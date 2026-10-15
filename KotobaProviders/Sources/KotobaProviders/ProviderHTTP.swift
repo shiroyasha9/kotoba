@@ -54,10 +54,7 @@ final class ProviderConnection: Sendable {
         let key = try await key()
         var request = URLRequest(url: url)
         request.httpMethod = "POST"
-        switch keyHeader {
-        case .bearer: request.setValue("Bearer \(key)", forHTTPHeaderField: "Authorization")
-        case .subscriptionKey: request.setValue(key, forHTTPHeaderField: "Ocp-Apim-Subscription-Key")
-        }
+        authorize(&request, with: key)
         request.setValue(contentType, forHTTPHeaderField: "Content-Type")
         let metrics = UploadMetrics(label)
         do {
@@ -80,6 +77,27 @@ final class ProviderConnection: Sendable {
             throw CancellationError()
         } catch is URLError {
             throw ProviderError.offline
+        }
+    }
+
+    /// One free request with `key` (the one being checked, not the stored one), for the key check. Nil when no
+    /// answer came: offline, or a timeout.
+    func probe(_ url: URL, method: String, key: String) async -> (Data, HTTPURLResponse)? {
+        var request = URLRequest(url: url)
+        request.httpMethod = method
+        authorize(&request, with: key)
+        do {
+            let (data, response) = try await session.data(for: request)
+            return (response as? HTTPURLResponse).map { (data, $0) }
+        } catch {
+            return nil
+        }
+    }
+
+    private func authorize(_ request: inout URLRequest, with key: String) {
+        switch keyHeader {
+        case .bearer: request.setValue("Bearer \(key)", forHTTPHeaderField: "Authorization")
+        case .subscriptionKey: request.setValue(key, forHTTPHeaderField: "Ocp-Apim-Subscription-Key")
         }
     }
 
@@ -136,6 +154,16 @@ enum ProviderHTTP {
         }
     }
 
+    /// The key check result for a status that is not plain success: 401/403 refused, 402 no credit, anything else
+    /// (or no answer) unreachable. Each provider reads its own 200 body.
+    static func keyCheck(status: Int?) -> KeyCheck {
+        switch status {
+        case 401, 403: .invalid
+        case 402: .noCredit
+        default: .unreachable
+        }
+    }
+
     /// `text` trimmed; an empty or missing text is `ProviderError.emptyTranscript`.
     static func nonEmpty(_ text: String?, label: String) throws(ProviderError) -> String {
         let trimmed = (text ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
@@ -143,11 +171,12 @@ enum ProviderHTTP {
         return trimmed
     }
 
-    /// The error for a non-2xx status, the same on every route: 401/403 auth, 429 rate limit, 408/5xx server,
-    /// any other 4xx rejected with the body's message.
+    /// The error for a non-2xx status, the same on every route: 401/403 auth, 402 no credit, 429 rate limit,
+    /// 408/5xx server, any other 4xx rejected with the body's message.
     static func error(status: Int, retryAfter: String?, body: Data) -> ProviderError {
         switch status {
         case 401, 403: .auth(status: status)
+        case 402: .noCredit
         case 429: .rateLimited(retryAfter: retryAfter.flatMap(Int.init).map { .seconds($0) })
         case 408, 500...: .server(status: status)
         default: .rejected(status: status, message: errorMessage(in: body))

@@ -1,0 +1,94 @@
+import AppKit
+import KotobaCore
+import KotobaStorage
+
+/// Sample data for the Settings snapshots, and the whole window on each pane (`make snapshots`). Samples never touch
+/// the owner's files, Keychain or devices.
+@MainActor
+extension SettingsPane {
+    /// The whole window, once per pane and for the Dictionary pane's import and suggestions states.
+    static func windowSnapshots() -> [Snapshot] {
+        let (incoming, contents) = sampleWisprImport
+        return [
+            windowSnapshot(sampleDictionary, selecting: .dictionary, named: "settings-window"),
+            windowSnapshot(
+                PersonalDictionary(), import: .preview(PersonalDictionary().importPreview(of: incoming), contents),
+                selecting: .dictionary, named: "settings-window-import"),
+            windowSnapshot(
+                sampleDictionary, suggestions: sampleSuggestions, selecting: .dictionary,
+                named: "settings-window-suggestions"),
+            windowSnapshot(sampleDictionary, selecting: .speech, named: "settings-window-speech"),
+            windowSnapshot(sampleDictionary, selecting: .microphones, named: "settings-window-microphone"),
+            windowSnapshot(sampleDictionary, selecting: .general, named: "settings-window-general"),
+        ]
+    }
+
+    static var sampleDictionary: PersonalDictionary {
+        PersonalDictionary(
+            terms: [
+                "PyTorch", "zshrc", "Vercel", "uv", "Supabase", String(repeating: "very-long-identifier-", count: 3),
+            ],
+            rules: [
+                ReplacementRule(find: "cloud code", replacement: "Claude Code"),
+                ReplacementRule(find: "um", replacement: ""),
+            ]
+        )
+    }
+
+    /// What Wispr Flow would add, and its counts: one learned correction, two snippets.
+    static var sampleWisprImport: (PersonalDictionary, WisprFlowImport.Contents) {
+        var incoming = PersonalDictionary(terms: ["Xandor", "changeset"])
+        incoming.rules = [ReplacementRule(find: "Zandor", replacement: "Xandor")]
+        return (incoming, WisprFlowImport.Contents(dictionary: incoming, learned: incoming.rules, snippets: 2))
+    }
+
+    static var sampleSuggestions: [DictionarySuggestion] {
+        let seen = Date(timeIntervalSince1970: 1_800_000_000)
+        return [
+            DictionarySuggestion(
+                candidate: SuggestionCandidate(
+                    heard: "versel", corrected: "Vercel", proposes: .termAndRule, origin: .fix,
+                    appBundleID: "com.apple.TextEdit"),
+                evidence: 3, firstSeenAt: seen, lastSeenAt: seen),
+            DictionarySuggestion(
+                candidate: SuggestionCandidate(heard: "ember", corrected: "embra", proposes: .term, origin: .fix),
+                firstSeenAt: seen, lastSeenAt: seen),
+        ]
+    }
+
+    /// A model over a throwaway store; snapshots never save.
+    static func sampleModel(
+        _ dictionary: PersonalDictionary,
+        import state: DictionaryModel.WisprImport? = nil,
+        suggestions: [DictionarySuggestion] = []
+    ) -> DictionaryModel {
+        let url = FileManager.default.temporaryDirectory.appending(path: "kotoba-snapshot-\(UUID().uuidString).sqlite")
+        let store: DictionaryStore
+        do {
+            store = try DictionaryStore(url: url)
+        } catch {
+            preconditionFailure("Snapshot dictionary store: \(error)")
+        }
+        let model = DictionaryModel(dictionary: dictionary, store: store, suggestions: suggestions) { _ in }
+        model.wisprImport = state
+        model.isWisprInstalled = true
+        return model
+    }
+
+    /// The whole window with every pane, showing `id`.
+    private static func windowSnapshot(
+        _ dictionary: PersonalDictionary,
+        import state: DictionaryModel.WisprImport? = nil,
+        suggestions: [DictionarySuggestion] = [],
+        selecting id: SettingsPaneID,
+        named name: String
+    ) -> Snapshot {
+        let panes: [SettingsPane] = [
+            .general(.sample()),
+            .dictionary(sampleModel(dictionary, import: state, suggestions: suggestions)),
+            .microphones(MicrophoneModel(source: .sample()) {}),
+            .speech(.sample(route: .openRouterMAI, azureEndpoint: "")),
+        ]
+        return SettingsWindow.windowSnapshot(of: panes, selecting: id, named: name)
+    }
+}

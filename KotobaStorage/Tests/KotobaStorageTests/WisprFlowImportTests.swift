@@ -114,6 +114,20 @@ struct WisprFlowImportTests {
         #expect(imported.learnedCorrections == 1)
     }
 
+    @Test func aLearnedCorrectionFromACommonWordGivesTheWordOnly() async throws {
+        let url = folder.url.appending(path: "flow.sqlite")
+        let fixture = try WisprFixture(url: url)
+        try fixture.insert(phrase: "Marlow", source: "user_edits", observedSource: "Mellow")
+        try fixture.insert(phrase: "Xandor", source: "user_edits", observedSource: "Zandor")
+        fixture.close()
+
+        let imported = try await WisprFlowImport.read(from: url).keepingRules { $0.lowercased() == "mellow" }
+
+        #expect(imported.dictionary.terms == ["Marlow", "Xandor"])
+        #expect(imported.dictionary.rules == [ReplacementRule(find: "Zandor", replacement: "Xandor")])
+        #expect(imported.learnedCorrections == 1)
+    }
+
     @Test(arguments: [SQLiteDatabase.Value.text("1"), .text("true"), .real(1)])
     func otherSpellingsOfASnippetAreCounted(isSnippet: SQLiteDatabase.Value) async throws {
         let url = folder.url.appending(path: "flow.sqlite")

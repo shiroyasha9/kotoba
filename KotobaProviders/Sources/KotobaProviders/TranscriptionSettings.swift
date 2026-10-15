@@ -8,13 +8,46 @@ public enum ProviderAccount: String, CaseIterable, Sendable {
     case xai
     case azure
 
-    /// The provider's name in the menu, Settings and "Set your … key".
+    /// The provider's name in the menu, Settings and "Add your … key".
     public var title: String {
         switch self {
         case .openRouter: "OpenRouter"
         case .xai: "xAI"
         case .azure: "Azure"
         }
+    }
+
+    /// Where the owner creates a key ("Get a Key…").
+    public var keysPage: URL {
+        switch self {
+        case .openRouter: Self.url("https://openrouter.ai/settings/keys")
+        case .xai: Self.url("https://console.x.ai")
+        case .azure: Self.url("https://portal.azure.com/#create/Microsoft.CognitiveServicesSpeechServices")
+        }
+    }
+
+    /// Where the owner adds credit ("Add Credit…").
+    public var creditsPage: URL {
+        switch self {
+        case .openRouter: Self.url("https://openrouter.ai/settings/credits")
+        case .xai: Self.url("https://console.x.ai")
+        case .azure: Self.url("https://portal.azure.com/#view/Microsoft_Azure_CostManagement/Menu/~/overview")
+        }
+    }
+
+    /// The public price page for the provider's speech models, next to "a few cents per hour". All three answered
+    /// a plain GET on 2026-10-15 (OpenRouter's model page shows the per-hour price).
+    public var pricingPage: URL {
+        switch self {
+        case .openRouter: Self.url("https://openrouter.ai/microsoft/mai-transcribe-2")
+        case .xai: Self.url("https://docs.x.ai/developers/models")
+        case .azure: Self.url("https://azure.microsoft.com/en-us/pricing/details/speech/")
+        }
+    }
+
+    private static func url(_ text: String) -> URL {
+        guard let url = URL(string: text) else { preconditionFailure("constant URL \(text)") }
+        return url
     }
 }
 
@@ -28,25 +61,32 @@ public enum TranscriptionRoute: String, CaseIterable, Sendable {
     case xaiGrok = "xai-direct/grok-stt"
     case azureMAI = "azure-direct/mai-transcribe-2"
 
+    /// The speech model's name in the menu and Settings.
     public var title: String {
         switch self {
-        case .openRouterMAI: "MAI-Transcribe-2 (OpenRouter)"
-        case .openRouterGrok: "Grok STT (OpenRouter)"
-        case .xaiGrok: "Grok STT (xAI direct)"
-        case .azureMAI: "MAI-Transcribe-2 (Azure direct)"
+        case .openRouterMAI: "MAI-Transcribe-2 via OpenRouter (Recommended)"
+        case .openRouterGrok: "Grok via OpenRouter"
+        case .xaiGrok: "Grok via xAI"
+        case .azureMAI: "MAI-Transcribe-2 via Azure"
         }
     }
 
-    /// A short note for the menu next to the title, or nil.
+    /// The title without "(Recommended)", for the menu's subtitle and other short places.
+    public var menuTitle: String {
+        self == .openRouterMAI ? "MAI-Transcribe-2 via OpenRouter" : title
+    }
+
+    /// A short note for the menu under the title, or nil.
     public var note: String? {
         switch self {
-        case .openRouterMAI: nil
         // The live check on 2026-10-15 got a 404 "No endpoints found matching your data policy" for Grok with zdr.
-        case .openRouterGrok: "No zero-data-retention route"
-        // Built from the docs only: the owner has no xAI or Azure account yet.
-        case .xaiGrok, .azureMAI: "Untested live"
+        case .openRouterGrok: "OpenRouter may keep audio"
+        case .openRouterMAI, .xaiGrok, .azureMAI: nil
         }
     }
+
+    /// The direct routes: shown under "Advanced". They are built from the docs and not yet tested live.
+    public var isAdvanced: Bool { self == .xaiGrok || self == .azureMAI }
 
     /// The provider account whose key this route uses. One key per provider.
     public var account: ProviderAccount {
@@ -79,23 +119,26 @@ public final class TranscriptionSettings: Sendable {
     }
 
     private let storage: any SettingsStorage
+    private let notifications: NotificationCenter
 
-    /// The app's standard UserDefaults.
+    /// The app's standard UserDefaults, announcing changes on `NotificationCenter.default`.
     public convenience init() {
         self.init(storage: StandardUserDefaults())
     }
 
-    init(storage: any SettingsStorage) {
+    init(storage: any SettingsStorage, notifications: NotificationCenter = .default) {
         self.storage = storage
+        self.notifications = notifications
     }
 
-    /// Settings kept in memory only, for snapshots and previews: nothing reads or writes UserDefaults.
-    public static func inMemory() -> TranscriptionSettings {
-        TranscriptionSettings(storage: MemorySettingsStorage())
+    /// Settings kept in memory only, for snapshots, previews and tests: nothing reads or writes UserDefaults. A test
+    /// passes a center of its own, so changes from tests running in parallel do not reach it.
+    public static func inMemory(notifications: NotificationCenter = .default) -> TranscriptionSettings {
+        TranscriptionSettings(storage: MemorySettingsStorage(), notifications: notifications)
     }
 
-    /// Posted on `NotificationCenter.default` after any setting changes, by any instance; `object` is the
-    /// `Change`. The Providers pane redraws on it, and the app retries dictations that waited for an endpoint.
+    /// Posted after any setting changes, on the instance's center (`NotificationCenter.default` in the app); `object`
+    /// is the `Change`. The Speech pane redraws on it, and the app retries dictations that waited for an endpoint.
     public static let didChange = Notification.Name("tech.teensy.kotoba.TranscriptionSettings.didChange")
 
     public enum Change: Sendable {
@@ -128,7 +171,7 @@ public final class TranscriptionSettings: Sendable {
         }
         set {
             storage.set(newValue.rawValue, forKey: Key.route)
-            Self.post(.route)
+            post(.route)
         }
     }
 
@@ -137,7 +180,7 @@ public final class TranscriptionSettings: Sendable {
         get { storage.bool(forKey: Key.grokFormat) }
         set {
             storage.set(newValue, forKey: Key.grokFormat)
-            Self.post(.grokOptions)
+            post(.grokOptions)
         }
     }
 
@@ -146,7 +189,7 @@ public final class TranscriptionSettings: Sendable {
         get { storage.bool(forKey: Key.grokFillerWords) }
         set {
             storage.set(newValue, forKey: Key.grokFillerWords)
-            Self.post(.grokOptions)
+            post(.grokOptions)
         }
     }
 
@@ -158,15 +201,26 @@ public final class TranscriptionSettings: Sendable {
         get { storage.string(forKey: Key.azureEndpoint) ?? "" }
         set {
             storage.set(newValue, forKey: Key.azureEndpoint)
-            Self.post(.azureEndpoint)
+            post(.azureEndpoint)
         }
     }
 
-    /// `text` as an endpoint URL when it is https with a host, else nil. The key is sent there, so plain http is
-    /// refused. The router and the Providers pane both use this one rule.
+    /// The host endings of an Azure Speech endpoint: a resource's own domain, or the regional host. Checked on
+    /// 2026-10-16: Microsoft's MAI-Transcribe and LLM Speech pages show only `<resource>.cognitiveservices.azure.com`
+    /// (https://learn.microsoft.com/en-us/azure/ai-services/speech-service/mai-transcribe,
+    /// https://learn.microsoft.com/en-us/azure/ai-services/speech-service/llm-speech), and the Speech REST page adds
+    /// `<region>.api.cognitive.microsoft.com` for resources without a custom domain
+    /// (https://learn.microsoft.com/en-us/azure/ai-services/speech-service/rest-speech-to-text-short). No Speech page
+    /// shows `*.services.ai.azure.com` or `*.openai.azure.com`; add a form here only when a Speech doc shows it.
+    static let azureSpeechDomains = [".cognitiveservices.azure.com", ".api.cognitive.microsoft.com"]
+
+    /// `text` as an endpoint URL when it is https on an Azure Speech host, else nil. The key and the audio are sent
+    /// there, so a half-typed host ("https://myres.co") or any other domain is refused. The router and the Speech
+    /// pane both use this one rule.
     public static func azureEndpointURL(_ text: String) -> URL? {
         guard let url = URL(string: text.trimmingCharacters(in: .whitespaces)), url.scheme == "https",
-            url.host()?.isEmpty == false
+            let host = url.host()?.lowercased(),
+            azureSpeechDomains.contains(where: { host.hasSuffix($0) && host.count > $0.count })
         else { return nil }
         return url
     }
@@ -185,12 +239,12 @@ public final class TranscriptionSettings: Sendable {
         get { storage.string(forKey: Key.cleanupModel).flatMap(CleanupModel.init) ?? .geminiFlashLite }
         set {
             storage.set(newValue.rawValue, forKey: Key.cleanupModel)
-            Self.post(.cleanupModel)
+            post(.cleanupModel)
         }
     }
 
-    private static func post(_ change: Change) {
-        NotificationCenter.default.post(name: didChange, object: change)
+    private func post(_ change: Change) {
+        notifications.post(name: Self.didChange, object: change)
     }
 }
 

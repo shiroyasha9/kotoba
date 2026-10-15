@@ -75,6 +75,7 @@ Spike `spikes/settings-memory/` (`build.sh`, `measure.sh`): a status-item app bu
 - Opening Settings adds +19-21 MB that stays after close, more than the +15 MB of variant E (a smaller form).
 - No leak: `SettingsSpike --leak-check` opens and closes the window and checks weak references 2 s after close. The window, its `NSHostingController` and a per-open pane model are all deallocated. The memory that stays belongs to SwiftUI's loaded runtime, not to kotoba's objects. The app's `DictionaryModel` lives for the app's lifetime on purpose, because the pipeline reads it.
 - Decision (lead, 2026-10-15): +19-21 MB after close is accepted for now. The idle gate is measured from launch with Settings never opened. If the owner wants it lower, the option is AppKit panes.
+- ServiceManagement (launch at login, phase 2.5) loads at launch: +16-80 KB (onboarding agent, test binary). Lazy linking does not work: with `-Xlinker -lazy_framework`, ld prints "lazy-load will be ignored for 'ServiceManagement' because deployment target version is too low" and keeps `LC_LOAD_DYLIB`. Accepted (lead, 2026-10-16); no `dlopen` workaround.
 
 ## Commands
 

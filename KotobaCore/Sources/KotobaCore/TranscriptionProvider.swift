@@ -63,7 +63,9 @@ public enum ProviderError: Error, Sendable, Equatable {
     case rateLimited(retryAfter: Duration?)
     /// 408, 5xx, or a success status with a body that does not parse.
     case server(status: Int)
-    /// Any other 4xx (bad request, no credits). Retrying the same request gives the same answer.
+    /// The account has no credit left (402). The dictation waits until the owner adds credit.
+    case noCredit
+    /// Any other 4xx (bad request, payload too large). Retrying the same request gives the same answer.
     case rejected(status: Int, message: String)
     /// The route answered but heard no speech.
     case emptyTranscript
@@ -81,6 +83,7 @@ public enum ProviderError: Error, Sendable, Equatable {
     public var setupItem: SetupItem? {
         switch self {
         case .auth: .key
+        case .noCredit: .credit
         case .needsSetup(_, let item): item
         default: nil
         }
@@ -89,10 +92,26 @@ public enum ProviderError: Error, Sendable, Equatable {
     public var recovery: Recovery {
         switch self {
         case .offline, .keyUnavailable, .rateLimited, .server: .transient
-        case .auth, .needsSetup: .needsSetup
+        case .auth, .needsSetup, .noCredit: .needsSetup
         case .rejected, .emptyTranscript: .permanent
         }
     }
+
+    /// Why the route refused, for a `.permanent` error; the indicator picks its text and button from it.
+    public var rejectReason: RejectReason? {
+        switch self {
+        case .emptyTranscript: .emptyTranscript
+        case .rejected: .other
+        case .offline, .auth, .needsSetup, .noCredit, .keyUnavailable, .rateLimited, .server: nil
+        }
+    }
+}
+
+/// Why a dictation was rejected.
+public enum RejectReason: String, Sendable {
+    /// The route heard no speech, twice.
+    case emptyTranscript
+    case other
 }
 
 /// What `ProviderError.needsSetup` asks the owner to set.
@@ -100,4 +119,6 @@ public enum SetupItem: String, Sendable {
     case key
     /// The Azure Speech resource endpoint.
     case endpoint
+    /// Credit on the provider account: a dictation refused for no credit waits for it (lead decision 6).
+    case credit
 }

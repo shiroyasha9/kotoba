@@ -1,56 +1,72 @@
 import AVFAudio
 import AppKit
-import ApplicationServices
 import Carbon
 import KotobaCore
 import KotobaProviders
 import KotobaStorage
+import Network
+import Observation
 import os
 
 /// Wires the ports to the pipeline and owns the menu bar item. Windows are built on demand.
 @MainActor
-final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
+final class AppDelegate: NSObject, NSApplicationDelegate {
     private let hotkeys = HotkeyTap(cleanupChord: CleanupChord.current.modifiers)
     private let microphones = MicrophonePreferences()
     private lazy var audio = AudioCapture(preferences: microphones)
     /// Read by the provider on every request, so a menu change applies to the next dictation.
     private let routeSettings = TranscriptionSettings()
     private let vault = KeyVault()
+    private lazy var readiness = Readiness(settings: routeSettings, vault: vault)
+    /// The provider; onboarding uses it to check a key.
+    private lazy var router = TranscriptionRouter(settings: routeSettings, keys: vault.source(for:))
+    private lazy var setup = SetupFlow(
+        readiness: readiness, routeSettings: routeSettings, vault: vault, router: router,
+        openSpeechSettings: { [weak self] in self?.settingsController.show(selecting: .speech) })
     private let settings = DictationPipeline.Settings(
         audioDirectory: HistoryStore.directory.appending(path: "audio", directoryHint: .isDirectory)
     )
-    private lazy var indicator = IndicatorPanel(longRecordingWarning: settings.longRecordingWarning)
-    private var statusItem: NSStatusItem?
+    private lazy var indicator = IndicatorPanel()
+    private lazy var fixWindow = FixLastDictationController(
+        lastText: { [weak self] in await self?.lastDeliveredText() },
+        dictionary: { [weak self] in self?.settingsController.dictionary })
+    private var statusItem: StatusBarItem?
     private var pipeline: DictationPipeline?
     private var store: HistoryStore?
     private var state: DictationState = .idle
     private var pendingCount = 0
+    /// A dictation was pasted or copied, so "Fix Last Dictation…" has something to fix.
+    private var hasLastDictation = false
     /// Retried transcripts from the last 24 h, newest first, for the Recovered submenu.
     private var recovered: [DictationRecord] = []
     private var isSecureInputOn = false
-    private var hotkeyIssue: String?
+    /// Set when the history database does not open; the menu shows it instead of the status.
+    private var launchIssue: String?
     private lazy var settingsController = SettingsController(
-        routeSettings: routeSettings, vault: vault, microphones: microphones, audio: audio)
+        routeSettings: routeSettings, vault: vault, router: router, microphones: microphones, audio: audio
+    ) { [routeSettings, indicator, hotkeys] in
+        GeneralModel(settings: routeSettings, indicator: indicator, setCleanupChord: hotkeys.setCleanupChord)
+    }
 
     func applicationDidFinishLaunching(_ notification: Notification) {
         AppDefaults.registerDefaults()
         CGEventPaster.trackKeyboardLayout()
         CGEventPaster.warmUp()
         NSApp.mainMenu = .editOnlyMain()
-        setUpStatusItem()
+        statusItem = StatusBarItem(target: self) { [weak self] in self?.menuModel() }
         let store: HistoryStore
         do {
             store = try HistoryStore()
         } catch {
             Log.app.fault("Cannot open the history database: \(error)")
-            hotkeyIssue = "History database unavailable"
+            launchIssue = StatusText.historyUnavailable
             return
         }
         self.store = store
         let pipeline = DictationPipeline(
             ports: .init(
                 audio: audio,
-                provider: TranscriptionRouter(settings: routeSettings, keys: vault.source(for:)),
+                provider: router,
                 paster: CGEventPaster(),
                 pasteboard: SystemPasteboard(),
                 clock: SystemClock(),
@@ -63,13 +79,21 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         self.pipeline = pipeline
 
         observe(pipeline)
+        observeReadiness()
+        setup.showOnboardingIfNew()
+        setup.watchGrants()
         Task {
             await settingsController.loadDictionary(into: pipeline)
-            await prepareMicrophone()
             await pipeline.retryPending()
             await refreshQueues()
         }
         startHotkeys(feeding: pipeline)
+        // Story 22: the pipeline sends failed dictations again when the network returns.
+        Task.detached {
+            for await path in NWPathMonitor() {
+                await pipeline.networkChanged(isOnline: path.status == .satisfied)
+            }
+        }
     }
 
     /// Quit waits until a live recording or an open Undo window is saved, so no audio is lost.
@@ -85,12 +109,18 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     // MARK: Pipeline wiring
 
     private func observe(_ pipeline: DictationPipeline) {
-        indicator.onUndo = {
-            Task { await pipeline.undo() }
+        indicator.onAction = { [weak self] action in
+            self?.perform(action)
         }
         Task {
             for await state in pipeline.states {
                 render(state)
+            }
+        }
+        // Each history write can change the Retry count, the Recovered list and "Fix Last Dictation…".
+        Task {
+            for await _ in pipeline.historyChanges {
+                await refreshQueues()
             }
         }
         Task { [audio, indicator] in
@@ -100,7 +130,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         }
         // A saved key, endpoint or route can complete the setup; the dictations that waited for it are sent then.
         Task { [vault] in
-            for await _ in vault.saves {
+            for await _ in vault.changes {
                 await setupChanged(pipeline)
             }
         }
@@ -114,20 +144,37 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         }
     }
 
+    /// No permission prompt at launch: onboarding asks (O2). The engine is prepared once the mic is allowed,
+    /// and the icon follows the setup state.
+    private func observeReadiness() {
+        let readiness = readiness
+        Task {
+            for await microphone in Observations({ readiness.microphone }) where microphone == .allowed {
+                await audio.prepare()
+            }
+        }
+        Task {
+            for await _ in Observations({ readiness.isComplete }) {
+                updateIcon()
+            }
+        }
+    }
+
     private func setupChanged(_ pipeline: DictationPipeline) async {
+        readiness.refresh()
         await pipeline.setupChanged()
         await refreshQueues()
     }
 
+    private var statusContext: StatusContext {
+        StatusContext(
+            provider: routeSettings.route.account, microphone: readiness.microphone,
+            isPasteAllowed: readiness.isAccessibilityAllowed, isSecureInputOn: isSecureInputOn,
+            longRecordingMinutes: Int(settings.longRecordingWarning / .seconds(60)))
+    }
+
     private func render(_ newState: DictationState) {
         let wasRecording = if case .recording = state { true } else { false }
-        // The queue counts change only when a dictation ends.
-        let changesQueues =
-            switch newState {
-            case .failed, .needsSetup, .rejected, .recovered, .copied, .cleanupFailed: true
-            case .idle: state == .transcribing
-            case .recording, .transcribing, .undoable, .captureFailed: false
-            }
         state = newState
         if case .recording = newState {
             if !wasRecording {
@@ -141,10 +188,13 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
                 playCue("Pop")
             }
         }
-        indicator.show(newState, secureInput: isSecureInputOn, provider: routeSettings.route.account)
-        if changesQueues {
-            Task { await refreshQueues() }
+        updateIcon()
+        switch newState {
+        // Their text and button depend on the mic and Accessibility grants now (I2).
+        case .captureFailed, .copied: readiness.refresh()
+        default: break
         }
+        indicator.show(newState, context: statusContext)
     }
 
     private func playCue(_ name: String) {
@@ -162,37 +212,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
             }
         }
         Task {
-            if await hotkeys.start() {
-                CGEventPaster.isTrusted = true
-                return
-            }
-            // The event tap and Cmd-V both need Accessibility. Ask once, then check until it is granted.
-            hotkeyIssue = "Waiting for Accessibility permission"
-            AXIsProcessTrustedWithOptions(["AXTrustedCheckOptionPrompt": true] as CFDictionary)
-            while await !hotkeys.start() {
-                do {
-                    try await Task.sleep(for: .seconds(5))
-                } catch {
-                    return
-                }
-            }
+            await setup.startHotkeys(hotkeys)
             CGEventPaster.isTrusted = true
-            hotkeyIssue = nil
             Log.app.info("Hotkey tap started")
         }
-    }
-
-    private func prepareMicrophone() async {
-        switch AVAudioApplication.shared.recordPermission {
-        case .granted:
-            break
-        case .undetermined:
-            guard await AVAudioApplication.requestRecordPermission() else { return }
-        default:
-            Log.app.error("Microphone access denied")
-            return
-        }
-        await audio.prepare()
     }
 
     private func refreshQueues() async {
@@ -200,133 +223,108 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         recovered = await pipeline.retries.recovered()
         do {
             pendingCount = try await store.pendingCount()
+            hasLastDictation = try await store.lastDelivered() != nil
         } catch {
-            Log.app.error("Cannot count queued dictations: \(error)")
+            Log.app.error("Cannot read the dictation history: \(error)")
+        }
+        updateIcon()
+    }
+
+    // MARK: Pill actions
+
+    private func perform(_ action: PillAction) {
+        switch action {
+        case .undo:
+            guard let pipeline else { return }
+            Task { await pipeline.undo() }
+        case .retry:
+            retryFailed()
+        case .addKey, .openSpeechSettings:
+            settingsController.show(selecting: .speech)
+        case .addCredit:
+            NSWorkspace.shared.open(routeSettings.route.account.creditsPage)
+        case .copy:
+            guard case .recovered(let id) = state else { return }
+            copyRecovered(id)
+        case .allowPasting:
+            setup.allowPasting()
+        case .openMicrophoneSettings:
+            readiness.openSettings(.microphone)
+        }
+    }
+
+    /// The text kotoba pasted or copied last, for "Fix Last Dictation…"; nil shows the window's empty state.
+    private func lastDeliveredText() async -> String? {
+        guard let store else { return nil }
+        do {
+            return try await store.lastDelivered()?.deliveredText
+        } catch {
+            Log.app.error("Cannot read the last dictation: \(error)")
+            return nil
+        }
+    }
+
+    private func copyRecovered(_ id: DictationID) {
+        guard let pipeline else { return }
+        Task {
+            guard let record = await pipeline.retries.recovered().first(where: { $0.id == id }) else { return }
+            await pipeline.retries.copy(record)
         }
     }
 }
 
 // MARK: - Menu
 
-extension AppDelegate {
-    private func setUpStatusItem() {
-        let item = NSStatusBar.system.statusItem(withLength: NSStatusItem.squareLength)
-        item.button?.image = NSImage(systemSymbolName: "waveform", accessibilityDescription: "kotoba")
-        let menu = NSMenu()
-        menu.delegate = self
-        item.menu = menu
-        statusItem = item
+extension AppDelegate: StatusMenuActions {
+    private func updateIcon() {
+        statusItem?.icon =
+            if case .recording = state {
+                .listening
+            } else if !readiness.isComplete || pendingCount > 0 {
+                .needsAttention
+            } else {
+                .ready
+            }
     }
 
-    func menuNeedsUpdate(_ menu: NSMenu) {
-        menu.removeAllItems()
-        let provider = routeSettings.route.account.title
-        let status = NSMenuItem(
-            title: hotkeyIssue ?? state.menuText(provider: provider), action: nil, keyEquivalent: "")
-        status.isEnabled = false
-        menu.addItem(status)
-        let retry = NSMenuItem.action(
-            "Retry Failed Dictations (\(pendingCount))", target: self, action: #selector(retryFailed))
-        retry.isEnabled = pendingCount > 0
-        menu.addItem(retry)
-        addRecoveredItems(to: menu)
-        menu.addItem(.separator())
-        addMicrophoneItems(to: menu)
-        addModelItems(to: menu)
-        menu.addItem(
-            .choices(
-                "Cleanup Chord: \(CleanupChord.current.title)",
-                CleanupChord.allCases.map { MenuChoice(title: $0.title, value: $0.rawValue) },
-                selected: CleanupChord.current.rawValue, target: self, action: #selector(chooseCleanupChord(_:))))
-        menu.addItem(.separator())
-        menu.addItem(.action("Set API Key…", target: self, action: #selector(openProvidersSettings)))
-        menu.addItem(.action("Settings…", target: self, action: #selector(openSettings), keyEquivalent: ","))
-        menu.addItem(
-            .toggle("Sound Cues", isOn: AppDefaults.areSoundCuesOn, target: self, action: #selector(toggleSoundCues)))
-        menu.addItem(
-            .choices(
-                "Indicator Position", IndicatorAnchor.allCases.map { MenuChoice(title: $0.title, value: $0.rawValue) },
-                selected: indicator.anchor.rawValue, target: self, action: #selector(selectIndicatorAnchor(_:))))
-        menu.addItem(.separator())
-        menu.addItem(
-            NSMenuItem(title: "Quit kotoba", action: #selector(NSApplication.terminate(_:)), keyEquivalent: "q"))
+    private func menuModel() -> MenuModel {
+        readiness.refresh()
+        let status: MenuModel.Status =
+            if let launchIssue {
+                .text(launchIssue)
+            } else if state == .idle {
+                readiness.firstMissing.map { .finishSetup($0.setupText) } ?? .text(StatusText.ready)
+            } else {
+                .text(state.statusText(statusContext) ?? "")
+            }
+        let route = routeSettings.route
+        let input = audio.inputInUse
+        return MenuModel(
+            status: status,
+            pendingCount: pendingCount,
+            recovered: recovered.map { record in
+                let text = record.deliveredText ?? ""
+                let title = text.count > 40 ? String(text.prefix(40)) + "…" : text
+                return MenuChoice(title: title, value: record.id.rawValue.uuidString)
+            },
+            microphones: AudioDevices.inputs().map { MenuChoice(title: $0.name, value: $0.uid) },
+            microphoneInUse: input.map { ($0.uid, $0.name) },
+            routes: MenuModel.routes(current: route),
+            route: MenuChoice(title: route.menuTitle, value: route.rawValue),
+            grok: route.isGrok
+                ? MenuModel.Grok(
+                    isFormatOn: routeSettings.isGrokFormatOn, keepsFillerWords: routeSettings.keepsGrokFillerWords)
+                : nil,
+            hasLastDictation: hasLastDictation,
+            suggestionCount: settingsController.dictionary?.suggestions.count ?? 0
+        )
     }
 
-    /// The connected mics, the one kotoba records from checked. Picking one moves it to the top of the order.
-    private func addMicrophoneItems(to menu: NSMenu) {
-        let current = audio.inputInUse
-        let inputs = AudioDevices.inputs().map { MenuChoice(title: $0.name, value: $0.uid) }
-        menu.addItem(
-            .choices(
-                "Microphone: \(current?.name ?? "None")", inputs, selected: current?.uid, target: self,
-                action: #selector(chooseMicrophone(_:))))
+    func finishSetup() {
+        setup.finishSetup()
     }
 
-    @objc private func chooseMicrophone(_ sender: NSMenuItem) {
-        guard let uid = sender.representedObject as? String else { return }
-        microphones.choose(uid: uid, name: sender.title)
-        Task { await audio.inputMayHaveChanged() }
-    }
-
-    private func addModelItems(to menu: NSMenu) {
-        let current = routeSettings.route
-        let routes = TranscriptionRoute.allCases.map {
-            MenuChoice(title: $0.title, value: $0.rawValue, subtitle: $0.note)
-        }
-        menu.addItem(
-            .choices(
-                "Model: \(current.title)", subtitle: current.note, routes, selected: current.rawValue, target: self,
-                action: #selector(selectRoute(_:))))
-        guard current.isGrok else { return }
-        menu.addItem(
-            .toggle(
-                "Format Numbers (format)", isOn: routeSettings.isGrokFormatOn, target: self,
-                action: #selector(toggleGrokFormat), indentationLevel: 1))
-        menu.addItem(
-            .toggle(
-                "Keep Filler Words", isOn: routeSettings.keepsGrokFillerWords, target: self,
-                action: #selector(toggleGrokFillerWords), indentationLevel: 1))
-    }
-
-    private func addRecoveredItems(to menu: NSMenu) {
-        guard !recovered.isEmpty else { return }
-        let items = recovered.map { record in
-            let text = record.cleanedText ?? record.transcript ?? ""
-            let title = text.count > 40 ? String(text.prefix(40)) + "…" : text
-            return MenuChoice(title: title, value: record.id.rawValue.uuidString)
-        }
-        menu.addItem(
-            .choices(
-                "Recovered (\(recovered.count))", items, selected: nil, target: self,
-                action: #selector(copyRecovered(_:))))
-    }
-
-    @objc private func copyRecovered(_ sender: NSMenuItem) {
-        guard let pipeline, let id = sender.representedObject as? String,
-            let record = recovered.first(where: { $0.id.rawValue.uuidString == id })
-        else { return }
-        Task {
-            await pipeline.retries.copy(record)
-            await refreshQueues()
-        }
-    }
-
-    @objc private func selectRoute(_ sender: NSMenuItem) {
-        guard let raw = sender.representedObject as? String, let route = TranscriptionRoute(rawValue: raw) else {
-            return
-        }
-        routeSettings.route = route
-    }
-
-    @objc private func toggleGrokFormat() {
-        routeSettings.isGrokFormatOn.toggle()
-    }
-
-    @objc private func toggleGrokFillerWords() {
-        routeSettings.keepsGrokFillerWords.toggle()
-    }
-
-    @objc private func retryFailed() {
+    func retryFailed() {
         guard let pipeline else { return }
         Task {
             await pipeline.retryPending()
@@ -334,27 +332,47 @@ extension AppDelegate {
         }
     }
 
-    @objc private func toggleSoundCues() {
-        AppDefaults.areSoundCuesOn.toggle()
+    func copyRecovered(_ sender: NSMenuItem) {
+        guard let raw = sender.representedObject as? String, let uuid = UUID(uuidString: raw) else { return }
+        copyRecovered(DictationID(rawValue: uuid))
     }
 
-    @objc private func selectIndicatorAnchor(_ sender: NSMenuItem) {
-        guard let raw = sender.representedObject as? String, let anchor = IndicatorAnchor(rawValue: raw) else { return }
-        indicator.anchor = anchor
+    /// Picking a mic moves it to the top of the order.
+    func chooseMicrophone(_ sender: NSMenuItem) {
+        guard let uid = sender.representedObject as? String else { return }
+        microphones.choose(uid: uid, name: sender.title)
+        Task { await audio.inputMayHaveChanged() }
     }
 
-    @objc private func chooseCleanupChord(_ sender: NSMenuItem) {
-        guard let raw = sender.representedObject as? String, let chord = CleanupChord(rawValue: raw) else { return }
-        CleanupChord.current = chord
-        hotkeys.setCleanupChord(chord.modifiers)
+    func selectRoute(_ sender: NSMenuItem) {
+        guard let raw = sender.representedObject as? String, let route = TranscriptionRoute(rawValue: raw) else {
+            return
+        }
+        routeSettings.route = route
     }
 
-    @objc private func openSettings() {
+    func toggleGrokFormat() {
+        routeSettings.isGrokFormatOn.toggle()
+    }
+
+    func toggleGrokFillerWords() {
+        routeSettings.keepsGrokFillerWords.toggle()
+    }
+
+    func fixLastDictation() {
+        fixWindow.show()
+    }
+
+    func openSuggestions() {
+        settingsController.show(selecting: .dictionary)
+    }
+
+    func openSettings() {
         settingsController.show()
     }
 
-    /// The Providers pane holds one key field per provider.
-    @objc private func openProvidersSettings() {
-        settingsController.show(selecting: .providers)
+    func showAbout() {
+        NSApp.activate()
+        NSApp.orderFrontStandardAboutPanel(nil)
     }
 }

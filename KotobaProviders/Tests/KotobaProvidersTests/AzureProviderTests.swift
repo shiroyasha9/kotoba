@@ -14,7 +14,7 @@ struct AzureProviderTests {
         _ = try await stub.provider().transcribe(stub.request(terms: ["DictationPipeline", "src/main.swift"]))
 
         let sent = try #require(stub.requests.only)
-        #expect(sent.url?.host() == "speech.\(stub.host)")
+        #expect(sent.url?.host() == "\(stub.host).cognitiveservices.azure.com")
         #expect(sent.url?.path() == "/speechtotext/transcriptions:transcribe")
         #expect(sent.url?.query() == "api-version=2025-10-15")
         #expect(sent.headers["Ocp-Apim-Subscription-Key"] == "sk-or-test")

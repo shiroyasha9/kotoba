@@ -1,12 +1,36 @@
 import AppKit
 import KotobaCore
-import KotobaProviders
+
+/// The one button a pill can carry. AppDelegate maps each action to its handler.
+enum PillAction: Sendable {
+    case undo
+    case retry
+    case addKey
+    case openSpeechSettings
+    case addCredit
+    case copy
+    case allowPasting
+    case openMicrophoneSettings
+
+    var title: String {
+        switch self {
+        case .undo: "Undo"
+        case .retry: "Retry"
+        case .addKey: "Add Key…"
+        case .openSpeechSettings: "Settings…"
+        case .addCredit: "Add Credit…"
+        case .copy: "Copy"
+        case .allowPasting: "Allow Pasting…"
+        case .openMicrophoneSettings: "Open System Settings…"
+        }
+    }
+}
 
 /// The pill's content view: the glass, the state row and the drag handling. Everything except the
-/// Undo button is a drag handle; a press that does not move past the drag threshold does nothing.
+/// action button is a drag handle; a press that does not move past the drag threshold does nothing.
 final class IndicatorPillView: NSView {
     enum Layout {
-        /// The state dot, the text, the level and Undo in a row.
+        /// The state dot, the text, the level and the action button in a row.
         case horizontal
         /// The state dot over a vertical level, at a side edge.
         case vertical
@@ -18,11 +42,12 @@ final class IndicatorPillView: NSView {
     struct Content {
         var text = ""
         var color = NSColor.secondaryLabelColor
+        var toolTip: String?
         var showsMeter = false
         var showsSpinner = false
         /// Only the state dot and the level, so the pill stands vertical at a side edge.
         var isCompact = false
-        var offersUndo = false
+        var action: PillAction?
         /// A message that hides after a few seconds.
         var hidesSoon = false
     }
@@ -31,16 +56,17 @@ final class IndicatorPillView: NSView {
         get { meter.level }
         set { meter.level = newValue }
     }
-    var onUndo: (() -> Void)? {
-        get { undoButton.onClick }
-        set { undoButton.onClick = newValue }
-    }
+    var onAction: ((PillAction) -> Void)?
+    /// The pointer entered (true) or left (false) the pill.
+    var onHoverChanged: ((Bool) -> Void)?
     var onDragBegan: (() -> Void)?
     var onDragMoved: ((NSPoint) -> Void)?
     var onDragEnded: ((NSPoint) -> Void)?
     var content = Content() {
         didSet {
             label.stringValue = content.text
+            toolTip = content.toolTip
+            actionButton.title = content.action?.title ?? ""
             updateDotColor()
             applyLayout()
         }
@@ -53,7 +79,7 @@ final class IndicatorPillView: NSView {
     private let stack = NSStackView()
     private let dot = NSView()
     private let label = NSTextField(labelWithString: "")
-    private let undoButton = FirstClickButton(title: "Undo")
+    private let actionButton = FirstClickButton()
     private let spinner = NSProgressIndicator()
     private let dragIcon = NSImageView()
     private var pressStart: NSPoint?
@@ -71,14 +97,18 @@ final class IndicatorPillView: NSView {
         spinner.style = .spinning
         spinner.controlSize = .small
         spinner.isDisplayedWhenStopped = false
-        undoButton.bezelStyle = .glass
-        undoButton.controlSize = .small
+        actionButton.bezelStyle = .glass
+        actionButton.controlSize = .small
+        actionButton.onClick = { [weak self] in
+            guard let action = self?.content.action else { return }
+            self?.onAction?(action)
+        }
         dragIcon.image = NSImage(systemSymbolName: "waveform", accessibilityDescription: "kotoba")
         dragIcon.symbolConfiguration = .init(pointSize: 15, weight: .semibold)
         dragIcon.contentTintColor = .labelColor
 
         // Centered in both orientations; hidden views leave the stack.
-        stack.setViews([dot, label, meter, spinner, undoButton, dragIcon], in: .center)
+        stack.setViews([dot, label, meter, spinner, actionButton, dragIcon], in: .center)
         stack.spacing = 8
         NSLayoutConstraint.activate([
             dot.widthAnchor.constraint(equalToConstant: 10),
@@ -90,6 +120,10 @@ final class IndicatorPillView: NSView {
         glass.cornerRadius = IndicatorPlacement.cornerRadius
         glass.contentView = stack
         addSubview(glass)
+        // kotoba is never the active app, so hover must work while it is inactive.
+        addTrackingArea(
+            NSTrackingArea(
+                rect: .zero, options: [.mouseEnteredAndExited, .activeAlways, .inVisibleRect], owner: self))
         applyLayout()
     }
 
@@ -114,6 +148,11 @@ final class IndicatorPillView: NSView {
         stack.fittingSize.width
     }
 
+    /// The label is narrower than its text, so the text ends in "…". Valid after layout.
+    var isTextTruncated: Bool {
+        !label.isHidden && label.intrinsicContentSize.width > label.frame.width + 0.5
+    }
+
     private func applyLayout() {
         let isDrag = layout == .drag
         stack.orientation = layout == .vertical ? .vertical : .horizontal
@@ -128,7 +167,7 @@ final class IndicatorPillView: NSView {
         dot.isHidden = isDrag
         label.isHidden = layout != .horizontal
         meter.isHidden = isDrag || !content.showsMeter
-        undoButton.isHidden = layout != .horizontal || !content.offersUndo
+        actionButton.isHidden = layout != .horizontal || content.action == nil
         spinner.isHidden = isDrag || !content.showsSpinner
         if spinner.isHidden {
             spinner.stopAnimation(nil)
@@ -146,7 +185,15 @@ final class IndicatorPillView: NSView {
 
     override func hitTest(_ point: NSPoint) -> NSView? {
         guard let hit = super.hitTest(point) else { return nil }
-        return hit.isDescendant(of: undoButton) ? hit : self
+        return hit.isDescendant(of: actionButton) ? hit : self
+    }
+
+    override func mouseEntered(with event: NSEvent) {
+        onHoverChanged?(true)
+    }
+
+    override func mouseExited(with event: NSEvent) {
+        onHoverChanged?(false)
     }
 
     override func mouseDown(with event: NSEvent) {
@@ -239,14 +286,13 @@ private final class LevelMeter: NSView {
     }
 }
 
-/// A button that acts on the first click in a window that is not key, so Undo works without
-/// activating kotoba.
+/// A button that acts on the first click in a window that is not key, so a pill action works
+/// without activating kotoba.
 private final class FirstClickButton: NSButton {
     var onClick: (() -> Void)?
 
-    convenience init(title: String) {
+    convenience init() {
         self.init(frame: .zero)
-        self.title = title
         target = self
         action = #selector(clicked)
     }
@@ -257,83 +303,5 @@ private final class FirstClickButton: NSButton {
 
     @objc private func clicked() {
         onClick?()
-    }
-}
-
-// MARK: - Snapshots
-
-extension IndicatorPanel {
-    /// Each state the owner reads, at each anchor, plus the dragged pill.
-    static func snapshots() -> [Snapshot] {
-        let indicator = IndicatorPanel(longRecordingWarning: .seconds(600))
-        struct Row {
-            let name: String
-            let state: DictationState
-            var secureInput = false
-        }
-        let rows = [
-            Row(name: "recording", state: .recording(isLong: false)),
-            Row(name: "recording-long", state: .recording(isLong: true)),
-            Row(name: "secure-input", state: .recording(isLong: false), secureInput: true),
-            Row(name: "transcribing", state: .transcribing),
-            Row(name: "failed", state: .failed(DictationID())),
-            Row(name: "needs-key", state: .needsSetup(DictationID(), .key)),
-            Row(name: "needs-endpoint", state: .needsSetup(DictationID(), .endpoint)),
-            Row(name: "cancelled", state: .undoable),
-        ]
-        var snapshots = [
-            Snapshot(name: "indicator-drag") { PillStandIn(content: .init(), anchor: nil) }
-        ]
-        for row in rows {
-            // Azure has the longest name, so its texts are the widest.
-            guard let content = indicator.content(for: row.state, secureInput: row.secureInput, provider: .azure)
-            else { continue }
-            for anchor in IndicatorAnchor.allCases {
-                snapshots.append(
-                    Snapshot(name: "indicator-\(row.name)-\(anchor.rawValue)") {
-                        PillStandIn(content: content, anchor: anchor)
-                    })
-            }
-        }
-        return snapshots
-    }
-}
-
-/// The pill over a capsule in the window color, since its glass does not render offscreen.
-private final class PillStandIn: NSView {
-    /// A nil anchor shows the dragged pill.
-    init(content: IndicatorPillView.Content, anchor: IndicatorAnchor?) {
-        let pill = IndicatorPillView(frame: .zero)
-        pill.content = content
-        pill.level = 0.6
-        let frame: ScreenRect
-        if let anchor {
-            pill.layout =
-                IndicatorPlacement.isVertical(at: anchor, isCompact: content.isCompact) ? .vertical : .horizontal
-            // Only the size matters here, so any visible frame does.
-            frame = IndicatorPlacement.frame(
-                at: anchor, isCompact: content.isCompact, contentWidth: pill.fittingWidth,
-                in: ScreenRect(x: 0, y: 0, width: 1512, height: 945))
-        } else {
-            pill.layout = .drag
-            frame = IndicatorPlacement.dragFrame(centeredAt: ScreenPoint(x: 0, y: 0))
-        }
-        super.init(frame: NSRect(x: 0, y: 0, width: frame.width, height: frame.height))
-        pill.frame = bounds
-        addSubview(pill)
-    }
-
-    @available(*, unavailable)
-    required init?(coder: NSCoder) {
-        fatalError("PillStandIn is built in code")
-    }
-
-    override func draw(_ dirtyRect: NSRect) {
-        let radius = IndicatorPlacement.cornerRadius
-        let capsule = NSBezierPath(roundedRect: bounds.insetBy(dx: 0.5, dy: 0.5), xRadius: radius, yRadius: radius)
-        NSColor.controlBackgroundColor.setFill()
-        capsule.fill()
-        NSColor.separatorColor.setStroke()
-        capsule.stroke()
     }
 }

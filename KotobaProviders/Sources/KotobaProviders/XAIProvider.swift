@@ -29,6 +29,23 @@ final class XAIProvider: RouteClient {
         await connection.warm(endpoint)
     }
 
+    /// `GET /v1/api-key`: free, describes the key. A wrong key answers 400 ("Incorrect API key provided", seen on
+    /// 2026-10-15). `team_blocked` is read as no credit: xAI blocks a team that has no credit left or is over its
+    /// spending limit (not stated in xAI's docs; check on the first live test).
+    func checkKey(_ key: String, _ options: TranscriptionSettings.RouteOptions) async -> KeyCheck {
+        let url = endpoint.deletingLastPathComponent().appending(path: "api-key")
+        guard let (data, response) = await connection.probe(url, method: "GET", key: key) else { return .unreachable }
+        switch response.statusCode {
+        case 200: break
+        case 400: return .invalid
+        default: return ProviderHTTP.keyCheck(status: response.statusCode)
+        }
+        // A body of another shape (a proxy page) proves nothing about the key.
+        guard let info = try? JSONDecoder().decode(KeyInfo.self, from: data) else { return .unreachable }
+        if info.apiKeyBlocked || info.apiKeyDisabled { return .invalid }
+        return info.teamBlocked ? .noCredit : .valid
+    }
+
     func transcribe(_ request: TranscriptionRequest, _ options: TranscriptionSettings.RouteOptions) async throws
         -> Transcript
     {
@@ -70,4 +87,16 @@ private struct SuccessBody: Decodable {
     var text: String?
     /// Audio seconds, rounded to two decimals.
     var duration: Double?
+}
+
+private struct KeyInfo: Decodable {
+    enum CodingKeys: String, CodingKey {
+        case apiKeyBlocked = "api_key_blocked"
+        case apiKeyDisabled = "api_key_disabled"
+        case teamBlocked = "team_blocked"
+    }
+
+    var apiKeyBlocked: Bool
+    var apiKeyDisabled: Bool
+    var teamBlocked: Bool
 }

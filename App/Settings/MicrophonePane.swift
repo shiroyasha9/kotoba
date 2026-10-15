@@ -33,14 +33,33 @@ final class MicrophoneModel {
         var save: @MainActor ([MicrophonePreferences.Entry]) -> Void
         /// The UID of the mic kotoba records from.
         var current: @MainActor () -> String?
+        /// Starts the mic test; the stream yields the input level until the test ends.
+        var testLevels: @MainActor () async -> AsyncStream<Float> = { AsyncStream { $0.finish() } }
 
         static func live(_ preferences: MicrophonePreferences, audio: AudioCapture) -> Self {
             Self(
                 inputs: AudioDevices.inputs,
                 entries: { preferences.entries },
                 save: { preferences.entries = $0 },
-                current: { audio.inputInUse?.uid }
+                current: { audio.inputInUse?.uid },
+                testLevels: { await audio.testLevels(for: .seconds(5)) }
             )
+        }
+
+        /// Three sample mics, for snapshots: the built-in one in use and in the order, a Shure in the order but not
+        /// connected, and AirPods (Bluetooth) connected but not in the order.
+        @MainActor
+        static func sample() -> Self {
+            let builtIn = AudioDevice(
+                id: 1, uid: "built-in", name: "MacBook Pro Microphone", transport: .builtIn, hasInput: true)
+            let airPods = AudioDevice(
+                id: 2, uid: "airpods", name: "AirPods Pro", transport: .bluetooth, hasInput: true)
+            var entries = [
+                MicrophonePreferences.Entry(uid: "shure", name: "Shure MV7"),
+                MicrophonePreferences.Entry(uid: "built-in", name: "MacBook Pro Microphone"),
+            ]
+            return Self(
+                inputs: { [builtIn, airPods] }, entries: { entries }, save: { entries = $0 }, current: { "built-in" })
         }
     }
 
@@ -48,6 +67,9 @@ final class MicrophoneModel {
     private(set) var others: [Row] = []
     /// The mic in use, by UID.
     private(set) var currentUID: String?
+    /// The input level 0...1 while the mic test runs; nil otherwise.
+    private(set) var testLevel: Float?
+    @ObservationIgnored private var test: Task<Void, Never>?
 
     @ObservationIgnored private let source: Source
     @ObservationIgnored private let onChange: @MainActor () -> Void
@@ -88,6 +110,25 @@ final class MicrophoneModel {
         save(listed.filter { $0 != row })
     }
 
+    /// Records for 5 s and shows the level next to the mic in use (ux-polish MP2). The mic's orange dot shows
+    /// meanwhile, as after any click that records.
+    func testMicrophone() {
+        guard test == nil else { return }
+        testLevel = 0
+        test = Task {
+            for await level in await source.testLevels() {
+                testLevel = level
+            }
+            testLevel = nil
+            test = nil
+        }
+    }
+
+    /// Ends a running test early (the pane closed); the stream's end stops the capture.
+    func stopTest() {
+        test?.cancel()
+    }
+
     /// Clears the order, so kotoba follows the system default input again.
     func followSystemDefault() {
         save([])
@@ -106,9 +147,9 @@ private struct MicrophonePane: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
             List {
-                Section("Your Order") {
+                Section {
                     ForEach(model.listed) { row in
-                        MicrophoneRow(row: row, isCurrent: row.uid == model.currentUID)
+                        MicrophoneRow(row: row, isCurrent: row.uid == model.currentUID, level: model.testLevel)
                             .contextMenu {
                                 Button("Remove from Order", role: .destructive) { model.remove(row) }
                             }
@@ -118,20 +159,28 @@ private struct MicrophonePane: View {
                         Text("No mics in your order: kotoba follows the system default input.")
                             .foregroundStyle(.secondary)
                     }
+                } header: {
+                    Text("Your Order")
+                } footer: {
+                    Text("kotoba uses the first connected mic in this list. Drag to change the order.")
+                        .font(.callout)
+                        .fontWeight(.regular)
+                        .foregroundStyle(.secondary)
                 }
                 if !model.others.isEmpty {
                     Section("Other Connected") {
                         ForEach(model.others) { row in
-                            MicrophoneRow(row: row, isCurrent: row.uid == model.currentUID) { model.add(row) }
+                            MicrophoneRow(row: row, isCurrent: row.uid == model.currentUID, level: model.testLevel) {
+                                model.add(row)
+                            }
                         }
                     }
                 }
             }
             Divider()
             HStack {
-                Text("Drag to order. kotoba records from the first connected mic in your order.")
-                    .font(.callout)
-                    .foregroundStyle(.secondary)
+                Button("Test Microphone", action: model.testMicrophone)
+                    .disabled(model.testLevel != nil)
                 Spacer()
                 Button("Follow System Default", action: model.followSystemDefault)
                     .disabled(model.listed.isEmpty)
@@ -139,12 +188,15 @@ private struct MicrophonePane: View {
             .padding(12)
         }
         .onAppear(perform: model.reload)
+        .onDisappear(perform: model.stopTest)
     }
 }
 
 private struct MicrophoneRow: View {
     let row: MicrophoneModel.Row
     let isCurrent: Bool
+    /// The mic test's level, shown on the mic in use while the test runs.
+    var level: Float?
     /// A listed row shows a drag handle; another connected mic shows Add instead.
     var onAdd: (() -> Void)?
 
@@ -158,12 +210,25 @@ private struct MicrophoneRow: View {
             Text(row.name)
                 .foregroundStyle(row.isConnected ? .primary : .secondary)
             Spacer()
+            if isCurrent, let level {
+                // A live level, like the pill's meter, not a progress bar.
+                Capsule()
+                    .fill(.quaternary)
+                    .overlay(alignment: .leading) {
+                        Capsule()
+                            .fill(Color(nsColor: .systemGreen))
+                            .frame(width: 80 * CGFloat(min(max(level, 0), 1)))
+                    }
+                    .frame(width: 80, height: 6)
+                    .animation(.linear(duration: 0.1), value: level)
+                    .accessibilityLabel("Input level")
+            }
             if !row.isConnected {
                 Text("Not connected")
                     .font(.caption)
                     .foregroundStyle(.secondary)
             } else if row.isBluetooth {
-                Text("Bluetooth - lower quality")
+                Text("Bluetooth: lower quality while recording")
                     .font(.caption)
                     .foregroundStyle(.secondary)
             }
@@ -181,24 +246,20 @@ private struct MicrophoneRow: View {
 
 @MainActor
 extension SettingsPane {
-    /// The pane with three sample mics: the built-in one in use, AirPods (Bluetooth) connected, and a
-    /// USB mic in the order but not connected.
     static func microphoneSnapshots() -> [Snapshot] {
-        let builtIn = AudioDevice(
-            id: 1, uid: "built-in", name: "MacBook Pro Microphone", transport: .builtIn, hasInput: true)
-        let airPods = AudioDevice(id: 2, uid: "airpods", name: "AirPods Pro", transport: .bluetooth, hasInput: true)
-        var entries = [
-            MicrophonePreferences.Entry(uid: "shure", name: "Shure MV7"),
-            MicrophonePreferences.Entry(uid: "built-in", name: "MacBook Pro Microphone"),
-        ]
-        let source = MicrophoneModel.Source(
-            inputs: { [builtIn, airPods] },
-            entries: { entries },
-            save: { entries = $0 },
-            current: { "built-in" }
-        )
+        let source = MicrophoneModel.Source.sample()
         return [
-            SettingsWindow.snapshot(of: .microphones(MicrophoneModel(source: source) {}), named: "settings-microphone")
+            SettingsWindow.snapshot(of: .microphones(MicrophoneModel(source: source) {}), named: "settings-microphone"),
+            SettingsWindow.snapshot(of: .microphones(.testing(source)), named: "settings-microphone-test"),
         ]
+    }
+}
+
+extension MicrophoneModel {
+    /// A model in the middle of a mic test, for the snapshot.
+    static func testing(_ source: Source) -> MicrophoneModel {
+        let model = MicrophoneModel(source: source) {}
+        model.testLevel = 0.6
+        return model
     }
 }

@@ -19,6 +19,8 @@ final class KeychainStore: APIKeySource {
     private enum Cached {
         case unknown
         case missing
+        /// A key is stored; its value is not read yet.
+        case present
         case key(String)
     }
 
@@ -32,12 +34,27 @@ final class KeychainStore: APIKeySource {
     /// Whether a key is stored, without reading it.
     func hasKey() -> Bool {
         switch cached.withLock({ $0 }) {
-        case .key: return true
+        case .key, .present: return true
         case .missing: return false
-        case .unknown:
-            let status = SecItemCopyMatching(baseQuery as CFDictionary, nil)
-            if status == errSecItemNotFound { cached.withLock { $0 = .missing } }
-            return status == errSecSuccess
+        case .unknown: break
+        }
+        let status = SecItemCopyMatching(baseQuery as CFDictionary, nil)
+        let found: Cached? =
+            switch status {
+            case errSecSuccess: .present
+            case errSecItemNotFound: .missing
+            default: nil  // A locked keychain: ask again next time.
+            }
+        return cached.withLock { cached in
+            // A save or delete during the lookup is newer than its answer; keep it.
+            if case .unknown = cached, let found {
+                cached = found
+            }
+            switch cached {
+            case .key, .present: return true
+            case .missing: return false
+            case .unknown: return status == errSecSuccess
+            }
         }
     }
 
@@ -45,7 +62,7 @@ final class KeychainStore: APIKeySource {
         switch cached.withLock({ $0 }) {
         case .key(let key): return key
         case .missing: throw APIKeyError.missing
-        case .unknown: break
+        case .unknown, .present: break
         }
         var query = baseQuery
         query[kSecReturnData] = true

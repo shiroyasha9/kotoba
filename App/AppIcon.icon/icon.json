@@ -1,0 +1,75 @@
+{
+  "fill-specializations": [
+    {
+      "value": {
+        "linear-gradient": [
+          "srgb:0.98039,0.98039,0.96863,1.00000",
+          "srgb:0.90196,0.90980,0.89020,1.00000"
+        ]
+      }
+    },
+    {
+      "appearance": "dark",
+      "value": {
+        "linear-gradient": [
+          "srgb:0.12549,0.13725,0.16471,1.00000",
+          "srgb:0.05882,0.06667,0.08235,1.00000"
+        ]
+      }
+    }
+  ],
+  "groups": [
+    {
+      "layers": [
+        {
+          "fill-specializations": [
+            {
+              "value": {
+                "solid": "srgb:0.90980,0.33333,0.23922,1.00000"
+              }
+            },
+            {
+              "appearance": "dark",
+              "value": {
+                "solid": "srgb:1.00000,0.41961,0.29020,1.00000"
+              }
+            }
+          ],
+          "image-name": "caret.svg",
+          "name": "caret"
+        },
+        {
+          "fill-specializations": [
+            {
+              "value": {
+                "solid": "srgb:0.10588,0.11765,0.14118,1.00000"
+              }
+            },
+            {
+              "appearance": "dark",
+              "value": {
+                "solid": "srgb:0.93333,0.94118,0.95686,1.00000"
+              }
+            }
+          ],
+          "image-name": "wave.svg",
+          "name": "wave"
+        }
+      ],
+      "name": "Mark",
+      "shadow": {
+        "kind": "neutral",
+        "opacity": 0.5
+      },
+      "translucency": {
+        "enabled": false,
+        "value": 0
+      }
+    }
+  ],
+  "supported-platforms": {
+    "squares": [
+      "macOS"
+    ]
+  }
+}

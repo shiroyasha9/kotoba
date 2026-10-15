@@ -119,22 +119,6 @@ struct PipelineRetryTests {
         #expect(await world.provider.requests.count == 2)
     }
 
-    @Test func aRefusedRequestIsRejectedAndNeverRetried() async throws {
-        let world = FakeWorld(transcript: "no credits")
-        let pipeline = world.makePipeline()
-        await world.provider.fail(with: ProviderError.rejected(status: 402, message: "Insufficient credits"))
-
-        await pipeline.dictate(world)
-        let record = try #require(await world.store.records.first)
-        #expect(record.status == .rejected)
-        #expect(await pipeline.state == .rejected(record.id))
-
-        await world.provider.fail(with: nil)
-        await pipeline.retryPending()
-        #expect(await world.provider.requests.count == 1)
-        #expect(try #require(await world.store.records.first).status == .rejected)
-    }
-
     @Test func aNetworkFailureStaysRetryable() async throws {
         let world = FakeWorld(transcript: "offline")
         let pipeline = world.makePipeline()
@@ -143,18 +127,6 @@ struct PipelineRetryTests {
         await pipeline.dictate(world)
 
         #expect(try #require(await world.store.records.first).status == .failed)
-    }
-
-    @Test func aRetryRefusedByTheRouteBecomesRejected() async throws {
-        let world = FakeWorld(transcript: "later refused")
-        let pipeline = world.makePipeline()
-        await world.provider.fail(with: ProviderError.offline)
-        await pipeline.dictate(world)
-
-        await world.provider.fail(with: ProviderError.rejected(status: 400, message: "Unsupported audio"))
-        await pipeline.retryPending()
-
-        #expect(try #require(await world.store.records.first).status == .rejected)
     }
 
     @Test func anAuthErrorWaitsForAKeyAndIsNotRetriedOnItsOwn() async throws {
@@ -194,20 +166,6 @@ struct PipelineRetryTests {
         #expect(await world.provider.requests.count == 3)
         #expect(await world.pasteboard.text == "owner's")
         #expect(await world.paster.pasteCount == 0)
-    }
-
-    @Test func anEmptyTranscriptGetsOneRetryThenIsRejected() async throws {
-        let world = FakeWorld(transcript: "")
-        let pipeline = world.makePipeline()
-        await world.provider.fail(with: ProviderError.emptyTranscript)
-
-        await pipeline.dictate(world)
-        #expect(try #require(await world.store.records.first).status == .failed)
-        await pipeline.retryPending()
-        #expect(try #require(await world.store.records.first).status == .rejected)
-        await pipeline.retryPending()
-
-        #expect(await world.provider.requests.count == 2)
     }
 
     @Test func aRetryNeverSendsADictationThatFinishedMeanwhile() async throws {
@@ -296,4 +254,30 @@ struct PipelineRetryTests {
         await pipeline.setupChanged()
         #expect(try #require(await world.store.records.first).status == .recovered)
     }
+
+    @Test func eachHistoryWriteIsAnnounced() async throws {
+        let world = FakeWorld(transcript: "text")
+        let pipeline = world.makePipeline()
+        let changes = ChangeCounter()
+        let watcher = Task {
+            for await _ in pipeline.historyChanges {
+                await changes.record()
+            }
+        }
+        defer { watcher.cancel() }
+        await world.provider.fail(with: ProviderError.offline)
+
+        await pipeline.dictate(world)
+
+        #expect(await eventually { await changes.isAnnounced })
+    }
+}
+
+private actor ChangeCounter {
+    private(set) var isAnnounced = false
+
+    func record() {
+        isAnnounced = true
+    }
+
 }

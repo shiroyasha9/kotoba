@@ -27,9 +27,16 @@ struct TranscriptionSettingsTests {
         (" https://kotoba-speech.cognitiveservices.azure.com ", "https://kotoba-speech.cognitiveservices.azure.com"),
         ("http://kotoba-speech.cognitiveservices.azure.com", nil),
         ("kotoba-speech.cognitiveservices.azure.com", nil),
+        ("https://eastus.api.cognitive.microsoft.com/", "https://eastus.api.cognitive.microsoft.com/"),
+        // Prefixes met while typing, and hosts that only look like Azure: the key must never go there.
+        ("https://my", nil),
+        ("https://myres.co", nil),
+        ("https://myres.cognitiveservices.azure.com.example.com", nil),
+        ("https://cognitiveservices.azure.com", nil),
+        ("https://example.com", nil),
         ("", nil),
     ])
-    func azureEndpointMustBeAnHTTPSURL(text: String, expected: String?) {
+    func azureEndpointMustBeAnHTTPSAzureSpeechHost(text: String, expected: String?) {
         let settings = TranscriptionSettings.inMemory()
         settings.azureEndpoint = text
 
@@ -43,10 +50,9 @@ struct TranscriptionSettingsTests {
 
     @Test func eachProviderHasOneKeyAndDirectRoutesAreMarkedUntested() {
         #expect(TranscriptionRoute.allCases.map(\.account) == [.openRouter, .openRouter, .xai, .azure])
-        #expect(TranscriptionRoute.xaiGrok.note == "Untested live")
-        #expect(TranscriptionRoute.azureMAI.note == "Untested live")
-        #expect(TranscriptionRoute.openRouterGrok.note == "No zero-data-retention route")
-        #expect(TranscriptionRoute.openRouterMAI.note == nil)
+        #expect(TranscriptionRoute.openRouterGrok.note == "OpenRouter may keep audio")
+        #expect(TranscriptionRoute.allCases.filter { $0.note != nil } == [.openRouterGrok])
+        #expect(TranscriptionRoute.allCases.filter(\.isAdvanced) == [.xaiGrok, .azureMAI])
     }
 
     @Test(arguments: [
@@ -64,7 +70,7 @@ struct TranscriptionSettingsTests {
             }
         let stub = StubHost(reply: reply)
         stub.settings.route = route
-        stub.settings.azureEndpoint = stub.url("").absoluteString
+        stub.settings.azureEndpoint = stub.azureEndpoint
 
         let transcript = try await stub.provider().transcribe(stub.request())
 
@@ -74,29 +80,27 @@ struct TranscriptionSettingsTests {
 
     @Test func theRouterAndThePaneShareOneEndpointRule() {
         #expect(TranscriptionSettings.azureEndpointURL("https://a.cognitiveservices.azure.com") != nil)
+        #expect(TranscriptionSettings.azureEndpointURL("https://a.example.com") == nil)
         #expect(TranscriptionSettings.azureEndpointURL("http://a.cognitiveservices.azure.com") == nil)
         #expect(TranscriptionSettings.azureEndpointURL("https://") == nil)
     }
 
     @Test func eachChangeIsAnnouncedWithWhatChanged() async {
-        let settings = TranscriptionSettings.inMemory()
+        // A center of this test's own: tests running in parallel cannot post into it.
+        let center = NotificationCenter()
+        let settings = TranscriptionSettings.inMemory(notifications: center)
         let changes = Mutex<[TranscriptionSettings.Change]>([])
-        let observer = NotificationCenter.default.addObserver(
-            forName: TranscriptionSettings.didChange, object: nil, queue: nil
-        ) { note in
+        let observer = center.addObserver(forName: TranscriptionSettings.didChange, object: nil, queue: nil) { note in
             if let change = note.object as? TranscriptionSettings.Change { changes.withLock { $0.append(change) } }
         }
-        defer { NotificationCenter.default.removeObserver(observer) }
+        defer { center.removeObserver(observer) }
 
         settings.azureEndpoint = "https://a.cognitiveservices.azure.com"
         settings.route = .azureMAI
         settings.isGrokFormatOn = true
         settings.cleanupModel = .claudeHaiku
 
-        // Other tests running in parallel post too; only these four are checked, in order.
-        #expect(
-            changes.withLock { $0 }.filter { [.azureEndpoint, .route, .grokOptions, .cleanupModel].contains($0) }
-                .suffix(4) == [.azureEndpoint, .route, .grokOptions, .cleanupModel])
+        #expect(changes.withLock { $0 } == [.azureEndpoint, .route, .grokOptions, .cleanupModel])
     }
 
     @Test func missingSetupNamesTheKeyFirstThenTheAzureEndpoint() {
@@ -110,5 +114,31 @@ struct TranscriptionSettingsTests {
         settings.route = .openRouterMAI
         #expect(settings.missingSetup { $0 == .azure } == .key)
         #expect(settings.missingSetup { $0 == .openRouter } == nil)
+    }
+
+    @Test func routeTitlesAreThePlainSpeechModelNames() {
+        #expect(
+            TranscriptionRoute.allCases.map(\.title) == [
+                "MAI-Transcribe-2 via OpenRouter (Recommended)", "Grok via OpenRouter", "Grok via xAI",
+                "MAI-Transcribe-2 via Azure",
+            ])
+    }
+
+    @Test func menuTitlesDropTheRecommendation() {
+        #expect(
+            TranscriptionRoute.allCases.map(\.menuTitle) == [
+                "MAI-Transcribe-2 via OpenRouter", "Grok via OpenRouter", "Grok via xAI", "MAI-Transcribe-2 via Azure",
+            ])
+    }
+
+    @Test func eachAccountLinksToItsKeyAndCreditPages() {
+        #expect(ProviderAccount.openRouter.keysPage.absoluteString == "https://openrouter.ai/settings/keys")
+        #expect(ProviderAccount.openRouter.creditsPage.absoluteString == "https://openrouter.ai/settings/credits")
+        #expect(
+            ProviderAccount.openRouter.pricingPage.absoluteString == "https://openrouter.ai/microsoft/mai-transcribe-2")
+        #expect(
+            ProviderAccount.allCases.allSatisfy {
+                [$0.keysPage, $0.creditsPage, $0.pricingPage].allSatisfy { $0.scheme == "https" }
+            })
     }
 }

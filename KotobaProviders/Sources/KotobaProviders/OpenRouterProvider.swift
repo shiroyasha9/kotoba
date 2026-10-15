@@ -26,6 +26,19 @@ final class OpenRouterProvider: RouteClient {
         await connection.warm(baseURL.appending(path: "models/\(options.route.rawValue)/endpoints"))
     }
 
+    /// `GET /key`: free, returns the key's credit limit (https://openrouter.ai/docs/api/reference/limits). An
+    /// account with no credit at all is not visible here: the account balance (`GET /credits`) needs a management
+    /// key, not the API key kotoba holds (checked 2026-10-15). The first dictation reports it (402).
+    func checkKey(_ key: String, _ options: TranscriptionSettings.RouteOptions) async -> KeyCheck {
+        guard let (data, response) = await connection.probe(baseURL.appending(path: "key"), method: "GET", key: key)
+        else { return .unreachable }
+        guard response.statusCode == 200 else { return ProviderHTTP.keyCheck(status: response.statusCode) }
+        // A body of another shape (a proxy page) proves nothing about the key.
+        guard let info = try? JSONDecoder().decode(KeyInfo.self, from: data) else { return .unreachable }
+        if let remaining = info.data.limitRemaining, remaining <= 0 { return .noCredit }
+        return .valid
+    }
+
     func transcribe(_ request: TranscriptionRequest, _ options: TranscriptionSettings.RouteOptions) async throws
         -> Transcript
     {
@@ -126,4 +139,18 @@ private struct SuccessBody: Decodable {
 
     var text: String?
     var usage: Usage?
+}
+
+/// `GET /key`.
+private struct KeyInfo: Decodable {
+    var data: KeyLimit
+}
+
+/// `limit_remaining` is null for a key without a credit limit.
+private struct KeyLimit: Decodable {
+    enum CodingKeys: String, CodingKey {
+        case limitRemaining = "limit_remaining"
+    }
+
+    var limitRemaining: Double?
 }

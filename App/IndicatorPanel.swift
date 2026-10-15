@@ -1,6 +1,5 @@
 import AppKit
 import KotobaCore
-import KotobaProviders
 
 /// The floating recording indicator: a Liquid Glass pill with the state and the mic level, on the
 /// screen that holds the focused window. It sits at one of three anchors (`IndicatorAnchor`), and
@@ -10,8 +9,8 @@ import KotobaProviders
 final class IndicatorPanel {
     private static let anchorKey = "indicator.anchor"
 
-    /// Called when the owner clicks Undo after Esc.
-    var onUndo: (() -> Void)?
+    /// Called when the owner clicks the pill's button.
+    var onAction: ((PillAction) -> Void)?
 
     /// Saved in UserDefaults; setting it moves a visible pill there.
     var anchor: IndicatorAnchor {
@@ -35,21 +34,22 @@ final class IndicatorPanel {
     /// The pill's horizontal content width when the drag began, for the bottom target.
     private var dropTargetWidth: CGFloat = 0
     private var screenObserver: (any NSObjectProtocol)?
-    private var hideTask: Task<Void, Never>?
-    private var isRecording = false
-
-    private let longRecordingMinutes: Int
-
-    init(longRecordingWarning: Duration) {
-        longRecordingMinutes = Int(longRecordingWarning / .seconds(60))
+    /// The pill's hide timer: running until its deadline, or held by hover with the time that was left.
+    private enum HideTimer {
+        case running(deadline: ContinuousClock.Instant, task: Task<Void, Never>)
+        case paused(remaining: Duration)
     }
 
-    /// `provider`: the current route's provider, named when a key or endpoint is missing.
-    func show(_ state: DictationState, secureInput: Bool, provider: ProviderAccount) {
-        hideTask?.cancel()
+    private var hideTimer: HideTimer?
+    private var isHovering = false
+    private var isRecording = false
+
+    /// Shows the text and the button `StatusText` gives `state`, or hides the pill when there is none.
+    func show(_ state: DictationState, context: StatusContext) {
+        cancelHide()
         let wasRecording = isRecording
         isRecording = if case .recording = state { true } else { false }
-        guard let content = content(for: state, secureInput: secureInput, provider: provider) else {
+        guard let content = content(for: state, context: context) else {
             orderOut()
             return
         }
@@ -63,8 +63,11 @@ final class IndicatorPanel {
         if !wasVisible {
             panel.orderFrontRegardless()
         }
+        // A pill that appears under a still pointer gets no mouse-entered event.
+        isHovering = panel.frame.contains(NSEvent.mouseLocation)
         if content.hidesSoon {
-            hide(after: .seconds(4))
+            // A pill with a button gives the owner time to reach it.
+            hide(after: content.action == nil ? .seconds(4) : .seconds(8))
         }
     }
 
@@ -73,39 +76,77 @@ final class IndicatorPanel {
     }
 
     /// What the pill shows for `state`; nil hides it.
-    func content(
-        for state: DictationState, secureInput: Bool, provider: ProviderAccount
-    ) -> IndicatorPillView.Content? {
+    func content(for state: DictationState, context: StatusContext) -> IndicatorPillView.Content? {
+        let text = state.statusText(context) ?? ""
+        let action = state.pillAction(context)
         switch state {
         case .idle:
             return nil
         case .recording(let isLong):
-            var text = isLong ? "Listening - over \(longRecordingMinutes) min" : "Listening"
-            if secureInput {
-                text += " - secure input on"
-            }
-            // The warnings need their text, so only a plain "Listening" pill stands vertical.
-            return .init(text: text, color: .systemRed, showsMeter: true, isCompact: !isLong && !secureInput)
+            // Only a plain "Listening" pill stands vertical at an edge; the others carry more words.
+            let isPlain = !isLong && !context.isSecureInputOn
+            return .init(
+                text: text, color: .systemRed, toolTip: context.isSecureInputOn ? DictationState.secureInputHelp : nil,
+                showsMeter: true, isCompact: isPlain)
         case .transcribing:
-            return .init(text: "Transcribing", color: .systemBlue, showsSpinner: true, isCompact: true)
+            return .init(text: text, color: .systemBlue, showsSpinner: true, isCompact: true)
         case .undoable:
             // The pipeline ends the Undo window itself, so no hide timer here.
-            return .init(text: "Cancelled", color: .secondaryLabelColor, offersUndo: true)
+            return .init(text: text, color: .secondaryLabelColor, action: action)
         case .failed, .needsSetup, .rejected, .cleanupFailed, .recovered, .copied, .captureFailed:
             return .init(
-                text: state.outcomeMessage(provider: provider.title) ?? "",
-                color: state.isGoodOutcome ? .systemGreen : .systemOrange, hidesSoon: true)
+                text: text, color: state.isGoodOutcome ? .systemGreen : .systemOrange, action: action,
+                hidesSoon: true)
         }
     }
 
+    /// Hides the pill after `delay`, or holds the delay while the pointer is on the pill.
     private func hide(after delay: Duration) {
-        hideTask = Task { [weak self] in
+        cancelHide()
+        guard !isHovering else {
+            hideTimer = .paused(remaining: delay)
+            return
+        }
+        let task = Task { [weak self] in
             do {
                 try await Task.sleep(for: delay)
             } catch {
                 return
             }
+            // A show() between the wake-up and here cancelled this timer; its pill stays.
+            guard !Task.isCancelled else { return }
             self?.orderOut()
+        }
+        hideTimer = .running(deadline: .now + delay, task: task)
+    }
+
+    private func cancelHide() {
+        if case .running(_, let task) = hideTimer {
+            task.cancel()
+        }
+        hideTimer = nil
+    }
+
+    /// Hover holds a running hide timer; leaving restarts it with the time that was left.
+    private func hoverChanged(isInside: Bool) {
+        isHovering = isInside
+        switch hideTimer {
+        case .running(let deadline, let task) where isInside:
+            task.cancel()
+            hideTimer = .paused(remaining: max(ContinuousClock.now.duration(to: deadline), .seconds(1)))
+        case .paused(let remaining) where !isInside:
+            hide(after: remaining)
+        default:
+            break
+        }
+    }
+
+    private func perform(_ action: PillAction) {
+        onAction?(action)
+        // The pipeline ends the Undo window itself; any other action is done with the pill.
+        if action != .undo {
+            cancelHide()
+            orderOut()
         }
     }
 
@@ -127,7 +168,8 @@ final class IndicatorPanel {
 
         let pill = IndicatorPillView(frame: panel.contentLayoutRect)
         panel.contentView = pill
-        pill.onUndo = { [weak self] in self?.onUndo?() }
+        pill.onAction = { [weak self] action in self?.perform(action) }
+        pill.onHoverChanged = { [weak self] isInside in self?.hoverChanged(isInside: isInside) }
         pill.onDragBegan = { [weak self] in self?.beginDrag() }
         pill.onDragMoved = { [weak self] point in self?.moveDrag(to: point) }
         pill.onDragEnded = { [weak self] point in self?.endDrag(at: point) }

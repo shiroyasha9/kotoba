@@ -27,6 +27,21 @@ final class AzureProvider: RouteClient {
         await connection.warm(endpoint)
     }
 
+    /// `POST {endpoint}/sts/v1.0/issueToken`: free, swaps the key for a 10-minute token
+    /// (https://learn.microsoft.com/en-us/azure/ai-services/speech-service/rest-speech-to-text-short). 401 is a wrong
+    /// key; 403 with a key sent means the resource is out of quota.
+    func checkKey(_ key: String, _ options: TranscriptionSettings.RouteOptions) async -> KeyCheck {
+        guard let endpoint = options.azureEndpoint else { return .needsEndpoint }
+        let url = endpoint.appending(path: "sts/v1.0/issueToken")
+        guard let (_, response) = await connection.probe(url, method: "POST", key: key) else { return .unreachable }
+        switch response.statusCode {
+        case 200: return .valid
+        case 401: return .invalid
+        case 403: return .noCredit
+        default: return .unreachable
+        }
+    }
+
     func transcribe(_ request: TranscriptionRequest, _ options: TranscriptionSettings.RouteOptions) async throws
         -> Transcript
     {

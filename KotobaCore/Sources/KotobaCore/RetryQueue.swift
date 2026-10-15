@@ -13,6 +13,8 @@ public actor RetryQueue {
     private var isRunning = false
     /// Asked for while a run was going; it runs right after, so no request is lost.
     private var requested: RetrySelection?
+    /// Whether the last network report was offline.
+    private var isOffline = false
 
     init(steps: TranscriptionSteps, store: any Store, clock: any PipelineClock, clipboard: ClipboardGuard) {
         self.steps = steps
@@ -46,6 +48,13 @@ public actor RetryQueue {
             requested = nil
         }
         return results
+    }
+
+    /// Records a network report. Returns true when the report ends an outage; the first report is not a return,
+    /// because launch already retries.
+    func recordNetwork(isOnline: Bool) -> Bool {
+        defer { isOffline = !isOnline }
+        return isOnline && isOffline
     }
 
     private func runOnce(
@@ -120,7 +129,7 @@ public actor RetryQueue {
     /// Puts a recovered transcript (the cleaned one, for a cleanup dictation) on the clipboard and
     /// takes it off the Recovered list.
     public func copy(_ record: DictationRecord) async {
-        guard let text = record.cleanedText ?? record.transcript else { return }
+        guard let text = record.deliveredText else { return }
         await clipboard.copy(text)
         do {
             try await store.markCopied(record.id)

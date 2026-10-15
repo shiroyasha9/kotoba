@@ -227,11 +227,7 @@ struct OpenRouterProviderTests {
         (.fixture("error-502", status: 502), .server(status: 502)),
         (.raw(status: 503, body: ""), .server(status: 503)),
         (.fixture("error-400", status: 400), .rejected(status: 400, message: "Unsupported audio format")),
-        (
-            .fixture("error-402", status: 402),
-            .rejected(
-                status: 402, message: "Insufficient credits. Add more using https://openrouter.ai/settings/credits")
-        ),
+        (.fixture("error-402", status: 402), .noCredit),
         (.raw(status: 413, body: "Payload Too Large"), .rejected(status: 413, message: "Payload Too Large")),
         (.failure(.notConnectedToInternet), .offline),
         (.failure(.timedOut), .offline),

@@ -23,7 +23,8 @@ public actor HistoryStore: Store {
             recovered_at REAL,
             cleaned_text TEXT,
             needs_setup TEXT,
-            mode TEXT NOT NULL DEFAULT 'transcript'
+            mode TEXT NOT NULL DEFAULT 'transcript',
+            reject_reason TEXT
         );
         CREATE INDEX IF NOT EXISTS dictations_status ON dictations (status);
         CREATE TABLE IF NOT EXISTS latency_marks (
@@ -37,17 +38,19 @@ public actor HistoryStore: Store {
     /// Columns added after the first build the owner ran; an older database gets them on open.
     private static let addedColumns = [
         ("model", "TEXT"), ("recovered_at", "REAL"), ("cleaned_text", "TEXT"), ("needs_setup", "TEXT"),
-        ("mode", "TEXT NOT NULL DEFAULT 'transcript'"),
+        ("mode", "TEXT NOT NULL DEFAULT 'transcript'"), ("reject_reason", "TEXT"),
     ]
 
     private static let columns = """
         id, created_at, audio_path, audio_duration_ms, transcript, model, status, recovered_at, cleaned_text,
-        needs_setup, mode
+        needs_setup, mode, reject_reason
         """
 
-    /// SQL lists of statuses, from `DictationRecord.Status`: the retry queue, and the rows prune keeps.
+    /// SQL lists of statuses, from `DictationRecord.Status`: the retry queue, the rows prune keeps, and the rows whose
+    /// text reached the owner.
     private static let retryable = sqlList([.pending, .failed])
     private static let kept = sqlList([.pending, .failed, .rejected])
+    private static let delivered = sqlList([.pasted, .copied])
 
     /// ~/Library/Application Support/kotoba/
     public static var directory: URL {
@@ -83,12 +86,12 @@ public actor HistoryStore: Store {
             try database.run(
                 """
                 INSERT INTO dictations (\(Self.columns))
-                VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11)
+                VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12)
                 ON CONFLICT (id) DO UPDATE SET
                     audio_path = excluded.audio_path, audio_duration_ms = excluded.audio_duration_ms,
                     transcript = excluded.transcript, model = excluded.model, status = excluded.status,
                     recovered_at = excluded.recovered_at, cleaned_text = excluded.cleaned_text,
-                    needs_setup = excluded.needs_setup, mode = excluded.mode;
+                    needs_setup = excluded.needs_setup, mode = excluded.mode, reject_reason = excluded.reject_reason;
                 """,
                 [
                     id, .real(record.createdAt.timeIntervalSince1970), .text(record.audio.file.path),
@@ -96,6 +99,7 @@ public actor HistoryStore: Store {
                     Self.text(record.model), .text(record.status.rawValue),
                     record.recoveredAt.map { .real($0.timeIntervalSince1970) } ?? .null, Self.text(record.cleanedText),
                     Self.text(record.needsSetup?.rawValue), .text(record.mode.rawValue),
+                    Self.text(record.rejectReason?.rawValue),
                 ]
             )
             try database.run("DELETE FROM latency_marks WHERE dictation_id = ?1;", [id])
@@ -112,6 +116,15 @@ public actor HistoryStore: Store {
 
     public func pendingRetries() throws -> [DictationRecord] {
         try records(where: "status IN \(Self.retryable) ORDER BY created_at")
+    }
+
+    /// The newest dictation whose text reached the owner, pasted or left on the clipboard, for "Fix Last Dictation…".
+    /// Its `deliveredText` is the string the pipeline pasted. "Last" is the last one spoken
+    /// (`created_at`): a recovered dictation copied later does not count as newer.
+    public func lastDelivered() throws -> DictationRecord? {
+        try records(
+            where: "status IN \(Self.delivered) ORDER BY created_at DESC LIMIT 1", withLatency: false
+        ).first
     }
 
     public func status(of id: DictationID) throws -> DictationRecord.Status? {
@@ -189,6 +202,7 @@ public actor HistoryStore: Store {
         record.cleanedText = string(row[8])
         record.needsSetup = string(row[9]).flatMap(SetupItem.init(rawValue:))
         record.mode = string(row[10]).flatMap(DictationMode.init(rawValue:)) ?? .transcript
+        record.rejectReason = string(row[11]).flatMap(RejectReason.init(rawValue:))
         return record
     }
 

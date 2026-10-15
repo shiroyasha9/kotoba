@@ -26,8 +26,19 @@ private struct DictionaryPane: View {
     var body: some View {
         let rows = visibleRows
         VStack(spacing: 0) {
-            List(rows, id: \.self, selection: $selection) { row in
-                DictionaryRowView(draft: model.draft(for: row))
+            List(selection: $selection) {
+                if !model.suggestions.isEmpty, search.isEmpty {
+                    SuggestionsSection(model: model)
+                }
+                Section {
+                    ForEach(rows, id: \.self) { row in
+                        DictionaryRowView(draft: model.draft(for: row))
+                    }
+                } header: {
+                    if !model.suggestions.isEmpty, search.isEmpty, !rows.isEmpty {
+                        Text("Words and Replacements")
+                    }
+                }
             }
             .contextMenu(forSelectionType: DictionaryModel.Row.self) { rows in
                 if rows.count == 1, let row = rows.first {
@@ -45,13 +56,15 @@ private struct DictionaryPane: View {
             }
             .onDeleteCommand { delete() }
             .overlay {
-                if model.rows.isEmpty {
+                if model.rows.isEmpty, model.suggestions.isEmpty {
                     ContentUnavailableView(
                         "No Words Yet",
                         systemImage: "character.book.closed",
-                        description: Text("Add names and terms the model should know, or import them from Wispr Flow.")
+                        description: Text(
+                            "Add names and terms the speech model should know, or fix a word it always gets wrong. "
+                                + "You can also import from Wispr Flow.")
                     )
-                } else if rows.isEmpty {
+                } else if rows.isEmpty, !search.isEmpty {
                     ContentUnavailableView.search(text: search)
                 }
             }
@@ -92,10 +105,13 @@ private struct DictionaryPane: View {
             if isReading {
                 ProgressView().controlSize(.small)
             }
-            Button("Import from Wispr Flow…") { model.previewWisprImport() }
-                .disabled(model.wisprImport != nil)
+            if model.isWisprInstalled {
+                Button("Import from Wispr Flow…") { model.previewWisprImport() }
+                    .disabled(model.wisprImport != nil)
+            }
         }
         .padding(10)
+        .task { await model.checkWisprInstalled() }
     }
 
     private var visibleRows: [DictionaryModel.Row] {
@@ -110,8 +126,13 @@ private struct DictionaryPane: View {
 
     private var summary: String {
         let dictionary = model.dictionary
-        return "\(counted(dictionary.terms.count, "word")), \(counted(dictionary.rules.count, "replacement")). "
-            + "Keyterms sent: \(dictionary.keyterms.count) of \(PersonalDictionary.maxKeyterms)."
+        let hints =
+            dictionary.keyterms.count < PersonalDictionary.maxKeyterms
+            ? "The speech model gets up to \(PersonalDictionary.maxKeyterms) words as hints."
+            : "Only the first \(PersonalDictionary.maxKeyterms) words are sent as hints."
+        let words = StatusText.counted(dictionary.terms.count, "word")
+        let replacements = StatusText.counted(dictionary.rules.count, "replacement")
+        return "\(words), \(replacements). " + hints
     }
 
     private var isReading: Bool {
@@ -159,7 +180,7 @@ private struct DictionaryPane: View {
         case .preview(let preview, _) where !preview.isEmpty: "Import from Wispr Flow?"
         case .preview: "Nothing New in Wispr Flow"
         case .notFound: "Wispr Flow Not Found"
-        case .failed: "Wispr Flow's Dictionary Could Not Be Read"
+        case .failed: "Couldn’t Read Wispr Flow’s Dictionary"
         case .reading, nil: ""
         }
     }
@@ -169,34 +190,30 @@ private struct DictionaryPane: View {
         case .preview(let preview, let contents):
             var lines = [
                 preview.isEmpty
-                    ? "Every word in Wispr Flow's dictionary is already here."
-                    : "Adds \(counted(preview.terms.count, "word")) and \(counted(preview.rules.count, "replacement"))."
+                    ? "Every word in Wispr Flow’s dictionary is already here."
+                    : "Adds \(StatusText.counted(preview.terms.count, "word")) and "
+                        + "\(StatusText.counted(preview.rules.count, "replacement"))."
             ]
             if contents.learnedCorrections > 0 {
                 lines.append(
-                    "Includes \(counted(contents.learnedCorrections, "learned correction")): "
+                    "Includes \(StatusText.counted(contents.learnedCorrections, "learned correction")): "
                         + "what Wispr heard is replaced with the word you corrected it to.")
             }
             if preview.duplicateCount > 0 {
                 lines.append(
-                    "\(counted(preview.duplicateCount, "entry")) already in your dictionary.")
+                    "\(StatusText.counted(preview.duplicateCount, "entry")) already in your dictionary.")
             }
             if contents.snippets > 0 {
-                lines.append("Not imported: \(counted(contents.snippets, "snippet")).")
+                lines.append("Not imported: \(StatusText.counted(contents.snippets, "snippet")).")
             }
             return lines.joined(separator: " ")
         case .notFound:
-            return "kotoba looked for Wispr Flow's database in ~/Library/Application Support/Wispr Flow."
+            return "Wispr Flow is not on this Mac, or it has no dictionary yet."
         case .failed(let reason):
             return reason
         case .reading:
             return ""
         }
-    }
-
-    /// "1 entry", "2 entries": Foundation's grammar agreement picks the English plural.
-    private func counted(_ count: Int, _ noun: String) -> String {
-        String(AttributedString(localized: "^[\(count) \(noun)](inflect: true)").characters)
     }
 
     private func edit(_ row: DictionaryModel.Row) {
@@ -218,13 +235,14 @@ private struct DictionaryRowView: View {
             Text(draft.word)
             if draft.isReplacing {
                 Image(systemName: "arrow.right").foregroundStyle(.secondary)
-                Text(draft.replacement.isEmpty ? "(removed)" : draft.replacement)
+                Text(draft.replacement.isEmpty ? "(deleted from text)" : draft.replacement)
                     .foregroundStyle(draft.replacement.isEmpty ? .secondary : .primary)
             } else if draft.word.count > PersonalDictionary.maxKeytermLength {
                 Image(systemName: "exclamationmark.triangle.fill")
                     .symbolRenderingMode(.multicolor)
                     .help(
-                        "Longer than \(PersonalDictionary.maxKeytermLength) characters, so it is not sent to the model."
+                        "Longer than \(PersonalDictionary.maxKeytermLength) characters, so it is not sent to the "
+                            + "speech model."
                     )
             }
         }
@@ -240,15 +258,19 @@ private struct EntryEditor: View {
 
     var body: some View {
         Form {
-            TextField("Word", text: $draft.word, prompt: Text("PyTorch"))
-            Toggle("Replace it with", isOn: $draft.isReplacing.animation())
-            if draft.isReplacing {
-                TextField("Replacement", text: $draft.replacement, prompt: Text("Leave empty to remove the word"))
-                Toggle("Whole words only", isOn: $draft.isWholeWord)
-                Toggle("Match case", isOn: $draft.isCaseSensitive)
-            }
-            if let error {
-                Text(message(for: error)).foregroundStyle(.red)
+            Section {
+                TextField("Word", text: $draft.word, prompt: Text("PyTorch"))
+                Toggle("Replace it with", isOn: $draft.isReplacing.animation())
+                if draft.isReplacing {
+                    TextField("Replacement", text: $draft.replacement, prompt: Text("Leave empty to remove the word"))
+                    Toggle("Whole words only", isOn: $draft.isWholeWord)
+                    Toggle("Match case", isOn: $draft.isCaseSensitive)
+                }
+                if let error {
+                    Text(message(for: error)).foregroundStyle(.red)
+                }
+            } header: {
+                Text(isNew ? "Add Word" : "Edit Word").font(.headline)
             }
         }
         .formStyle(.grouped)
@@ -287,18 +309,8 @@ private struct EntryEditor: View {
 @MainActor
 extension SettingsPane {
     static func dictionarySnapshots() -> [Snapshot] {
-        let sample = PersonalDictionary(
-            terms: [
-                "PyTorch", "zshrc", "Vercel", "uv", "Supabase", String(repeating: "very-long-identifier-", count: 3),
-            ],
-            rules: [
-                ReplacementRule(find: "cloud code", replacement: "Claude Code"),
-                ReplacementRule(find: "um", replacement: ""),
-            ]
-        )
-        var incoming = PersonalDictionary(terms: ["Xandor", "changeset"])
-        incoming.rules = [ReplacementRule(find: "Zandor", replacement: "Xandor")]
-        let contents = WisprFlowImport.Contents(dictionary: incoming, learnedCorrections: 1, snippets: 2)
+        let sample = sampleDictionary
+        let (incoming, contents) = sampleWisprImport
         return [
             SettingsWindow.snapshot(of: .dictionary(sampleModel(sample)), named: "settings-dictionary"),
             SettingsWindow.snapshot(
@@ -309,49 +321,11 @@ extension SettingsPane {
             ),
             SettingsWindow.snapshot(
                 of: .dictionary(sampleModel(sample, import: .notFound)), named: "settings-dictionary-import-not-found"),
-            windowSnapshot(sample, import: nil, named: "settings-window"),
-            windowSnapshot(
-                PersonalDictionary(), import: .preview(PersonalDictionary().importPreview(of: incoming), contents),
-                named: "settings-window-import"),
             Snapshot(name: "settings-dictionary-editor") {
                 let rule = ReplacementRule(find: "cloud code", replacement: "Claude Code")
                 let editor = EntryEditor(draft: EntryDraft(rule: rule), isNew: false) { _ throws(DictionaryError) in }
-                return NSHostingView(rootView: editor)
+                return Snapshots.hostingView(editor)
             },
-        ]
-    }
-
-    /// The whole window with all three panes, on the Dictionary pane.
-    private static func windowSnapshot(
-        _ dictionary: PersonalDictionary,
-        import state: DictionaryModel.WisprImport?,
-        named name: String
-    ) -> Snapshot {
-        var entries = [MicrophonePreferences.Entry(uid: "built-in", name: "MacBook Pro Microphone")]
-        let microphones = MicrophoneModel.Source(
-            inputs: { [] }, entries: { entries }, save: { entries = $0 }, current: { "built-in" })
-        let panes: [SettingsPane] = [
-            .dictionary(sampleModel(dictionary, import: state)),
-            .microphones(MicrophoneModel(source: microphones) {}),
-            .providers(.sample(route: .openRouterMAI, azureEndpoint: "")),
-        ]
-        return SettingsWindow.windowSnapshot(of: panes, selecting: .dictionary, named: name)
-    }
-
-    /// A model over a throwaway store; snapshots never save.
-    private static func sampleModel(
-        _ dictionary: PersonalDictionary,
-        import state: DictionaryModel.WisprImport? = nil
-    ) -> DictionaryModel {
-        let url = FileManager.default.temporaryDirectory.appending(path: "kotoba-snapshot-\(UUID().uuidString).sqlite")
-        let store: DictionaryStore
-        do {
-            store = try DictionaryStore(url: url)
-        } catch {
-            preconditionFailure("Snapshot dictionary store: \(error)")
-        }
-        let model = DictionaryModel(dictionary: dictionary, store: store) { _ in }
-        model.wisprImport = state
-        return model
+        ] + windowSnapshots()
     }
 }

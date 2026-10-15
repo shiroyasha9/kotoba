@@ -171,6 +171,104 @@ UI text in this list is the text in the code at the phase 2 gate (2026-10-15). I
 | 99 | Stop a dictation, copy something before the text pastes | Your new copy is on the clipboard after the restore | |
 | 100 | Dictate twice quickly | Both paste; your original clipboard comes back | |
 
+## Phase 2.5
+
+Rows from each agent's phase 2.5 work. The numbers continue the list above.
+
+### Menu, readiness and recovery
+
+| # | Do this | Expect | Result |
+|---|---|---|---|
+| 101 | First launch on a clean user (or `defaults delete tech.teensy.kotoba onboarding.completed` with permissions reset) | No Microphone or Accessibility prompt at launch; the onboarding window opens | |
+| 102 | Open the menu while setup is not complete | First line "Finish Setting Up kotoba…" with a subtitle that names the first missing thing; the menu bar icon shows the waveform with "!" | |
+| 103 | Click "Finish Setting Up kotoba…" | Onboarding opens on that step | |
+| 104 | Allow Accessibility in onboarding, then tap ⌃⌥⌘ at once | The hotkey works at once, not after 5 s | |
+| 105 | Turn Wi-Fi off and dictate | Pill: "Couldn't reach OpenRouter. Saved." | |
+| 106 | Turn Wi-Fi on | Within seconds the pill says "Saved dictation recovered" with **Copy**; the menu lists it under Recovered Dictations; nothing is pasted | |
+| 107 | Settings > Microphone > **Test Microphone** | The level bar moves on the mic in use for 5 s and the orange dot shows; then both stop | |
+| 108 | Start a dictation during the microphone test | The dictation works normally | |
+| 109 | Cause each pill with a button: offline, no key, no credit, recovered, paste not allowed, mic access off | **Retry** retries; **Add Key…** opens Settings on Speech; **Add Credit…** opens the OpenRouter credits page; **Copy** copies the recovered text; **Allow Pasting…** opens onboarding at Accessibility; **Open Settings…** opens Privacy & Security > Microphone | |
+| 110 | Menu > **About kotoba** | The standard About panel opens with the version | |
+
+### Onboarding
+
+| # | Do this | Expect | Result |
+|---|---|---|---|
+| 111 | Fresh setup: run `defaults delete tech.teensy.kotoba onboarding.completed`, remove kotoba's Microphone and Accessibility grants, open kotoba | "Welcome to kotoba" opens, centred, on Welcome; no Microphone or Accessibility prompt shows before its step | |
+| 112 | Microphone step: click **Allow Microphone**, then **Allow** in the prompt | "Microphone allowed" with a checkmark; the window moves to Accessibility by itself in about 1 s | |
+| 113 | Microphone step, deny instead | "Microphone access is off."; **Open System Settings** opens Privacy & Security > Microphone | |
+| 114 | Turn kotoba on there | The step turns green and moves on without a click | |
+| 115 | Accessibility step: click **Open Accessibility Settings** | The system prompt shows (kotoba joins the list) | |
+| 116 | Click it again | Privacy & Security > Accessibility opens | |
+| 117 | Turn kotoba on there | The step turns green within 1 s and moves on | |
+| 118 | Key step: press ⌘V in the key field, then ⌘A | The key pastes, then all of it is selected; no beep | |
+| 119 | Press Return | Same as **Save**: the field clears; the result line shows the key check ("Key works" for a good key) | |
+| 120 | Click **Get a Key at OpenRouter…** | openrouter.ai/settings/keys opens | |
+| 121 | Key step: click **See Pricing…** | The pricing page of the current speech model's provider opens (OpenRouter: openrouter.ai/microsoft/mai-transcribe-2) | |
+| 122 | Key step: save a key with no credit | "This key has no credit. Add credit at OpenRouter." with **Add Credit…** | |
+| 123 | Click **Add Credit…** | openrouter.ai/settings/credits opens | |
+| 124 | Click **Use xAI or Azure Instead…** | Settings opens on Speech | |
+| 125 | Try It step | The text field has focus | |
+| 126 | Tap ⌃⌥⌘, speak, tap again | The text lands in the field; "It works." shows | |
+| 127 | Hold ⌃⌥⌘ while you speak, let go | Same as the tap | |
+| 128 | In the Try It field, press ⌘A, then ⌘V | Select all and paste work; no beep | |
+| 129 | Done step | "Open kotoba when you log in" is on | |
+| 130 | Click **Done** | kotoba is in System Settings > General > Login Items; if macOS asks for approval, the note and **Open Login Items Settings** show | |
+| 131 | Close the window on the key step; menu > **Finish Setting Up kotoba…** | The window opens again on the key step | |
+| 132 | Use **Back** and **Continue** on each step | Each moves one step | |
+| 133 | Press Return on Welcome, Microphone, Accessibility and Done | Return clicks **Get Started**, **Continue** or **Done**; on the key and Try It steps Return belongs to the field | |
+
+### Speech pane
+
+| # | Do this | Expect | Result |
+|---|---|---|---|
+| 134 | Open Settings | The sidebar shows "Speech" with a speech-bubble symbol (not "Providers") | |
+| 135 | Speech > **Speech model** | "MAI-Transcribe-2 via OpenRouter (Recommended)" and "Grok via OpenRouter"; under "Advanced": "Grok via xAI" and "MAI-Transcribe-2 via Azure"; no "Untested" text | |
+| 136 | Pick **Grok via OpenRouter** | Footer: "OpenRouter may keep this audio. MAI-Transcribe-2 keeps none."; the toggles "Format numbers and units" and "Keep filler words" show; no "a few cents per hour" line | |
+| 137 | Pick **MAI-Transcribe-2 via OpenRouter (Recommended)** | Only the "OpenRouter Key" section shows, with "You pay OpenRouter directly, a few cents per hour of speech."; no Azure section; no toggles | |
+| 138 | Look under the key row | **Get a Key…** and **See Pricing…** | |
+| 139 | Click **Get a Key…**, then **See Pricing…** | The browser opens OpenRouter's keys page, then the MAI-Transcribe-2 price page | |
+| 140 | Pick each speech model in turn and click **Get a Key…** and **See Pricing…** | OpenRouter, the xAI console and the Azure portal (keys), and each provider's price page open (sign in if asked) | |
+| 141 | Paste a valid key, press **Save** | "Checking the key…", then a green "Key works" | |
+| 142 | Paste a wrong key (for example "sk-or-wrong"), press **Save** | "OpenRouter did not accept this key" in red | |
+| 143 | Save a key with no credit | "This key has no credit." with **Add Credit…**, which opens OpenRouter's credits page | |
+| 144 | Turn Wi-Fi off, save a key | "Couldn’t reach OpenRouter. The key is saved; kotoba checks it at your first dictation." | |
+| 145 | Save a key, then save another one at once | Only the second key's result shows | |
+| 146 | Close and open Settings with a saved key | The key row shows a green "Saved"; the field is empty (the key is never shown) | |
+| 147 | Click in the key field, press ⌘V, then ⌘A | The key pastes (dots), then all of it is selected; no beep | |
+| 148 | Pick **MAI-Transcribe-2 via Azure** | The "Azure Key" section and the "Azure Speech" endpoint section show; footer "Use a Speech resource in the region nearest to you." | |
+| 149 | Endpoint field: press ⌘V, then ⌘A | The text pastes, then all of it is selected; no beep | |
+| 150 | With dictations waiting for the endpoint, type a valid endpoint slowly, then press Return | Nothing is sent while you type; the waiting dictations are sent only after Return | |
+| 151 | Type `https://example.com` in the endpoint field, press Return | Red text: "Use the https endpoint from the Azure portal (Keys and Endpoint)."; the stored endpoint does not change | |
+| 152 | Type a valid endpoint, then click another field (no Return) | The endpoint is saved when the field loses focus | |
+| 153 | Save an Azure key with the endpoint empty | "Key saved. Add your Azure endpoint to check it." | |
+| 154 | With keys for two providers saved, look below the key section | A closed "Other Keys" group; it opens to the other provider's key row | |
+| 155 | Change the speech model in the menu while Settings is open | The pane shows the new model at once | |
+| 156 | Look for the cleanup model in the Speech pane | It is not there; it is in the General pane next to the cleanup chord | |
+
+### Fix Last Dictation
+
+| # | Do this | Expect | Result |
+|---|---|---|---|
+| 157 | Dictate "deploy it to versel today", then menu > **Fix Last Dictation…** | The field shows that dictation's text; **Learn** is dimmed until you change the text | |
+| 158 | In the field, press ⌘A, ⌘C, ⌘X, ⌘V and ⌘Z | Each works; no beep | |
+| 159 | Change "versel" to "Vercel", click **Learn** | "versel -> Vercel" shows, checked | |
+| 160 | Change a known word pair (for example "add it" to "audit"), click **Learn** | The pair shows unchecked | |
+| 161 | Edit the text again after **Learn** | The list goes away; **Learn** shows again | |
+| 162 | Click **Add and Copy** | The window closes; nothing pastes by itself; ⌘V in any app pastes the fixed text | |
+| 163 | Open Settings > Dictionary | "Vercel" and the replacement versel -> Vercel are there; the pair does not come back as a suggestion | |
+| 164 | After **Learn**, uncheck every word | The button reads **Copy**; it copies the text and adds nothing | |
+| 165 | With no dictation since install, open **Fix Last Dictation…** | "No dictation to fix yet" and **Close** | |
+
+### Pill action buttons
+
+| # | Do this | Expect | Result |
+|---|---|---|---|
+| 166 | Turn Wi-Fi off and dictate | The pill shows its message with one button (**Retry**) and stays about 8 s; a message pill without a button stays about 4 s | |
+| 167 | Hold the pointer over a message pill | It does not hide while the pointer is on it; it hides a few seconds after the pointer leaves | |
+| 168 | While you type in another app, click the pill's button | The action runs on the first click (for example **Retry** starts the retry); the pill hides; focus stays in the app you type in | |
+| 169 | Press Esc during a recording, wait | **Undo** keeps the pill until the Undo window ends | |
+
 ## Known offscreen-only doubts
 
 The offscreen snapshots (`make snapshots`) show two things that may not happen in the real app. Check them on screen:

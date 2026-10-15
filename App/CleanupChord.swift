@@ -1,8 +1,8 @@
 import Foundation
 import KotobaCore
 
-/// The owner's choice of cleanup chord, saved in UserDefaults: Ctrl+Opt+Cmd+Shift by default, which
-/// a Caps Lock "Hyper" key also presses (all four, in any order), or Ctrl+Opt+Cmd+Fn, or off.
+/// The owner's choice of cleanup chord, saved in UserDefaults: ⌃⌥⌘⇧ by default, which a Caps Lock "Hyper"
+/// key also presses (all four, in any order), or ⌃⌥⌘fn, or off.
 enum CleanupChord: String, CaseIterable {
     case shift
     case function
@@ -25,8 +25,8 @@ enum CleanupChord: String, CaseIterable {
 
     var title: String {
         switch self {
-        case .shift: "Ctrl+Opt+Cmd+Shift"
-        case .function: "Ctrl+Opt+Cmd+Fn"
+        case .shift: StatusText.dictationChord + "⇧"
+        case .function: StatusText.dictationChord + "fn"
         case .off: "Off"
         }
     }

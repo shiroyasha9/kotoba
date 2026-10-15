@@ -25,7 +25,7 @@ public enum DictationState: Sendable, Equatable {
     /// Transcription failed. The audio is kept and queued for retry.
     case failed(DictationID)
     /// The route refused the request; a retry cannot help. The audio is kept.
-    case rejected(DictationID)
+    case rejected(DictationID, RejectReason)
     /// The route needs an API key. The audio is kept and retried when the owner saves one.
     case needsSetup(DictationID, SetupItem)
     /// The cleanup failed, so the raw transcript was pasted.
@@ -41,7 +41,7 @@ public enum DictationState: Sendable, Equatable {
     static func outcome(of record: DictationRecord) -> Self {
         switch record.status {
         case .recovered: .recovered(record.id)
-        case .rejected: .rejected(record.id)
+        case .rejected: .rejected(record.id, record.rejectReason ?? .other)
         case .copied: .copied(record.id)
         case .failed where record.needsSetup != nil: .needsSetup(record.id, record.needsSetup ?? .key)
         case .failed, .pending: .failed(record.id)
@@ -57,7 +57,8 @@ extension DictationPipeline {
         public let paster: any Paster
         public let pasteboard: any Pasteboard
         public let clock: any PipelineClock
-        public let store: any Store
+        /// The pipeline wraps it so each write is announced on `historyChanges`.
+        public internal(set) var store: any Store
         /// Cleans the transcript of a cleanup dictation; nil pastes the raw transcript.
         public let cleaner: (any TextCleaner)?
         /// What the current route still needs before it can send (a key or an endpoint); nil when ready.

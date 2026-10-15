@@ -118,3 +118,62 @@ custom_rules:
     excluded_match_kinds: [comment, doccomment, string]
     message: "One long-lived URLSession per provider, built in its init; a session per request costs a TLS handshake. Mark that one line with `// swiftlint:disable:next url_session_construction`."
     severity: error
+  # CODING_STANDARDS.md "User-facing text" rules 3, 5 and 8, on UI strings in App/ only: strings on a line that
+  # builds UI (Text(, Button(, NSMenuItem(title:, .toolTip = …) and every string in App/StatusText.swift.
+  # Log strings are not on such lines, so they never trip these rules.
+  ui_text_ellipsis:
+    name: "UI text: one-character ellipsis"
+    included: ["App/.*\\.swift"]
+    regex: "(?<=(?:\\b(?:Text|Button|Toggle|Section|Label|Picker|LabeledContent|Link|Menu|TextField|SecureField|GroupBox|NSMenuItem|NSButton|NSTextField|NSAlert|MenuChoice|help|navigationTitle|confirmationDialog|alert)\\(|\\.(?:title|subtitle|toolTip|messageText|informativeText|placeholderString|stringValue|prompt) = )[^\\n]{0,200})\\.\\.\\."
+    match_kinds: [string]
+    message: "Use the one-character ellipsis \"…\", only on an item that opens a window or asks for more input (CODING_STANDARDS.md, User-facing text 3)."
+    severity: error
+  ui_text_internal_terms:
+    name: "UI text: no internal terms"
+    included: ["App/.*\\.swift"]
+    regex: "(?<=(?:\\b(?:Text|Button|Toggle|Section|Label|Picker|LabeledContent|Link|Menu|TextField|SecureField|GroupBox|NSMenuItem|NSButton|NSTextField|NSAlert|MenuChoice|help|navigationTitle|confirmationDialog|alert)\\(|\\.(?:title|subtitle|toolTip|messageText|informativeText|placeholderString|stringValue|prompt) = )[^\\n]{0,200})(?i:\\b(?:routes?|keyterms?|ZDR|zero-data-retention|needsSetup|untested|(?:microsoft|x-ai|openai|google)/[\\w.-]+)\\b)"
+    match_kinds: [string]
+    message: "No internal terms in UI text: route, keyterm, ZDR, zero-data-retention, needsSetup, untested, model slugs (CODING_STANDARDS.md, User-facing text 5)."
+    severity: error
+  ui_text_dash:
+    name: "UI text: no \" - \" between phrases"
+    included: ["App/.*\\.swift"]
+    regex: "(?<=(?:\\b(?:Text|Button|Toggle|Section|Label|Picker|LabeledContent|Link|Menu|TextField|SecureField|GroupBox|NSMenuItem|NSButton|NSTextField|NSAlert|MenuChoice|help|navigationTitle|confirmationDialog|alert)\\(|\\.(?:title|subtitle|toolTip|messageText|informativeText|placeholderString|stringValue|prompt) = )[^\\n]{0,200}) - "
+    match_kinds: [string]
+    message: "No \" - \" between phrases in UI text: two sentences, a colon, or \"·\" before a value (CODING_STANDARDS.md, User-facing text 8)."
+    severity: error
+  ui_text_straight_quotes:
+    name: "UI text: curly apostrophe and quotes"
+    included: ["App/.*\\.swift"]
+    regex: "(?<=(?:\\b(?:Text|Button|Toggle|Section|Label|Picker|LabeledContent|Link|Menu|TextField|SecureField|GroupBox|NSMenuItem|NSButton|NSTextField|NSAlert|MenuChoice|help|navigationTitle|confirmationDialog|alert)\\(|\\.(?:title|subtitle|toolTip|messageText|informativeText|placeholderString|stringValue|prompt) = )[^\\n]{0,200})(?:'|\\\\\")"
+    match_kinds: [string]
+    message: "Use the curly apostrophe and quotes (’ “ ”) in UI text, not ' or \\\" (CODING_STANDARDS.md, User-facing text 13)."
+    severity: error
+  status_text_straight_quotes:
+    name: "Status text: curly apostrophe and quotes"
+    included: ["App/StatusText\\.swift"]
+    regex: "(?:'|\\\\\")"
+    match_kinds: [string]
+    message: "Use the curly apostrophe and quotes (’ “ ”) in pill and menu text, not ' or \\\" (CODING_STANDARDS.md, User-facing text 13)."
+    severity: error
+  status_text_ellipsis:
+    name: "Status text: one-character ellipsis"
+    included: ["App/StatusText\\.swift"]
+    regex: "\\.\\.\\."
+    match_kinds: [string]
+    message: "Use the one-character ellipsis \"…\" (CODING_STANDARDS.md, User-facing text 3)."
+    severity: error
+  status_text_internal_terms:
+    name: "Status text: no internal terms"
+    included: ["App/StatusText\\.swift"]
+    regex: "(?i:\\b(?:routes?|keyterms?|ZDR|zero-data-retention|needsSetup|untested|(?:microsoft|x-ai|openai|google)/[\\w.-]+)\\b)"
+    match_kinds: [string]
+    message: "No internal terms in pill or menu text (CODING_STANDARDS.md, User-facing text 5)."
+    severity: error
+  status_text_dash:
+    name: "Status text: no \" - \" between phrases"
+    included: ["App/StatusText\\.swift"]
+    regex: " - "
+    match_kinds: [string]
+    message: "No \" - \" between phrases in pill or menu text (CODING_STANDARDS.md, User-facing text 8)."
+    severity: error

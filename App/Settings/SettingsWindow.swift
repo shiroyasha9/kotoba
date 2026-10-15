@@ -2,9 +2,9 @@ import AppKit
 import Observation
 import SwiftUI
 
-/// One page in the Settings sidebar. To add a pane, add its case to `SettingsPaneID`, write
-/// `extension SettingsPane { static func name(…) -> Self }` in its own file under App/Settings/ and add it to the
-/// list in `SettingsController`.
+/// One page in the Settings sidebar. To add a pane, add its case to `SettingsPaneID` (the case order is the sidebar
+/// order), write `extension SettingsPane { static func name(…) -> Self }` in its own file under App/Settings/ and add
+/// it to the list in `SettingsController`.
 struct SettingsPane: Identifiable {
     let id: SettingsPaneID
     let title: String
@@ -12,16 +12,20 @@ struct SettingsPane: Identifiable {
     let content: @MainActor () -> AnyView
 }
 
-enum SettingsPaneID: String, Hashable {
+/// In sidebar order: the panes a new user needs first come first (docs/research/ux-polish.md W2).
+enum SettingsPaneID: String, Hashable, CaseIterable {
+    case general
+    case speech
     case dictionary
     case microphones
-    case providers
 }
 
 /// The Settings window, built when the owner opens it and released when they close it. SwiftUI is used only for
 /// on-demand windows (docs/spec.md, Platform and UI).
 @MainActor
 final class SettingsWindow: NSObject, NSWindowDelegate {
+    static let defaultSize = NSSize(width: 720, height: 480)
+
     private var window: NSWindow?
     private let selection = Selection()
 
@@ -43,12 +47,13 @@ final class SettingsWindow: NSObject, NSWindowDelegate {
     }
 
     private func makeWindow(panes: [SettingsPane]) -> NSWindow {
-        let view = SettingsView(panes: panes, selection: selection)
+        // The window title follows the pane, as in System Settings.
+        let view = SettingsView(panes: panes, selection: selection) { [weak self] title in self?.window?.title = title }
         let window = NSWindow(contentViewController: NSHostingController(rootView: view))
-        window.title = "kotoba Settings"
+        window.title = "Settings"
         window.styleMask = [.titled, .closable, .miniaturizable, .resizable, .fullSizeContentView]
         window.isReleasedWhenClosed = false
-        window.setContentSize(NSSize(width: 720, height: 480))
+        window.setContentSize(Self.defaultSize)
         window.setFrameAutosaveName("Settings")
         window.delegate = self
         window.center()
@@ -66,6 +71,18 @@ private final class Selection {
 private struct SettingsView: View {
     let panes: [SettingsPane]
     @Bindable var selection: Selection
+    let onTitle: (String) -> Void
+
+    init(panes: [SettingsPane], selection: Selection, onTitle: @escaping (String) -> Void = { _ in }) {
+        let order = SettingsPaneID.allCases
+        self.panes = panes.sorted { order.firstIndex(of: $0.id) ?? 0 < order.firstIndex(of: $1.id) ?? 0 }
+        self.selection = selection
+        self.onTitle = onTitle
+    }
+
+    private var shown: SettingsPane? {
+        panes.first { $0.id == selection.id } ?? panes.first
+    }
 
     var body: some View {
         NavigationSplitView {
@@ -74,13 +91,14 @@ private struct SettingsView: View {
             }
             .navigationSplitViewColumnWidth(min: 160, ideal: 180, max: 240)
         } detail: {
-            if let pane = panes.first(where: { $0.id == selection.id }) ?? panes.first {
+            if let pane = shown {
                 pane.content()
                     .navigationTitle(pane.title)
             }
         }
         .frame(minWidth: 600, minHeight: 380)
         .onAppear { selection.id = selection.id ?? panes.first?.id }
+        .onChange(of: shown?.title, initial: true) { _, title in onTitle(title ?? "Settings") }
     }
 }
 
@@ -93,7 +111,7 @@ extension SettingsWindow {
     /// `height` above the window's 440 shows a pane that scrolls in the window in full.
     static func snapshot(of pane: SettingsPane, named name: String, height: CGFloat = 440) -> Snapshot {
         Snapshot(name: name) {
-            let view = NSHostingView(rootView: pane.content().frame(width: 540, height: height))
+            let view = Snapshots.hostingView(pane.content().frame(width: 540, height: height))
             view.setFrameSize(NSSize(width: 540, height: height))
             return view
         }
@@ -101,8 +119,6 @@ extension SettingsWindow {
 }
 
 extension SettingsWindow {
-    static let defaultSize = NSSize(width: 720, height: 480)
-
     /// The whole window content (sidebar and detail) at the window's size, for `make snapshots`. It stops the run when
     /// the content is taller or wider than the window: on 2026-10-15 a pane that grew past the window pushed the
     /// sidebar rows above its top and the footer below its bottom, so the window looked empty. The sidebar's
@@ -111,21 +127,15 @@ extension SettingsWindow {
     static func windowSnapshot(of panes: [SettingsPane], selecting id: SettingsPane.ID, named name: String)
         -> Snapshot
     {
-        Snapshot(name: name) {
+        let overflow: @MainActor (NSView) -> String? = { view in
+            view.subviews.first { $0.frame != view.bounds }.map {
+                "Settings content is \($0.frame), the window is \(view.bounds)"
+            }
+        }
+        return Snapshots.fixedWindow(named: name, size: defaultSize, check: overflow) {
             let selection = Selection()
             selection.id = id
-            let view = NSHostingView(rootView: SettingsView(panes: panes, selection: selection))
-            view.setFrameSize(defaultSize)
-            let window = NSWindow(
-                contentRect: NSRect(origin: .zero, size: defaultSize), styleMask: .borderless, backing: .buffered,
-                defer: true)
-            window.contentView = view
-            view.layoutSubtreeIfNeeded()
-            for content in view.subviews where content.frame != view.bounds {
-                preconditionFailure("\(name): Settings content is \(content.frame), the window is \(view.bounds)")
-            }
-            window.contentView = nil
-            return view
+            return SettingsView(panes: panes, selection: selection)
         }
     }
 }

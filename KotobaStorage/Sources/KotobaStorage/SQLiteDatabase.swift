@@ -14,6 +14,16 @@ final class SQLiteDatabase {
         case integer(Int64)
         case real(Double)
         case text(String)
+
+        /// `.text`, or `.null` for nil.
+        static func nullable(_ text: String?) -> Self {
+            text.map(Self.text) ?? .null
+        }
+
+        /// The text of a `.text` value; nil for any other.
+        var string: String? {
+            if case .text(let text) = self { text } else { nil }
+        }
     }
 
     /// SQLITE_TRANSIENT: SQLite copies bound text before the call returns.

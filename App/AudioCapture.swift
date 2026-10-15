@@ -48,6 +48,9 @@ actor AudioCapture: AudioSource {
     private var isDeviceCheckQueued = false
     /// A mic change that arrived during a capture; it applies when the capture ends.
     private var isInputChangeDeferred = false
+    /// The Settings mic test's level stream, while a test records into a throwaway file.
+    private var testLevels: AsyncStream<Float>.Continuation?
+    private var testTimer: Task<Void, Never>?
 
     init(preferences: MicrophonePreferences) {
         self.preferences = preferences
@@ -100,6 +103,51 @@ actor AudioCapture: AudioSource {
     }
 
     func beginCapture(into file: URL) async throws -> AsyncStream<CaptureEvent> {
+        // A dictation ends a mic test; this costs one engine restart, only when a test runs.
+        await endTest()
+        return try startCapture(into: file, levels: levelContinuation)
+    }
+
+    /// The Settings mic test (ux-polish MP2): records `duration` into a throwaway file and yields the input
+    /// level until it ends. It yields nothing when the mic is not allowed (no prompt from Settings) or a
+    /// dictation records.
+    func testLevels(for duration: Duration) -> AsyncStream<Float> {
+        let (levels, continuation) = AsyncStream.makeStream(of: Float.self, bufferingPolicy: .bufferingNewest(1))
+        let file = URL.temporaryDirectory.appending(path: "kotoba-microphone-test-\(UUID().uuidString).flac")
+        guard AVAudioApplication.shared.recordPermission == .granted, writer == nil else {
+            continuation.finish()
+            return levels
+        }
+        do {
+            _ = try startCapture(into: file, levels: continuation)
+        } catch {
+            Log.audio.error("The mic test did not start: \(error)")
+            continuation.finish()
+            return levels
+        }
+        testLevels = continuation
+        // A reader that stops early (the pane closed) ends the test; `endTest` does nothing when it already ran.
+        continuation.onTermination = { _ in Task { await self.endTest() } }
+        testTimer = Task {
+            // Cancelled only by an earlier end, which has done the work.
+            guard (try? await Task.sleep(for: duration)) != nil else { return }
+            await endTest()
+        }
+        return levels
+    }
+
+    private func endTest() async {
+        guard let testLevels else { return }
+        self.testLevels = nil
+        testTimer?.cancel()
+        testTimer = nil
+        await discardCapture()
+        testLevels.finish()
+    }
+
+    private func startCapture(
+        into file: URL, levels: AsyncStream<Float>.Continuation
+    ) throws -> AsyncStream<CaptureEvent> {
         if graph == nil {
             graph = makeGraph()
         }
@@ -117,7 +165,7 @@ actor AudioCapture: AudioSource {
                 ring: ring,
                 readingFrom: readPosition,
                 events: continuation,
-                levels: levelContinuation
+                levels: levels
             )
         } catch {
             stopEngine()

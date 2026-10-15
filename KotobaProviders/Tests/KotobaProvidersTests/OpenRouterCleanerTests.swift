@@ -97,11 +97,7 @@ struct OpenRouterCleanerTests {
             StubReply.raw(status: 200, body: #"{"choices":[{"message":{"content":" "}}]}"#),
             ProviderError.emptyTranscript
         ),
-        (
-            .fixture("error-402", status: 402),
-            .rejected(
-                status: 402, message: "Insufficient credits. Add more using https://openrouter.ai/settings/credits")
-        ),
+        (.fixture("error-402", status: 402), .noCredit),
         (.raw(status: 429, body: ""), .rateLimited(retryAfter: nil)),
         (.failure(.notConnectedToInternet), .offline),
     ])

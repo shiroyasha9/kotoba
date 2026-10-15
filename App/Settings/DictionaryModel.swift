@@ -1,4 +1,4 @@
-import Foundation
+import AppKit
 import KotobaCore
 import KotobaStorage
 import Observation
@@ -23,9 +23,15 @@ final class DictionaryModel {
     }
 
     private(set) var dictionary: PersonalDictionary
+    /// Pending suggestions learned from corrections, the most seen first. The menu shows their count.
+    private(set) var suggestions: [DictionarySuggestion] = []
+    /// Pairs the owner dismissed; a correction detector skips them.
+    private(set) var dismissedPairs: Set<SuggestionPair> = []
     /// A save that failed, shown under the list until the next save works.
     private(set) var saveError: String?
     var wisprImport: WisprImport?
+    /// False hides "Import from Wispr Flow…": Wispr Flow's folder is not on this Mac.
+    var isWisprInstalled = false
 
     @ObservationIgnored private let store: DictionaryStore
     @ObservationIgnored private let onChange: @MainActor (PersonalDictionary) async -> Void
@@ -33,13 +39,29 @@ final class DictionaryModel {
     @ObservationIgnored private var saving: Task<Void, Never>?
     @ObservationIgnored private var reading: Task<Void, Never>?
 
+    /// `suggestions` given (snapshots) skips reading them from the store.
     init(
-        dictionary: PersonalDictionary, store: DictionaryStore,
+        dictionary: PersonalDictionary, store: DictionaryStore, suggestions: [DictionarySuggestion]? = nil,
         onChange: @escaping @MainActor (PersonalDictionary) async -> Void
     ) {
         self.dictionary = dictionary
         self.store = store
         self.onChange = onChange
+        if let suggestions {
+            self.suggestions = suggestions
+        } else {
+            saving = Task { await refreshSuggestions() }
+        }
+    }
+
+    /// The English spell checker's answer for one word, for "a common heard word gives a word only, never a
+    /// replacement". A word the user taught the spell checker (Learned Words: "Vercel", "embra") is not a common
+    /// word; counting it as known made real corrections weak (learning's evaluation on the Wispr pairs).
+    static func isKnownWord(_ word: String) -> Bool {
+        let checker = NSSpellChecker.shared
+        let misspelled = checker.checkSpelling(
+            of: word, startingAt: 0, language: "en", wrap: false, inSpellDocumentWithTag: 0, wordCount: nil)
+        return misspelled.location == NSNotFound && !checker.hasLearnedWord(word)
     }
 
     var rows: [Row] {
@@ -96,17 +118,93 @@ final class DictionaryModel {
         wisprImport = .reading
         reading = Task {
             do {
-                guard let contents = try await WisprFlowImport.readInstalled() else {
+                guard let read = try await WisprFlowImport.readInstalled() else {
                     wisprImport = .notFound
                     return
                 }
+                let contents = read.keepingRules(isKnownWord: Self.isKnownWord)
                 wisprImport = .preview(dictionary.importPreview(of: contents.dictionary), contents)
             } catch WisprFlowImport.ImportError.changedWhileCloning {
-                wisprImport = .failed("Wispr Flow kept writing to its database. Try again in a moment.")
+                wisprImport = .failed("Wispr Flow kept writing to its dictionary. Try again in a moment.")
             } catch {
                 Log.dictionary.error("Cannot read Wispr Flow's dictionary: \(error)")
-                wisprImport = .failed(String(describing: error))
+                wisprImport = .failed("Couldn’t read Wispr Flow’s dictionary. Try again.")
             }
+        }
+    }
+
+    /// Checks for Wispr Flow's folder when the pane opens.
+    func checkWisprInstalled() async {
+        isWisprInstalled = await WisprFlowImport.isInstalled()
+    }
+
+    // MARK: Suggestions
+
+    /// Counts corrections a detector found and the owner left unchecked: a weak one shows as a suggestion once seen
+    /// twice. A pair the owner added or dismissed does not come back.
+    func record(_ corrections: [DetectedCorrection]) {
+        enqueue { [store] in
+            for correction in corrections where !self.dictionary.contains(correction.candidate) {
+                do {
+                    _ = try await store.record(correction.candidate, isStrong: correction.isStrong, at: .now)
+                } catch {
+                    Log.dictionary.error("Cannot record a suggestion: \(error)")
+                }
+            }
+        }
+    }
+
+    /// Corrections the owner saw and unchecked: never suggested again.
+    func dismiss(_ candidates: [SuggestionCandidate]) {
+        enqueue { [store] in
+            do {
+                try await store.dismiss(candidates, at: .now)
+            } catch {
+                Log.dictionary.error("Cannot dismiss corrections: \(error)")
+            }
+        }
+    }
+
+    /// Adds corrections the owner checked ("Fix Last Dictation…") and stores them as added, so a dismissal of the
+    /// same pair is lifted and they are never suggested again.
+    func add(_ candidates: [SuggestionCandidate]) {
+        commit(candidates.reduce(dictionary) { $0.adding($1) }, recordingAdded: candidates)
+    }
+
+    func addSuggestions(_ ids: Set<DictionarySuggestion.ID>) {
+        let chosen = suggestions.filter { ids.contains($0.id) }
+        suggestions.removeAll { ids.contains($0.id) }
+        commit(chosen.reduce(dictionary) { $0.adding($1.candidate) }, markingAdded: chosen.map(\.id))
+    }
+
+    func dismissSuggestions(_ ids: Set<DictionarySuggestion.ID>) {
+        suggestions.removeAll { ids.contains($0.id) }
+        enqueue { [store] in
+            do {
+                try await store.dismiss(Array(ids))
+            } catch {
+                Log.dictionary.error("Cannot dismiss suggestions: \(error)")
+            }
+        }
+    }
+
+    /// Runs `work` after the edits before it, then refreshes the suggestions: the store, the pipeline and the list end
+    /// with the last edit.
+    private func enqueue(_ work: @escaping @MainActor () async -> Void) {
+        let previous = saving
+        saving = Task {
+            await previous?.value
+            await work()
+            await refreshSuggestions()
+        }
+    }
+
+    private func refreshSuggestions() async {
+        do {
+            suggestions = try await store.pendingSuggestions(at: .now)
+            dismissedPairs = try await store.dismissedPairs()
+        } catch {
+            Log.dictionary.error("Cannot read suggestions: \(error)")
         }
     }
 
@@ -119,19 +217,23 @@ final class DictionaryModel {
         commit(updated)
     }
 
-    private func commit(_ updated: PersonalDictionary) {
-        guard updated != dictionary else { return }
+    /// `ids`: suggestions this edit adds, and `candidates`: checked corrections, both stored as added in the same
+    /// save. A deleted entry that came from a suggestion makes it dismissed in the store.
+    private func commit(
+        _ updated: PersonalDictionary,
+        markingAdded ids: [DictionarySuggestion.ID] = [],
+        recordingAdded candidates: [SuggestionCandidate] = []
+    ) {
+        guard updated != dictionary || !ids.isEmpty || !candidates.isEmpty else { return }
         dictionary = updated
-        let previous = saving
-        saving = Task { [store, onChange] in
-            await previous?.value
+        enqueue { [store, onChange] in
             await onChange(updated)
             do {
-                try await store.save(updated)
-                saveError = nil
+                try await store.save(updated, markingAdded: ids, recordingAdded: candidates)
+                self.saveError = nil
             } catch {
                 Log.dictionary.error("Cannot save the dictionary: \(error)")
-                saveError = "The dictionary could not be saved: \(error)"
+                self.saveError = "Couldn’t save your dictionary. Make the change again."
             }
         }
     }

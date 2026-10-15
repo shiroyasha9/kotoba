@@ -31,19 +31,26 @@ public final class TranscriptionRouter: TranscriptionProvider {
     /// Warms only the current route: its connection and its key.
     public func warmUp() async {
         let options = settings.routeOptions
-        await client(for: options.route).warmUp(options)
+        await client(for: options.route.account).warmUp(options)
     }
 
     public func transcribe(_ request: TranscriptionRequest) async throws -> Transcript {
         let options = settings.routeOptions
-        return try await client(for: options.route).transcribe(request, options)
+        return try await client(for: options.route.account).transcribe(request, options)
     }
 
-    private func client(for route: TranscriptionRoute) -> any RouteClient {
-        switch route {
-        case .openRouterMAI, .openRouterGrok: openRouter
-        case .xaiGrok: xai
-        case .azureMAI: azure
+    /// Checks `key` for `account` with one free request on that provider's connection (no audio, no cost). Used
+    /// when a key is saved (onboarding, the Speech pane); the dictation path never calls it.
+    public func checkKey(_ key: String, for account: ProviderAccount) async -> KeyCheck {
+        await client(for: account).checkKey(key, settings.routeOptions)
+    }
+
+    /// The one place that maps a provider to its client; a route reaches it through `TranscriptionRoute.account`.
+    private func client(for account: ProviderAccount) -> any RouteClient {
+        switch account {
+        case .openRouter: openRouter
+        case .xai: xai
+        case .azure: azure
         }
     }
 }
@@ -52,8 +59,24 @@ public final class TranscriptionRouter: TranscriptionProvider {
 /// `Transcript.model` always agree.
 protocol RouteClient: Sendable {
     func warmUp(_ options: TranscriptionSettings.RouteOptions) async
+    /// Checks `key` with the provider's free key-info request; `options` carries the Azure endpoint.
+    func checkKey(_ key: String, _ options: TranscriptionSettings.RouteOptions) async -> KeyCheck
     func transcribe(
         _ request: TranscriptionRequest,
         _ options: TranscriptionSettings.RouteOptions
     ) async throws -> Transcript
+}
+
+/// What a key check found.
+public enum KeyCheck: Sendable, Equatable {
+    /// The provider accepted the key.
+    case valid
+    /// The provider did not accept the key.
+    case invalid
+    /// The key works but has no credit left.
+    case noCredit
+    /// No answer: offline, or the provider failed. The key stays saved; the first dictation tells.
+    case unreachable
+    /// Azure only: the key cannot be checked before the endpoint is set.
+    case needsEndpoint
 }

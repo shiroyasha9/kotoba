@@ -53,6 +53,7 @@ Reference: the copy deck in `docs/research/ux-polish.md` (sections 4.1-4.6). A n
 10. Counts inflect (`AttributedString(localized: "^[…](inflect: true)")`); hide a zero count instead of "(0)".
 11. Pill and menu status strings live in `App/StatusText.swift` only.
 12. Every new window, pane and `DictationState` gets a snapshot in `App/Snapshots.swift` (light and dark).
+13. Typographic punctuation: curly apostrophe and quotes (’ “ ”) in UI text, never ' or " inside the visible words.
 
 ## Tests
 

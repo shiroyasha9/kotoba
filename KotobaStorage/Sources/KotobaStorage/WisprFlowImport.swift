@@ -13,17 +13,32 @@ public enum WisprFlowImport {
     /// What Wispr's dictionary holds, de-duplicated.
     public struct Contents: Sendable, Equatable {
         public var dictionary = PersonalDictionary()
-        /// Words Wispr learned from the owner's edits; each is a term and a rule from what Wispr heard.
-        public var learnedCorrections = 0
+        /// Rules from words Wispr learned from the owner's edits (what Wispr heard -> the word the owner wrote); each
+        /// learned word is also a term.
+        public var learned: [ReplacementRule] = []
         /// Snippets are a later kotoba feature, so they are counted, not imported.
         public var snippets = 0
 
+        public var learnedCorrections: Int { learned.count }
+
         public init(
-            dictionary: PersonalDictionary = PersonalDictionary(), learnedCorrections: Int = 0, snippets: Int = 0
+            dictionary: PersonalDictionary = PersonalDictionary(), learned: [ReplacementRule] = [], snippets: Int = 0
         ) {
             self.dictionary = dictionary
-            self.learnedCorrections = learnedCorrections
+            self.learned = learned
             self.snippets = snippets
+        }
+
+        /// Drops each learned rule whose heard text is made of common words, keeping its word: replacing a real word
+        /// everywhere breaks other sentences (`Mellow` -> `Marlow`). Same check as the correction detector.
+        public func keepingRules(isKnownWord: (String) -> Bool) -> Self {
+            let common = learned.filter {
+                SuggestionCandidate.proposal(heard: $0.find, isKnownWord: isKnownWord) == .term
+            }
+            var kept = self
+            kept.learned.removeAll(where: common.contains)
+            kept.dictionary.rules.removeAll(where: common.contains)
+            return kept
         }
     }
 
@@ -53,6 +68,12 @@ public enum WisprFlowImport {
     /// Wispr keeps recent writes in `flow.sqlite-wal`, which SQLite's `immutable=1` mode would skip. So this clones
     /// the database and its WAL into `folder` (an APFS clone, no copy of the bytes), reads the clone and deletes
     /// `folder`.
+    /// Whether Wispr Flow's database is on this Mac, found off the main actor (it lists folders only).
+    @concurrent
+    public static func isInstalled() async -> Bool {
+        locate() != nil
+    }
+
     /// Finds Wispr's database and reads it, off the main actor. Nil when Wispr Flow is not on this Mac.
     @concurrent
     public static func readInstalled() async throws -> Contents? {
@@ -99,7 +120,7 @@ public enum WisprFlowImport {
         }
         // De-duplicated first: a correction in both the personal and the team dictionary counts once.
         contents.dictionary.apply(contents.dictionary.importPreview(of: raw))
-        contents.learnedCorrections = contents.dictionary.rules.filter(learned.contains).count
+        contents.learned = contents.dictionary.rules.filter(learned.contains)
         return contents
     }
 

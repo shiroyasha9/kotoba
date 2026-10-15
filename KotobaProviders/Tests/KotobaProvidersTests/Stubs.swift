@@ -101,10 +101,13 @@ final class StubHost {
     /// UserDefaults.
     let settings = TranscriptionSettings.inMemory()
 
-    /// Selects Azure direct with its endpoint at `speech.<host>`.
+    /// An Azure Speech endpoint that routes to this test's host: `<host>.cognitiveservices.azure.com`.
+    var azureEndpoint: String { "https://\(host).cognitiveservices.azure.com/" }
+
+    /// Selects Azure direct with `azureEndpoint`.
     func useAzure() {
         settings.route = .azureMAI
-        settings.azureEndpoint = "https://speech.\(host)/"
+        settings.azureEndpoint = azureEndpoint
     }
 
     /// The router with every route pointed at this test's host: OpenRouter at /api/v1, xAI at /v1/stt; Azure takes
@@ -165,8 +168,8 @@ final class StubURLProtocol: URLProtocol, @unchecked Sendable {
         )
         let requestHost = request.url?.host() ?? ""
         let (reply, onRequest) = Self.routes.withLock { routes in
-            // Azure requests go to `speech.<host>`.
-            guard let host = routes.keys.first(where: { requestHost == $0 || requestHost.hasSuffix(".\($0)") }) else {
+            // Azure requests go to `<host>.cognitiveservices.azure.com`.
+            guard let host = routes.keys.first(where: { requestHost == $0 || requestHost.hasPrefix("\($0).") }) else {
                 return (StubReply?.none, (@Sendable () -> Void)?.none)
             }
             routes[host]?.requests.append(sent)

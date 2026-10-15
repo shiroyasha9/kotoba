@@ -31,6 +31,35 @@ struct HistoryStoreTests {
         #expect(try await store.status(of: saved.id) == .failed)
     }
 
+    @Test func aRejectedRecordKeepsItsReason() async throws {
+        let store = try HistoryStore(url: url)
+        var saved = record(.rejected)
+        saved.rejectReason = .emptyTranscript
+        try await store.save(saved)
+
+        // No query returns rejected rows yet, so read the column directly.
+        let rows = try SQLiteDatabase(url: url).query("SELECT reject_reason FROM dictations;")
+        #expect(rows.first?.first == .text("emptyTranscript"))
+    }
+
+    @Test func theLastDeliveredIsTheNewestPastedOrCopiedRow() async throws {
+        let store = try HistoryStore(url: url)
+        #expect(try await store.lastDelivered() == nil)
+        var pasted = record(.pasted, at: 1_800_000_000)
+        pasted.transcript = "deploy it to versel"
+        var copied = record(.copied, at: 1_800_000_100)
+        copied.transcript = "raw words"
+        copied.cleanedText = "Cleaned words."
+        try await store.save(pasted)
+        try await store.save(copied)
+        try await store.save(record(.failed, at: 1_800_000_200))
+        try await store.save(record(.cancelled, at: 1_800_000_300))
+
+        let last = try #require(try await store.lastDelivered())
+        #expect(last.id == copied.id)
+        #expect(last.cleanedText == "Cleaned words.")
+    }
+
     @Test func onlyPendingAndFailedAreQueued() async throws {
         let store = try HistoryStore(url: url)
         for status in [DictationRecord.Status.pending, .failed, .pasted, .rejected, .cancelled] {

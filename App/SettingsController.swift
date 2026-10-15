@@ -10,15 +10,24 @@ final class SettingsController {
     private let vault: KeyVault
     private let microphones: MicrophonePreferences
     private let audio: AudioCapture
+    private let router: TranscriptionRouter
+    /// Builds the General pane's model each time the window builds its panes, so it shows current values.
+    private let makeGeneral: @MainActor () -> GeneralModel
+    /// The dictionary the Dictionary pane edits; "Fix Last Dictation…" adds to it and the menu counts its suggestions.
     /// Built once the dictionary file is read at launch.
-    private var dictionary: DictionaryModel?
+    private(set) var dictionary: DictionaryModel?
 
-    init(routeSettings: TranscriptionSettings, vault: KeyVault, microphones: MicrophonePreferences, audio: AudioCapture)
-    {
+    /// `router` checks a saved key in the Speech pane.
+    init(
+        routeSettings: TranscriptionSettings, vault: KeyVault, router: TranscriptionRouter,
+        microphones: MicrophonePreferences, audio: AudioCapture, makeGeneral: @escaping @MainActor () -> GeneralModel
+    ) {
         self.routeSettings = routeSettings
         self.vault = vault
+        self.router = router
         self.microphones = microphones
         self.audio = audio
+        self.makeGeneral = makeGeneral
     }
 
     /// Reads the personal dictionary (its own file, so its writes never block a dictation save)
@@ -35,13 +44,13 @@ final class SettingsController {
         }
     }
 
-    /// `pane` opens a given pane, e.g. Providers for "Set API Key…"; nil keeps the pane shown.
+    /// `pane` opens a given pane, e.g. Speech for the pill's "Add Key…"; nil keeps the pane shown.
     func show(selecting pane: SettingsPaneID? = nil) {
         window.show(panes(), selecting: pane)
     }
 
     private func panes() -> [SettingsPane] {
-        var panes: [SettingsPane] = []
+        var panes: [SettingsPane] = [.general(makeGeneral())]
         if let dictionary {
             panes.append(.dictionary(dictionary))
         }
@@ -50,7 +59,8 @@ final class SettingsController {
             .microphones(
                 MicrophoneModel(source: .live(microphones, audio: audio)) { Task { await audio.inputMayHaveChanged() } }
             ))
-        panes.append(.providers(ProvidersModel(settings: routeSettings, vault: vault)))
+        panes.append(
+            .speech(SpeechSettingsModel(settings: routeSettings, vault: vault, checkKey: router.checkKey(_:for:))))
         return panes
     }
 }

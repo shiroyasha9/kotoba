@@ -56,6 +56,8 @@ public struct DictationRecord: Sendable, Equatable, Identifiable {
     public var cleanedText: String?
     /// A `.failed` dictation that waits for the owner to set a key or an endpoint; retried then, not on its own.
     public var needsSetup: SetupItem?
+    /// Why a `.rejected` dictation was refused; nil for every other status.
+    public var rejectReason: RejectReason?
     /// When a retry transcribed it; the menu lists it for 24 h after this.
     public var recoveredAt: Date?
     public var latency: LatencyLog
@@ -82,6 +84,9 @@ public struct DictationRecord: Sendable, Equatable, Identifiable {
 }
 
 extension DictationRecord {
+    /// The text kotoba pasted or offers to copy: the cleaned text of a cleanup dictation, else the transcript.
+    public var deliveredText: String? { cleanedText ?? transcript }
+
     /// Records a failed request: `.failed` (retried), with `needsSetup` when only a setting can help,
     /// or `.rejected` when the same request cannot succeed. An empty transcript gets one retry
     /// before it counts as rejected. Errors that are not `ProviderError` count as transient.
@@ -94,6 +99,7 @@ extension DictationRecord {
         case .permanent:
             status = providerError == .emptyTranscript && !onRetry ? .failed : .rejected
         }
+        rejectReason = status == .rejected ? providerError?.rejectReason : nil
     }
 }
 
@@ -105,5 +111,38 @@ extension Store {
         } catch {
             Log.pipeline.error("Cannot save dictation \(record.id.rawValue): \(error)")
         }
+    }
+}
+
+/// Passes every call to `base` and announces each write, so the app reads its counts and lists again only then.
+struct AnnouncingStore: Store {
+    let base: any Store
+    let changes: AsyncStream<Void>.Continuation
+
+    func save(_ record: DictationRecord) async throws {
+        defer { changes.yield() }
+        try await base.save(record)
+    }
+
+    func pendingRetries() async throws -> [DictationRecord] {
+        try await base.pendingRetries()
+    }
+
+    func status(of id: DictationID) async throws -> DictationRecord.Status? {
+        try await base.status(of: id)
+    }
+
+    func recovered(since cutoff: Date) async throws -> [DictationRecord] {
+        try await base.recovered(since: cutoff)
+    }
+
+    func markCopied(_ id: DictationID) async throws {
+        defer { changes.yield() }
+        try await base.markCopied(id)
+    }
+
+    func prune(olderThan cutoff: Date) async throws {
+        defer { changes.yield() }
+        try await base.prune(olderThan: cutoff)
     }
 }

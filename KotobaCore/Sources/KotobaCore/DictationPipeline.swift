@@ -6,27 +6,11 @@ import Foundation
 public actor DictationPipeline {
     typealias Instant = ContinuousClock.Instant
 
-    private struct Recording {
-        let id: DictationID
-        let file: URL
-        let startedAt: Instant
-        /// True until the chord-up that decides tap or hold.
-        var isUndecided: Bool
-        /// The cleanup modifier was seen before the announcement; it cannot change after it.
-        var isCleanupSeen = false
-        /// The indicator and start cue are on. They wait until the press is a tap (released in
-        /// time) or a hold (threshold passed), so a shortcut press shows and plays nothing.
-        var isAnnounced = false
-        let captureEvents: Task<Void, Never>
-        /// The clipboard, taken at the announcement (so a shortcut press reads nothing) while capture runs.
-        var clipboard: ClipboardGuard.Pending?
-        let warning: Task<Void, Never>
-        let announcement: Task<Void, Never>
-    }
-
     public private(set) var state: DictationState = .idle
     /// Every state change, for the indicator and sound cues.
     public nonisolated let states: AsyncStream<DictationState>
+    /// After each write to the store, coalesced: the menu reads its counts and lists again.
+    public nonisolated let historyChanges: AsyncStream<Void>
 
     private let ports: Ports
     private var settings: Settings
@@ -51,6 +35,10 @@ public actor DictationPipeline {
     private var quietWaiters = Waiters()
 
     public init(ports: Ports, settings: Settings) {
+        let (historyChanges, changes) = AsyncStream.makeStream(of: Void.self, bufferingPolicy: .bufferingNewest(1))
+        self.historyChanges = historyChanges
+        var ports = ports
+        ports.store = AnnouncingStore(base: ports.store, changes: changes)
         self.ports = ports
         self.settings = settings
         work = PendingWork(clock: ports.clock)
@@ -85,9 +73,8 @@ public actor DictationPipeline {
         await resume(at: ports.clock.now)
     }
 
-    /// Transcribes kept dictations into the Recovered list (`retries.recovered()`), each send after
-    /// no dictation is live. With no `selection` (launch, the menu), dictations that wait for a
-    /// setting are included only when the current route has everything it needs.
+    /// Transcribes kept dictations into the Recovered list, each send after no dictation is live. With no `selection`
+    /// (launch, the menu), dictations that wait for a setting are included only when the route has everything.
     public func retryPending(_ chosen: RetrySelection? = nil) async {
         let isSetUp = await ports.missingSetup() == nil
         let selection = chosen ?? (isSetUp ? .all : .exceptNeedsSetup)
@@ -99,11 +86,17 @@ public actor DictationPipeline {
         }
     }
 
-    /// A key or an endpoint was saved: once the route has everything it needs, the dictations that
-    /// waited for a setting are sent again, once each.
+    /// A key, an endpoint or credit arrived: once the route has everything, the waiting dictations are sent once each.
     public func setupChanged() async {
         guard await ports.missingSetup() == nil else { return }
         await retryPending(.onlyNeedsSetup)
+    }
+
+    /// The network monitor's report. When the network returns after an outage, the failed dictations are sent again
+    /// (story 22), as tracked work: this returns at once, so the monitor never waits on a retry (review B7).
+    public func networkChanged(isOnline: Bool) async {
+        guard await retries.recordNetwork(isOnline: isOnline) else { return }
+        work.track { await self.retryPending(.exceptNeedsSetup) }
     }
 
     /// The owner edited the dictionary: the next request, paste and retry use it.
@@ -352,6 +345,8 @@ extension DictationPipeline {
             work.schedule(at: ports.clock.now + settings.restoreDelay) { await self.clipboard.restore(after: write) }
         }
         finishDictation(current.id, showing: outcome.showing ?? .outcome(of: outcome.record))
+        // A transcript proves the route works, credit included: the dictations that waited are sent (decision 6).
+        if outcome.record.transcript != nil { await setupChanged() }
     }
 
     /// A Cmd-V posted while the chord is held reaches the app as Ctrl+Opt+Cmd+V.

@@ -16,7 +16,7 @@ extension NSMenuItem {
         subtitle: String? = nil,
         _ choices: [MenuChoice],
         selected: String?,
-        target: AnyObject,
+        target: AnyObject?,
         action: Selector
     ) -> NSMenuItem {
         let submenu = NSMenu()
@@ -36,20 +36,20 @@ extension NSMenuItem {
 
     /// A plain action item.
     @MainActor
-    static func action(_ title: String, target: AnyObject, action: Selector, keyEquivalent: String = "") -> NSMenuItem {
+    static func action(_ title: String, target: AnyObject?, action: Selector, keyEquivalent: String = "") -> NSMenuItem
+    {
         let item = NSMenuItem(title: title, action: action, keyEquivalent: keyEquivalent)
         item.target = target
         return item
     }
 
-    /// An on/off item, indented when it belongs to the item above it.
+    /// An on/off item.
     @MainActor
     static func toggle(
-        _ title: String, isOn: Bool, target: AnyObject, action: Selector, indentationLevel: Int = 0
+        _ title: String, isOn: Bool, target: AnyObject?, action: Selector
     ) -> NSMenuItem {
         let item = Self.action(title, target: target, action: action)
         item.state = isOn ? .on : .off
-        item.indentationLevel = indentationLevel
         return item
     }
 }
