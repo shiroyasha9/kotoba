@@ -9,6 +9,9 @@ public actor DictationPipeline {
     public private(set) var state: DictationState = .idle
     /// Every state change, for the indicator and sound cues.
     public nonisolated let states: AsyncStream<DictationState>
+    /// What is live after each change: whether "Paste Again" can paste, and which dictations are being sent. Only
+    /// the newest value is kept.
+    public nonisolated let activity: AsyncStream<PipelineActivity>
     /// Each write to the store, in order: the menu reads its counts and lists again, an open History window its rows.
     public nonisolated let historyChanges: AsyncStream<HistoryChange>
 
@@ -19,6 +22,8 @@ public actor DictationPipeline {
     public nonisolated let retries: RetryQueue
     let delivery: TranscriptDelivery
     private let stateContinuation: AsyncStream<DictationState>.Continuation
+    private let activityContinuation: AsyncStream<PipelineActivity>.Continuation
+    private var lastActivity = PipelineActivity(isQuiet: true, inFlight: [])
     var recording: Recording?
     /// Set while Esc's Undo window is open.
     var paused: UndoWindow<Recording>?
@@ -58,6 +63,8 @@ public actor DictationPipeline {
             steps: TranscriptionSteps(provider: ports.provider, cleaner: ports.cleaner), store: ports.store,
             clock: ports.clock, clipboard: clipboard)
         (states, stateContinuation) = AsyncStream.makeStream(of: DictationState.self)
+        (activity, activityContinuation) = AsyncStream.makeStream(
+            of: PipelineActivity.self, bufferingPolicy: .bufferingNewest(1))
     }
 
     /// `instant` is when the key event happened (the tap's time); nil means now. Tap vs hold and
@@ -239,6 +246,7 @@ public actor DictationPipeline {
 
 extension DictationPipeline {
     func emit(_ newState: DictationState) {
+        announceActivity()
         guard newState != state else { return }
         state = newState
         stateContinuation.yield(newState)
@@ -248,15 +256,21 @@ extension DictationPipeline {
     func finishDictation(_ id: DictationID, showing outcome: DictationState) {
         inFlight.remove(id)
         submitRequests.remove(id)
+        // With another dictation in flight the state may not change, but this one is no longer sent.
+        announceActivity()
         defer { resumeQuietWaiters() }
         // A live recording or an open Undo window keeps the indicator; the outcome would hide it.
         guard recording == nil, paused == nil else { return }
         emit(outcome == .idle && !inFlight.isEmpty ? .transcribing : outcome)
     }
 
-    /// The dictations being sent now: the History window labels their rows and keeps them from Delete.
-    public var inFlightIDs: Set<DictationID> {
-        inFlight
+    /// Sends the activity when it changed; every change of a recording, Undo window or dictation in flight comes with
+    /// a state change or `finishDictation`.
+    private func announceActivity() {
+        let now = PipelineActivity(isQuiet: isQuiet, inFlight: inFlight)
+        guard now != lastActivity else { return }
+        lastActivity = now
+        activityContinuation.yield(now)
     }
 
     /// No recording, no Undo window and no transcription in flight: "Paste Again" can paste.

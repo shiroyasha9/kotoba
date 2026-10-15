@@ -163,6 +163,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
                 scheduleQueueRefresh()
             }
         }
+        Task {
+            for await activity in pipeline.activity {
+                history?.activityChanged(activity)
+            }
+        }
         Task { [audio, indicator] in
             for await level in audio.levels {
                 indicator.showLevel(level)
@@ -218,7 +223,6 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         let wasRecording = if case .recording = state { true } else { false }
         state = newState
         learner.dictationStateChanged(newState)
-        history?.dictationStateChanged()
         if case .recording = newState {
             if !wasRecording {
                 isSecureInputOn = IsSecureEventInputEnabled()

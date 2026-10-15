@@ -15,6 +15,11 @@ struct HistoryView: View {
             .onChange(of: model.findRequests) { isSearchFocused = true }
             .toolbar { toolbar(for: model.selected) }
             .task(id: model.search) { await model.reload() }
+            .alert("Couldn’t Paste", isPresented: $model.isPasteFailureShown) {
+                Button("OK") {}
+            } message: {
+                Text("kotoba couldn’t bring back the app you were in. The text is on the clipboard: press ⌘V there.")
+            }
             .confirmationDialog(
                 deleteTitle, isPresented: isAskingToDelete, presenting: model.pendingDelete
             ) { ids in
@@ -49,7 +54,7 @@ struct HistoryView: View {
                         HistoryRow(
                             record: record, icon: model.icon(for: record.app),
                             isRetryable: model.retryable.contains(record.id),
-                            isSending: model.sending.contains(record.id))
+                            isSending: model.activity.inFlight.contains(record.id))
                     }
                 }
             }

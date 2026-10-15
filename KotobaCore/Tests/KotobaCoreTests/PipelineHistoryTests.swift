@@ -143,9 +143,10 @@ struct PipelineHistoryChangeTests {
         #expect(await world.store.records.map(\.status) == [.pasted])
     }
 
-    @Test func theDictationsInFlightAreKnownUntilTheyEnd() async throws {
+    @Test func theActivityNamesEachDictationInFlightUntilItEnds() async throws {
         let world = FakeWorld(transcript: "sending")
         let pipeline = world.makePipeline()
+        var activity = pipeline.activity.makeAsyncIterator()
         let gate = Gate()
         await world.provider.hold(at: gate)
         await pipeline.tap(world)
@@ -153,12 +154,41 @@ struct PipelineHistoryChangeTests {
         #expect(await eventually { await gate.hasWaiters })
         let id = try #require(await world.store.records.first?.id)
 
-        #expect(await pipeline.inFlightIDs == [id])
-        #expect(await !pipeline.isQuiet)
+        #expect(await activity.next() == PipelineActivity(isQuiet: false, inFlight: [id]))
         await gate.open()
         await pipeline.settle()
-        #expect(await pipeline.inFlightIDs.isEmpty)
-        #expect(await pipeline.isQuiet)
+        #expect(await activity.next() == PipelineActivity(isQuiet: true, inFlight: []))
+    }
+
+    @Test func aDictationThatEndsWhileAnotherIsSentLeavesTheActivity() async throws {
+        let world = FakeWorld(transcript: "two at once")
+        let pipeline = world.makePipeline()
+        var activity = pipeline.activity.makeAsyncIterator()
+        let first = Gate()
+        await world.provider.hold(at: first)
+        await pipeline.tap(world)
+        await pipeline.tap(world)
+        #expect(await eventually { await first.hasWaiters })
+        let second = Gate()
+        await world.provider.hold(at: second)
+        await pipeline.tap(world)
+        await pipeline.tap(world)
+        #expect(await eventually { await second.hasWaiters })
+        let ids = await world.store.records.map(\.id)
+        try #require(ids.count == 2)
+
+        await first.open()
+
+        // The state stays "transcribing" for the second one, but the first one leaves the activity. Only the newest
+        // value is kept, so older ones may come first.
+        var latest = await activity.next()
+        while latest?.inFlight.count == 2 {
+            latest = await activity.next()
+        }
+        #expect(latest == PipelineActivity(isQuiet: false, inFlight: [ids[1]]))
+        #expect(await pipeline.state == .transcribing)
+        await second.open()
+        await pipeline.settle()
     }
 
     @Test func eachChangeNamesItsDictation() async throws {

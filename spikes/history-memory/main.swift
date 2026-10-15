@@ -88,7 +88,7 @@ final class Spike: NSObject, NSApplicationDelegate {
                 source: HistoryModel.Source(
                     page: { try await store.page(matching: $0, after: $1, limit: $2) },
                     record: { try await store.record($0, matching: $1) }, delete: { _ in }, retry: { _ in },
-                    paste: { _, _ in }, copy: { _ in }))
+                    paste: { _, _ in true }, copy: { _ in }))
             let controller = NSHostingController(rootView: HistoryView(model: model))
             controller.sceneBridgingOptions = [.toolbars]
             let window = NSWindow(contentViewController: controller)

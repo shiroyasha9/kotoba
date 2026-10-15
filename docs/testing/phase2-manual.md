@@ -410,6 +410,8 @@ Rows from each agent's phase 2.5 work. The numbers continue the list above.
 | 309 | Open Settings, press ⌘W; open History, press ⌘W; open **Fix Last Dictation…**, press ⌘W | Each window closes; no beep | |
 | 310 | In History, click a row, press ⌘F, type a word | The search field gets the focus and the list filters | |
 | 311 | Move and resize Settings and History, close each, reopen it at once (within 2 s) | Each opens at the size and place you left it | |
+| 312 | Open History from the menu while a text field in another app has the focus, quit that app, then **Paste Again** a row | Nothing pastes into History; “Couldn’t Paste” says the text is on the clipboard; ⌘V in another app pastes it | |
+| 313 | Start two dictations back to back so both are sent at once; watch their rows in History | Each row says “Transcribing” only until its own text arrives, then Delete works on it | |
 
 ## Known offscreen-only doubts
 

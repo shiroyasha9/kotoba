@@ -152,6 +152,19 @@ extension DictationPipeline {
     }
 }
 
+/// What is live in the pipeline, for the History window.
+public struct PipelineActivity: Sendable, Equatable {
+    /// No recording, no Undo window and no dictation in flight: "Paste Again" can paste.
+    public var isQuiet: Bool
+    /// The dictations being sent now: their rows say so and cannot be deleted.
+    public var inFlight: Set<DictationID>
+
+    public init(isQuiet: Bool, inFlight: Set<DictationID>) {
+        self.isQuiet = isQuiet
+        self.inFlight = inFlight
+    }
+}
+
 /// The app in front, as app activation events report it.
 public struct FrontApp: Sendable, Equatable {
     /// The submit rule compares it: a process, not an app, so a relaunched app is another one.

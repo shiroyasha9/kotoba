@@ -15,6 +15,8 @@ final class HistoryController: NSObject, NSWindowDelegate {
     private let pipeline: DictationPipeline
     private var window: NSWindow?
     private var model: HistoryModel?
+    /// The pipeline's newest activity, kept while the window is closed so it opens with it.
+    private var activity = PipelineActivity(isQuiet: true, inFlight: [])
     /// History changes for the open window, applied one at a time in order (two saves of one dictation must not land
     /// out of order). Both end when the window closes.
     private var changes: AsyncStream<HistoryChange>.Continuation?
@@ -32,24 +34,15 @@ final class HistoryController: NSObject, NSWindowDelegate {
         window.makeKeyAndOrderFront(nil)
     }
 
-    /// A history write (from `DictationPipeline.historyChanges`): an open window reads the row it names, and which
-    /// dictations are in flight (two in flight change no state when one ends).
+    /// A history write (from `DictationPipeline.historyChanges`): an open window reads the row it names.
     func historyChanged(_ change: HistoryChange) {
         changes?.yield(change)
-        readActivity()
     }
 
-    /// A dictation started or ended: an open window reads which dictations are in flight.
-    func dictationStateChanged() {
-        readActivity()
-    }
-
-    private func readActivity() {
-        guard let model else { return }
-        Task { [pipeline] in
-            model.isQuiet = await pipeline.isQuiet
-            model.sending = await pipeline.inFlightIDs
-        }
+    /// From `DictationPipeline.activity`: which dictations are being sent, and whether Paste Again can paste.
+    func activityChanged(_ activity: PipelineActivity) {
+        self.activity = activity
+        model?.activity = activity
     }
 
     /// Edit > Find… (⌘F): no view in the window answers it, so AppKit sends it to the key window's delegate. SwiftUI's
@@ -72,8 +65,8 @@ final class HistoryController: NSObject, NSWindowDelegate {
 
     private func makeWindow() -> NSWindow {
         let model = HistoryModel(source: source)
+        model.activity = activity
         self.model = model
-        readActivity()
         let (stream, continuation) = AsyncStream.makeStream(of: HistoryChange.self)
         changes = continuation
         applying = Task {
@@ -112,8 +105,14 @@ final class HistoryController: NSObject, NSWindowDelegate {
             delete: { await pipeline.delete($0) },
             retry: { await pipeline.retry($0) },
             paste: { text, id in
-                guard await pipeline.isQuiet, await Self.returnFocus() else { return }
+                guard await pipeline.isQuiet else { return true }
+                guard await Self.returnFocus() else {
+                    // The paste would land in kotoba: the text waits on the clipboard instead.
+                    await pipeline.copyAgain(text)
+                    return false
+                }
                 await pipeline.pasteAgain(text, of: id)
+                return true
             },
             copy: { await pipeline.copyAgain($0) }
         )
@@ -121,7 +120,8 @@ final class HistoryController: NSObject, NSWindowDelegate {
 
     /// kotoba is the active app while this window is key, so a Cmd-V would land in it. The last app the owner was in
     /// comes back to the front (kotoba's windows stay as they are), and the paste waits for its activation, at most
-    /// `focusWait`. False when there is no such app: the paste would land in kotoba.
+    /// `focusWait`. False when there is no such app or it did not come to the front in time: the paste would land in
+    /// kotoba.
     private static func returnFocus() async -> Bool {
         guard NSApp.isActive else { return true }
         guard let id = FrontAppObserver.lastOtherProcessID, let app = NSRunningApplication(processIdentifier: id),
@@ -136,15 +136,16 @@ final class HistoryController: NSObject, NSWindowDelegate {
             for await note in activations
             where (note.userInfo?[NSWorkspace.applicationUserInfoKey] as? NSRunningApplication)?.processIdentifier == id
             {
-                return
+                return true
             }
+            return false
         }
         let bound = Task {
             try? await Task.sleep(for: focusWait)  // Cancelled once the switch came: nothing to do.
             wait.cancel()
         }
-        await wait.value
+        let isActivated = await wait.value
         bound.cancel()
-        return true
+        return isActivated
     }
 }

@@ -20,7 +20,8 @@ final class HistoryModel {
         /// The pipeline announces what it deleted (`HistoryChange.deleted`); the window removes rows only then.
         var delete: @MainActor (Set<DictationID>) async -> Void
         var retry: @MainActor (Set<DictationID>) async -> Void
-        var paste: @MainActor (String, DictationID) async -> Void
+        /// False when the app the owner was in did not come back, so nothing was pasted; the text is on the clipboard.
+        var paste: @MainActor (String, DictationID) async -> Bool
         var copy: @MainActor (String) async -> Void
     }
 
@@ -52,12 +53,13 @@ final class HistoryModel {
     /// False until the first read returns, so the empty state does not flash before the rows.
     private(set) var isLoaded = false
     private(set) var loadError: String?
-    /// No dictation is recording or being sent (`DictationPipeline.isQuiet`): Paste Again would race its paste.
-    var isQuiet = true
-    /// The dictations being sent now: their rows say so and cannot be deleted.
-    var sending: Set<DictationID> = []
+    /// While a dictation records or is sent, Paste Again would race its paste; the rows being sent say so and cannot be
+    /// deleted.
+    var activity = PipelineActivity(isQuiet: true, inFlight: [])
     /// Each Edit > Find… adds one; the view focuses its search field.
     var findRequests = 0
+    /// Paste Again could not bring back the app the owner was in: the window says so.
+    var isPasteFailureShown = false
     /// The rows the Delete confirmation asks about; nil when it is not shown.
     var pendingDelete: [DictationID]?
 
@@ -180,13 +182,17 @@ final class HistoryModel {
 
     /// One row only: two texts pasted in one go would read as one dictation.
     func canPasteAgain(_ records: [DictationRecord]) -> Bool {
-        isQuiet && records.count == 1 && records.first?.deliveredText != nil
+        activity.isQuiet && records.count == 1 && records.first?.deliveredText != nil
     }
 
     func pasteAgain(_ records: [DictationRecord]) {
         guard let source, canPasteAgain(records), let record = records.first, let text = record.deliveredText
         else { return }
-        Task { await source.paste(text, record.id) }
+        Task {
+            if await !source.paste(text, record.id) {
+                isPasteFailureShown = true
+            }
+        }
     }
 
     func canRetry(_ records: [DictationRecord]) -> Bool {
@@ -202,7 +208,7 @@ final class HistoryModel {
 
     /// A dictation in flight is not deleted: its own save would bring the row back (the pipeline keeps it too).
     func canDelete(_ records: [DictationRecord]) -> Bool {
-        !records.isEmpty && !records.contains { sending.contains($0.id) }
+        !records.isEmpty && !records.contains { activity.inFlight.contains($0.id) }
     }
 
     func askToDelete(_ records: [DictationRecord]) {
