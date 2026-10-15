@@ -19,6 +19,7 @@ import KotobaProviders
     func openSuggestions()
     func openSettings()
     func showAbout()
+    func checkForUpdates()
 }
 
 /// Everything the menu bar menu shows, as values, so the menu can be built and read without the running app.
@@ -55,6 +56,15 @@ struct MenuModel {
     var hasRawLastDictation = false
     /// Pending dictionary suggestions; the item hides at 0.
     var suggestionCount = 0
+    /// The update item's state; nil in a Debug build, which has no updater, so the item hides.
+    var updates: Updates?
+
+    struct Updates {
+        /// False while Sparkle reads the feed or downloads in the background: "Check for Updates…" is disabled.
+        var canCheck = true
+        /// A scheduled check found an update the user has not looked at: the item reads "Install Update…".
+        var hasWaitingUpdate = false
+    }
 
     /// The speech models the menu offers: the OpenRouter ones, plus a direct route only while it is the current one
     /// (the others sit under Advanced in Settings).
@@ -73,6 +83,9 @@ struct MenuModel {
         menu.addItem(
             .action("Settings…", target: target, action: #selector(StatusMenuActions.openSettings), keyEquivalent: ","))
         menu.addItem(.action("About kotoba", target: target, action: #selector(StatusMenuActions.showAbout)))
+        if let updates {
+            menu.addItem(Self.updateItem(updates, target: target))
+        }
         menu.addItem(.separator())
         menu.addItem(
             NSMenuItem(title: "Quit kotoba", action: #selector(NSApplication.terminate(_:)), keyEquivalent: "q"))
@@ -160,8 +173,20 @@ struct MenuModel {
         return items
     }
 
-    /// Menus for the snapshot run's `menu-<name>.txt`: ready, setup not complete, listening, and failed with a
-    /// retry waiting.
+    /// Without an action the menu disables the item, as it does the status line.
+    private static func updateItem(_ updates: Updates, target: StatusMenuActions?) -> NSMenuItem {
+        let item = NSMenuItem.action(
+            updates.hasWaitingUpdate ? "Install Update…" : "Check for Updates…", target: target,
+            action: #selector(StatusMenuActions.checkForUpdates))
+        if !updates.canCheck {
+            item.action = nil
+            item.isEnabled = false
+        }
+        return item
+    }
+
+    /// Menus for the snapshot run's `menu-<name>.txt`: ready, setup not complete (a Debug build: no update item),
+    /// listening (with Sparkle busy), failed with a retry and an update waiting, and a Bluetooth mic.
     static func samples() -> [(name: String, model: Self)] {
         let mics = [MenuChoice(title: "MacBook Pro Microphone", value: "builtin")]
         let context = StatusContext(provider: .openRouter)
@@ -170,11 +195,13 @@ struct MenuModel {
         }
         var ready = Self(
             status: .text(StatusText.ready), microphones: mics, microphoneInUse: ("builtin", "MacBook Pro Microphone"),
-            routes: routes(current: .openRouterMAI), route: route(.openRouterMAI))
+            routes: routes(current: .openRouterMAI), route: route(.openRouterMAI), updates: Updates())
         var setup = ready
+        setup.updates = nil
         setup.status = .finishSetup(Readiness.Missing.setup(.key, .openRouter).setupText)
         var listening = ready
         listening.status = .text(DictationState.recording(isLong: false).statusText(context) ?? "")
+        listening.updates?.canCheck = false
         ready.recovered = [MenuChoice(title: "Send the draft to the team by Friday", value: "1")]
         ready.hasLastDictation = true
         ready.hasRawLastDictation = true
@@ -185,6 +212,7 @@ struct MenuModel {
         failed.routes = routes(current: .xaiGrok)
         failed.route = route(.xaiGrok)
         failed.grok = Grok(isFormatOn: true, keepsFillerWords: false)
+        failed.updates?.hasWaitingUpdate = true
         var bluetooth = listening
         bluetooth.microphones.append(MenuChoice(title: "AirPods Pro", value: "airpods"))
         bluetooth.microphoneInUse = ("airpods", "AirPods Pro")
@@ -219,8 +247,8 @@ struct MenuModel {
 /// The menu bar item: its icon, and its menu, built fresh from `model()` each time it opens.
 @MainActor
 final class StatusBarItem: NSObject, NSMenuDelegate {
-    /// M10 with the kotoba mark (design/icon/): the full mark when ready, a dot while setup is not complete or a
-    /// dictation waits for a retry, and a caret that blinks while listening. Template images from
+    /// M10 with the kotoba mark (design/icon/): the full mark when ready, a dot while setup is not complete, a
+    /// dictation waits for a retry or an update waits, and a caret that blinks while listening. Template images from
     /// App/Assets.xcassets, so they follow the menu bar's appearance.
     enum Icon {
         case ready

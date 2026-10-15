@@ -50,10 +50,13 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private var isSecureInputOn = false
     /// Set when the history database does not open; the menu shows it instead of the status.
     var launchIssue: String?
+    let updater = Updater.forThisBuild()
     lazy var settingsController = SettingsController(
         routeSettings: routeSettings, vault: vault, router: router, microphones: microphones, audio: audio
-    ) { [routeSettings, indicator, weak self] in
-        GeneralModel(settings: routeSettings, indicator: indicator) { self?.submitPhraseChanged(isOn: $0) }
+    ) { [routeSettings, indicator, updater, weak self] in
+        GeneralModel(settings: routeSettings, indicator: indicator, updater: updater) {
+            self?.submitPhraseChanged(isOn: $0)
+        }
     }
 
     func applicationDidFinishLaunching(_ notification: Notification) {
@@ -62,6 +65,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         CGEventPaster.warmUp()
         NSApp.mainMenu = .editOnlyMain()
         statusItem = StatusBarItem(target: self) { [weak self] in self?.menuModel() }
+        updater?.onWaitingUpdateChange = { [weak self] in self?.updateIcon() }
         let store: HistoryStore
         do {
             store = try HistoryStore()

@@ -9,7 +9,7 @@ extension AppDelegate: StatusMenuActions {
         statusItem?.icon =
             if case .recording = state {
                 .listening
-            } else if !readiness.isComplete || pendingCount > 0 {
+            } else if !readiness.isComplete || pendingCount > 0 || updater?.hasWaitingUpdate == true {
                 .needsAttention
             } else {
                 .ready
@@ -44,7 +44,8 @@ extension AppDelegate: StatusMenuActions {
                 : nil,
             hasLastDictation: hasLastDictation,
             hasRawLastDictation: hasRawLastDictation,
-            suggestionCount: settingsController.dictionary?.suggestions.count ?? 0
+            suggestionCount: settingsController.dictionary?.suggestions.count ?? 0,
+            updates: updater.map { MenuModel.Updates(canCheck: $0.canCheck, hasWaitingUpdate: $0.hasWaitingUpdate) }
         )
     }
 
@@ -118,5 +119,9 @@ extension AppDelegate: StatusMenuActions {
     func showAbout() {
         NSApp.activate()
         NSApp.orderFrontStandardAboutPanel(nil)
+    }
+
+    func checkForUpdates() {
+        updater?.check()
     }
 }

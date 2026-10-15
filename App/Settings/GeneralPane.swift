@@ -12,7 +12,8 @@ extension SettingsPane {
 }
 
 /// The General pane's settings: the dictation and cleanup shortcuts and the cleanup model, the spoken Return phrase,
-/// launch at login, sounds, and the indicator's position and visibility. Each change applies at once.
+/// launch at login, sounds, the indicator's position and visibility, and automatic update checks. Each change applies
+/// at once.
 @MainActor
 @Observable
 final class GeneralModel {
@@ -53,19 +54,31 @@ final class GeneralModel {
         didSet { setSubmitPhrase(isSubmitPhraseOn) }
     }
 
+    var checksForUpdates: Bool {
+        didSet { setChecksForUpdates?(checksForUpdates) }
+    }
+
+    /// False in a Debug build, which has no updater: the Updates section hides.
+    var hasUpdater: Bool { setChecksForUpdates != nil }
+
     @ObservationIgnored private let settings: TranscriptionSettings
     @ObservationIgnored private let loginItem: LoginItem
     @ObservationIgnored private let setAnchor: @MainActor (IndicatorAnchor) -> Void
     @ObservationIgnored private let setVisibility: @MainActor (IndicatorVisibility) -> Void
     @ObservationIgnored private let setSubmitPhrase: @MainActor (Bool) -> Void
+    @ObservationIgnored private let setChecksForUpdates: (@MainActor (Bool) -> Void)?
     /// Observable itself: the rows and the cleanup model follow a new recording.
     @ObservationIgnored let chords: HotkeyChords
 
     /// Reads the current values. `submitPhraseChanged` hands a new submit phrase setting to the pipeline.
     convenience init(
-        settings: TranscriptionSettings, indicator: IndicatorPanel,
+        settings: TranscriptionSettings, indicator: IndicatorPanel, updater: Updater?,
         submitPhraseChanged: @escaping @MainActor (Bool) -> Void
     ) {
+        var setChecksForUpdates: (@MainActor (Bool) -> Void)?
+        if let updater {
+            setChecksForUpdates = { updater.checksAutomatically = $0 }
+        }
         self.init(
             settings: settings, loginItem: .live, chords: .shared, areSoundsOn: AppDefaults.areSoundCuesOn,
             indicatorAnchor: indicator.anchor, setAnchor: { indicator.anchor = $0 },
@@ -74,20 +87,22 @@ final class GeneralModel {
             setSubmitPhrase: {
                 AppDefaults.isSubmitPhraseOn = $0
                 submitPhraseChanged($0)
-            })
+            }, checksForUpdates: updater?.checksAutomatically ?? false, setChecksForUpdates: setChecksForUpdates)
     }
 
     private init(
         settings: TranscriptionSettings, loginItem: LoginItem, chords: HotkeyChords, areSoundsOn: Bool,
         indicatorAnchor: IndicatorAnchor, setAnchor: @escaping @MainActor (IndicatorAnchor) -> Void,
         indicatorVisibility: IndicatorVisibility, setVisibility: @escaping @MainActor (IndicatorVisibility) -> Void,
-        isSubmitPhraseOn: Bool, setSubmitPhrase: @escaping @MainActor (Bool) -> Void
+        isSubmitPhraseOn: Bool, setSubmitPhrase: @escaping @MainActor (Bool) -> Void,
+        checksForUpdates: Bool, setChecksForUpdates: (@MainActor (Bool) -> Void)?
     ) {
         self.settings = settings
         self.loginItem = loginItem
         self.setAnchor = setAnchor
         self.setVisibility = setVisibility
         self.setSubmitPhrase = setSubmitPhrase
+        self.setChecksForUpdates = setChecksForUpdates
         self.chords = chords
         cleanupModel = settings.cleanupModel
         isLaunchAtLoginOn = loginItem.isOn()
@@ -96,6 +111,7 @@ final class GeneralModel {
         self.indicatorAnchor = indicatorAnchor
         self.indicatorVisibility = indicatorVisibility
         self.isSubmitPhraseOn = isSubmitPhraseOn
+        self.checksForUpdates = checksForUpdates
     }
 
     /// One register or unregister call per click; the toggle then shows what the system holds.
@@ -105,15 +121,16 @@ final class GeneralModel {
         isLaunchAtLoginOn = loginItem.isOn()
     }
 
-    /// Fixed values for snapshots: no UserDefaults, Login Items or indicator is read. `loginItem` stands in for
-    /// the system.
+    /// Fixed values for snapshots: no UserDefaults, Login Items, indicator or updater is read. `loginItem` stands
+    /// in for the system.
     static func sample(loginItem: LoginItem = .init(isOn: { true }, problem: { nil }, change: { _ in nil }))
         -> GeneralModel
     {
         GeneralModel(
             settings: .inMemory(), loginItem: loginItem, chords: HotkeyChords(defaults: nil), areSoundsOn: true,
             indicatorAnchor: .bottomCenter, setAnchor: { _ in }, indicatorVisibility: .whileDictating,
-            setVisibility: { _ in }, isSubmitPhraseOn: true, setSubmitPhrase: { _ in })
+            setVisibility: { _ in }, isSubmitPhraseOn: true, setSubmitPhrase: { _ in }, checksForUpdates: true,
+            setChecksForUpdates: { _ in })
     }
 }
 
@@ -177,6 +194,11 @@ private struct GeneralPane: View {
                     Text("With “Always”, click the indicator to start and stop dictating.")
                 }
             }
+            if model.hasUpdater {
+                Section("Updates") {
+                    Toggle("Check for updates automatically", isOn: $model.checksForUpdates)
+                }
+            }
         }
         .formStyle(.grouped)
     }
@@ -186,7 +208,7 @@ private struct GeneralPane: View {
 extension SettingsPane {
     static func generalSnapshots() -> [Snapshot] {
         [
-            SettingsWindow.snapshot(of: .general(.sample()), named: "settings-general", height: 800),
+            SettingsWindow.snapshot(of: .general(.sample()), named: "settings-general", height: 860),
             loginFailureSnapshot(),
         ]
     }
