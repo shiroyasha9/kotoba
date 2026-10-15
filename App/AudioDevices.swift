@@ -22,15 +22,34 @@ enum AudioDevices {
         }
     }
 
+    /// The system default output, for the Bluetooth mic warning (`InputDevicePolicy.warning`).
+    static func defaultOutput() -> AudioDevice? {
+        do {
+            return try AudioHardwareSystem.shared.defaultOutputDevice.map(device)
+        } catch {
+            Log.audio.error("Cannot read the default output device: \(error)")
+            return nil
+        }
+    }
+
+    /// The device's nominal sample rate, or nil when it cannot be read (the device went away).
+    static func nominalSampleRate(of id: AudioObjectID) -> Double? {
+        try? AudioHardwareDevice(id: id).nominalSampleRate
+    }
+
     /// The devices that can record, for the Microphone menu and Settings.
     static func inputs() -> [AudioDevice] {
         all().filter(\.hasInput)
     }
 
-    /// Calls `onChange` on the main queue when the default input changes or a device connects or
-    /// disconnects. Lives as long as the app.
+    /// Calls `onChange` on the main queue when the default input or output changes (the output feeds
+    /// the Bluetooth mic warning) or a device connects or disconnects. Lives as long as the app.
     static func observeChanges(_ onChange: @escaping @Sendable () -> Void) {
-        for selector in [kAudioHardwarePropertyDefaultInputDevice, kAudioHardwarePropertyDevices] {
+        let selectors = [
+            kAudioHardwarePropertyDefaultInputDevice, kAudioHardwarePropertyDefaultOutputDevice,
+            kAudioHardwarePropertyDevices,
+        ]
+        for selector in selectors {
             var address = PropertyAddress(selector)
             AudioObjectAddPropertyListenerBlock(AudioObjectID(kAudioObjectSystemObject), &address, .main) { _, _ in
                 onChange()
