@@ -68,14 +68,14 @@ UI text in this list is the text in the code at the phase 2 gate (2026-10-15). I
 |---|---|---|---|
 | 32 | Open the **Microphone: …** submenu | The connected inputs; the one in use is checked; the title shows "Microphone: <name>" | |
 | 33 | Pick another mic, dictate | kotoba records from the mic you picked; Settings > **Microphone** shows it at the top of **Your Order** | |
-| 34 | Settings > **Microphone**: look at **Other Connected** | Connected mics that are not in your order, each with **Add** | |
-| 35 | Click **Add** on a mic in **Other Connected** | It moves to **Your Order** | |
-| 36 | Drag a mic to the top of **Your Order**, dictate | kotoba records from that mic (checkmark on it) | |
+| 34 | Settings > **Microphone**: click **+** under **Your Order** | A menu of the connected mics that are not in your order; **+** is dimmed when there are none | |
+| 35 | Pick a mic in the **+** menu | It joins the end of **Your Order** | |
+| 36 | Drag a mic to the top of **Your Order**, dictate | The row moves while you drag; kotoba records from that mic (“In use” on its row) | |
 | 37 | Disconnect the first mic in the order, dictate | kotoba uses the next connected mic in the order; the first one shows "Not connected" | |
 | 38 | Connect it again, dictate | kotoba uses it again | |
 | 39 | Connect a mic during a recording | The recording keeps its mic; the new mic is used from the next dictation | |
-| 40 | Look at a Bluetooth mic in the pane | "Bluetooth - lower quality" | |
-| 41 | Right-click a mic in **Your Order** > **Remove from Order** | It leaves the order (and shows under **Other Connected** if it is connected) | |
+| 40 | Look at a Bluetooth mic in the pane (in the order, or in the **+** menu) | “Bluetooth: call-quality audio” | |
+| 41 | Right-click a mic in **Your Order** > **Remove from Order**; then select one and click **−**; then select one and press Delete | Each time it leaves the order (and shows in the **+** menu if it is connected) | |
 | 42 | Click **Follow System Default** | "No mics in your order: kotoba follows the system default input."; with AirPods as output, kotoba records from the built-in mic | |
 
 ## Indicator position
@@ -185,7 +185,7 @@ Rows from each agent's phase 2.5 work. The numbers continue the list above.
 | 104 | Allow Accessibility in onboarding, then tap ⌃⌥⌘ at once | The hotkey works at once, not after 5 s | |
 | 105 | Turn Wi-Fi off and dictate | Pill: "Couldn't reach OpenRouter. Saved." | |
 | 106 | Turn Wi-Fi on | Within seconds the pill says "Saved dictation recovered" with **Copy**; the menu lists it under Recovered Dictations; nothing is pasted | |
-| 107 | Settings > Microphone > **Test Microphone** | The level bar moves on the mic in use for 5 s and the orange dot shows; then both stop | |
+| 107 | Settings > Microphone > **Test Microphone** | The **Input level** bar moves for 5 s and the orange dot shows; then both stop | |
 | 108 | Start a dictation during the microphone test | The dictation works normally | |
 | 109 | Cause each pill with a button: offline, no key, no credit, recovered, paste not allowed, mic access off | **Retry** retries; **Add Key…** opens Settings on Speech; **Add Credit…** opens the OpenRouter credits page; **Copy** copies the recovered text; **Allow Pasting…** opens onboarding at Accessibility; **Open Settings…** opens Privacy & Security > Microphone | |
 | 110 | Menu > **About kotoba** | The standard About panel opens with the version | |
@@ -269,11 +269,128 @@ Rows from each agent's phase 2.5 work. The numbers continue the list above.
 | 168 | While you type in another app, click the pill's button | The action runs on the first click (for example **Retry** starts the retry); the pill hides; focus stays in the app you type in | |
 | 169 | Press Esc during a recording, wait | **Undo** keeps the pill until the Undo window ends | |
 
+### Pill bar and "Show indicator" (phase 2.6)
+
+| # | Do this | Expect | Result |
+|---|---|---|---|
+| 170 | With a message pill that has a button (for example Wi-Fi off, **Retry**), look at the pill bottom | A thin bar starts full and empties in about 8 s; the pill hides when it is empty | |
+| 171 | Hold the pointer on that pill for 20 s, then move it away | The bar stops while the pointer is on the pill; after you leave it runs on from where it stopped, and the pill hides when the bar is empty | |
+| 172 | Press Esc during a recording; hold the pointer on the Cancelled pill for 20 s, then click **Undo** | The bar stops and the Undo window stays open; **Undo** resumes the recording | |
+| 173 | Press Esc during a recording; hold the pointer on the pill for 2 s, move it away, wait | The bar runs on; the pill hides when the bar is empty (about 5 s in total, not counting the hold) | |
+| 174 | Settings > General > **Show indicator**: **Always** | A small round waveform pill shows at the saved position; it shows no level and no motion | |
+| 175 | Type in TextEdit, click the round pill, speak, click the pill again | The click starts a dictation like a chord tap; the second click stops it; the text pastes into TextEdit; TextEdit stays the active app and keeps its cursor | |
+| 176 | With **Always**, drag the round pill to another position | The pill moves; no dictation starts | |
+| 177 | With **Always**, finish a dictation and wait for a message pill to end | The pill goes back to the small round pill, not hidden | |
+| 178 | Set **Show indicator** back to **While Dictating** | The round pill goes away at once | |
+| 179 | On macOS 27, with **Always**, move the pointer over the round pill and press | The glass shows a response to the pointer and the press (interactive glass) | |
+| 264 | With **While Dictating**, start a dictation with the chord, then click the Listening pill | The click stops the dictation like a chord tap; the text pastes into your app | |
+| 265 | Look at the pill edges over a light and a dark window | The glass shadow is soft on every side; no straight cut-off edge; clicks just outside the pill reach the app below | |
+| 277 | Put the pointer where the pill appears and keep it still; dictate, press Esc (the Cancelled pill appears under the pointer), then move the pointer away | The bar stops while the pointer is on the pill; after you move away the bar runs on and the pill goes in about 5 s; the next dictation works | |
+
+### Learning from edits (phase 2.6)
+
+| # | Do this | Expect | Result |
+|---|---|---|---|
+| 180 | In TextEdit, dictate "deploy it to versel today"; change "versel" to "Vercel"; click another app | Within about 1 s the pill shows a sparkle, "Added Vercel" and **Undo**, with the bar | |
+| 181 | Open Settings > Dictionary | "Vercel" and the replacement versel -> Vercel are there | |
+| 182 | Repeat 180, then click **Undo** on the pill | The word and the replacement are gone from the dictionary; the same fix later adds nothing and shows no pill | |
+| 183 | Dictate a sentence, change "add it" to "audit", click another app | No pill; after the same fix a second time, "audit" shows in Dictionary > Suggestions | |
+| 184 | In Slack, dictate a message with a name spelled wrong, fix the name, press Return | The pill shows "Added <name>" after the message is sent (the first paste into Slack after launch may learn nothing) | |
+| 185 | In Safari or Chrome, dictate into a text field, fix a name, click elsewhere on the page | The pill shows "Added <name>" | |
+| 186 | In a terminal prompt, dictate, fix a word | Nothing is learned or the word is learned; menu > **Fix Last Dictation…** still teaches it | |
+| 187 | Dictate into a password field (for example a login page), then type in it | The field is never read: Instruments shows no "readback read" interval, and nothing is learned | |
+| 188 | Dictate, fix a word, and within 1 s start the next dictation | The recording pill shows (no learned-word pill); the fixed word shows in Suggestions | |
+| 189 | Dictate, change nothing for 60 s | No pill; nothing is learned | |
+| 190 | Dictate, then rewrite the whole sentence | Nothing is learned | |
+| 191 | Instruments > Points of Interest (subsystem tech.teensy.kotoba) during 180 | "readback open" once per paste and "readback read" once after each typing pause; no readback interval between dictations | |
+| 192 | Settings > Dictionary: turn **Learn from my edits** off; repeat 180 | No pill; nothing is learned; Instruments shows no "readback open" interval | |
+
+### User-set chords (phase 2.6)
+
+| # | Do this | Expect | Result |
+|---|---|---|---|
+| 200 | Settings > General > click the **Dictate** shortcut, press and release ⌃⌥⌘ | The button shows "Press keys", then the held keys, then ⌃⌥⌘; no dictation starts while you record | |
+| 201 | Record fn (press and release fn alone) as **Dictate**; tap fn in TextEdit, speak, tap fn | A dictation, as with ⌃⌥⌘; the hint about the fn key setting shows under the button; ⌃⌥⌘ does nothing now | |
+| 202 | Record right ⌥ (right Option alone) as **Dictate**; tap left ⌥, then right ⌥ | Left ⌥ does nothing; right ⌥ starts a dictation. The menu says "Tap right ⌥ to dictate" | |
+| 203 | Record ⌃⌥Space as **Dictate**; in TextEdit hold ⌃⌥Space while you speak, let go | Push-to-talk works; no space and no other character is typed into TextEdit, also while the key repeats | |
+| 204 | With ⌃⌥Space as **Dictate**, press ⌃⌥⇧Space and ⌃Space | Neither starts a dictation; they reach the app or macOS as before | |
+| 205 | With each chord of 201-203, press the chord plus another key (for example ⌃⌥Space then K) before the start sound | No sound, no recording; the other key reaches the app | |
+| 206 | With each chord of 201-203, press Esc during a recording | The recording is cancelled with Undo, as with ⌃⌥⌘ | |
+| 207 | Record ⌘Space, then ⌥ alone, then K alone, then Esc with ⌥, as **Dictate** | Each is refused with its reason (macOS uses it; part of many shortcuts; add a modifier; Esc cancels a dictation); the old chord stays and still works | |
+| 208 | Record the cleanup chord (⌃⌥⇧⌘) as **Dictate** | Refused: "This is the cleanup shortcut." | |
+| 209 | Set **Dictate** to fn, then record ⌃⌥⌘ as **Clean up**, then dictate with ⌃⌥⌘ | A cleanup dictation; fn makes a plain dictation | |
+| 210 | Click the cleanup shortcut's ⊗ button | The shortcut shows "Off", the cleanup model is greyed out, and the cleanup chord does nothing | |
+| 211 | Click the ↺ button next to a changed shortcut | It goes back to ⌃⌥⌘ (or ⌃⌥⇧⌘ for cleanup) at once | |
+| 212 | Click a shortcut button, then press Esc, or click it again, or switch to another app | Recording stops; the shortcut does not change; ⌃⌥⌘ dictates again at once | |
+| 213 | Change **Dictate**, quit kotoba, open it again | The new chord works and shows in the menu and in Settings | |
+| 214 | First launch (onboarding Welcome): record fn as the shortcut | The text above changes to "Tap fn"; the Try It step and the menu say fn | |
+
+### Submit after paste and Last Dictation (phase 2.6)
+
+| # | Do this | Expect | Result |
+|---|---|---|---|
+| 230 | In cmux (Claude Code prompt), dictate "list the files in this repo. Press enter." | The prompt gets "list the files in this repo." without the phrase, and Claude Code starts on it (Return sent) | |
+| 231 | In cmux (Codex prompt), dictate "explain the last commit, press return" | "explain the last commit" pastes and is submitted | |
+| 232 | In Slack, dictate "Running five minutes late. Press enter." | The message "Running five minutes late." is sent, whole; no text stays in the box | |
+| 233 | In Slack, dictate a long message (about 60 words) that ends with "press enter" | The whole message is sent as one message; no part of it stays in the box | |
+| 234 | In Chrome, in a search field, dictate "kotoba dictation. Press return." | The search runs for "kotoba dictation." | |
+| 235 | In TextEdit, dictate "Looks good, send it." and "Press enter to continue." | Both paste as spoken; no Return ("send it" is not a submit phrase; the other phrase is not at the end) | |
+| 236 | In TextEdit, dictate only "Press enter." | "Press enter." pastes; no Return | |
+| 237 | Settings > General > turn off **Press Return when you say “press enter”**; dictate "hello. Press enter." | "hello. Press enter." pastes; no Return. Turn it on again | |
+| 238 | With the cleanup chord, dictate "um so fix the the bug. Press enter." | The cleaned text pastes without "Press enter", then Return | |
+| 239 | Turn Wi-Fi off, dictate "test. Press enter.", turn Wi-Fi on, copy it from **Recovered Dictations** | The recovered text is "test." and no Return was sent at any time | |
+| 240 | Instruments > Points of Interest during 230 | A "returnSent" point follows "pasteSent" by less than 5 ms | |
+| 241 | Dictate into TextEdit, click into another TextEdit window, menu > **Paste Last Dictation** | The same text pastes into the second window; the clipboard holds what it held before (check with ⌘V after 2 s) | |
+| 242 | Menu > **Copy Last Dictation**, then ⌘V in TextEdit | The last dictation pastes; it stays on the clipboard | |
+| 243 | With the cleanup chord, dictate "um so the the plan"; menu > **Paste Last Without Cleanup** | The raw words "um so the the plan" paste. After a plain dictation the item is not in the menu | |
+| 244 | Turn off Accessibility for kotoba; menu > **Paste Last Dictation** | The pill shows the copied message; the text is on the clipboard. Turn Accessibility on again | |
+| 245 | In cmux (Claude Code prompt), tap the chord, speak "list the files", press Return | The recording stops at Return; "list the files" pastes, then Claude Code starts on it. No extra Return or new line before the paste | |
+| 246 | Tap the chord, speak, hold Return for 2 s, release | One Return only, after the paste; no repeated Returns reach the app | |
+| 247 | Tap the chord, speak, press ⇧Return | The recording goes on; the app gets ⇧Return as usual | |
+| 248 | Press Return with no dictation running, and press Esc during a recording | Return reaches the app as usual; Esc still cancels with Undo | |
+| 249 | Turn Wi-Fi off, tap the chord, speak, press Return; turn Wi-Fi on and retry | The dictation goes to **Recovered Dictations**; no Return is sent | |
+| 288 | In Slack, tap the chord, say "hello. Press enter.", tap the chord, and click TextEdit within 1 s | "hello." pastes into TextEdit; no Return; the pill shows "Didn’t press Return: app changed" | |
+| 289 | Tap the chord to stop, and press Return at once (within about 0.1 s) | One Return, after the paste; the Return is not lost | |
+| 290 | Start a long dictation, stop it, and during "Transcribing" choose menu > **Paste Last Dictation** | Nothing pastes from the menu; the new dictation pastes once | |
+
+### Live no-sound warning (phase 2.6)
+
+| # | Do this | Expect | Result |
+|---|---|---|---|
+| 266 | Choose the built-in mic. In System Settings > Sound > Input, set the input volume to 0; tap the chord and say nothing | About 2 s after the start the pill and the menu status show “No sound from the mic” with **Microphone…**; the pill’s help tag names the mic; recording goes on | |
+| 267 | With the warning up, set the input volume back and speak | The warning goes away at your first word; the pill says “Listening” again | |
+| 268 | Input volume normal, in a quiet room, tap the chord and say nothing for 15 s | No warning at any time | |
+| 269 | Hold the chord with the input volume at 0 for about 1 s, then release | No warning; the dictation ends as usual | |
+| 270 | Choose AirPods as the mic; tap the chord, wait 1 s, then speak; later stay silent for 10 s | No warning while the AirPods start; note if a warning shows in the silence (AirPods noise suppression) | |
+| 271 | During a recording with a USB mic, unplug it | Within about 2 s the pill shows the warning (or recording moves to another mic and shows its level) | |
+| 272 | Click **Microphone…** on the warning | Settings opens on the Microphone pane; recording goes on until you stop it | |
+
+### Native components (phase 2.6)
+
+| # | Do this | Expect | Result |
+|---|---|---|---|
+| 252 | Settings > Microphone with AirPods connected and not in the order: click **+** | AirPods Pro in the menu with “Bluetooth: call-quality audio” under its name | |
+| 253 | Settings > Microphone: drag the second mic above the first | A drop line shows while you drag; the order changes and stays after you close and open Settings | |
+| 254 | Settings > Microphone: no mic selected | **−** is dimmed; with every connected mic in the order, **+** is dimmed | |
+| 255 | Settings > Dictionary > **Import from Wispr Flow…**, then press Esc; again, then press Return | An alert (not a panel in the pane): Esc cancels and adds nothing; Return imports | |
+| 256 | Settings > Dictionary: select a word, click **−**; click **+** | The word is deleted; **+** opens the Add Word sheet | |
+| 257 | Fix Last Dictation…: click into the text, press ⌘A then type | The whole text is replaced; the box has no separate border inside the grouped box | |
+| 258 | Onboarding Done step: click each switch | Each switch changes; the two switches sit in one grouped box | |
+| 259 | Settings window toolbar | No sidebar toggle button; the sidebar cannot be hidden | |
+| 260 | Choose AirPods as the mic (menu), then open Settings > Microphone | “Bluetooth mic: call-quality audio” with its detail at the top of **Your Order**; the AirPods row says only “In use” | |
+| 261 | Settings > Microphone open: plug in a USB mic, then unplug it | It shows in the **+** menu (or as connected in **Your Order**) at once, and goes away again; no reopen needed | |
+| 262 | Settings > Microphone open: pick another mic in the menu bar **Microphone** submenu | “In use” moves to that mic in the pane at once; with AirPods, the Bluetooth warning appears | |
+| 273 | AirPods as output, choose **AirPods Pro** in **Microphone** | At the foot of the submenu: a dimmed warning “Bluetooth mic: call-quality audio” with “Playback drops to call quality. Start and stop are slower, and the first word can be lost.” | |
+| 274 | AirPods as output, the built-in mic or a USB mic in use; play a video, then dictate | No warning in the menu; the video audio does not drop to call quality; System Settings > Sound > Input keeps its default | |
+| 275 | AirPods as the system default input, no mic in your order; play a video, then dictate | kotoba records from the built-in mic; the video audio does not drop to call quality | |
+| 276 | Unplug or turn off the mic in use during a recording | The recording goes on with the next mic (your order, then the system default); no crash | |
+
 ## Known offscreen-only doubts
 
 The offscreen snapshots (`make snapshots`) show two things that may not happen in the real app. Check them on screen:
 - Row 54: the "Undo" title on the dark Cancelled pill renders black on dark offscreen.
 - Row 74: the empty Azure endpoint's example URL renders as bright as typed text offscreen.
+- Dark mode: the Settings sidebar labels and the pill's glass button titles (Undo, Retry) render near black offscreen (text on glass, docs/research/native-ui.md). On screen they must be light.
 
 ## Gates (after a day of use; each needs the owner's go because it reads the app database)
 

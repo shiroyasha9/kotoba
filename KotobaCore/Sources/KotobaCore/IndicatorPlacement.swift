@@ -95,6 +95,19 @@ public enum IndicatorPlacement {
         return ScreenRect(x: x, y: y, width: size.width, height: size.height)
     }
 
+    /// The small round idle pill ("Show indicator: Always") at its anchor: where the pill with text centers at
+    /// the bottom, and mid-height at a side edge.
+    public static func roundFrame(at anchor: IndicatorAnchor, in visibleFrame: ScreenRect) -> ScreenRect {
+        let x =
+            switch anchor {
+            case .bottomCenter: visibleFrame.mid.x - dragDiameter / 2
+            case .left: visibleFrame.minX + sideInset
+            case .right: visibleFrame.maxX - sideInset - dragDiameter
+            }
+        let y = anchor == .bottomCenter ? visibleFrame.minY + bottomInset : visibleFrame.mid.y - dragDiameter / 2
+        return ScreenRect(x: x, y: y, width: dragDiameter, height: dragDiameter)
+    }
+
     public static func dragFrame(centeredAt point: ScreenPoint) -> ScreenRect {
         let radius = dragDiameter / 2
         return ScreenRect(x: point.x - radius, y: point.y - radius, width: dragDiameter, height: dragDiameter)
@@ -107,6 +120,16 @@ public enum IndicatorPlacement {
             return center.distance(to: point)
         }
         return IndicatorAnchor.allCases.min { distance(to: $0) < distance(to: $1) } ?? .bottomCenter
+    }
+
+    /// A click on the pill (not its button) is a chord tap: it stops a recording, and with "Show indicator: Always" it
+    /// starts one from the idle pill. Elsewhere it does nothing.
+    public static func isClickATap(in state: DictationState, showsIdlePill: Bool) -> Bool {
+        switch state {
+        case .recording: true
+        case .idle: showsIdlePill
+        default: false
+        }
     }
 
     public static func isDrag(from start: ScreenPoint, to point: ScreenPoint) -> Bool {

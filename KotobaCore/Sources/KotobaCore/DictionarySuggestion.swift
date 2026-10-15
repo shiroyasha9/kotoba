@@ -1,7 +1,7 @@
 import Foundation
 
-/// A word kotoba learned from the owner's corrections. It waits as a suggestion until the owner adds or dismisses it;
-/// nothing is added on its own (docs/spec.md, Polish and learning).
+/// A word kotoba learned from the owner's corrections. It waits as a suggestion until the owner adds or dismisses it.
+/// A strong correction read back after a paste is stored as added at once (`ReadbackChoice`).
 public struct DictionarySuggestion: Sendable, Equatable, Identifiable {
     public enum Status: String, Sendable {
         case pending

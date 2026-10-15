@@ -171,6 +171,34 @@ final class DictionaryModel {
         commit(candidates.reduce(dictionary) { $0.adding($1) }, recordingAdded: candidates)
     }
 
+    /// The entries one auto-learn added: the pill's Undo takes out exactly these.
+    struct Learned: Equatable {
+        /// The corrected words that added something, for the pill.
+        var words: [String]
+        var terms: [String]
+        var rules: [ReplacementRule]
+    }
+
+    /// Adds corrections kotoba read back after a paste, stored as added like a checked fix. Nil when they add
+    /// nothing new.
+    func learn(_ candidates: [SuggestionCandidate]) -> Learned? {
+        let before = dictionary
+        let new = candidates.filter { !before.contains($0) }
+        guard !new.isEmpty else { return nil }
+        add(new)
+        return Learned(
+            words: new.map(\.corrected), terms: dictionary.terms.filter { !before.terms.contains($0) },
+            rules: dictionary.rules.filter { !before.rules.contains($0) })
+    }
+
+    /// The pill's Undo. The save then marks the suggestion dismissed, so the word is not learned again.
+    func undoLearned(_ learned: Learned) {
+        var updated = dictionary
+        updated.terms.removeAll { learned.terms.contains($0) }
+        updated.rules.removeAll { learned.rules.contains($0) }
+        commit(updated)
+    }
+
     func addSuggestions(_ ids: Set<DictionarySuggestion.ID>) {
         let chosen = suggestions.filter { ids.contains($0.id) }
         suggestions.removeAll { ids.contains($0.id) }

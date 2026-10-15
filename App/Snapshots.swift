@@ -16,7 +16,10 @@ struct Snapshot {
 /// `<name>-light.png` and `<name>-dark.png` and the sample menus as `menu-<name>.txt`, and exits:
 /// no screen capture, no TCC grant.
 /// Glass and other backdrop effects do not render offscreen, so a view that relies on them draws
-/// a stand-in shape in its snapshot.
+/// a stand-in shape in its snapshot. Text that SwiftUI or AppKit draws on glass with a system style
+/// (`.primary`, `.secondary`, a `.glass` button title, the macOS 26 sidebar labels) draws near
+/// black in the dark images: the window server applies its glass tint, `cacheDisplay` does not.
+/// An explicit color or an AppKit label on the same glass draws right (docs/research/native-ui.md).
 @MainActor
 enum Snapshots {
     /// Each feature adds one line with its own snapshot list.
@@ -26,6 +29,7 @@ enum Snapshots {
         SettingsPane.speechSnapshots,
         SettingsPane.microphoneSnapshots,
         SettingsPane.generalSnapshots,
+        ChordRecorder.snapshots,
         StatusBarItem.snapshots,
         OnboardingController.snapshots,
         FixLastDictationController.snapshots,

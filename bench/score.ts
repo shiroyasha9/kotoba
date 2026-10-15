@@ -25,14 +25,15 @@ function isIdentifierShaped(token: string): boolean {
 }
 
 /**
- * Normalizes text for WER: lowercase, punctuation removed except inside
+ * Normalizes text for WER: lowercase, punctuation removed (letters, combining
+ * marks such as Devanagari vowel signs, and digits stay) except inside
  * identifier-shaped tokens, whitespace collapsed, fillers dropped.
  */
 export function normalize(text: string): string[] {
 	const out: string[] = [];
 	for (const raw of text.toLowerCase().split(/\s+/)) {
 		let token = stripEdges(raw);
-		if (!isIdentifierShaped(token)) token = token.replace(/[^\p{L}\p{N}]+/gu, "");
+		if (!isIdentifierShaped(token)) token = token.replace(/[^\p{L}\p{M}\p{N}]+/gu, "");
 		if (token && !FILLERS.has(token)) out.push(token);
 	}
 	return out;

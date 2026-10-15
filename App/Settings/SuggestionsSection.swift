@@ -3,7 +3,8 @@ import KotobaCore
 import SwiftUI
 
 /// Suggestions learned from corrections, at the top of the Dictionary pane: the owner adds or dismisses each one
-/// (docs/research/auto-learning.md 4.2). Nothing is added without a click.
+/// (docs/research/auto-learning.md 4.2). Strong corrections kotoba reads back after a paste skip this list: they are
+/// added at once, with Undo on the pill (docs/spec.md, Owner round 2026-10-16).
 struct SuggestionsSection: View {
     let model: DictionaryModel
 
@@ -30,6 +31,32 @@ struct SuggestionsSection: View {
     }
 }
 
+/// "Learn from my edits", in the Dictionary pane's header box: a pane-level setting, as System Settings places them.
+/// Off, kotoba never observes another app's field (`AXFieldWatcher`).
+struct LearnFromEditsToggle: View {
+    // The registered default applies; the initial value here is only what @AppStorage requires.
+    @AppStorage(AppDefaults.Key.learnsFromEdits.rawValue)
+    private var isLearningFromEdits = AppDefaults.isLearningFromEdits
+
+    // Custom row: outside a Form a switch sits next to its label, and this row puts it at the trailing edge, as a Form
+    // row does. A grouped Form above the word list cannot hold it: a fixed-height Form makes the pane's ideal height
+    // the list's full height, and the Settings window then grows past the screen (spike, docs/research/native-ui.md).
+    var body: some View {
+        HStack {
+            VStack(alignment: .leading) {
+                Text("Learn from my edits")
+                Text("When you fix a word kotoba pasted, kotoba adds it to your dictionary.")
+                    .font(.callout)
+                    .foregroundStyle(.secondary)
+            }
+            Spacer()
+            Toggle("Learn from my edits", isOn: $isLearningFromEdits)
+                .labelsHidden()
+                .toggleStyle(.switch)
+        }
+    }
+}
+
 private struct SuggestionRow: View {
     let suggestion: DictionarySuggestion
     let add: () -> Void
@@ -51,10 +78,8 @@ private struct SuggestionRow: View {
                 .foregroundStyle(.secondary)
                 .help("Dismiss")
             Button("Add", action: add)
-                .buttonStyle(.borderedProminent)
         }
         .controlSize(.small)
-        .padding(.vertical, 2)
     }
 
     /// "Cursor · Seen 3 times"

@@ -13,6 +13,8 @@ public enum LatencyMark: String, Sendable, CaseIterable {
     case uploadStart
     case response
     case pasteSent
+    /// Submit phrase only: Return posted after the paste.
+    case returnSent
     /// Cleanup dictations only: the cleaner request and its answer. `make latency` leaves these
     /// dictations out of the 1 s gate.
     case cleanStart

@@ -5,14 +5,14 @@ import SwiftUI
 
 extension SettingsPane {
     static func general(_ model: GeneralModel) -> Self {
-        SettingsPane(id: .general, title: "General", systemImage: "gearshape") {
+        SettingsPane(id: .general) {
             AnyView(GeneralPane(model: model))
         }
     }
 }
 
-/// The settings that used to live only in the menu (ux-polish G1): the cleanup chord and model, launch at
-/// login, sounds and the indicator position. Each change applies at once.
+/// The General pane's settings: the dictation and cleanup shortcuts and the cleanup model, the spoken Return phrase,
+/// launch at login, sounds, and the indicator's position and visibility. Each change applies at once.
 @MainActor
 @Observable
 final class GeneralModel {
@@ -26,13 +26,6 @@ final class GeneralModel {
         static let live = Self(
             isOn: { LaunchAtLogin.isOn || LaunchAtLogin.needsApproval }, problem: { LaunchAtLogin.problem },
             change: { LaunchAtLogin.change(to: $0) })
-    }
-
-    var cleanupChord: CleanupChord {
-        didSet {
-            CleanupChord.current = cleanupChord
-            setCleanupChord(cleanupChord.modifiers)
-        }
     }
 
     var cleanupModel: CleanupModel {
@@ -52,36 +45,57 @@ final class GeneralModel {
         didSet { setAnchor(indicatorAnchor) }
     }
 
+    var indicatorVisibility: IndicatorVisibility {
+        didSet { setVisibility(indicatorVisibility) }
+    }
+
+    var isSubmitPhraseOn: Bool {
+        didSet { setSubmitPhrase(isSubmitPhraseOn) }
+    }
+
     @ObservationIgnored private let settings: TranscriptionSettings
     @ObservationIgnored private let loginItem: LoginItem
     @ObservationIgnored private let setAnchor: @MainActor (IndicatorAnchor) -> Void
-    @ObservationIgnored private let setCleanupChord: @MainActor (ModifierKeys?) -> Void
+    @ObservationIgnored private let setVisibility: @MainActor (IndicatorVisibility) -> Void
+    @ObservationIgnored private let setSubmitPhrase: @MainActor (Bool) -> Void
+    /// Observable itself: the rows and the cleanup model follow a new recording.
+    @ObservationIgnored let chords: HotkeyChords
 
-    /// Reads the current values. `setCleanupChord` tells the hotkey tap about a new chord.
+    /// Reads the current values. `submitPhraseChanged` hands a new submit phrase setting to the pipeline.
     convenience init(
         settings: TranscriptionSettings, indicator: IndicatorPanel,
-        setCleanupChord: @escaping @MainActor (ModifierKeys?) -> Void
+        submitPhraseChanged: @escaping @MainActor (Bool) -> Void
     ) {
         self.init(
-            settings: settings, loginItem: .live, cleanupChord: .current, areSoundsOn: AppDefaults.areSoundCuesOn,
-            indicatorAnchor: indicator.anchor, setAnchor: { indicator.anchor = $0 }, setCleanupChord: setCleanupChord)
+            settings: settings, loginItem: .live, chords: .shared, areSoundsOn: AppDefaults.areSoundCuesOn,
+            indicatorAnchor: indicator.anchor, setAnchor: { indicator.anchor = $0 },
+            indicatorVisibility: indicator.visibility, setVisibility: { indicator.visibility = $0 },
+            isSubmitPhraseOn: AppDefaults.isSubmitPhraseOn,
+            setSubmitPhrase: {
+                AppDefaults.isSubmitPhraseOn = $0
+                submitPhraseChanged($0)
+            })
     }
 
     private init(
-        settings: TranscriptionSettings, loginItem: LoginItem, cleanupChord: CleanupChord, areSoundsOn: Bool,
+        settings: TranscriptionSettings, loginItem: LoginItem, chords: HotkeyChords, areSoundsOn: Bool,
         indicatorAnchor: IndicatorAnchor, setAnchor: @escaping @MainActor (IndicatorAnchor) -> Void,
-        setCleanupChord: @escaping @MainActor (ModifierKeys?) -> Void
+        indicatorVisibility: IndicatorVisibility, setVisibility: @escaping @MainActor (IndicatorVisibility) -> Void,
+        isSubmitPhraseOn: Bool, setSubmitPhrase: @escaping @MainActor (Bool) -> Void
     ) {
         self.settings = settings
         self.loginItem = loginItem
         self.setAnchor = setAnchor
-        self.setCleanupChord = setCleanupChord
-        self.cleanupChord = cleanupChord
+        self.setVisibility = setVisibility
+        self.setSubmitPhrase = setSubmitPhrase
+        self.chords = chords
         cleanupModel = settings.cleanupModel
         isLaunchAtLoginOn = loginItem.isOn()
         loginProblem = loginItem.problem()
         self.areSoundsOn = areSoundsOn
         self.indicatorAnchor = indicatorAnchor
+        self.indicatorVisibility = indicatorVisibility
+        self.isSubmitPhraseOn = isSubmitPhraseOn
     }
 
     /// One register or unregister call per click; the toggle then shows what the system holds.
@@ -97,8 +111,9 @@ final class GeneralModel {
         -> GeneralModel
     {
         GeneralModel(
-            settings: .inMemory(), loginItem: loginItem, cleanupChord: .shift, areSoundsOn: true,
-            indicatorAnchor: .bottomCenter, setAnchor: { _ in }, setCleanupChord: { _ in })
+            settings: .inMemory(), loginItem: loginItem, chords: HotkeyChords(defaults: nil), areSoundsOn: true,
+            indicatorAnchor: .bottomCenter, setAnchor: { _ in }, indicatorVisibility: .whileDictating,
+            setVisibility: { _ in }, isSubmitPhraseOn: true, setSubmitPhrase: { _ in })
     }
 }
 
@@ -107,15 +122,18 @@ private struct GeneralPane: View {
 
     var body: some View {
         Form {
+            Section {
+                PaneHeader(pane: .general)
+            }
             Section("Shortcut") {
                 LabeledContent {
-                    Text(StatusText.dictationChord)
+                    ChordRecorder(chords: model.chords, role: .dictation)
                 } label: {
                     Text("Dictate")
                     Text("Tap to start and stop, or hold while you speak.")
                 }
-                Picker(selection: $model.cleanupChord) {
-                    ForEach(CleanupChord.allCases, id: \.self) { Text($0.title).tag($0) }
+                LabeledContent {
+                    ChordRecorder(chords: model.chords, role: .cleanup)
                 } label: {
                     Text("Clean up")
                     Text("Removes filler words and fixes punctuation. Takes a moment longer.")
@@ -123,19 +141,27 @@ private struct GeneralPane: View {
                 Picker("Cleanup model", selection: $model.cleanupModel) {
                     ForEach(CleanupModel.allCases, id: \.self) { Text($0.title).tag($0) }
                 }
-                .disabled(model.cleanupChord == .off)
+                .disabled(model.chords.cleanup == nil)
+            }
+            Section {
+                Toggle(isOn: $model.isSubmitPhraseOn) {
+                    Text("Press Return when you say “press enter”")
+                    Text("Also “press return”. Say it last: kotoba pastes the text without it, then presses Return.")
+                }
+            } header: {
+                Text("Paste")
+            } footer: {
+                Text("While you dictate, press Return to stop. kotoba pastes the text, then presses Return.")
             }
             Section("Startup") {
                 Toggle(
                     "Open kotoba when you log in",
                     isOn: Binding(get: { model.isLaunchAtLoginOn }, set: { model.setLaunchAtLogin($0) }))
                 if let problem = model.loginProblem {
-                    HStack {
-                        Text(problem.text)
-                            .font(.callout)
-                            .foregroundStyle(.secondary)
-                        Spacer()
+                    LabeledContent {
                         Button("Open Login Items…", action: LaunchAtLogin.openLoginItemsSettings)
+                    } label: {
+                        Text(problem.text).foregroundStyle(.secondary)
                     }
                 }
             }
@@ -143,6 +169,12 @@ private struct GeneralPane: View {
                 Toggle("Play a sound when dictation starts and stops", isOn: $model.areSoundsOn)
                 Picker("Indicator position", selection: $model.indicatorAnchor) {
                     ForEach(IndicatorAnchor.allCases, id: \.self) { Text($0.title).tag($0) }
+                }
+                Picker(selection: $model.indicatorVisibility) {
+                    ForEach(IndicatorVisibility.allCases, id: \.self) { Text($0.title).tag($0) }
+                } label: {
+                    Text("Show indicator")
+                    Text("With “Always”, click the indicator to start and stop dictating.")
                 }
             }
         }
@@ -154,7 +186,7 @@ private struct GeneralPane: View {
 extension SettingsPane {
     static func generalSnapshots() -> [Snapshot] {
         [
-            SettingsWindow.snapshot(of: .general(.sample()), named: "settings-general", height: 520),
+            SettingsWindow.snapshot(of: .general(.sample()), named: "settings-general", height: 800),
             loginFailureSnapshot(),
         ]
     }
@@ -171,7 +203,7 @@ extension SettingsPane {
                     return .failed
                 }))
         model.setLaunchAtLogin(true)
-        var snapshot = SettingsWindow.snapshot(of: .general(model), named: "settings-general-login-failed", height: 560)
+        var snapshot = SettingsWindow.snapshot(of: .general(model), named: "settings-general-login-failed", height: 840)
         snapshot.check = { _ in
             guard changes == 1, model.loginProblem == .failed, !model.isLaunchAtLoginOn else {
                 return "A failed launch-at-login change made \(changes) calls and kept no note"

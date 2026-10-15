@@ -1,6 +1,9 @@
 import AppKit
 
-// First, so a snapshot run (`--snapshots <folder>`) builds no hotkey tap and no audio engine; it exits when done.
+// Before anything reads a setting: the AppDelegate's stored properties read some at init.
+AppDefaults.registerDefaults()
+
+// Then, so a snapshot run (`--snapshots <folder>`) builds no hotkey tap and no audio engine; it exits when done.
 Snapshots.runIfRequested()
 
 let delegate = AppDelegate()

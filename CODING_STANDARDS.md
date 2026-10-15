@@ -30,7 +30,15 @@
 
 - Colocate by concern: a type, constant or small helper lives in the file of the function that owns it. A separate file only when several modules share it, to break an import cycle, or for an integration of 60+ lines.
 - Plain file names after the main type (`DictationPipeline.swift`), no dotted suffixes.
+- Files stay under 400 lines (lint). When your edit takes a shared file past 350 lines, move a whole concern into its own extension file first (`PipelineRecording.swift`, `AppMenu.swift`), so the next agent has room. Never trim comments or join lines to pass the limit.
 - Platform code lives in `App/`; decisions live in `KotobaCore/`, which imports only Foundation, os and Synchronization. If an adapter starts to decide something, move the decision into the core behind a port.
+
+## Native components (owner, 2026-10-16)
+
+- Build UI from Apple's own components, in this order: a SwiftUI or AppKit control with its system style (`Form` with `.formStyle(.grouped)`, `Section`, `List` with `.onMove`, `Toggle`, `Picker`, `LabeledContent`, `Button` with system styles, toolbar items, `ProgressView`, `.glassEffect`, SF Symbols); then a composition of them. Build a custom view only when no native control exists. Put a one-line comment on it that names the gap, for example the shortcut recorder.
+- Never draw your own copy of a native control: no hand-made drag handles, list rows, separators, toggles, tab bars, or button shapes. Take spacing, fonts and colors from the system (semantic colors, `.font(.body)`), never hard-coded values.
+- Settings follows macOS System Settings: a sidebar with grouped forms. Lists that the user orders use the native list reorder.
+- Native is the floor, not the goal: each view must also look polished, like a first-party Apple app (clear hierarchy, an empty state for each list, balanced layout). Judge every snapshot as a designer before you report.
 
 ## Windows and text entry
 

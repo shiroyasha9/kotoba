@@ -38,7 +38,10 @@ export type SttVariantKey =
 	| "mai"
 	| "mai+phraseList"
 	| "mai+clean"
-	| "mai+zdr";
+	| "mai+zdr"
+	| "mai+auto"
+	| "mai+hi"
+	| "grok+auto";
 
 /**
  * JSON value for xAI's "true"/"false" form fields (`format`, `filler_words`)
@@ -57,6 +60,8 @@ export type SttVariant = {
 	routing?: { zdr?: boolean };
 	/** Runs in the sequential latency pass only, never in the accuracy pass. */
 	latencyOnly?: true;
+	/** Top-level ISO-639-1 `language`; null sends none (auto-detect). Default "en". */
+	language?: string | null;
 };
 
 /**
@@ -189,7 +194,7 @@ export async function transcribe(p: Paths, sink: CallSink, { variant, clip, info
 	const body = JSON.stringify({
 		model: variant.model,
 		input_audio: { data: audio.toBase64(), format },
-		language: "en",
+		...(variant.language === null ? {} : { language: variant.language ?? "en" }),
 		...(variant.providerOptions || variant.routing
 			? { provider: { ...variant.routing, ...(variant.providerOptions ? { options: variant.providerOptions } : {}) } }
 			: {}),
@@ -354,7 +359,7 @@ async function probeVariant(
 	return { row, format: row.format };
 }
 
-async function runVariants(ctx: SttContext, stage: string, targets: [SttVariant, Clip[]][]): Promise<void> {
+export async function runVariants(ctx: SttContext, stage: string, targets: [SttVariant, Clip[]][]): Promise<void> {
 	const { p, audio, budget } = ctx;
 	if (!targets.length || budget.exceeded) return;
 	const ok = okRowsByVariant(await readJsonl<SttRow>(p.sttRaw));

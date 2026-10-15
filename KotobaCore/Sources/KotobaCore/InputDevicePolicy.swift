@@ -24,6 +24,15 @@ public struct AudioDevice: Sendable, Equatable, Identifiable {
     }
 }
 
+/// A warning about the mic in use, for the Microphone menu and pane (docs/spec.md, "Owner round 2026-10-16").
+public enum MicrophoneWarning: Sendable, Equatable {
+    /// A Bluetooth mic runs in the call profile: call-quality audio, and a slow start that can lose
+    /// the first word (AirPods Pro, 2026-10-16: about 0.3 s of audio lost about 0.3 s after the
+    /// start, and one stop that waited 171 ms). `interruptsPlayback` when the output is Bluetooth
+    /// too: playback drops to call quality while kotoba records.
+    case bluetoothMic(interruptsPlayback: Bool)
+}
+
 /// Which microphone to record from (docs/spec.md, "Audio", microphone choice).
 ///
 /// The owner's preference order comes first: the first connected input in it is used, Bluetooth
@@ -51,5 +60,12 @@ public enum InputDevicePolicy {
     /// The order after the owner picks `uid` in the menu: it moves to the top, the rest keep their order.
     public static func order(_ order: [String], choosing uid: String) -> [String] {
         [uid] + order.filter { $0 != uid }
+    }
+
+    /// The warning for `input`, the mic kotoba records from; `outputTransport` is the system default
+    /// output's transport, nil when there is none.
+    public static func warning(input: AudioDevice?, outputTransport: AudioDevice.Transport?) -> MicrophoneWarning? {
+        guard input?.transport == .bluetooth else { return nil }
+        return .bluetoothMic(interruptsPlayback: outputTransport == .bluetooth)
     }
 }

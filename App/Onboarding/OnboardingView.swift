@@ -4,6 +4,9 @@ import SwiftUI
 /// One step at a time: a symbol, a title, one or two plain sentences and the step's own control, with the step
 /// dots and Back/Continue at the bottom.
 struct OnboardingView: View {
+    /// A readable line length in the window: every step's text and boxes share it.
+    static let textWidth: CGFloat = 420
+
     @Bindable var model: OnboardingModel
     /// Closes the window after Done.
     let close: @MainActor () -> Void
@@ -12,9 +15,9 @@ struct OnboardingView: View {
         VStack(spacing: 0) {
             VStack(spacing: 14) {
                 Image(systemName: symbol)
-                    .font(.system(size: 40, weight: .regular))
+                    .font(.largeTitle)
+                    .imageScale(.large)
                     .foregroundStyle(.tint)
-                    .frame(height: 48)
                 Text(title)
                     .font(.title)
                     .fontWeight(.semibold)
@@ -111,7 +114,8 @@ struct OnboardingView: View {
     }
 }
 
-/// One dot per step: done steps show a checkmark, the shown step is filled.
+/// One dot per step: done steps show a checkmark, the shown step is filled. Custom: macOS has no page indicator
+/// control (UIPageControl is iOS only).
 private struct StepDots: View {
     let model: OnboardingModel
 
@@ -126,7 +130,8 @@ private struct StepDots: View {
                             .foregroundStyle(step == model.step ? AnyShapeStyle(.tint) : AnyShapeStyle(.tertiary))
                     }
                 }
-                .font(.system(size: 9))
+                .font(.caption2)
+                .imageScale(.small)
                 .opacity(step == model.step || model.isDone(step) ? 1 : 0.8)
             }
         }

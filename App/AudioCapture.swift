@@ -33,10 +33,18 @@ actor AudioCapture: AudioSource {
     /// The mic the input records from; a device change rebuilds only when this changes. Kept under a
     /// lock too, so the menu and Settings can read it without waiting on the actor.
     private var currentInput: AudioDevice? {
-        didSet { inputInUseValue.withLock { $0 = currentInput } }
+        didSet {
+            inputInUseValue.withLock { $0 = currentInput }
+            if currentInput?.uid != oldValue?.uid {
+                Task { @MainActor in NotificationCenter.default.post(name: Self.inputDidChange, object: nil) }
+            }
+        }
     }
+    /// Posted on the main actor when the mic in use (`inputInUse`) changes, for the Microphone pane.
+    static let inputDidChange = Notification.Name("AudioCapture.inputDidChange")
     private nonisolated let inputInUseValue = Mutex<AudioDevice?>(nil)
-    private var isListeningToDevices = false
+    /// Device and default changes, observed from `prepare` for the app's whole life.
+    private var deviceObservation: AudioDeviceObservation?
     /// A device burst (connect, then default change) is handled once: one check queued, not one per event.
     private var isDeviceCheckQueued = false
     /// A mic change that arrived during a capture; it applies when the capture ends.
@@ -61,9 +69,8 @@ actor AudioCapture: AudioSource {
         if input == nil {
             input = makeInput()
         }
-        guard !isListeningToDevices else { return }
-        isListeningToDevices = true
-        AudioDevices.observeChanges { [weak self] in
+        guard deviceObservation == nil else { return }
+        deviceObservation = AudioDevices.observe { [weak self] in
             Task { await self?.devicesChanged() }
         }
     }
@@ -275,7 +282,12 @@ actor AudioCapture: AudioSource {
         input?.stop()
         let rebuilt = makeInput()
         input = rebuilt
-        guard let writer, let rebuilt else { return }
+        guard let writer else { return }
+        guard let rebuilt else {
+            // No mic opened during a capture: no more audio comes until a mic does.
+            writer.inputLost()
+            return
+        }
         await writer.switchSampleRate(to: rebuilt.sampleRate)
         // The capture may have ended, paused or been rebuilt again during the await. Start the
         // input only for the same capture, still live, on the input built here.
@@ -286,6 +298,7 @@ actor AudioCapture: AudioSource {
             try rebuilt.start()
         } catch {
             Log.audio.error("Capture could not continue after the route change: \(error)")
+            writer.inputLost()
         }
     }
 }

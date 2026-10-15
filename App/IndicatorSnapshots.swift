@@ -11,28 +11,34 @@ extension IndicatorPanel {
         let state: DictationState
         // Azure has the longest name, so its texts are the widest.
         var context = StatusContext(provider: .azure)
+        /// The mic level the meter shows.
+        var level = 0.6
     }
 
     /// Every state the owner reads, plus the dragged pill. A compact pill renders at the bottom and at an edge
     /// (vertical there); a pill with text looks the same at every anchor, so it renders once. The run fails
     /// when a pill's text is cut off.
     static func snapshots() -> [Snapshot] {
-        let indicator = IndicatorPanel()
         let id = DictationID()
         let samples: [DictationState] = [
             .idle, .recording(isLong: false), .transcribing, .undoable, .failed(id), .rejected(id, .other),
-            .needsSetup(id, .key), .cleanupFailed(id), .copied(id), .recovered(id), .captureFailed,
+            .needsSetup(id, .key), .cleanupFailed(id), .returnSkipped(id), .copied(id), .recovered(id), .captureFailed,
         ]
         var snapshots = [
-            Snapshot(name: "indicator-drag") { PillStandIn(content: .init(), anchor: nil) }
+            Snapshot(name: "indicator-drag") { PillStandIn(content: .init(), anchor: nil) },
+            Snapshot(name: "indicator-idle-bottomCenter") { PillStandIn(content: .idle, anchor: .bottomCenter) },
         ]
-        for row in samples.flatMap(snapshotRows) {
-            guard let content = indicator.content(for: row.state, context: row.context) else { continue }
+        var contents = samples.flatMap(snapshotRows).compactMap { row in
+            content(for: row.state, context: row.context, visibility: .whileDictating).map { (row.name, $0, row.level) }
+        }
+        // Auto-learn's notice; the longest word that fits.
+        contents.append(("learned", .init(.learned("Kubernetes", id: UUID())), 0.6))
+        for (name, content, level) in contents {
             let anchors: [IndicatorAnchor] = content.isCompact ? [.bottomCenter, .left] : [.bottomCenter]
             for anchor in anchors {
                 snapshots.append(
-                    Snapshot(name: "indicator-\(row.name)-\(anchor.rawValue)") {
-                        PillStandIn(content: content, anchor: anchor)
+                    Snapshot(name: "indicator-\(name)-\(anchor.rawValue)") {
+                        PillStandIn(content: content, anchor: anchor, level: level)
                     } check: { view in
                         (view as? PillStandIn)?.pill.isTextTruncated == true
                             ? "the pill text \"\(content.text)\" is cut off" : nil
@@ -40,6 +46,13 @@ extension IndicatorPanel {
             }
         }
         return snapshots
+    }
+
+    /// A long built-in mic name, the widest "No sound" text.
+    private static var silent: StatusContext {
+        var context = StatusContext(provider: .azure)
+        context.microphoneName = "MacBook Pro Microphone"
+        return context
     }
 
     /// The rows for one state. The switch has no default, so a new `DictationState` case does not compile
@@ -55,6 +68,9 @@ extension IndicatorPanel {
                 SnapshotRow(
                     name: "secure-input", state: .recording(isLong: false),
                     context: StatusContext(provider: .azure, isSecureInputOn: true)),
+                SnapshotRow(
+                    name: "recording-silent", state: .recording(isLong: false, isSilent: true), context: silent,
+                    level: 0),
             ]
         case .needsSetup(let id, _):
             [
@@ -80,7 +96,7 @@ extension IndicatorPanel {
                     name: "captureFailed-denied", state: state,
                     context: StatusContext(provider: .azure, microphone: .denied)),
             ]
-        case .transcribing, .undoable, .failed, .cleanupFailed, .recovered:
+        case .transcribing, .undoable, .failed, .cleanupFailed, .returnSkipped, .recovered:
             [SnapshotRow(name: snapshotName(of: state), state: state)]
         }
     }
@@ -92,22 +108,33 @@ extension IndicatorPanel {
         case .undoable: "undoable"
         case .failed: "failed"
         case .cleanupFailed: "cleanupFailed"
+        case .returnSkipped: "returnSkipped"
         case .recovered: "recovered"
         case .idle, .recording, .needsSetup, .rejected, .copied, .captureFailed: "\(state)"
         }
     }
 }
 
-/// The pill over a capsule in the window color, since its glass does not render offscreen.
+/// The pill over a capsule in the window color, since its glass does not render offscreen. A pill with a timer
+/// shows its bar held at 60 %.
 private final class PillStandIn: NSView {
     let pill = IndicatorPillView(frame: .zero)
 
     /// A nil anchor shows the dragged pill.
-    init(content: IndicatorPillView.Content, anchor: IndicatorAnchor?) {
+    init(content: IndicatorPillView.Content, anchor: IndicatorAnchor?, level: Double = 0.6) {
         pill.content = content
-        pill.level = 0.6
+        pill.level = level
+        if let timer = content.timer {
+            let now = ContinuousClock.now
+            var countdown = Countdown(duration: timer.duration, startingAt: now - timer.duration * 0.4)
+            countdown.hold(at: now)
+            pill.countdown = countdown
+        }
         let frame: ScreenRect
-        if let anchor {
+        if content.isRound, let anchor {
+            pill.layout = .round
+            frame = IndicatorPlacement.roundFrame(at: anchor, in: ScreenRect(x: 0, y: 0, width: 1512, height: 945))
+        } else if let anchor {
             pill.layout =
                 IndicatorPlacement.isVertical(at: anchor, isCompact: content.isCompact) ? .vertical : .horizontal
             // Only the size matters here, so any visible frame does.
@@ -115,7 +142,7 @@ private final class PillStandIn: NSView {
                 at: anchor, isCompact: content.isCompact, contentWidth: pill.fittingWidth,
                 in: ScreenRect(x: 0, y: 0, width: 1512, height: 945))
         } else {
-            pill.layout = .drag
+            pill.layout = .round
             frame = IndicatorPlacement.dragFrame(centeredAt: ScreenPoint(x: 0, y: 0))
         }
         super.init(frame: NSRect(x: 0, y: 0, width: frame.width, height: frame.height))

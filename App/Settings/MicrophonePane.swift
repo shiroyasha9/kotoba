@@ -4,15 +4,16 @@ import SwiftUI
 
 extension SettingsPane {
     static func microphones(_ model: MicrophoneModel) -> Self {
-        SettingsPane(id: .microphones, title: "Microphone", systemImage: "mic") {
+        SettingsPane(id: .microphones) {
             AnyView(MicrophonePane(model: model))
         }
     }
 }
 
 /// The microphone preference order as the pane shows it: "Your order" holds only mics the owner
-/// put there (a menu pick, or Add to Order here); "Other connected" lists the rest and is never
-/// saved by a drag or a remove. So a Bluetooth mic joins the order only when the owner adds it.
+/// put there (a menu pick, or Add to Order here); the other connected mics are offered by the Add
+/// menu and are never saved by a drag or a remove. So a Bluetooth mic joins the order only when the
+/// owner adds it.
 @MainActor
 @Observable
 final class MicrophoneModel {
@@ -33,6 +34,11 @@ final class MicrophoneModel {
         var save: @MainActor ([MicrophonePreferences.Entry]) -> Void
         /// The UID of the mic kotoba records from.
         var current: @MainActor () -> String?
+        /// What the menu also warns about the mic in use (a Bluetooth mic).
+        var warning: @MainActor () -> MicrophoneWarning? = { nil }
+        /// Calls its argument on each device change and each change of the mic in use, until the returned value is
+        /// released. Nil: nothing to observe (snapshots).
+        var observe: @MainActor (@escaping @MainActor @Sendable () -> Void) -> AnyObject? = { _ in nil }
         /// Starts the mic test; the stream yields the input level until the test ends.
         var testLevels: @MainActor () async -> AsyncStream<Float> = { AsyncStream { $0.finish() } }
 
@@ -42,24 +48,51 @@ final class MicrophoneModel {
                 entries: { preferences.entries },
                 save: { preferences.entries = $0 },
                 current: { audio.inputInUse?.uid },
+                warning: {
+                    InputDevicePolicy.warning(
+                        input: audio.inputInUse, outputTransport: AudioDevices.defaultOutputTransport())
+                },
+                observe: { onChange in
+                    LiveObservation(
+                        devices: AudioDevices.observe { MainActor.assumeIsolated(onChange) },
+                        input: NotificationCenter.default.addObserver(
+                            forName: AudioCapture.inputDidChange, object: nil, queue: .main
+                        ) { _ in MainActor.assumeIsolated(onChange) })
+                },
                 testLevels: { await audio.testLevels(for: .seconds(5)) }
             )
         }
 
         /// Three sample mics, for snapshots: the built-in one in use and in the order, a Shure in the order but not
-        /// connected, and AirPods (Bluetooth) connected but not in the order.
+        /// connected, and AirPods (Bluetooth) connected but not in the order. `order` and `current` (UIDs) change that.
         @MainActor
-        static func sample() -> Self {
+        static func sample(
+            order: [String] = ["shure", "built-in"], current: String = "built-in", warning: MicrophoneWarning? = nil
+        ) -> Self {
             let builtIn = AudioDevice(
                 id: 1, uid: "built-in", name: "MacBook Pro Microphone", transport: .builtIn, hasInput: true)
             let airPods = AudioDevice(
                 id: 2, uid: "airpods", name: "AirPods Pro", transport: .bluetooth, hasInput: true)
-            var entries = [
-                MicrophonePreferences.Entry(uid: "shure", name: "Shure MV7"),
-                MicrophonePreferences.Entry(uid: "built-in", name: "MacBook Pro Microphone"),
-            ]
+            let names = ["shure": "Shure MV7", "built-in": builtIn.name, "airpods": airPods.name]
+            var entries = order.map { MicrophonePreferences.Entry(uid: $0, name: names[$0] ?? $0) }
             return Self(
-                inputs: { [builtIn, airPods] }, entries: { entries }, save: { entries = $0 }, current: { "built-in" })
+                inputs: { [builtIn, airPods] }, entries: { entries }, save: { entries = $0 }, current: { current },
+                warning: { warning })
+        }
+    }
+
+    /// The device listeners and the mic-in-use observer of the open pane; both end when this is released.
+    private final class LiveObservation {
+        let devices: AudioDeviceObservation
+        let input: any NSObjectProtocol
+
+        init(devices: AudioDeviceObservation, input: any NSObjectProtocol) {
+            self.devices = devices
+            self.input = input
+        }
+
+        deinit {
+            NotificationCenter.default.removeObserver(input)
         }
     }
 
@@ -67,9 +100,12 @@ final class MicrophoneModel {
     private(set) var others: [Row] = []
     /// The mic in use, by UID.
     private(set) var currentUID: String?
+    private(set) var warning: MicrophoneWarning?
     /// The input level 0...1 while the mic test runs; nil otherwise.
     private(set) var testLevel: Float?
     @ObservationIgnored private var test: Task<Void, Never>?
+    /// Held while the pane shows, so a closed pane observes nothing.
+    @ObservationIgnored private var observation: AnyObject?
 
     @ObservationIgnored private let source: Source
     @ObservationIgnored private let onChange: @MainActor () -> Void
@@ -95,6 +131,7 @@ final class MicrophoneModel {
             Row(uid: $0.uid, name: $0.name, isConnected: true, isBluetooth: $0.transport == .bluetooth)
         }
         currentUID = source.current()
+        warning = source.warning()
     }
 
     func move(from offsets: IndexSet, to destination: Int) {
@@ -106,8 +143,8 @@ final class MicrophoneModel {
         save(listed + [row])
     }
 
-    func remove(_ row: Row) {
-        save(listed.filter { $0 != row })
+    func remove(_ uids: Set<Row.ID>) {
+        save(listed.filter { !uids.contains($0.uid) })
     }
 
     /// Records for 5 s and shows the level next to the mic in use (ux-polish MP2). The mic's orange dot shows
@@ -124,8 +161,15 @@ final class MicrophoneModel {
         }
     }
 
-    /// Ends a running test early (the pane closed); the stream's end stops the capture.
-    func stopTest() {
+    /// The pane shows: reads the devices, then reads them again on each change until `disappear()`.
+    func appear() {
+        reload()
+        observation = observation ?? source.observe { [weak self] in self?.reload() }
+    }
+
+    /// The pane closed: stops observing, and ends a running test early (the stream's end stops the capture).
+    func disappear() {
+        observation = nil
         test?.cancel()
     }
 
@@ -143,104 +187,133 @@ final class MicrophoneModel {
 
 private struct MicrophonePane: View {
     @Bindable var model: MicrophoneModel
+    @State private var selection: Set<MicrophoneModel.Row.ID> = []
+    /// The order list's rows, as tall as the system draws them; the list takes this height, so it never scrolls.
+    @State private var orderHeight: CGFloat = 0
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 0) {
-            List {
-                Section {
-                    ForEach(model.listed) { row in
-                        MicrophoneRow(row: row, isCurrent: row.uid == model.currentUID, level: model.testLevel)
-                            .contextMenu {
-                                Button("Remove from Order", role: .destructive) { model.remove(row) }
-                            }
+        Form {
+            Section {
+                PaneHeader(pane: .microphones)
+            }
+            Section {
+                if let warning = model.warning {
+                    Label {
+                        Text(StatusText.title(warning))
+                        Text(StatusText.detail(warning))
+                    } icon: {
+                        Image(systemName: "exclamationmark.triangle.fill").symbolRenderingMode(.multicolor)
                     }
-                    .onMove(perform: model.move)
-                    if model.listed.isEmpty {
-                        Text("No mics in your order: kotoba follows the system default input.")
-                            .foregroundStyle(.secondary)
-                    }
-                } header: {
-                    Text("Your Order")
-                } footer: {
-                    Text("kotoba uses the first connected mic in this list. Drag to change the order.")
-                        .font(.callout)
-                        .fontWeight(.regular)
-                        .foregroundStyle(.secondary)
                 }
-                if !model.others.isEmpty {
-                    Section("Other Connected") {
-                        ForEach(model.others) { row in
-                            MicrophoneRow(row: row, isCurrent: row.uid == model.currentUID, level: model.testLevel) {
-                                model.add(row)
-                            }
+                if model.listed.isEmpty {
+                    Text("No mics in your order: kotoba follows the system default input.")
+                        .foregroundStyle(.secondary)
+                } else {
+                    order
+                }
+                orderButtons
+            } header: {
+                Text("Your Order")
+            } footer: {
+                Text("kotoba uses the first connected mic in this list. Drag to change the order.")
+            }
+            Section {
+                LabeledContent("Input level") {
+                    HStack {
+                        Gauge(value: Double(min(max(model.testLevel ?? 0, 0), 1))) {}
+                            .gaugeStyle(.accessoryLinearCapacity)
+                            .animation(.linear(duration: 0.1), value: model.testLevel)
+                        Button("Test Microphone", action: model.testMicrophone)
+                            .disabled(model.testLevel != nil)
+                    }
+                }
+            }
+        }
+        .formStyle(.grouped)
+        .onAppear(perform: model.appear)
+        .onDisappear(perform: model.disappear)
+    }
+
+    /// The order as a native list inside the form's box, as in System Settings > Login Items: a form row cannot be
+    /// dragged, a list row can. The list is as tall as its rows measure, so it never scrolls inside the form.
+    private var order: some View {
+        List(selection: $selection) {
+            ForEach(model.listed) { row in
+                LabeledContent {
+                    Text(status(of: row)).foregroundStyle(.secondary)
+                } label: {
+                    Text(row.name).foregroundStyle(row.isConnected ? .primary : .secondary)
+                }
+            }
+            .onMove(perform: model.move)
+        }
+        .listStyle(.plain)
+        .scrollContentBackground(.hidden)
+        .scrollDisabled(true)
+        .onScrollGeometryChange(for: CGFloat.self, of: \.contentSize.height) { _, height in orderHeight = height }
+        .frame(height: orderHeight)
+        .contextMenu(forSelectionType: MicrophoneModel.Row.ID.self) { uids in
+            Button("Remove from Order", role: .destructive) { remove(uids) }
+        }
+        .onDeleteCommand { remove(selection) }
+    }
+
+    /// Add (a menu of the other connected mics) and Remove under the list, as under every editable list in System
+    /// Settings.
+    private var orderButtons: some View {
+        HStack {
+            Menu {
+                ForEach(model.others) { row in
+                    Button {
+                        model.add(row)
+                    } label: {
+                        Text(row.name)
+                        if row.isBluetooth {
+                            Text(StatusText.bluetoothMicNote)
                         }
                     }
                 }
+            } label: {
+                Label("Add to Order", systemImage: "plus")
             }
-            Divider()
-            HStack {
-                Button("Test Microphone", action: model.testMicrophone)
-                    .disabled(model.testLevel != nil)
-                Spacer()
-                Button("Follow System Default", action: model.followSystemDefault)
-                    .disabled(model.listed.isEmpty)
-            }
-            .padding(12)
-        }
-        .onAppear(perform: model.reload)
-        .onDisappear(perform: model.stopTest)
-    }
-}
-
-private struct MicrophoneRow: View {
-    let row: MicrophoneModel.Row
-    let isCurrent: Bool
-    /// The mic test's level, shown on the mic in use while the test runs.
-    var level: Float?
-    /// A listed row shows a drag handle; another connected mic shows Add instead.
-    var onAdd: (() -> Void)?
-
-    var body: some View {
-        HStack {
-            // A plain checkmark marks the mic in use; the rows are an order, not a choice.
-            Image(systemName: "checkmark")
-                .foregroundStyle(Color.accentColor)
-                .opacity(isCurrent ? 1 : 0)
-                .accessibilityLabel(isCurrent ? "In use" : "")
-            Text(row.name)
-                .foregroundStyle(row.isConnected ? .primary : .secondary)
+            .menuIndicator(.hidden)
+            .fixedSize()
+            .disabled(model.others.isEmpty)
+            .help(model.others.isEmpty ? "No other mics are connected" : "Add a connected mic to the order")
+            Button("Remove from Order", systemImage: "minus") { remove(selection) }
+                .disabled(selection.isEmpty)
             Spacer()
-            if isCurrent, let level {
-                // A live level, like the pill's meter, not a progress bar.
-                Capsule()
-                    .fill(.quaternary)
-                    .overlay(alignment: .leading) {
-                        Capsule()
-                            .fill(Color(nsColor: .systemGreen))
-                            .frame(width: 80 * CGFloat(min(max(level, 0), 1)))
-                    }
-                    .frame(width: 80, height: 6)
-                    .animation(.linear(duration: 0.1), value: level)
-                    .accessibilityLabel("Input level")
-            }
-            if !row.isConnected {
-                Text("Not connected")
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
-            } else if row.isBluetooth {
-                Text("Bluetooth: lower quality while recording")
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
-            }
-            if let onAdd {
-                Button("Add", action: onAdd)
-                    .controlSize(.small)
-            } else {
-                Image(systemName: "line.3.horizontal")
-                    .foregroundStyle(.tertiary)
-                    .accessibilityHidden(true)
-            }
+            // Clears the order, so it sits with the buttons that change it.
+            Button("Follow System Default", action: model.followSystemDefault)
+                .labelStyle(.titleOnly)
+                .buttonStyle(.bordered)
+                .controlSize(.small)
+                .disabled(model.listed.isEmpty)
         }
+        .labelStyle(.iconOnly)
+        .buttonStyle(.borderless)
+        .menuStyle(.borderlessButton)
+    }
+
+    /// "In use", "Not connected" and the Bluetooth note, the ones that apply.
+    private func status(of row: MicrophoneModel.Row) -> String {
+        var parts: [String] = []
+        if row.uid == model.currentUID {
+            parts.append("In use")
+        }
+        if !row.isConnected {
+            parts.append("Not connected")
+        } else if row.isBluetooth, !(row.uid == model.currentUID && model.warning != nil) {
+            // The warning above the list already says it for the mic in use.
+            parts.append(StatusText.bluetoothMicNote)
+        }
+        return parts.joined(separator: " · ")
+    }
+
+    private func remove(_ uids: Set<MicrophoneModel.Row.ID>) {
+        guard !uids.isEmpty else { return }
+        model.remove(uids)
+        selection = []
     }
 }
 
@@ -251,6 +324,16 @@ extension SettingsPane {
         return [
             SettingsWindow.snapshot(of: .microphones(MicrophoneModel(source: source) {}), named: "settings-microphone"),
             SettingsWindow.snapshot(of: .microphones(.testing(source)), named: "settings-microphone-test"),
+            SettingsWindow.snapshot(
+                of: .microphones(MicrophoneModel(source: .sample(order: [])) {}), named: "settings-microphone-empty"),
+            SettingsWindow.snapshot(
+                of: .microphones(
+                    MicrophoneModel(
+                        source: .sample(
+                            order: ["airpods", "built-in"], current: "airpods",
+                            warning: .bluetoothMic(interruptsPlayback: true))
+                    ) {}),
+                named: "settings-microphone-bluetooth"),
         ]
     }
 }

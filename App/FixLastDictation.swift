@@ -6,6 +6,8 @@ import SwiftUI
 /// "Fix Last Dictation…": the owner corrects the last dictation's text, kotoba finds the words worth learning in the
 /// edit, and the owner picks which to add (story 32, docs/research/auto-learning.md 3d). The fixed text goes to the
 /// clipboard; it is not pasted again, since the focus has moved. Built when it opens and released when it closes.
+/// Readback (`EditReadback`) learns from edits in apps whose text Accessibility can read; this window is the way for
+/// the others, such as terminals.
 @MainActor
 final class FixLastDictationController: NSObject, NSWindowDelegate {
     static let size = NSSize(width: 480, height: 400)
@@ -144,64 +146,58 @@ struct FixLastDictationView: View {
     let close: () -> Void
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 12) {
+        VStack(spacing: 0) {
             if model.pasted == nil {
                 empty
             } else {
-                Text("Correct the words kotoba got wrong, then click \(model.canLearn ? "Learn" : "Copy").")
-                    .foregroundStyle(.secondary)
-                TextEditor(text: $model.text)
-                    .font(.body)
-                    .scrollContentBackground(.hidden)
-                    .padding(6)
-                    .background(Color(nsColor: .textBackgroundColor))
-                    .clipShape(.rect(cornerRadius: 6))
-                    .overlay(RoundedRectangle(cornerRadius: 6).stroke(Color(nsColor: .separatorColor)))
-                    .frame(minHeight: 100)
-                if let corrections = model.corrections {
-                    found(corrections)
+                Form {
+                    Section {
+                        TextEditor(text: $model.text)
+                            .font(.body)
+                            .scrollContentBackground(.hidden)
+                            .frame(minHeight: 100)
+                    } footer: {
+                        Text("Correct the words kotoba got wrong, then click \(model.canLearn ? "Learn" : "Copy").")
+                    }
+                    if let corrections = model.corrections {
+                        found(corrections)
+                    }
                 }
+                .formStyle(.grouped)
                 buttons
+                    .padding([.horizontal, .bottom], 20)
             }
         }
-        .padding(20)
         .frame(width: FixLastDictationController.size.width, height: FixLastDictationController.size.height)
     }
 
     private var empty: some View {
-        VStack(spacing: 12) {
-            Spacer()
-            Text("No Dictation to Fix Yet").font(.headline)
-            Text("Dictate something, then open this window again.")
-                .foregroundStyle(.secondary)
-            Spacer()
+        VStack {
+            ContentUnavailableView(
+                "No Dictation to Fix Yet", systemImage: "text.badge.checkmark",
+                description: Text("Dictate something, then open this window again."))
             HStack {
                 Spacer()
                 Button("Close", action: close).keyboardShortcut(.defaultAction)
             }
         }
-        .frame(maxWidth: .infinity)
+        .padding(20)
     }
 
-    private func found(_ corrections: [DetectedCorrection]) -> some View {
-        VStack(alignment: .leading, spacing: 6) {
-            if corrections.isEmpty {
+    @ViewBuilder private func found(_ corrections: [DetectedCorrection]) -> some View {
+        if corrections.isEmpty {
+            Section {
                 Text("No new words found. Copy puts the fixed text on the clipboard.")
                     .foregroundStyle(.secondary)
-            } else {
-                Text("Words to Add").font(.headline)
-                ScrollView {
-                    VStack(alignment: .leading, spacing: 6) {
-                        ForEach(corrections, id: \.candidate.pair) { correction in
-                            Toggle(isOn: binding(for: correction.candidate.pair)) {
-                                SuggestionCandidateLabel(candidate: correction.candidate)
-                            }
-                            .toggleStyle(.checkbox)
-                        }
+            }
+        } else {
+            Section("Words to Add") {
+                ForEach(corrections, id: \.candidate.pair) { correction in
+                    Toggle(isOn: binding(for: correction.candidate.pair)) {
+                        SuggestionCandidateLabel(candidate: correction.candidate)
                     }
-                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .toggleStyle(.checkbox)
                 }
-                .frame(maxHeight: 110)
             }
         }
     }

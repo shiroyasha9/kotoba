@@ -105,34 +105,58 @@ struct KeyCheckLine: View {
     var body: some View {
         switch status {
         case .checking:
-            HStack(spacing: 6) {
+            HStack {
                 ProgressView().controlSize(.small)
                 Text("Checking the key…").foregroundStyle(.secondary)
             }
         case .checked(.valid):
-            Label("Key works", systemImage: "checkmark.circle.fill").foregroundStyle(.green)
+            StatusLabel("Key works", systemImage: "checkmark.circle.fill", color: .green)
         case .checked(.invalid):
-            Label("\(account.title) did not accept this key", systemImage: "xmark.circle.fill").foregroundStyle(.red)
+            StatusLabel("\(account.title) did not accept this key", systemImage: "xmark.circle.fill", color: .red)
         case .checked(.noCredit):
             HStack {
-                Label("This key has no credit.", systemImage: "exclamationmark.circle.fill").foregroundStyle(.orange)
+                StatusLabel("This key has no credit.", systemImage: "exclamationmark.circle.fill", color: .orange)
                 Button("Add Credit…") { NSWorkspace.shared.open(account.creditsPage) }
             }
         case .checked(.unreachable):
-            Label(
+            StatusLabel(
                 "Couldn’t reach \(account.title). The key is saved; kotoba checks it at your first dictation.",
-                systemImage: "wifi.exclamationmark"
+                systemImage: "wifi.exclamationmark", color: .secondary
             )
             .foregroundStyle(.secondary)
         case .checked(.needsEndpoint):
-            Label("Key saved. Add your Azure endpoint to check it.", systemImage: "checkmark.circle")
-                .foregroundStyle(.secondary)
+            StatusLabel(
+                "Key saved. Add your Azure endpoint to check it.", systemImage: "checkmark.circle", color: .secondary
+            )
+            .foregroundStyle(.secondary)
         case .saveFailed:
-            Label("Couldn’t save the key in your keychain. Try again.", systemImage: "xmark.circle.fill")
-                .foregroundStyle(.red)
+            StatusLabel(
+                "Couldn’t save the key in your keychain. Try again.", systemImage: "xmark.circle.fill", color: .red)
         case .removeFailed:
-            Label("Couldn’t remove the key from your keychain. Try again.", systemImage: "xmark.circle.fill")
-                .foregroundStyle(.red)
+            StatusLabel(
+                "Couldn’t remove the key from your keychain. Try again.", systemImage: "xmark.circle.fill", color: .red)
+        }
+    }
+}
+
+/// A status line where only the symbol carries the status color, as in System Settings; the words keep the label
+/// colors. The key check line and the Speech pane's "Saved" use it.
+struct StatusLabel<Style: ShapeStyle>: View {
+    let text: String
+    let systemImage: String
+    let color: Style
+
+    init(_ text: String, systemImage: String, color: Style) {
+        self.text = text
+        self.systemImage = systemImage
+        self.color = color
+    }
+
+    var body: some View {
+        Label {
+            Text(text)
+        } icon: {
+            Image(systemName: systemImage).foregroundStyle(color)
         }
     }
 }

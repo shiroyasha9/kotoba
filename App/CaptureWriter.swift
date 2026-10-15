@@ -66,6 +66,7 @@ final class CaptureWriter: @unchecked Sendable {
         var stopHostTime: UInt64?
         var stopsNow = false
         var pendingSampleRate: Double?
+        var hasReportedInputLoss = false
         var rateSwitched: CheckedContinuation<Void, Never>?
         var finished: CheckedContinuation<RecordedAudio, Never>?
         /// Ends a stop that waits for audio from a vanished device; cancelled when the file closes.
@@ -168,12 +169,25 @@ final class CaptureWriter: @unchecked Sendable {
         }
     }
 
-    /// The engine was rebuilt with a new format. Returns once audio at the old rate is written.
+    /// No mic is open during the capture; the events report it once (`CaptureEvent.inputLost`).
+    func inputLost() {
+        let isFirst = control.withLock { control in
+            defer { control.hasReportedInputLoss = true }
+            return !control.hasReportedInputLoss
+        }
+        if isFirst {
+            events.yield(.inputLost)
+        }
+    }
+
+    /// The mic input was rebuilt at a new sample rate. Returns once audio at the old rate is written.
     func switchSampleRate(to sampleRate: Double) async {
         await withCheckedContinuation { continuation in
             control.withLock { control in
                 control.pendingSampleRate = sampleRate
                 control.rateSwitched = continuation
+                // A new mic is open: its loss is reported again.
+                control.hasReportedInputLoss = false
             }
             ring.wake.signal()
         }
@@ -290,12 +304,16 @@ final class CaptureWriter: @unchecked Sendable {
         return RecordedAudio(file: fileURL, duration: .seconds(Double(framesWritten) / Self.outputFormat.sampleRate))
     }
 
-    /// RMS over about 100 ms, scaled so speech fills most of the range.
+    /// RMS over 4,800 input frames (100 ms at 48 kHz), scaled so speech fills most of the range. The
+    /// capture events carry it too, for the no-sound warning (`NoSoundPolicy`). Two streams on purpose:
+    /// the indicator meter reads `levels` without a hop through the pipeline actor.
     private func measureLevel(_ samples: UnsafePointer<Float>, count: Int) {
         levelSum += vDSP.sumOfSquares(UnsafeBufferPointer(start: samples, count: count))
         levelFrames += count
         guard levelFrames >= Self.chunkFrames else { return }
-        levels.yield(min(1, (levelSum / Float(levelFrames)).squareRoot() * 8))
+        let level = min(1, (levelSum / Float(levelFrames)).squareRoot() * 8)
+        levels.yield(level)
+        events.yield(.level(level))
         levelSum = 0
         levelFrames = 0
     }

@@ -2,7 +2,7 @@ import AppKit
 import KotobaCore
 
 /// The one button a pill can carry. AppDelegate maps each action to its handler.
-enum PillAction: Sendable {
+enum PillAction: Sendable, Equatable {
     case undo
     case retry
     case addKey
@@ -11,10 +11,14 @@ enum PillAction: Sendable {
     case copy
     case allowPasting
     case openMicrophoneSettings
+    /// Opens Settings > Microphone, from the no-sound warning.
+    case chooseMicrophone
+    /// Removes the words that auto-learn just added to the dictionary, found by the learn's id.
+    case undoLearned(UUID)
 
     var title: String {
         switch self {
-        case .undo: "Undo"
+        case .undo, .undoLearned: "Undo"
         case .retry: "Retry"
         case .addKey: "Add Key…"
         case .openSpeechSettings: "Settings…"
@@ -22,34 +26,54 @@ enum PillAction: Sendable {
         case .copy: "Copy"
         case .allowPasting: "Allow Pasting…"
         case .openMicrophoneSettings: "Open System Settings…"
+        case .chooseMicrophone: "Microphone…"
         }
     }
 }
 
-/// The pill's content view: the glass, the state row and the drag handling. Everything except the
-/// action button is a drag handle; a press that does not move past the drag threshold does nothing.
+/// The pill's own timer, the one its bar shows.
+struct PillTimer {
+    enum Kind {
+        /// The pill hides when the time runs out: a message.
+        case hidesPill
+        /// The pipeline owns the time (the Esc Undo window): hover holds it there too, and the pipeline ends the pill.
+        case followsUndoWindow
+    }
+
+    var duration: Duration
+    var kind = Kind.hidesPill
+}
+
+/// The pill's content view: the glass, the state row, the countdown bar and the drag handling. Everything
+/// except the action button is a drag handle; a press that does not move past the drag threshold is a click,
+/// which starts or stops a dictation only on a clickable pill.
 final class IndicatorPillView: NSView {
     enum Layout {
         /// The state dot, the text, the level and the action button in a row.
         case horizontal
         /// The state dot over a vertical level, at a side edge.
         case vertical
-        /// A small round waveform under the pointer.
-        case drag
+        /// A small round waveform: the idle pill, and the pill under the pointer during a drag.
+        case round
     }
 
     /// What the pill shows.
     struct Content {
         var text = ""
         var color = NSColor.secondaryLabelColor
+        /// An SF Symbol in place of the state dot.
+        var symbol: String?
         var toolTip: String?
         var showsMeter = false
         var showsSpinner = false
         /// Only the state dot and the level, so the pill stands vertical at a side edge.
         var isCompact = false
+        /// The small round idle pill.
+        var isRound = false
+        /// A click on the pill (not its button) is a chord tap.
+        var isClickable = false
         var action: PillAction?
-        /// A message that hides after a few seconds.
-        var hidesSoon = false
+        var timer: PillTimer?
     }
 
     var level: CGFloat {
@@ -57,6 +81,8 @@ final class IndicatorPillView: NSView {
         set { meter.level = newValue }
     }
     var onAction: ((PillAction) -> Void)?
+    /// A click on a clickable pill, not a drag.
+    var onClick: (() -> Void)?
     /// The pointer entered (true) or left (false) the pill.
     var onHoverChanged: ((Bool) -> Void)?
     var onDragBegan: (() -> Void)?
@@ -67,28 +93,50 @@ final class IndicatorPillView: NSView {
             label.stringValue = content.text
             toolTip = content.toolTip
             actionButton.title = content.action?.title ?? ""
-            updateDotColor()
+            symbolView.image = content.symbol.flatMap {
+                NSImage(systemSymbolName: $0, accessibilityDescription: nil)
+            }
+            // Interactive glass answers the pointer, so a clickable pill looks like one.
+            if #available(macOS 27, *) {
+                glass.effectIsInteractive = content.isClickable
+            }
+            updateColors()
             applyLayout()
         }
     }
     var layout = Layout.horizontal {
         didSet { applyLayout() }
     }
+    /// The timer the bar shows; nil hides the bar. The bar shows only on a pill with a button.
+    var countdown: Countdown? {
+        didSet {
+            bar.countdown = countdown
+            applyLayout()
+        }
+    }
 
+    private let glass = NSGlassEffectView()
     private let meter = LevelMeter()
+    private let bar = CountdownBar()
     private let stack = NSStackView()
-    private let dot = NSView()
+    /// Lifts the row while the bar shows under it.
+    private lazy var stackBottom = stack.bottomAnchor.constraint(equalTo: container.bottomAnchor)
+    /// The glass's content: the row, and the bar under it.
+    private let container = NSView()
+    private let dot = NSImageView(
+        image: NSImage(systemSymbolName: "circle.fill", accessibilityDescription: nil) ?? NSImage())
+    private let symbolView = NSImageView()
     private let label = NSTextField(labelWithString: "")
     private let actionButton = FirstClickButton()
     private let spinner = NSProgressIndicator()
-    private let dragIcon = NSImageView()
+    private let roundIcon = NSImageView()
     private var pressStart: NSPoint?
     private var isDragging = false
 
     override init(frame: NSRect) {
         super.init(frame: frame)
-        dot.wantsLayer = true
-        dot.layer?.cornerRadius = 5
+        dot.symbolConfiguration = .init(pointSize: 10, weight: .regular)
+        symbolView.symbolConfiguration = .init(textStyle: .body)
         label.font = .systemFont(ofSize: NSFont.systemFontSize, weight: .medium)
         label.textColor = .labelColor
         label.lineBreakMode = .byTruncatingTail
@@ -103,27 +151,36 @@ final class IndicatorPillView: NSView {
             guard let action = self?.content.action else { return }
             self?.onAction?(action)
         }
-        dragIcon.image = NSImage(systemSymbolName: "waveform", accessibilityDescription: "kotoba")
-        dragIcon.symbolConfiguration = .init(pointSize: 15, weight: .semibold)
-        dragIcon.contentTintColor = .labelColor
+        roundIcon.image = NSImage(systemSymbolName: "waveform", accessibilityDescription: "kotoba")
+        roundIcon.symbolConfiguration = .init(textStyle: .title3)
+        roundIcon.contentTintColor = .labelColor
 
         // Centered in both orientations; hidden views leave the stack.
-        stack.setViews([dot, label, meter, spinner, actionButton, dragIcon], in: .center)
+        stack.setViews([dot, symbolView, label, meter, spinner, actionButton, roundIcon], in: .center)
         stack.spacing = 8
+        stack.translatesAutoresizingMaskIntoConstraints = false
+        bar.translatesAutoresizingMaskIntoConstraints = false
+        container.addSubview(stack)
+        container.addSubview(bar)
+        // The bar runs along the bottom between the capsule's round ends.
+        let inset = IndicatorPlacement.cornerRadius
         NSLayoutConstraint.activate([
-            dot.widthAnchor.constraint(equalToConstant: 10),
-            dot.heightAnchor.constraint(equalToConstant: 10),
+            stack.leadingAnchor.constraint(equalTo: container.leadingAnchor),
+            stack.trailingAnchor.constraint(equalTo: container.trailingAnchor),
+            stack.topAnchor.constraint(equalTo: container.topAnchor),
+            stackBottom,
+            bar.leadingAnchor.constraint(equalTo: container.leadingAnchor, constant: inset),
+            bar.trailingAnchor.constraint(equalTo: container.trailingAnchor, constant: -inset),
+            bar.bottomAnchor.constraint(equalTo: container.bottomAnchor, constant: -5),
+            bar.heightAnchor.constraint(equalToConstant: CountdownBar.thickness),
         ])
 
-        let glass = NSGlassEffectView(frame: bounds)
+        glass.frame = bounds
         glass.autoresizingMask = [.width, .height]
         glass.cornerRadius = IndicatorPlacement.cornerRadius
-        glass.contentView = stack
+        glass.contentView = container
         addSubview(glass)
-        // kotoba is never the active app, so hover must work while it is inactive.
-        addTrackingArea(
-            NSTrackingArea(
-                rect: .zero, options: [.mouseEnteredAndExited, .activeAlways, .inVisibleRect], owner: self))
+        trackPointer(isInside: false)
         applyLayout()
     }
 
@@ -132,15 +189,10 @@ final class IndicatorPillView: NSView {
         fatalError("IndicatorPillView is built in code")
     }
 
-    override func viewDidChangeEffectiveAppearance() {
-        super.viewDidChangeEffectiveAppearance()
-        updateDotColor()
-    }
-
-    private func updateDotColor() {
-        effectiveAppearance.performAsCurrentDrawingAppearance {
-            dot.layer?.backgroundColor = content.color.cgColor
-        }
+    private func updateColors() {
+        dot.contentTintColor = content.color
+        symbolView.contentTintColor = content.color
+        roundIcon.contentTintColor = content.isRound && layout == .round ? .secondaryLabelColor : .labelColor
     }
 
     /// The width the horizontal layout needs for the current content.
@@ -154,30 +206,50 @@ final class IndicatorPillView: NSView {
     }
 
     private func applyLayout() {
-        let isDrag = layout == .drag
+        let isRound = layout == .round
+        let isHorizontal = layout == .horizontal
+        let showsBar = isHorizontal && content.action != nil && countdown != nil
         stack.orientation = layout == .vertical ? .vertical : .horizontal
         stack.alignment = layout == .vertical ? .centerX : .centerY
         stack.edgeInsets =
             switch layout {
             case .horizontal: NSEdgeInsets(top: 0, left: 14, bottom: 0, right: 14)
             case .vertical: NSEdgeInsets(top: 14, left: 0, bottom: 14, right: 0)
-            case .drag: NSEdgeInsets()
+            case .round: NSEdgeInsets()
             }
         meter.isVertical = layout == .vertical
-        dot.isHidden = isDrag
-        label.isHidden = layout != .horizontal
-        meter.isHidden = isDrag || !content.showsMeter
-        actionButton.isHidden = layout != .horizontal || content.action == nil
-        spinner.isHidden = isDrag || !content.showsSpinner
+        dot.isHidden = isRound || content.symbol != nil
+        symbolView.isHidden = isRound || content.symbol == nil
+        label.isHidden = !isHorizontal
+        meter.isHidden = isRound || !content.showsMeter
+        actionButton.isHidden = !isHorizontal || content.action == nil
+        bar.isHidden = !showsBar
+        stackBottom.constant = showsBar ? -6 : 0
+        spinner.isHidden = isRound || !content.showsSpinner
         if spinner.isHidden {
             spinner.stopAnimation(nil)
         } else {
             spinner.startAnimation(nil)
         }
-        dragIcon.isHidden = !isDrag
+        roundIcon.isHidden = !isRound
+        updateColors()
     }
 
     // MARK: Mouse
+
+    /// Starts hover tracking again. A pill that appears under a still pointer gets no mouse-entered event; with
+    /// `isInside` the area assumes the pointer is in, so leaving still sends mouse-exited and ends a hold.
+    func trackPointer(isInside: Bool) {
+        for area in trackingAreas {
+            removeTrackingArea(area)
+        }
+        // kotoba is never the active app, so hover must work while it is inactive.
+        var options: NSTrackingArea.Options = [.mouseEnteredAndExited, .activeAlways, .inVisibleRect]
+        if isInside {
+            options.insert(.assumeInside)
+        }
+        addTrackingArea(NSTrackingArea(rect: .zero, options: options, owner: self))
+    }
 
     override func acceptsFirstMouse(for event: NSEvent?) -> Bool {
         true
@@ -215,74 +287,11 @@ final class IndicatorPillView: NSView {
     override func mouseUp(with event: NSEvent) {
         if isDragging {
             onDragEnded?(NSEvent.mouseLocation)
+        } else if pressStart != nil, content.isClickable {
+            onClick?()
         }
         pressStart = nil
         isDragging = false
-    }
-}
-
-/// A bar whose filled part follows the mic level: left to right, or bottom to top when vertical.
-private final class LevelMeter: NSView {
-    private static let length: CGFloat = 56
-    private static let thickness: CGFloat = 6
-
-    private let fill = CALayer()
-    private lazy var horizontalConstraints = [
-        widthAnchor.constraint(equalToConstant: Self.length),
-        heightAnchor.constraint(equalToConstant: Self.thickness),
-    ]
-    private lazy var verticalConstraints = [
-        widthAnchor.constraint(equalToConstant: Self.thickness),
-        heightAnchor.constraint(equalToConstant: Self.length),
-    ]
-
-    var level: CGFloat = 0 {
-        didSet { needsLayout = true }
-    }
-
-    var isVertical = false {
-        didSet {
-            guard isVertical != oldValue else { return }
-            NSLayoutConstraint.deactivate(isVertical ? horizontalConstraints : verticalConstraints)
-            NSLayoutConstraint.activate(isVertical ? verticalConstraints : horizontalConstraints)
-            needsLayout = true
-        }
-    }
-
-    override init(frame: NSRect) {
-        super.init(frame: frame)
-        wantsLayer = true
-        layer?.cornerRadius = 3
-        layer?.backgroundColor = NSColor.quaternaryLabelColor.cgColor
-        fill.cornerRadius = 3
-        fill.backgroundColor = NSColor.labelColor.cgColor
-        layer?.addSublayer(fill)
-        NSLayoutConstraint.activate(horizontalConstraints)
-    }
-
-    @available(*, unavailable)
-    required init?(coder: NSCoder) {
-        fatalError("LevelMeter is built in code")
-    }
-
-    override func layout() {
-        super.layout()
-        let level = max(0, min(1, level))
-        CATransaction.begin()
-        CATransaction.setAnimationDuration(0.08)
-        fill.frame =
-            isVertical
-            ? CGRect(x: 0, y: 0, width: bounds.width, height: bounds.height * level)
-            : CGRect(x: 0, y: 0, width: bounds.width * level, height: bounds.height)
-        CATransaction.commit()
-    }
-
-    override func viewDidChangeEffectiveAppearance() {
-        super.viewDidChangeEffectiveAppearance()
-        effectiveAppearance.performAsCurrentDrawingAppearance {
-            layer?.backgroundColor = NSColor.quaternaryLabelColor.cgColor
-            fill.backgroundColor = NSColor.labelColor.cgColor
-        }
     }
 }
 
@@ -303,5 +312,42 @@ private final class FirstClickButton: NSButton {
 
     @objc private func clicked() {
         onClick?()
+    }
+}
+
+/// A message the pill shows for `duration`: an optional SF Symbol in place of the state dot, the text,
+/// and one button. With a button the pill shows a bar that empties over `duration`; hover holds the
+/// timer and the bar.
+struct PillNotice: Equatable {
+    var text: String
+    /// An SF Symbol name, such as "sparkles".
+    var symbol: String?
+    var action: PillAction?
+    var duration: Duration
+
+    init(text: String, symbol: String? = nil, action: PillAction? = nil, duration: Duration? = nil) {
+        self.text = text
+        self.symbol = symbol
+        self.action = action
+        // A pill with a button gives the owner time to reach it.
+        self.duration = duration ?? (action == nil ? .seconds(4) : .seconds(8))
+    }
+}
+
+extension PillNotice {
+    /// Auto-learn added the words that `label` names ("Kubernetes", "2 words"); Undo removes the learn `id`.
+    static func learned(_ label: String, id: UUID) -> Self {
+        PillNotice(text: StatusText.learned(label), symbol: "sparkles", action: .undoLearned(id))
+    }
+}
+
+extension IndicatorPillView.Content {
+    /// The small round pill at idle with "Show indicator: Always".
+    static let idle = Self(toolTip: StatusText.idlePillHelp, isRound: true, isClickable: true)
+
+    init(_ notice: PillNotice, color: NSColor = .controlAccentColor) {
+        self.init(
+            text: notice.text, color: color, symbol: notice.symbol, action: notice.action,
+            timer: .init(duration: notice.duration))
     }
 }

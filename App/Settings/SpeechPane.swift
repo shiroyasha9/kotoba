@@ -4,7 +4,7 @@ import SwiftUI
 
 extension SettingsPane {
     static func speech(_ model: SpeechSettingsModel) -> Self {
-        SettingsPane(id: .speech, title: "Speech", systemImage: "text.bubble") {
+        SettingsPane(id: .speech) {
             AnyView(SpeechPane(model: model))
         }
     }
@@ -139,6 +139,9 @@ private struct SpeechPane: View {
     var body: some View {
         Form {
             Section {
+                PaneHeader(pane: .speech)
+            }
+            Section {
                 Picker("Speech model", selection: $model.route) {
                     ForEach(TranscriptionRoute.allCases.filter { !$0.isAdvanced }, id: \.self) { route in
                         Text(route.title).tag(route)
@@ -253,7 +256,7 @@ private struct KeyRow: View {
                 if let status = model.keyChecks.status[account] {
                     KeyCheckLine(status: status, account: account)
                 } else if isSaved {
-                    Label("Saved", systemImage: "checkmark.circle.fill").foregroundStyle(.green)
+                    StatusLabel("Saved", systemImage: "checkmark.circle.fill", color: .green)
                 }
             }
         }

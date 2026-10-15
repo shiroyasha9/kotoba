@@ -18,5 +18,11 @@ extension DictationPipeline {
         var clipboard: ClipboardGuard.Pending?
         let warning: Task<Void, Never>
         let announcement: Task<Void, Never>
+        /// Whether the mic gave sound lately, for the no-sound warning.
+        var sound: NoSoundPolicy
+        /// The timer at `sound.deadline`; nil while the warning shows.
+        var soundDeadline: Task<Void, Never>?
+        /// The front app at the stop; a submit Return goes only to it.
+        var frontAppAtStop: Int32?
     }
 }

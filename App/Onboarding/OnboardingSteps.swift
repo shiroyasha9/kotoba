@@ -16,14 +16,10 @@ private struct StatusLine: View {
     }
 
     var body: some View {
-        Label {
-            Text(text)
-        } icon: {
-            switch kind {
-            case .good: Image(systemName: "checkmark.circle.fill").foregroundStyle(.green)
-            case .problem: Image(systemName: "exclamationmark.triangle.fill").foregroundStyle(.orange)
-            case .neutral: Image(systemName: "info.circle").foregroundStyle(.secondary)
-            }
+        switch kind {
+        case .good: StatusLabel(text, systemImage: "checkmark.circle.fill", color: .green)
+        case .problem: StatusLabel(text, systemImage: "exclamationmark.triangle.fill", color: .orange)
+        case .neutral: StatusLabel(text, systemImage: "info.circle", color: .secondary)
         }
     }
 }
@@ -39,7 +35,7 @@ private struct StepText: View {
         Text(text)
             .foregroundStyle(.secondary)
             .fixedSize(horizontal: false, vertical: true)
-            .frame(maxWidth: 420)
+            .frame(maxWidth: OnboardingView.textWidth)
     }
 }
 
@@ -47,16 +43,22 @@ private struct StepText: View {
 
 struct WelcomeStep: View {
     var body: some View {
+        // Keys are named in words once, here (CODING_STANDARDS, user-facing text 4).
         StepText(
-            "Tap \(StatusText.dictationChord) (Control-Option-Command), speak, and tap again. "
+            "Tap \(StatusText.dictationChordNamed), speak, and tap again. "
                 + "kotoba types what you said where your cursor is, in about a second."
         )
+        LabeledContent("Shortcut") {
+            ChordRecorder(chords: .shared, role: .dictation)
+        }
+        .fixedSize()
+        .padding(.top, 4)
         Label(
             "No account. Your audio goes only to the speech service you choose, with your own key.", systemImage: "lock"
         )
         .font(.callout)
         .foregroundStyle(.secondary)
-        .frame(maxWidth: 420)
+        .frame(maxWidth: OnboardingView.textWidth)
         .padding(.top, 8)
     }
 }
@@ -109,7 +111,7 @@ struct AccessibilityStep: View {
                 .font(.callout)
                 .foregroundStyle(.secondary)
                 .fixedSize(horizontal: false, vertical: true)
-                .frame(maxWidth: 380)
+                .frame(maxWidth: OnboardingView.textWidth)
         }
     }
 }
@@ -191,14 +193,17 @@ struct DoneStep: View {
 
     var body: some View {
         StepText("kotoba lives in the menu bar. Click the waveform icon to change your microphone or open Settings.")
-        VStack(spacing: 10) {
-            SwitchRow(
+        Form {
+            Toggle(
                 "Open kotoba when you log in",
                 isOn: Binding(get: { model.opensAtLogin }, set: { model.setOpensAtLogin($0) }))
-            SwitchRow("Play a sound when dictation starts and stops", isOn: $model.playsSounds)
+            Toggle("Play a sound when dictation starts and stops", isOn: $model.playsSounds)
         }
-        .frame(width: 400)
-        .padding(.top, 8)
+        .formStyle(.grouped)
+        .scrollDisabled(true)
+        // A form fills its container; here it is only as tall as its rows.
+        .fixedSize(horizontal: false, vertical: true)
+        .frame(width: OnboardingView.textWidth)
         // Applied as the step shows (default on), so a problem shows here before Done closes the window.
         .task { model.setOpensAtLogin(model.opensAtLogin) }
         if let problem = model.loginProblem {
@@ -235,25 +240,6 @@ struct DoneStep: View {
         case .microphone: "Allow the Microphone"
         case .accessibility: "Allow Accessibility"
         default: "Add Your Key"
-        }
-    }
-}
-
-/// A label on the left and a switch on the right, so a column of them lines up.
-private struct SwitchRow: View {
-    let title: String
-    @Binding var isOn: Bool
-
-    init(_ title: String, isOn: Binding<Bool>) {
-        self.title = title
-        _isOn = isOn
-    }
-
-    var body: some View {
-        HStack {
-            Text(title)
-            Spacer()
-            Toggle(title, isOn: $isOn).labelsHidden().toggleStyle(.switch)
         }
     }
 }

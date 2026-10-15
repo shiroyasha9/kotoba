@@ -21,6 +21,7 @@ Native macOS menu-bar dictation: tap a chord, speak, tap again, the cloud transc
 
 ## Rules
 
+- **No patchwork** (owner, 2026-10-16): build the root design, not a fix on top of a fix. Code is performant by construction: event-driven (an observer or notification, never a polling timer where an event exists), no work at idle, no copies on the hot path. Each change reports its measured cost.
 - **Licence**: copy code only from MIT or Apache-2.0 projects (Jot, Hex, FreeFlow). Keep their notice at the top of the copied file and add an entry to `NOTICE`. GPL projects (VoiceInk, TypeWhisper) are read-only references: take ideas, write your own code.
 - **Event-driven hot path** (key-down to Cmd-V sent): each step waits on its event (first audio buffer, HTTP response, pasteboard change). A real timeout sleeps on the injected `PipelineClock`, so tests control it.
 - **One long-lived URLSession per provider**, created in the provider's init and warmed at key-down. Lint flags every `URLSession(`; that one line carries `// swiftlint:disable:next url_session_construction`.
@@ -28,6 +29,7 @@ Native macOS menu-bar dictation: tap a chord, speak, tap again, the cloud transc
 - **Test-first through the seam**: hotkey events in, assertions on the fakes out. `KotobaCore/Tests/KotobaCoreTests/PipelineHotkeyTests.swift` shows the style.
 - **Signing**: every build uses the Developer ID in `project.yml` (team 7U6G55576W), so TCC grants and Keychain access survive rebuilds. The keychain holds another team's identity; keep the full identity name.
 - **Permissions**: the owner clicks Allow on every TCC prompt. Stop and ask when a prompt blocks you.
+- **Processes**: stop only the PIDs you started. Never `pkill`/`killall` by name: `kotoba` also matches the owner's app and other agents' `--snapshots` runs. UI scripting (AppleScript, System Events, accessibility tools) targets a PID you started, never a bundle id or app name: by bundle id it drives the owner's running app.
 - **Shared checkout**: several agents can work in this checkout at once. Test targets must always compile: a new test fails by assertion, with stub sources, never by a missing type. Edit only the files your task owns; to change a file another agent owns, message that agent with the interface you need. The app build must stay green between your edits too: other agents block on it for snapshots and `make check`. Write a new type so it compiles at each save (stub bodies first, then fill in), and build right after each edit (`swift build --package-path <pkg>` for a package, `make build-check AGENT=<you>` for App/). If you break it, fixing it comes before anything else.
 
 Code style and patterns: `CODING_STANDARDS.md`.

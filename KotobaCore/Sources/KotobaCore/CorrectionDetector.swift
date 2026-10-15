@@ -191,12 +191,8 @@ public enum CorrectionDetector {
     /// Edit distance between the letters and digits of both sides, over the longer one: spaces, `_` and `-` do not
     /// count (`order ID` and `order_id` are the same), and a spoken "hashtag" is `#`.
     static func letterDistance(_ heard: String, _ corrected: String) -> Double {
-        func key(_ text: String) -> [Character] {
-            Array(
-                text.lowercased().replacingOccurrences(of: "#", with: "hashtag").filter { $0.isLetter || $0.isNumber })
-        }
-        let source = key(heard)
-        let target = key(corrected)
+        let source = letterKey(heard)
+        let target = letterKey(corrected)
         guard !source.isEmpty, !target.isEmpty else { return source.isEmpty && target.isEmpty ? 0 : 1 }
         var previous = Array(0...target.count)
         for row in source.indices {
@@ -208,6 +204,11 @@ public enum CorrectionDetector {
             previous = current
         }
         return Double(previous[target.count]) / Double(max(source.count, target.count))
+    }
+
+    /// The letters and digits `letterDistance` compares: lowercase, with a spoken "hashtag" for `#`.
+    static func letterKey(_ text: String) -> [Character] {
+        Array(text.lowercased().replacingOccurrences(of: "#", with: "hashtag").filter { $0.isLetter || $0.isNumber })
     }
 }
 
@@ -225,6 +226,26 @@ public struct FixChoice: Sendable, Equatable {
                 add.append(correction.candidate)
             } else if correction.isStrong {
                 dismiss.append(correction.candidate)
+            } else {
+                suggest.append(correction)
+            }
+        }
+    }
+}
+
+/// What kotoba does with the corrections in an edit it read back after a paste (docs/spec.md, Owner round
+/// 2026-10-16): a strong one is added at once, and the pill offers Undo; a weak one waits in Suggestions. Strong ones
+/// wait in Suggestions too when the edit is not settled (the owner may have typed on after the last read, so a word
+/// can be cut), or when a new dictation ended the session (no pill is free for the Undo).
+public struct ReadbackChoice: Sendable, Equatable {
+    public var add: [SuggestionCandidate] = []
+    public var suggest: [DetectedCorrection] = []
+
+    public init(corrections: [DetectedCorrection], of edit: EditReadback.Edit) {
+        let addsAtOnce = edit.isSettled && edit.endedBy != .nextDictation
+        for correction in corrections {
+            if correction.isStrong, addsAtOnce {
+                add.append(correction.candidate)
             } else {
                 suggest.append(correction)
             }

@@ -13,6 +13,9 @@ import KotobaProviders
     func toggleGrokFormat()
     func toggleGrokFillerWords()
     func fixLastDictation()
+    func pasteLastDictation()
+    func pasteLastWithoutCleanup()
+    func copyLastDictation()
     func openSuggestions()
     func openSettings()
     func showAbout()
@@ -40,12 +43,16 @@ struct MenuModel {
     var microphones: [MenuChoice] = []
     /// The uid and name of the mic kotoba records from.
     var microphoneInUse: (uid: String, name: String)?
+    /// Shown at the foot of the Microphone submenu (`InputDevicePolicy.warning`).
+    var microphoneWarning: MicrophoneWarning?
     var routes: [MenuChoice] = []
     var route: MenuChoice?
     /// The Grok options, shown when the current speech model is Grok.
     var grok: Grok?
-    /// A dictation was pasted or copied; "Fix Last Dictation…" hides until then.
+    /// A dictation was pasted or copied; the Last Dictation items hide until then.
     var hasLastDictation = false
+    /// The last dictation was cleaned up; "Paste Last Without Cleanup" hides otherwise.
+    var hasRawLastDictation = false
     /// Pending dictionary suggestions; the item hides at 0.
     var suggestionCount = 0
 
@@ -99,6 +106,17 @@ struct MenuModel {
         }
         if hasLastDictation {
             items.append(
+                .action(
+                    "Paste Last Dictation", target: target, action: #selector(StatusMenuActions.pasteLastDictation)))
+            if hasRawLastDictation {
+                items.append(
+                    .action(
+                        "Paste Last Without Cleanup", target: target,
+                        action: #selector(StatusMenuActions.pasteLastWithoutCleanup)))
+            }
+            items.append(
+                .action("Copy Last Dictation", target: target, action: #selector(StatusMenuActions.copyLastDictation)))
+            items.append(
                 .action("Fix Last Dictation…", target: target, action: #selector(StatusMenuActions.fixLastDictation)))
         }
         if suggestionCount > 0 {
@@ -111,12 +129,19 @@ struct MenuModel {
     }
 
     private func settingItems(target: StatusMenuActions?) -> [NSMenuItem] {
-        var items: [NSMenuItem] = [
-            .choices(
-                "Microphone", subtitle: microphoneInUse?.name ?? "None", microphones,
-                selected: microphoneInUse?.uid, target: target,
-                action: #selector(StatusMenuActions.chooseMicrophone(_:)))
-        ]
+        let microphone = NSMenuItem.choices(
+            "Microphone", subtitle: microphoneInUse?.name ?? "None", microphones,
+            selected: microphoneInUse?.uid, target: target,
+            action: #selector(StatusMenuActions.chooseMicrophone(_:)))
+        if let microphoneWarning, let submenu = microphone.submenu {
+            let warning = NSMenuItem(title: StatusText.title(microphoneWarning), action: nil, keyEquivalent: "")
+            warning.subtitle = StatusText.detail(microphoneWarning)
+            warning.image = NSImage(systemSymbolName: "exclamationmark.triangle.fill", accessibilityDescription: nil)
+            warning.isEnabled = false
+            submenu.addItem(.separator())
+            submenu.addItem(warning)
+        }
+        var items = [microphone]
         let model = NSMenuItem.choices(
             "Speech Model", subtitle: route?.title, routes, selected: route?.value, target: target,
             action: #selector(StatusMenuActions.selectRoute(_:)))
@@ -152,6 +177,7 @@ struct MenuModel {
         listening.status = .text(DictationState.recording(isLong: false).statusText(context) ?? "")
         ready.recovered = [MenuChoice(title: "Send the draft to the team by Friday", value: "1")]
         ready.hasLastDictation = true
+        ready.hasRawLastDictation = true
         ready.suggestionCount = 2
         var failed = ready
         failed.status = .text(DictationState.failed(DictationID()).statusText(context) ?? "")
@@ -159,7 +185,13 @@ struct MenuModel {
         failed.routes = routes(current: .xaiGrok)
         failed.route = route(.xaiGrok)
         failed.grok = Grok(isFormatOn: true, keepsFillerWords: false)
-        return [("ready", ready), ("setup", setup), ("listening", listening), ("failed", failed)]
+        var bluetooth = listening
+        bluetooth.microphones.append(MenuChoice(title: "AirPods Pro", value: "airpods"))
+        bluetooth.microphoneInUse = ("airpods", "AirPods Pro")
+        bluetooth.microphoneWarning = .bluetoothMic(interruptsPlayback: true)
+        return [
+            ("ready", ready), ("setup", setup), ("listening", listening), ("failed", failed), ("bluetooth", bluetooth),
+        ]
     }
 
     /// The menu as text, one item per line (submenu items indented, subtitles after "·"), for snapshot runs.

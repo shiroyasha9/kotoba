@@ -32,6 +32,21 @@ struct IndicatorPlacementTests {
         #expect(frame.minY >= Self.visible.minY && frame.maxY <= Self.visible.maxY)
     }
 
+    static let roundRows: [(IndicatorAnchor, ScreenRect)] = [
+        (.bottomCenter, ScreenRect(x: 736, y: 94, width: 40, height: 40)),
+        (.left, ScreenRect(x: 12, y: 472.5, width: 40, height: 40)),
+        (.right, ScreenRect(x: 1460, y: 472.5, width: 40, height: 40)),
+    ]
+
+    @Test(arguments: roundRows)
+    func theRoundIdlePillSitsWhereThePillWithTextCenters(_ anchor: IndicatorAnchor, _ frame: ScreenRect) {
+        let round = IndicatorPlacement.roundFrame(at: anchor, in: Self.visible)
+        #expect(round == frame)
+        let pill = IndicatorPlacement.frame(at: anchor, isCompact: true, contentWidth: 240, in: Self.visible)
+        #expect(round.mid.y == pill.mid.y)
+        #expect(anchor != .bottomCenter || round.mid.x == pill.mid.x)
+    }
+
     @Test func theFrameFollowsAVisibleFrameOnASecondScreen() {
         let secondScreen = ScreenRect(x: 1512, y: -200, width: 1920, height: 1055)
         let frame = IndicatorPlacement.frame(at: .right, isCompact: true, contentWidth: 240, in: secondScreen)

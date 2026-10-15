@@ -102,6 +102,20 @@ struct SuggestionStoreTests {
         #expect(try await store.load() == dictionary)
     }
 
+    @Test func aLearnedWordTheOwnerUndoesIsNeverLearnedAgain() async throws {
+        let store = try makeStore()
+        var learned = vercel
+        learned.origin = .edit
+        let before = PersonalDictionary(terms: ["uv"])
+        try await store.save(before.adding(learned), recordingAdded: [learned], at: start)
+
+        try await store.save(before, at: start)
+
+        #expect(try await store.dismissedPairs() == [learned.pair])
+        #expect(try await store.record(learned, at: days(1)) == nil)
+        #expect(try await store.load() == before)
+    }
+
     @Test func aWeakCorrectionWaitsUntilItIsSeenTwice() async throws {
         let store = try makeStore()
         _ = try await store.record(embra, isStrong: false, at: start)

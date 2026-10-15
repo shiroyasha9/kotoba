@@ -3,13 +3,13 @@ import Observation
 import SwiftUI
 
 /// One page in the Settings sidebar. To add a pane, add its case to `SettingsPaneID` (the case order is the sidebar
-/// order), write `extension SettingsPane { static func name(…) -> Self }` in its own file under App/Settings/ and add
-/// it to the list in `SettingsController`.
+/// order) with its title, symbol, color and summary, write `extension SettingsPane { static func name(…) -> Self }` in
+/// its own file under App/Settings/ and add it to the list in `SettingsController`.
 struct SettingsPane: Identifiable {
     let id: SettingsPaneID
-    let title: String
-    let systemImage: String
     let content: @MainActor () -> AnyView
+
+    var title: String { id.title }
 }
 
 /// In sidebar order: the panes a new user needs first come first (docs/research/ux-polish.md W2).
@@ -18,6 +18,78 @@ enum SettingsPaneID: String, Hashable, CaseIterable {
     case speech
     case dictionary
     case microphones
+
+    var title: String {
+        switch self {
+        case .general: "General"
+        case .speech: "Speech"
+        case .dictionary: "Dictionary"
+        case .microphones: "Microphone"
+        }
+    }
+
+    /// Filled symbols, white on the pane's color, as in System Settings.
+    var systemImage: String {
+        switch self {
+        case .general: "gearshape.fill"
+        case .speech: "waveform"
+        case .dictionary: "character.book.closed.fill"
+        case .microphones: "mic.fill"
+        }
+    }
+
+    var tint: Color {
+        switch self {
+        case .general: .gray
+        case .speech: .blue
+        case .dictionary: .orange
+        case .microphones: .red
+        }
+    }
+
+    /// The line under the pane's title at the top of the pane.
+    var summary: String {
+        switch self {
+        case .general: "Your shortcut, how kotoba starts, and what it shows while you dictate."
+        case .speech: "The speech model that turns your voice into text, and its key."
+        case .dictionary: "Names and terms kotoba should know, and words to replace."
+        case .microphones: "The mic kotoba records from, and how to test it."
+        }
+    }
+}
+
+/// A pane's symbol, white on a rounded square of the pane's color, as in the System Settings sidebar. Custom: SwiftUI
+/// has no settings icon style.
+struct SettingsIcon: View {
+    let pane: SettingsPaneID
+    var size: CGFloat = 20
+
+    var body: some View {
+        Image(systemName: pane.systemImage)
+            .resizable()
+            .scaledToFit()
+            .padding(size * 0.2)
+            .foregroundStyle(.white)
+            .frame(width: size, height: size)
+            .background(pane.tint.gradient, in: .rect(cornerRadius: size * 0.25, style: .continuous))
+            .accessibilityHidden(true)
+    }
+}
+
+/// The first box of a pane: its icon, title and what it does, as at the top of a System Settings pane.
+struct PaneHeader: View {
+    let pane: SettingsPaneID
+
+    var body: some View {
+        HStack {
+            SettingsIcon(pane: pane, size: 40)
+            VStack(alignment: .leading) {
+                Text(pane.title).font(.headline)
+                Text(pane.summary).foregroundStyle(.secondary)
+            }
+        }
+        .accessibilityElement(children: .combine)
+    }
 }
 
 /// The Settings window, built when the owner opens it and released when they close it. SwiftUI is used only for
@@ -87,9 +159,15 @@ private struct SettingsView: View {
     var body: some View {
         NavigationSplitView {
             List(panes, selection: $selection.id) { pane in
-                Label(pane.title, systemImage: pane.systemImage)
+                Label {
+                    Text(pane.title)
+                } icon: {
+                    SettingsIcon(pane: pane.id)
+                }
             }
             .navigationSplitViewColumnWidth(min: 160, ideal: 180, max: 240)
+            // System Settings keeps its sidebar: no toggle to hide it.
+            .toolbar(removing: .sidebarToggle)
         } detail: {
             if let pane = shown {
                 pane.content()

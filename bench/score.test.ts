@@ -26,6 +26,11 @@ describe("normalize", () => {
 		]);
 	});
 
+	test("keeps combining vowel signs, so Devanagari words stay whole", () => {
+		expect(normalize("मेरा काम, नहीं।")).toEqual(["मेरा", "काम", "नहीं"]);
+		expect(wer("मेरा", "मारा").errors).toBe(1);
+	});
+
 	test("collapses whitespace", () => {
 		expect(normalize("  a \n\t b  ")).toEqual(["a", "b"]);
 	});

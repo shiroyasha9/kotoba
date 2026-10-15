@@ -6,14 +6,10 @@ import KotobaStorage
 /// the owner's files, Keychain or devices.
 @MainActor
 extension SettingsPane {
-    /// The whole window, once per pane and for the Dictionary pane's import and suggestions states.
+    /// The whole window, once per pane and for the Dictionary pane's suggestions state.
     static func windowSnapshots() -> [Snapshot] {
-        let (incoming, contents) = sampleWisprImport
-        return [
+        [
             windowSnapshot(sampleDictionary, selecting: .dictionary, named: "settings-window"),
-            windowSnapshot(
-                PersonalDictionary(), import: .preview(PersonalDictionary().importPreview(of: incoming), contents),
-                selecting: .dictionary, named: "settings-window-import"),
             windowSnapshot(
                 sampleDictionary, suggestions: sampleSuggestions, selecting: .dictionary,
                 named: "settings-window-suggestions"),
@@ -59,7 +55,6 @@ extension SettingsPane {
     /// A model over a throwaway store; snapshots never save.
     static func sampleModel(
         _ dictionary: PersonalDictionary,
-        import state: DictionaryModel.WisprImport? = nil,
         suggestions: [DictionarySuggestion] = []
     ) -> DictionaryModel {
         let url = FileManager.default.temporaryDirectory.appending(path: "kotoba-snapshot-\(UUID().uuidString).sqlite")
@@ -70,7 +65,6 @@ extension SettingsPane {
             preconditionFailure("Snapshot dictionary store: \(error)")
         }
         let model = DictionaryModel(dictionary: dictionary, store: store, suggestions: suggestions) { _ in }
-        model.wisprImport = state
         model.isWisprInstalled = true
         return model
     }
@@ -78,14 +72,13 @@ extension SettingsPane {
     /// The whole window with every pane, showing `id`.
     private static func windowSnapshot(
         _ dictionary: PersonalDictionary,
-        import state: DictionaryModel.WisprImport? = nil,
         suggestions: [DictionarySuggestion] = [],
         selecting id: SettingsPaneID,
         named name: String
     ) -> Snapshot {
         let panes: [SettingsPane] = [
             .general(.sample()),
-            .dictionary(sampleModel(dictionary, import: state, suggestions: suggestions)),
+            .dictionary(sampleModel(dictionary, suggestions: suggestions)),
             .microphones(MicrophoneModel(source: .sample()) {}),
             .speech(.sample(route: .openRouterMAI, azureEndpoint: "")),
         ]

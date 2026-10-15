@@ -22,6 +22,11 @@ public enum CaptureEvent: Sendable, Equatable {
     /// The first audio arrived. `at` is when its first sample was captured, not when it was
     /// delivered; it feeds `LatencyMark.firstAudioBuffer`.
     case firstBuffer(at: ContinuousClock.Instant)
+    /// The mic level 0...1 over the last meter window (about ten a second), the value the indicator's
+    /// meter shows. The no-sound warning reads it (`NoSoundPolicy`).
+    case level(Float)
+    /// The mic disconnected or stopped sending audio; no more levels come from it.
+    case inputLost
 }
 
 public struct RecordedAudio: Sendable, Equatable {

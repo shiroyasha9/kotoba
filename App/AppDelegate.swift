@@ -11,46 +11,54 @@ import os
 /// Wires the ports to the pipeline and owns the menu bar item. Windows are built on demand.
 @MainActor
 final class AppDelegate: NSObject, NSApplicationDelegate {
-    private let hotkeys = HotkeyTap(cleanupChord: CleanupChord.current.modifiers)
-    private let microphones = MicrophonePreferences()
-    private lazy var audio = AudioCapture(preferences: microphones)
+    private let hotkeys = HotkeyTap(chords: .shared)
+    let microphones = MicrophonePreferences()
+    lazy var audio = AudioCapture(preferences: microphones)
     /// Read by the provider on every request, so a menu change applies to the next dictation.
-    private let routeSettings = TranscriptionSettings()
+    let routeSettings = TranscriptionSettings()
     private let vault = KeyVault()
-    private lazy var readiness = Readiness(settings: routeSettings, vault: vault)
+    lazy var readiness = Readiness(settings: routeSettings, vault: vault)
     /// The provider; onboarding uses it to check a key.
     private lazy var router = TranscriptionRouter(settings: routeSettings, keys: vault.source(for:))
-    private lazy var setup = SetupFlow(
+    lazy var setup = SetupFlow(
         readiness: readiness, routeSettings: routeSettings, vault: vault, router: router,
         openSpeechSettings: { [weak self] in self?.settingsController.show(selecting: .speech) })
     private let settings = DictationPipeline.Settings(
-        audioDirectory: HistoryStore.directory.appending(path: "audio", directoryHint: .isDirectory)
+        audioDirectory: HistoryStore.directory.appending(path: "audio", directoryHint: .isDirectory),
+        isSubmitPhraseOn: AppDefaults.isSubmitPhraseOn
     )
     private lazy var indicator = IndicatorPanel()
-    private lazy var fixWindow = FixLastDictationController(
-        lastText: { [weak self] in await self?.lastDeliveredText() },
+    lazy var fixWindow = FixLastDictationController(
+        lastText: { [weak self] in await self?.lastDictation?.record()?.deliveredText },
         dictionary: { [weak self] in self?.settingsController.dictionary })
-    private var statusItem: StatusBarItem?
-    private var pipeline: DictationPipeline?
-    private var store: HistoryStore?
-    private var state: DictationState = .idle
-    private var pendingCount = 0
+    lazy var learner = EditLearner(
+        dictionary: { [weak self] in self?.settingsController.dictionary }, indicator: indicator)
+    var statusItem: StatusBarItem?
+    var pipeline: DictationPipeline?
+    var store: HistoryStore?
+    var state: DictationState = .idle
+    var pendingCount = 0
     /// A dictation was pasted or copied, so "Fix Last Dictation…" has something to fix.
-    private var hasLastDictation = false
+    var hasLastDictation = false
+    /// The last dictation was cleaned up, so "Paste Last Without Cleanup" has the raw transcript.
+    var hasRawLastDictation = false
+    var lastDictation: LastDictation?
+    /// The submit phrase toggle, in click order, to the pipeline (one consumer, as for the Undo holds).
+    let submitPhraseChanges = AsyncStream.makeStream(of: Bool.self)
     /// Menu previews from the last 24 h, newest first; full transcripts stay in the store until copied.
-    private var recovered: [MenuChoice] = []
+    var recovered: [MenuChoice] = []
     private var isSecureInputOn = false
     /// Set when the history database does not open; the menu shows it instead of the status.
-    private var launchIssue: String?
-    private lazy var settingsController = SettingsController(
+    var launchIssue: String?
+    lazy var settingsController = SettingsController(
         routeSettings: routeSettings, vault: vault, router: router, microphones: microphones, audio: audio
-    ) { [routeSettings, indicator, hotkeys] in
-        GeneralModel(settings: routeSettings, indicator: indicator, setCleanupChord: hotkeys.setCleanupChord)
+    ) { [routeSettings, indicator, weak self] in
+        GeneralModel(settings: routeSettings, indicator: indicator) { self?.submitPhraseChanged(isOn: $0) }
     }
 
     func applicationDidFinishLaunching(_ notification: Notification) {
-        AppDefaults.registerDefaults()
         CGEventPaster.trackKeyboardLayout()
+        FrontApp.track()
         CGEventPaster.warmUp()
         NSApp.mainMenu = .editOnlyMain()
         statusItem = StatusBarItem(target: self) { [weak self] in self?.menuModel() }
@@ -72,11 +80,14 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
                 clock: SystemClock(),
                 store: store,
                 cleaner: OpenRouterCleaner(apiKey: vault.source(for: .openRouter), settings: routeSettings),
-                missingSetup: { [vault, routeSettings] in routeSettings.missingSetup(hasKey: vault.hasKey(for:)) }
+                missingSetup: { [vault, routeSettings] in routeSettings.missingSetup(hasKey: vault.hasKey(for:)) },
+                readback: learner.readback,
+                frontAppID: { FrontApp.current }
             ),
             settings: settings
         )
         self.pipeline = pipeline
+        lastDictation = LastDictation(store: store, pipeline: pipeline)
 
         observe(pipeline)
         observeReadiness()
@@ -88,6 +99,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             await refreshQueues()
         }
         startHotkeys(feeding: pipeline)
+        // With "Show indicator: Always" the idle pill appears after the launch work, so building it (about 50 ms)
+        // never delays the hotkey tap.
+        Task { indicator.show(state, context: statusContext) }
         // Story 22: the pipeline sends failed dictations again when the network returns.
         Task.detached {
             for await path in NWPathMonitor() {
@@ -112,6 +126,21 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         indicator.onAction = { [weak self] action in
             self?.perform(action)
         }
+        // The pointer on the Undo pill holds the pipeline's Undo window; one consumer keeps the holds in order.
+        let (undoHolds, undoHold) = AsyncStream.makeStream(of: Bool.self)
+        indicator.onUndoHoldChanged = { undoHold.yield($0) }
+        Task {
+            for await isHeld in undoHolds {
+                await pipeline.holdUndoWindow(isHeld)
+            }
+        }
+        Task { [submitPhrases = submitPhraseChanges.stream] in
+            for await isOn in submitPhrases {
+                await pipeline.updateSubmitPhrase(isOn: isOn)
+            }
+        }
+        // A click on the idle or recording pill is a chord tap; the front app keeps focus, so the paste goes there.
+        indicator.onTap = { [hotkeys] in hotkeys.sendTap() }
         Task {
             for await state in pipeline.states {
                 render(state)
@@ -166,24 +195,26 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         await refreshQueues()
     }
 
-    private var statusContext: StatusContext {
+    var statusContext: StatusContext {
         StatusContext(
             provider: routeSettings.route.account, microphone: readiness.microphone,
             isPasteAllowed: readiness.isAccessibilityAllowed, isSecureInputOn: isSecureInputOn,
-            longRecordingMinutes: Int(settings.longRecordingWarning / .seconds(60)))
+            microphoneName: audio.inputInUse?.name,
+            longRecordingMinutes: Int(settings.longRecordingWarning / .seconds(60)), undoWindow: settings.undoWindow)
     }
 
     private func render(_ newState: DictationState) {
         let wasRecording = if case .recording = state { true } else { false }
         state = newState
+        learner.dictationStateChanged(newState)
         if case .recording = newState {
             if !wasRecording {
                 isSecureInputOn = IsSecureEventInputEnabled()
                 playCue("Tink")
             }
-            hotkeys.setSwallowsEscape(true)
+            hotkeys.setRecordingShown(true)
         } else {
-            hotkeys.setSwallowsEscape(false)
+            hotkeys.setRecordingShown(false)
             if wasRecording, newState == .transcribing {
                 playCue("Pop")
             }
@@ -218,7 +249,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         }
     }
 
-    private func refreshQueues() async {
+    func refreshQueues() async {
         guard let store, let pipeline else { return }
         recovered = await pipeline.retries.recovered().map { record in
             let preview = (record.deliveredText ?? "").prefix(41)
@@ -227,152 +258,13 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         }
         do {
             pendingCount = try await store.pendingCount()
-            hasLastDictation = try await store.lastDelivered() != nil
         } catch {
             Log.app.error("Cannot read the dictation history: \(error)")
         }
+        let last = await lastDictation?.record()
+        hasLastDictation = last != nil
+        hasRawLastDictation = last.flatMap(LastDictation.rawText) != nil
         updateIcon()
     }
 
-    // MARK: Pill actions
-
-    private func perform(_ action: PillAction) {
-        switch action {
-        case .undo:
-            guard let pipeline else { return }
-            Task { await pipeline.undo() }
-        case .retry:
-            retryFailed()
-        case .addKey, .openSpeechSettings:
-            settingsController.show(selecting: .speech)
-        case .addCredit:
-            NSWorkspace.shared.open(routeSettings.route.account.creditsPage)
-        case .copy:
-            guard case .recovered(let id) = state else { return }
-            copyRecovered(id)
-        case .allowPasting:
-            setup.allowPasting()
-        case .openMicrophoneSettings:
-            readiness.openSettings(.microphone)
-        }
-    }
-
-    /// The text kotoba pasted or copied last, for "Fix Last Dictation…"; nil shows the window's empty state.
-    private func lastDeliveredText() async -> String? {
-        guard let store else { return nil }
-        do {
-            return try await store.lastDelivered()?.deliveredText
-        } catch {
-            Log.app.error("Cannot read the last dictation: \(error)")
-            return nil
-        }
-    }
-
-    private func copyRecovered(_ id: DictationID) {
-        guard let pipeline else { return }
-        Task {
-            guard let record = await pipeline.retries.recovered().first(where: { $0.id == id }) else { return }
-            await pipeline.retries.copy(record)
-        }
-    }
-}
-
-// MARK: - Menu
-
-extension AppDelegate: StatusMenuActions {
-    private func updateIcon() {
-        statusItem?.icon =
-            if case .recording = state {
-                .listening
-            } else if !readiness.isComplete || pendingCount > 0 {
-                .needsAttention
-            } else {
-                .ready
-            }
-    }
-
-    private func menuModel() -> MenuModel {
-        readiness.refresh()
-        let status: MenuModel.Status =
-            if let launchIssue {
-                .text(launchIssue)
-            } else if state == .idle {
-                readiness.firstMissing.map { .finishSetup($0.setupText) } ?? .text(StatusText.ready)
-            } else {
-                .text(state.statusText(statusContext) ?? "")
-            }
-        let route = routeSettings.route
-        let input = audio.inputInUse
-        return MenuModel(
-            status: status,
-            pendingCount: pendingCount,
-            recovered: recovered,
-            microphones: AudioDevices.inputs().map { MenuChoice(title: $0.name, value: $0.uid) },
-            microphoneInUse: input.map { ($0.uid, $0.name) },
-            routes: MenuModel.routes(current: route),
-            route: MenuChoice(title: route.menuTitle, value: route.rawValue),
-            grok: route.isGrok
-                ? MenuModel.Grok(
-                    isFormatOn: routeSettings.isGrokFormatOn, keepsFillerWords: routeSettings.keepsGrokFillerWords)
-                : nil,
-            hasLastDictation: hasLastDictation,
-            suggestionCount: settingsController.dictionary?.suggestions.count ?? 0
-        )
-    }
-
-    func finishSetup() {
-        setup.finishSetup()
-    }
-
-    func retryFailed() {
-        guard let pipeline else { return }
-        Task {
-            await pipeline.retryPending()
-            await refreshQueues()
-        }
-    }
-
-    func copyRecovered(_ sender: NSMenuItem) {
-        guard let raw = sender.representedObject as? String, let uuid = UUID(uuidString: raw) else { return }
-        copyRecovered(DictationID(rawValue: uuid))
-    }
-
-    /// Picking a mic moves it to the top of the order.
-    func chooseMicrophone(_ sender: NSMenuItem) {
-        guard let uid = sender.representedObject as? String else { return }
-        microphones.choose(uid: uid, name: sender.title)
-        Task { await audio.inputMayHaveChanged() }
-    }
-
-    func selectRoute(_ sender: NSMenuItem) {
-        guard let raw = sender.representedObject as? String, let route = TranscriptionRoute(rawValue: raw) else {
-            return
-        }
-        routeSettings.route = route
-    }
-
-    func toggleGrokFormat() {
-        routeSettings.isGrokFormatOn.toggle()
-    }
-
-    func toggleGrokFillerWords() {
-        routeSettings.keepsGrokFillerWords.toggle()
-    }
-
-    func fixLastDictation() {
-        fixWindow.show()
-    }
-
-    func openSuggestions() {
-        settingsController.show(selecting: .dictionary)
-    }
-
-    func openSettings() {
-        settingsController.show()
-    }
-
-    func showAbout() {
-        NSApp.activate()
-        NSApp.orderFrontStandardAboutPanel(nil)
-    }
 }

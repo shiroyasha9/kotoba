@@ -60,7 +60,7 @@ actor SystemPasteboard: KotobaCore.Pasteboard {
     }
 }
 
-/// Posts Cmd-V with CGEvent. Needs the Accessibility permission. The key code for "v" comes from
+/// Posts Cmd-V and Return with CGEvent. Needs the Accessibility permission. The key code for "v" comes from
 /// the current keyboard layout, so Dvorak and AZERTY work. Text Input Sources must be read on the
 /// main thread, so the key code is looked up there at launch and on each layout change, and
 /// `sendPaste` reads only the cached value.
@@ -115,15 +115,29 @@ struct CGEventPaster: Paster {
     }
 
     func sendPaste() async throws {
-        guard Self.isTrusted else { throw PasteError.notAllowed }
-        let keyCode = Self.vKeyCode.withLock { $0 }
-        let source = Self.shared.source
+        try Self.post(Self.vKeyCode.withLock { $0 }, flags: .maskCommand)
+    }
+
+    /// Return is the same key in every layout. Posted after Cmd-V into the same HID event stream, the app reads
+    /// it only after it has handled the paste, so no wait is needed between them.
+    func sendReturn() async throws {
+        try Self.post(CGKeyCode(kVK_Return), flags: [])
+    }
+
+    /// Marks every event kotoba posts, so the hotkey tap lets its own Cmd-V and Return pass ("kotoba" in ASCII).
+    static let postedEventTag: Int64 = 0x6B6F_746F_6261
+
+    private static func post(_ keyCode: CGKeyCode, flags: CGEventFlags) throws {
+        guard isTrusted else { throw PasteError.notAllowed }
+        let source = shared.source
         guard
             let keyDown = CGEvent(keyboardEventSource: source, virtualKey: keyCode, keyDown: true),
             let keyUp = CGEvent(keyboardEventSource: source, virtualKey: keyCode, keyDown: false)
         else { throw PasteError.noEvent }
-        keyDown.flags = .maskCommand
-        keyUp.flags = .maskCommand
+        for event in [keyDown, keyUp] {
+            event.flags = flags
+            event.setIntegerValueField(.eventSourceUserData, value: postedEventTag)
+        }
         keyDown.post(tap: .cghidEventTap)
         keyUp.post(tap: .cghidEventTap)
     }

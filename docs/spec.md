@@ -151,6 +151,23 @@ Plans: `docs/research/ux-polish.md` (49 items, IDs used below) and `docs/researc
 - Learning (story 32), first build: a pure `CorrectionDetector` in KotobaCore, a `dictionary_suggestions` table, a Suggestions section in the Dictionary pane with a menu count, and "Fix Last Dictation…" (edit the last transcript, learn from the diff, copy the fixed text; no re-paste). Suggest and confirm, never auto-add. Identifiers, names and acronyms are learned; paths, URLs and numbers are not. A common heard word gives a term only, never a rule (applies to the Wispr import too). No LLM review until the local filters measure under 80% precision on the Wispr pairs.
 - Later learning steps, in order: Accessibility readback after paste (after a spike on the owner's apps), history mining (with the History window), context sources (off by default).
 
+### Owner round 2026-10-16 (phase 2.6; overrides phase 2.5 where they differ)
+
+- No patchwork: each feature is built as the root design, event-driven, with no work at idle (no polling timers where an event exists). Each change reports its measured cost (idle footprint, hot path).
+- Dictation chord is user-set (overrides "⌃⌥⌘ fixed"). A shortcut recorder in General and in onboarding accepts modifier-only chords (⌃⌥⌘, fn, a right-side modifier) and modifier + key. Tap/hold rules do not change. The cleanup chord uses the same recorder. A chord that clashes with the other chord is refused with a reason.
+- Pills with an action and a timer (Esc Undo, error pills, learned word) show a bar that starts full and empties over the timer. Hover pauses the timer and the bar.
+- Microphone: when Bluetooth is the output, the default stays the built-in mic. The user may still choose a Bluetooth mic (AirPods). kotoba then shows a warning (call-quality audio, it interrupts playback) in the menu and the Microphone pane. Capture opens only the chosen device and never changes the system default input or pulls AirPods into call mode when another mic is chosen.
+- Learning is automatic (overrides "suggest and confirm, never auto-add" for strong candidates). After a paste, kotoba follows the focused text field through Accessibility notifications, for a bounded time, and detects the user's edit of the pasted text. A strong candidate is added to the dictionary at once, and the pill shows it with a sparkle icon, the word and Undo (bar rule). Weak candidates go to Suggestions. "Fix Last Dictation…" stays for apps without readable text (terminals).
+- Indicator: more glass (Liquid Glass, measured cost). Setting "Show indicator": "While dictating" (default) or "Always". When shown at idle, a click starts and stops a dictation (tap semantics).
+- Order after this round: History window; usage and cost tracker; audio retention; per-app modes (each dictation records its front app, which feeds usage); Insights page (words per minute, words dictated, fixes, apps, streak); the rest of phase 3. Research tracks: what makes kotoba better than Wispr Flow, accuracy, languages (only languages the chosen model supports, from a picked list; Hinglish if a model supports code-switching). Snippets last.
+- From `docs/research/beyond-wispr.md` (owner, 2026-10-16 01:00 IST). Build now:
+  - idea 3, submit after paste: Return sent after the paste, by a spoken end phrase or a stop gesture;
+  - idea 4, a live "no sound" warning while recording;
+  - idea 2 (optional to the owner, small): Paste Last, Copy Last, and Paste Raw after cleanup.
+  Later:
+  - idea 1, context terms from the active repo and session (privacy decision open: on or off by default, story 34);
+  - idea 5, rank and cap dictionary terms per request (risk: it can drop a needed term).
+
 ### Wispr Flow transition
 - The owner keeps Wispr Flow until kotoba passes the gates and one week of daily use.
 

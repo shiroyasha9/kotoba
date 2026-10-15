@@ -4,7 +4,7 @@ import SwiftUI
 
 extension SettingsPane {
     static func dictionary(_ model: DictionaryModel) -> Self {
-        SettingsPane(id: .dictionary, title: "Dictionary", systemImage: "character.book.closed") {
+        SettingsPane(id: .dictionary) {
             AnyView(DictionaryPane(model: model))
         }
     }
@@ -24,58 +24,34 @@ private struct DictionaryPane: View {
     }
 
     var body: some View {
-        let rows = visibleRows
-        VStack(spacing: 0) {
-            List(selection: $selection) {
-                if !model.suggestions.isEmpty, search.isEmpty {
-                    SuggestionsSection(model: model)
+        // A list in a group box with Add and Delete at its foot, as in System Settings > General > Login Items: a list
+        // this long needs the list's own selection and lazy rows, which a grouped form has not.
+        VStack(alignment: .leading) {
+            // The pane's own switch sits in its header box, as the Bluetooth switch does in System Settings.
+            GroupBox {
+                VStack(alignment: .leading) {
+                    PaneHeader(pane: .dictionary)
+                    Divider()
+                    LearnFromEditsToggle()
                 }
-                Section {
-                    ForEach(rows, id: \.self) { row in
-                        DictionaryRowView(draft: model.draft(for: row))
-                    }
-                } header: {
-                    if !model.suggestions.isEmpty, search.isEmpty, !rows.isEmpty {
-                        Text("Words and Replacements")
-                    }
-                }
+                .frame(maxWidth: .infinity, alignment: .leading)
             }
-            .contextMenu(forSelectionType: DictionaryModel.Row.self) { rows in
-                if rows.count == 1, let row = rows.first {
-                    Button("Edit…") { edit(row) }
-                }
-                Button("Delete", role: .destructive) {
-                    // Rows are positions, so a kept selection would point at other words after the delete.
-                    model.delete(rows)
-                    selection = []
-                }
-            } primaryAction: { rows in
-                if rows.count == 1, let row = rows.first {
-                    edit(row)
-                }
-            }
-            .onDeleteCommand { delete() }
-            .overlay {
-                if model.rows.isEmpty, model.suggestions.isEmpty {
-                    ContentUnavailableView(
-                        "No Words Yet",
-                        systemImage: "character.book.closed",
-                        description: Text(
-                            "Add names and terms the speech model should know, or fix a word it always gets wrong. "
-                                + "You can also import from Wispr Flow.")
-                    )
-                } else if rows.isEmpty, !search.isEmpty {
-                    ContentUnavailableView.search(text: search)
-                }
-            }
-            if let state = model.wisprImport, !isReading {
-                Divider()
-                importBanner(state)
-            }
-            Divider()
-            footer
+            words
         }
+        .padding()
         .searchable(text: $search, placement: .toolbar, prompt: "Search words")
+        .alert(Self.importTitle(model.wisprImport), isPresented: isAlertShown, presenting: model.wisprImport) { state in
+            // Each button clears the state itself, so the binding never has to.
+            if case .preview(let preview, _) = state, !preview.isEmpty {
+                Button("Cancel", role: .cancel) { model.wisprImport = nil }
+                Button("Import") { model.applyWisprImport() }
+                    .keyboardShortcut(.defaultAction)
+            } else {
+                Button("OK") { model.wisprImport = nil }
+            }
+        } message: { state in
+            Text(Self.importMessage(state))
+        }
         .sheet(item: $editing) { editing in
             EntryEditor(draft: editing.draft, isNew: editing.row == nil) { draft throws(DictionaryError) in
                 try model.save(draft, replacing: editing.row)
@@ -84,22 +60,97 @@ private struct DictionaryPane: View {
         }
     }
 
-    private var footer: some View {
-        HStack(spacing: 12) {
-            HStack(spacing: 4) {
-                Button("Add", systemImage: "plus") { editing = Editing(row: nil, draft: EntryDraft()) }
-                Button("Delete", systemImage: "minus") { delete() }
-                    .disabled(selection.isEmpty)
+    private var words: some View {
+        VStack(alignment: .leading) {
+            GroupBox {
+                list
+                Divider()
+                editButtons
             }
-            .buttonStyle(.borderless)
-            .labelStyle(.iconOnly)
-            VStack(alignment: .leading, spacing: 2) {
-                Text(summary)
+            footer
+        }
+    }
+
+    private var list: some View {
+        let rows = visibleRows
+        return List(selection: $selection) {
+            if !model.suggestions.isEmpty, search.isEmpty {
+                SuggestionsSection(model: model)
+            }
+            Section {
+                ForEach(rows, id: \.self) { row in
+                    DictionaryRowView(draft: model.draft(for: row))
+                }
+            } header: {
+                if !model.suggestions.isEmpty, search.isEmpty, !rows.isEmpty {
+                    Text("Words and Replacements")
+                }
+            }
+        }
+        .listStyle(.plain)
+        .scrollContentBackground(.hidden)
+        .contextMenu(forSelectionType: DictionaryModel.Row.self) { rows in
+            if rows.count == 1, let row = rows.first {
+                Button("Edit…") { edit(row) }
+            }
+            Button("Delete", role: .destructive) {
+                // Rows are positions, so a kept selection would point at other words after the delete.
+                model.delete(rows)
+                selection = []
+            }
+        } primaryAction: { rows in
+            if rows.count == 1, let row = rows.first {
+                edit(row)
+            }
+        }
+        .onDeleteCommand { delete() }
+        .overlay {
+            if rows.isEmpty, model.suggestions.isEmpty || !search.isEmpty {
+                emptyState
+            }
+        }
+    }
+
+    @ViewBuilder private var emptyState: some View {
+        if search.isEmpty {
+            ContentUnavailableView {
+                Label("No Words Yet", systemImage: "character.book.closed")
+            } description: {
+                Text(
+                    "Add names and terms the speech model should know, or fix a word it always gets wrong. "
+                        + "You can also import from Wispr Flow.")
+            } actions: {
+                Button("Add Word…", action: add)
+            }
+        } else {
+            ContentUnavailableView.search(text: search)
+        }
+    }
+
+    private var editButtons: some View {
+        HStack {
+            Button("Add", systemImage: "plus", action: add)
+            Button("Delete", systemImage: "minus") { delete() }
+                .disabled(selection.isEmpty)
+            Spacer()
+        }
+        .buttonStyle(.borderless)
+        .labelStyle(.iconOnly)
+    }
+
+    /// The counts, a save error, and the import from Wispr Flow, under the box.
+    private var footer: some View {
+        HStack {
+            VStack(alignment: .leading) {
+                // An empty dictionary shows its own message in the box; "0 words" adds nothing.
+                if !model.rows.isEmpty {
+                    Text(summary)
+                }
                 if let saveError = model.saveError {
                     Text(saveError).foregroundStyle(.red)
                 }
             }
-            .font(.caption)
+            .font(.callout)
             .foregroundStyle(.secondary)
             Spacer()
             if isReading {
@@ -110,7 +161,6 @@ private struct DictionaryPane: View {
                     .disabled(model.wisprImport != nil)
             }
         }
-        .padding(10)
         .task { await model.checkWisprInstalled() }
     }
 
@@ -139,44 +189,13 @@ private struct DictionaryPane: View {
         if case .reading = model.wisprImport { true } else { false }
     }
 
-    /// The import preview, or why there is none, above the footer until the owner answers.
-    private func importBanner(_ state: DictionaryModel.WisprImport) -> some View {
-        // The buttons sit under the message, not beside it: next to buttons in an HStack, a wrapping Text is first
-        // measured at almost no width, and its height then made the whole Settings window taller than the screen.
-        HStack(alignment: .top, spacing: 10) {
-            if case .preview = state {
-                Image(systemName: "square.and.arrow.down.on.square")
-                    .font(.title2)
-                    .foregroundStyle(.tint)
-            } else {
-                Image(systemName: "exclamationmark.triangle.fill")
-                    .font(.title2)
-                    .symbolRenderingMode(.multicolor)
-            }
-            VStack(alignment: .leading, spacing: 8) {
-                Text(importTitle).font(.headline)
-                Text(importMessage(state))
-                    .foregroundStyle(.secondary)
-                HStack {
-                    Spacer()
-                    if case .preview(let preview, _) = state, !preview.isEmpty {
-                        Button("Cancel") { model.wisprImport = nil }
-                        Button("Import") { model.applyWisprImport() }
-                            .buttonStyle(.borderedProminent)
-                            .keyboardShortcut(.defaultAction)
-                    } else {
-                        Button("OK") { model.wisprImport = nil }
-                    }
-                }
-            }
-        }
-        .padding(12)
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .background(.background.secondary)
+    /// The import preview, or why there is none, as an alert until the owner answers.
+    private var isAlertShown: Binding<Bool> {
+        Binding(get: { model.wisprImport != nil && !isReading }, set: { _ in })
     }
 
-    private var importTitle: String {
-        switch model.wisprImport {
+    static func importTitle(_ state: DictionaryModel.WisprImport?) -> String {
+        switch state {
         case .preview(let preview, _) where !preview.isEmpty: "Import from Wispr Flow?"
         case .preview: "Nothing New in Wispr Flow"
         case .notFound: "Wispr Flow Not Found"
@@ -185,7 +204,7 @@ private struct DictionaryPane: View {
         }
     }
 
-    private func importMessage(_ state: DictionaryModel.WisprImport) -> String {
+    static func importMessage(_ state: DictionaryModel.WisprImport) -> String {
         switch state {
         case .preview(let preview, let contents):
             var lines = [
@@ -214,6 +233,10 @@ private struct DictionaryPane: View {
         case .reading:
             return ""
         }
+    }
+
+    private func add() {
+        editing = Editing(row: nil, draft: EntryDraft())
     }
 
     private func edit(_ row: DictionaryModel.Row) {
@@ -315,17 +338,31 @@ extension SettingsPane {
             SettingsWindow.snapshot(of: .dictionary(sampleModel(sample)), named: "settings-dictionary"),
             SettingsWindow.snapshot(
                 of: .dictionary(sampleModel(PersonalDictionary())), named: "settings-dictionary-empty"),
-            SettingsWindow.snapshot(
-                of: .dictionary(sampleModel(sample, import: .preview(sample.importPreview(of: incoming), contents))),
-                named: "settings-dictionary-import"
-            ),
-            SettingsWindow.snapshot(
-                of: .dictionary(sampleModel(sample, import: .notFound)), named: "settings-dictionary-import-not-found"),
+            importAlert(.preview(sample.importPreview(of: incoming), contents), named: "settings-dictionary-import"),
+            importAlert(.notFound, named: "settings-dictionary-import-not-found"),
             Snapshot(name: "settings-dictionary-editor") {
                 let rule = ReplacementRule(find: "cloud code", replacement: "Claude Code")
                 let editor = EntryEditor(draft: EntryDraft(rule: rule), isNew: false) { _ throws(DictionaryError) in }
                 return Snapshots.hostingView(editor)
             },
         ] + windowSnapshots()
+    }
+
+    /// The import alert as AppKit draws it, with the pane's words: SwiftUI's `.alert` is a sheet on the window, which
+    /// an offscreen run cannot show.
+    private static func importAlert(_ state: DictionaryModel.WisprImport, named name: String) -> Snapshot {
+        Snapshot(name: name) {
+            let alert = NSAlert()
+            alert.messageText = DictionaryPane.importTitle(state)
+            alert.informativeText = DictionaryPane.importMessage(state)
+            if case .preview(let preview, _) = state, !preview.isEmpty {
+                alert.addButton(withTitle: "Import")
+                alert.addButton(withTitle: "Cancel")
+            } else {
+                alert.addButton(withTitle: "OK")
+            }
+            alert.layout()
+            return alert.window.contentView ?? NSView()
+        }
     }
 }

@@ -18,7 +18,7 @@ import { okRowsByVariant, readJsonl, sumCost } from "./openrouter.ts";
 import { shortDiff, termRecall, wer } from "./score.ts";
 import { type RunEvent, type SttRow, LATENCY_CLIPS, bestSttVariant, sameTextRate, sttVariants } from "./stt.ts";
 
-function percentile(values: number[], p: number): number | null {
+export function percentile(values: number[], p: number): number | null {
 	if (!values.length) return null;
 	const sorted = [...values].sort((a, b) => a - b);
 	return sorted[Math.max(0, Math.ceil(p * sorted.length) - 1)]!;
@@ -30,7 +30,7 @@ const fmtUsd = (v: number) => `$${v.toFixed(4)}`;
 const ist = (iso: string) =>
 	new Date(iso).toLocaleString("en-GB", { timeZone: "Asia/Kolkata", dateStyle: "medium", timeStyle: "medium" });
 
-function table(head: string[], rows: (string | number)[][]): string {
+export function table(head: string[], rows: (string | number)[][]): string {
 	const esc = (c: string | number) => String(c).replaceAll("|", "\\|").replaceAll("\n", " ");
 	return [
 		`| ${head.join(" | ")} |`,

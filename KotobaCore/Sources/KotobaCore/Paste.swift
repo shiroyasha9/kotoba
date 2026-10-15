@@ -1,8 +1,11 @@
 import Foundation
 
-/// Posts Cmd-V to the focused app.
+/// Posts Cmd-V, and Return for a submit phrase, to the focused app.
 public protocol Paster: Sendable {
     func sendPaste() async throws
+    /// Return with no modifiers, posted right after a Cmd-V into the same event stream, so the app gets it after
+    /// the paste.
+    func sendReturn() async throws
 }
 
 /// The general pasteboard. The pipeline writes the transcript, pastes, and restores the

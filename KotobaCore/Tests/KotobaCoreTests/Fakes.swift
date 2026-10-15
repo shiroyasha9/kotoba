@@ -11,6 +11,7 @@ struct FakeWorld {
     let paster: FakePaster
     let clock = ManualClock()
     let store = FakeStore()
+    let frontApp = FakeFrontApp()
 
     init(transcript: String, clipboard: String? = "user's clipboard") {
         provider = FakeTranscriptionProvider(transcript: transcript)
@@ -20,7 +21,9 @@ struct FakeWorld {
 
     let setup = FakeSetup()
 
-    func makePipeline() -> DictationPipeline {
+    /// The fake mic sends no levels, so the no-sound deadline (`Settings.noSoundWarning`) stays out of other
+    /// tests' way unless a test sets it.
+    func makePipeline(noSoundWarning: Duration = .seconds(3_600)) -> DictationPipeline {
         DictationPipeline(
             ports: .init(
                 audio: audio,
@@ -29,9 +32,10 @@ struct FakeWorld {
                 pasteboard: pasteboard,
                 clock: clock,
                 store: store,
-                missingSetup: { [setup] in setup.missing }
+                missingSetup: { [setup] in setup.missing },
+                frontAppID: { [frontApp] in frontApp.id }
             ),
-            settings: .init(audioDirectory: URL(filePath: "/tmp/kotoba-tests"))
+            settings: .init(audioDirectory: URL(filePath: "/tmp/kotoba-tests"), noSoundWarning: noSoundWarning)
         )
     }
 }
@@ -83,6 +87,16 @@ actor FakeAudioSource: AudioSource {
     /// The first buffer arrived, its first sample captured at `instant`.
     func deliverFirstBuffer(at instant: ContinuousClock.Instant) {
         continuation?.yield(.firstBuffer(at: instant))
+    }
+
+    /// The meter measured `level` over its last window.
+    func deliverLevel(_ level: Float) {
+        continuation?.yield(.level(level))
+    }
+
+    /// The mic disconnected or stopped sending.
+    func loseInput() {
+        continuation?.yield(.inputLost)
     }
 
     func endCapture() async throws -> RecordedAudio {
@@ -171,9 +185,20 @@ actor FakePaster: Paster {
     func sendPaste() async throws {
         if let error { throw error }
         pasteCount += 1
+        keystrokes.append(.commandV)
         if let text = await pasteboard?.text {
             pasted.append(text)
         }
+    }
+
+    enum Keystroke: Equatable { case commandV, returnKey }
+
+    /// Every Cmd-V and Return, in the order the focused app got them.
+    private(set) var keystrokes: [Keystroke] = []
+
+    func sendReturn() async throws {
+        if let error { throw error }
+        keystrokes.append(.returnKey)
     }
 }
 

@@ -1,12 +1,14 @@
-/// The text steps a live dictation and a retry share: transcribe with the dictionary terms, apply
-/// the replacements, and for a cleanup dictation clean the raw transcript.
+/// The text steps a live dictation and a retry share: transcribe with the dictionary terms, remove a submit phrase,
+/// apply the replacements, and for a cleanup dictation clean the raw transcript.
 struct TranscriptionSteps: Sendable {
     /// A transcript with the dictionary replacements applied.
     struct Transcribed: Sendable {
-        /// What the provider heard, before replacements; the cleaner gets this.
+        /// What the provider heard, without a submit phrase and before replacements; the cleaner gets this.
         let raw: String
         let text: String
         let model: String
+        /// It ended with a submit phrase: a live dictation sends Return after the paste; a retry never does.
+        var submits = false
     }
 
     let provider: any TranscriptionProvider
@@ -14,10 +16,13 @@ struct TranscriptionSteps: Sendable {
 
     func transcribe(_ audio: RecordedAudio, settings: DictationPipeline.Settings) async throws -> Transcribed {
         let transcript = try await provider.transcribe(settings.request(for: audio))
+        // Matched on what the owner said, before the replacements, so a rule can neither make nor break the phrase.
+        let (raw, submits) = settings.isSubmitPhraseOn ? SubmitPhrase.split(transcript.text) : (transcript.text, false)
         return Transcribed(
-            raw: transcript.text,
-            text: settings.dictionary.applyReplacements(to: transcript.text),
-            model: transcript.model
+            raw: raw,
+            text: settings.dictionary.applyReplacements(to: raw),
+            model: transcript.model,
+            submits: submits
         )
     }
 

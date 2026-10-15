@@ -6,6 +6,36 @@ results/
 *.sqlite-*
 .DS_Store
 
+# Lead's ops log: local only, never public
+docs/progress.md
+
+# Secrets and signing material (Sparkle EdDSA key exports, certificates, notary keys)
+.env
+.env.*
+*.pem
+*.p8
+*.p12
+*.key
+*.cer
+*.mobileprovision
+
+# Release artifacts: upload to GitHub Releases, do not commit
+*.dmg
+*.xcarchive/
+release/
+notarize-*.log
+
+# Personal bench data (keep it in the runbooks folder)
+*.jsonl
+manifest.json
+bench/data/
+
+# Local agent and editor state
+.claude/
+.codex/
+.vscode/
+.idea/
+
 # Swift / Xcode (kotoba app)
 Kotoba.xcodeproj/
 App/Info.plist
