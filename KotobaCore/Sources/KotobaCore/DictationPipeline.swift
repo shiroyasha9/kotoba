@@ -52,7 +52,7 @@ public actor DictationPipeline {
         clipboard = ClipboardGuard(pasteboard: ports.pasteboard)
         delivery = TranscriptDelivery(
             provider: ports.provider, cleaner: ports.cleaner, paster: ports.paster, store: ports.store,
-            clock: ports.clock, clipboard: clipboard, frontAppID: ports.frontAppID)
+            clock: ports.clock, clipboard: clipboard, frontApp: ports.frontApp)
         retries = RetryQueue(
             steps: TranscriptionSteps(provider: ports.provider, cleaner: ports.cleaner), store: ports.store,
             clock: ports.clock, clipboard: clipboard)
@@ -98,6 +98,19 @@ public actor DictationPipeline {
         for record in results where isQuiet {
             emit(.outcome(of: record))
         }
+    }
+
+    /// The History window's Retry: sends the chosen kept dictations again, each after no dictation is live. A cancelled
+    /// one joins the queue first; the others must already be queued (`DictationRecord.isRetryable`).
+    public func retry(_ ids: Set<DictationID>) async {
+        for id in ids {
+            do {
+                try await ports.store.queueForRetry(id)
+            } catch {
+                Log.pipeline.error("Cannot queue \(id.rawValue) for retry: \(error)")
+            }
+        }
+        await retryPending(.only(ids))
     }
 
     /// A key, an endpoint or credit arrived: once the route has everything, the waiting dictations are sent once each.
@@ -229,8 +242,8 @@ extension DictationPipeline {
         emit(outcome == .idle && !inFlight.isEmpty ? .transcribing : outcome)
     }
 
-    /// No recording, no Undo window and no transcription in flight.
-    private var isQuiet: Bool {
+    /// No recording, no Undo window and no transcription in flight: "Paste Again" can paste.
+    public var isQuiet: Bool {
         recording == nil && paused == nil && inFlight.isEmpty
     }
 

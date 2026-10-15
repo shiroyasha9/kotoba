@@ -43,6 +43,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     /// The last dictation was cleaned up, so "Paste Last Without Cleanup" has the raw transcript.
     var hasRawLastDictation = false
     var lastDictation: LastDictation?
+    /// The History window; built with the store, its window only when it opens.
+    var history: HistoryController?
     /// The submit phrase toggle, in click order, to the pipeline (one consumer, as for the Undo holds).
     let submitPhraseChanges = AsyncStream.makeStream(of: Bool.self)
     /// Menu previews from the last 24 h, newest first; full transcripts stay in the store until copied.
@@ -61,7 +63,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
     func applicationDidFinishLaunching(_ notification: Notification) {
         CGEventPaster.trackKeyboardLayout()
-        FrontApp.track()
+        FrontAppObserver.track()
         CGEventPaster.warmUp()
         NSApp.mainMenu = .editOnlyMain()
         statusItem = StatusBarItem(target: self) { [weak self] in self?.menuModel() }
@@ -86,12 +88,13 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
                 cleaner: OpenRouterCleaner(apiKey: vault.source(for: .openRouter), settings: routeSettings),
                 missingSetup: { [vault, routeSettings] in routeSettings.missingSetup(hasKey: vault.hasKey(for:)) },
                 readback: learner.readback,
-                frontAppID: { FrontApp.current }
+                frontApp: { FrontAppObserver.current }
             ),
             settings: settings
         )
         self.pipeline = pipeline
         lastDictation = LastDictation(store: store, pipeline: pipeline)
+        history = HistoryController(store: store, pipeline: pipeline) { [weak self] in await self?.refreshQueues() }
 
         observe(pipeline)
         observeReadiness()
@@ -150,9 +153,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
                 render(state)
             }
         }
-        // Each history write can change the Retry count, the Recovered list and "Fix Last Dictation…".
+        // Each history write can change the Retry count, the Recovered list, "Fix Last Dictation…" and an open
+        // History window.
         Task {
             for await _ in pipeline.historyChanges {
+                history?.storeChanged()
                 await refreshQueues()
             }
         }
@@ -211,6 +216,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         let wasRecording = if case .recording = state { true } else { false }
         state = newState
         learner.dictationStateChanged(newState)
+        history?.dictationStateChanged(newState)
         if case .recording = newState {
             if !wasRecording {
                 isSecureInputOn = IsSecureEventInputEnabled()

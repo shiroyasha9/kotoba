@@ -95,10 +95,7 @@ private struct SuggestionRow: View {
     }
 
     private var appName: String? {
-        guard let bundleID = suggestion.candidate.appBundleID,
-            let url = NSWorkspace.shared.urlForApplication(withBundleIdentifier: bundleID)
-        else { return nil }
-        return FileManager.default.displayName(atPath: url.path).replacing(/\.app$/, with: "")
+        suggestion.candidate.appBundleID.flatMap(InstalledApp.name(of:))
     }
 }
 

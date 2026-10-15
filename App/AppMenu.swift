@@ -112,6 +112,10 @@ extension AppDelegate: StatusMenuActions {
         settingsController.show(selecting: .dictionary)
     }
 
+    func openHistory() {
+        history?.show()
+    }
+
     func openSettings() {
         settingsController.show()
     }

@@ -12,6 +12,8 @@ public protocol Store: Sendable {
     func recovered(since cutoff: Date) async throws -> [DictationRecord]
     /// Sets one record's status to `.copied`, keeping everything else.
     func markCopied(_ id: DictationID) async throws
+    /// Puts a `.cancelled` record in the retry queue as `.failed`; a record with any other status keeps it.
+    func queueForRetry(_ id: DictationID) async throws
     /// Deletes records and their audio created before `cutoff` (retention period), except
     /// `.pending`, `.failed` and `.rejected` ones. Runs at launch or when idle, never on the dictation path.
     func prune(olderThan cutoff: Date) async throws
@@ -60,6 +62,8 @@ public struct DictationRecord: Sendable, Equatable, Identifiable {
     public var rejectReason: RejectReason?
     /// When a retry transcribed it; the menu lists it for 24 h after this.
     public var recoveredAt: Date?
+    /// The app in front at the stop, where the text went; nil when unknown (and for dictations kept before this).
+    public var app: DictationApp?
     public var latency: LatencyLog
 
     public init(
@@ -83,9 +87,27 @@ public struct DictationRecord: Sendable, Equatable, Identifiable {
     }
 }
 
+/// The app a dictation went to. Usage and per-app modes group dictations by `bundleID`.
+public struct DictationApp: Sendable, Hashable {
+    public var bundleID: String
+    /// The app's name at the stop, so the history still names an app that is gone.
+    public var name: String?
+
+    public init(bundleID: String, name: String? = nil) {
+        self.bundleID = bundleID
+        self.name = name
+    }
+}
+
 extension DictationRecord {
     /// The text kotoba pasted or offers to copy: the cleaned text of a cleanup dictation, else the transcript.
     public var deliveredText: String? { cleanedText ?? transcript }
+
+    /// A dictation with no text yet that a retry can send, while its audio is kept: queued, failed, or cancelled
+    /// (`DictationPipeline.retry(_:)` queues it first). A rejected one would get the same answer again.
+    public var isRetryable: Bool {
+        status == .pending || status == .failed || status == .cancelled
+    }
 
     /// Records a failed request: `.failed` (retried), with `needsSetup` when only a setting can help,
     /// or `.rejected` when the same request cannot succeed. An empty transcript gets one retry
@@ -139,6 +161,11 @@ struct AnnouncingStore: Store {
     func markCopied(_ id: DictationID) async throws {
         defer { changes.yield() }
         try await base.markCopied(id)
+    }
+
+    func queueForRetry(_ id: DictationID) async throws {
+        defer { changes.yield() }
+        try await base.queueForRetry(id)
     }
 
     func prune(olderThan cutoff: Date) async throws {

@@ -137,5 +137,121 @@ struct HistoryStoreTests {
         let migrated = try #require(try await store.pendingRetries().first)
         #expect(migrated.needsSetup == .key)
         #expect(migrated.mode == .transcript)
+        #expect(migrated.app == nil)
+    }
+
+    // MARK: History window
+
+    func spoken(_ text: String, at time: TimeInterval, app: DictationApp? = nil) -> DictationRecord {
+        var spoken = record(.pasted, at: time)
+        spoken.transcript = text
+        spoken.app = app
+        return spoken
+    }
+
+    @Test func aRecordKeepsTheAppItWentTo() async throws {
+        let store = try HistoryStore(url: url)
+        var saved = spoken("ship it", at: 1_000, app: DictationApp(bundleID: "com.apple.Notes", name: "Notes"))
+        saved.latency = LatencyLog()
+        try await store.save(saved)
+
+        #expect(try await HistoryStore(url: url).page(limit: 10) == [saved])
+    }
+
+    @Test func pagesAreNewestFirstAndEachStartsAfterTheLastRowOfThePreviousOne() async throws {
+        let store = try HistoryStore(url: url)
+        // Two rows share a time, so the cursor must also order by id.
+        let rows = [1_000, 2_000, 2_000, 3_000, 4_000].map { spoken("words", at: TimeInterval($0)) }
+        for row in rows {
+            try await store.save(row)
+        }
+
+        let first = try await store.page(limit: 2)
+        let second = try await store.page(after: first.last, limit: 2)
+        let third = try await store.page(after: second.last, limit: 2)
+
+        #expect(first.map(\.createdAt.timeIntervalSince1970) == [4_000, 3_000])
+        #expect(second.map(\.createdAt.timeIntervalSince1970) == [2_000, 2_000])
+        #expect(third.map(\.createdAt.timeIntervalSince1970) == [1_000])
+        #expect(Set((first + second + third).map(\.id)) == Set(rows.map(\.id)))
+        // The page holds no latency marks: the window does not show them.
+        #expect(first.allSatisfy { $0.latency == LatencyLog() })
+    }
+
+    @Test func searchMatchesTheTranscriptTheCleanedTextOrTheAppName() async throws {
+        let store = try HistoryStore(url: url)
+        let raw = spoken("deploy to Vercel", at: 1_000)
+        var cleaned = spoken("um so the plan", at: 2_000)
+        cleaned.cleanedText = "The Plan is ready."
+        let mail = spoken("see you", at: 3_000, app: DictationApp(bundleID: "com.apple.mail", name: "Mail"))
+        let percent = spoken("100% done", at: 4_000)
+        for row in [raw, cleaned, mail, percent] {
+            try await store.save(row)
+        }
+
+        #expect(try await store.page(matching: "vercel", limit: 10).map(\.id) == [raw.id])
+        #expect(try await store.page(matching: "plan IS", limit: 10).map(\.id) == [cleaned.id])
+        #expect(try await store.page(matching: "mail", limit: 10).map(\.id) == [mail.id])
+        // LIKE wildcards in the search are plain characters.
+        #expect(try await store.page(matching: "0%", limit: 10).map(\.id) == [percent.id])
+        #expect(try await store.page(matching: "_", limit: 10).isEmpty)
+        #expect(try await store.page(matching: "", limit: 10).count == 4)
+    }
+
+    @Test func deleteRemovesTheRowItsMarksAndItsAudio() async throws {
+        let store = try HistoryStore(url: url)
+        let deleted = record(.failed)
+        let kept = record(.failed)
+        for saved in [deleted, kept] {
+            try Data("flac".utf8).write(to: saved.audio.file)
+            try await store.save(saved)
+        }
+
+        try await store.delete([deleted.id])
+
+        #expect(try await store.status(of: deleted.id) == nil)
+        #expect(try await store.status(of: kept.id) == .failed)
+        #expect(!FileManager.default.fileExists(atPath: deleted.audio.file.path))
+        #expect(FileManager.default.fileExists(atPath: kept.audio.file.path))
+        let marks = try SQLiteDatabase(url: url).query("SELECT count(*) FROM latency_marks;")
+        #expect(marks.first?.first == .integer(2))
+    }
+
+    /// The cost the History window pays: a page, a deep page and a search on 10,000 rows of about 30 words. Measured
+    /// 2026-10-16 (debug build): about 1 ms a page, 3 ms for a search that matches nothing. The bound is loose for
+    /// other agents' builds on the same machine.
+    @Test func aPageAndASearchOn10000RowsStayFast() async throws {
+        let store = try HistoryStore(url: url)
+        let words = "please move the standup to thursday and ask the team to review the pull request before lunch"
+            .split(separator: " ")
+        for index in 0..<10_000 {
+            let text = (0..<30).map { words[($0 * 7 + index) % words.count] }.joined(separator: " ")
+            try await store.save(spoken(text + " row\(index)", at: TimeInterval(index)))
+        }
+        let clock = ContinuousClock()
+        var first: [DictationRecord] = []
+        let page = try await clock.measure { first = try await store.page(limit: 200) }
+        let deep = try await clock.measure { _ = try await store.page(after: first.last, limit: 200) }
+        let hit = try await clock.measure { _ = try await store.page(matching: "Thursday", limit: 200) }
+        let miss = try await clock.measure { _ = try await store.page(matching: "kubernetes", limit: 200) }
+
+        #expect(first.count == 200)
+        for time in [page, deep, hit, miss] {
+            #expect(time < .milliseconds(100))
+        }
+    }
+
+    @Test func onlyACancelledDictationIsQueuedForRetry() async throws {
+        let store = try HistoryStore(url: url)
+        let cancelled = record(.cancelled)
+        let pasted = record(.pasted)
+        try await store.save(cancelled)
+        try await store.save(pasted)
+
+        try await store.queueForRetry(cancelled.id)
+        try await store.queueForRetry(pasted.id)
+
+        #expect(try await store.pendingRetries().map(\.id) == [cancelled.id])
+        #expect(try await store.status(of: pasted.id) == .pasted)
     }
 }

@@ -24,9 +24,13 @@ public actor HistoryStore: Store {
             cleaned_text TEXT,
             needs_setup TEXT,
             mode TEXT NOT NULL DEFAULT 'transcript',
-            reject_reason TEXT
+            reject_reason TEXT,
+            app_bundle_id TEXT,
+            app_name TEXT
         );
         CREATE INDEX IF NOT EXISTS dictations_status ON dictations (status);
+        -- The History window's order, newest first.
+        CREATE INDEX IF NOT EXISTS dictations_created ON dictations (created_at, id);
         CREATE TABLE IF NOT EXISTS latency_marks (
             dictation_id TEXT NOT NULL REFERENCES dictations (id) ON DELETE CASCADE,
             mark TEXT NOT NULL,
@@ -38,12 +42,13 @@ public actor HistoryStore: Store {
     /// Columns added after the first build the owner ran; an older database gets them on open.
     private static let addedColumns = [
         ("model", "TEXT"), ("recovered_at", "REAL"), ("cleaned_text", "TEXT"), ("needs_setup", "TEXT"),
-        ("mode", "TEXT NOT NULL DEFAULT 'transcript'"), ("reject_reason", "TEXT"),
+        ("mode", "TEXT NOT NULL DEFAULT 'transcript'"), ("reject_reason", "TEXT"), ("app_bundle_id", "TEXT"),
+        ("app_name", "TEXT"),
     ]
 
     private static let columns = """
         id, created_at, audio_path, audio_duration_ms, transcript, model, status, recovered_at, cleaned_text,
-        needs_setup, mode, reject_reason
+        needs_setup, mode, reject_reason, app_bundle_id, app_name
         """
 
     /// SQL lists of statuses, from `DictationRecord.Status`: the retry queue, the rows prune keeps, and the rows whose
@@ -86,12 +91,13 @@ public actor HistoryStore: Store {
             try database.run(
                 """
                 INSERT INTO dictations (\(Self.columns))
-                VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12)
+                VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14)
                 ON CONFLICT (id) DO UPDATE SET
                     audio_path = excluded.audio_path, audio_duration_ms = excluded.audio_duration_ms,
                     transcript = excluded.transcript, model = excluded.model, status = excluded.status,
                     recovered_at = excluded.recovered_at, cleaned_text = excluded.cleaned_text,
-                    needs_setup = excluded.needs_setup, mode = excluded.mode, reject_reason = excluded.reject_reason;
+                    needs_setup = excluded.needs_setup, mode = excluded.mode, reject_reason = excluded.reject_reason,
+                    app_bundle_id = excluded.app_bundle_id, app_name = excluded.app_name;
                 """,
                 [
                     id, .real(record.createdAt.timeIntervalSince1970), .text(record.audio.file.path),
@@ -99,7 +105,8 @@ public actor HistoryStore: Store {
                     Self.text(record.model), .text(record.status.rawValue),
                     record.recoveredAt.map { .real($0.timeIntervalSince1970) } ?? .null, Self.text(record.cleanedText),
                     Self.text(record.needsSetup?.rawValue), .text(record.mode.rawValue),
-                    Self.text(record.rejectReason?.rawValue),
+                    Self.text(record.rejectReason?.rawValue), Self.text(record.app?.bundleID),
+                    Self.text(record.app?.name),
                 ]
             )
             try database.run("DELETE FROM latency_marks WHERE dictation_id = ?1;", [id])
@@ -149,13 +156,54 @@ public actor HistoryStore: Store {
     }
 
     public func prune(olderThan cutoff: Date) throws {
-        let deleted = try database.query(
-            "DELETE FROM dictations WHERE created_at < ?1 AND status NOT IN \(Self.kept) RETURNING audio_path;",
-            [.real(cutoff.timeIntervalSince1970)]
-        )
+        try deleteRows(where: "created_at < ?1 AND status NOT IN \(Self.kept)", [.real(cutoff.timeIntervalSince1970)])
+    }
+
+    /// One page of the History window, newest first: the rows after `last` (the previous page's last row) whose text
+    /// or app name contains `search` (case-insensitive for ASCII letters); an empty `search` matches every row.
+    /// A search that matches nothing scans every row: about 3 ms on 10,000 rows (debug build, `HistoryStoreTests`), so
+    /// the history needs no FTS index. A page is about 1 ms.
+    public func page(matching search: String = "", after last: DictationRecord? = nil, limit: Int) throws
+        -> [DictationRecord]
+    {
+        var conditions: [String] = []
+        var values: [Value] = [.integer(Int64(limit))]
+        if !search.isEmpty {
+            values.append(.text("%" + Self.escapedForLike(search) + "%"))
+            conditions.append(
+                "(cleaned_text LIKE ?2 ESCAPE '\\' OR transcript LIKE ?2 ESCAPE '\\' OR app_name LIKE ?2 ESCAPE '\\')")
+        }
+        if let last {
+            values += [.real(last.createdAt.timeIntervalSince1970), .text(last.id.rawValue.uuidString)]
+            conditions.append("(created_at, id) < (?\(values.count - 1), ?\(values.count))")
+        }
+        let filter = conditions.isEmpty ? "1" : conditions.joined(separator: " AND ")
+        return try records(
+            where: "\(filter) ORDER BY created_at DESC, id DESC LIMIT ?1", values, withLatency: false)
+    }
+
+    /// Deletes the dictations, their latency marks and their audio files (the History window's Delete).
+    public func delete(_ ids: [DictationID]) throws {
+        guard !ids.isEmpty else { return }
+        let placeholders = (1...ids.count).map { "?\($0)" }.joined(separator: ", ")
+        try deleteRows(where: "id IN (\(placeholders))", ids.map { .text($0.rawValue.uuidString) })
+    }
+
+    /// Deletes the rows and their audio files; the latency marks go with them (`ON DELETE CASCADE`).
+    private func deleteRows(where condition: String, _ values: [Value]) throws {
+        let deleted = try database.query("DELETE FROM dictations WHERE \(condition) RETURNING audio_path;", values)
         for case .text(let path) in deleted.map({ $0[0] }) {
             try? FileManager.default.removeItem(atPath: path)  // A file already gone is fine.
         }
+    }
+
+    public func queueForRetry(_ id: DictationID) throws {
+        try database.run(
+            "UPDATE dictations SET status = ?2 WHERE id = ?1 AND status = ?3;",
+            [
+                .text(id.rawValue.uuidString), .text(DictationRecord.Status.failed.rawValue),
+                .text(DictationRecord.Status.cancelled.rawValue),
+            ])
     }
 
     /// Number of dictations waiting for a retry, for the menu.
@@ -203,6 +251,7 @@ public actor HistoryStore: Store {
         record.needsSetup = string(row[9]).flatMap(SetupItem.init(rawValue:))
         record.mode = string(row[10]).flatMap(DictationMode.init(rawValue:)) ?? .transcript
         record.rejectReason = string(row[11]).flatMap(RejectReason.init(rawValue:))
+        record.app = string(row[12]).map { DictationApp(bundleID: $0, name: string(row[13])) }
         return record
     }
 
@@ -217,6 +266,11 @@ public actor HistoryStore: Store {
             log.record(mark, offset: .milliseconds(milliseconds))
         }
         return log
+    }
+
+    /// `\`, `%` and `_` match only themselves in a LIKE pattern with `ESCAPE '\'`.
+    private static func escapedForLike(_ text: String) -> String {
+        text.replacing("\\", with: "\\\\").replacing("%", with: "\\%").replacing("_", with: "\\_")
     }
 
     private static func sqlList(_ statuses: [DictationRecord.Status]) -> String {

@@ -385,6 +385,24 @@ Rows from each agent's phase 2.5 work. The numbers continue the list above.
 | 275 | AirPods as the system default input, no mic in your order; play a video, then dictate | kotoba records from the built-in mic; the video audio does not drop to call quality | |
 | 276 | Unplug or turn off the mic in use during a recording | The recording goes on with the next mic (your order, then the system default); no crash | |
 
+### History window (phase 3)
+
+| # | Do this | Expect | Result |
+|---|---|---|---|
+| 291 | Menu > **History…** with no dictations yet | The History window opens with “No Dictations Yet” and your chord | |
+| 292 | Dictate in Notes, then in Terminal, with History open | Each dictation appears at the top under **Today** at once, with the app’s icon and name, its length and word count | |
+| 293 | Type a word from one dictation in the search field; then a word from none | Only matching rows show; then “No Results for …” | |
+| 294 | In the search field: type text, press ⌘A, then ⌘C, then paste in another app | ⌘A selects the search text, ⌘C copies it (not the selected row) | |
+| 295 | Select a row, press ⌘C, then paste in another app | The row’s text pastes (the cleaned text for a cleanup dictation) | |
+| 296 | Right-click a cleanup dictation > **Copy Without Cleanup**; hover over the row | The raw transcript is on the clipboard; the help tag shows “Before cleanup: …” | |
+| 297 | Click into a text field in another app, open History, select a row, click **Paste Again** (toolbar) | kotoba hides, the app you were in comes to the front and the text pastes there; your clipboard comes back after about 1 s | |
+| 298 | Start a dictation, then look at **Paste Again** in History while it records and transcribes | **Paste Again** is dimmed until the dictation ends | |
+| 299 | Turn Wi-Fi off, dictate, turn Wi-Fi on before the network retry, then in History select the “Not transcribed” row > **Retry** | The pill shows “Saved dictation recovered”; the row changes to “Recovered” with its text | |
+| 300 | Press Esc during a dictation and let Undo run out; in History select the “Cancelled” row > **Retry** | The audio is sent; the row changes to “Recovered” with its text | |
+| 301 | Select two rows, press Delete; click **Delete** in the dialog | “Delete 2 Dictations?”; the rows are gone, and their audio files are gone from `~/Library/Application Support/kotoba/audio` | |
+| 302 | Scroll History with more than 200 dictations | Older rows load as you reach the end; no pause | |
+| 303 | Close History, then open it again | It opens at the same size and place, with the search cleared | |
+
 ## Known offscreen-only doubts
 
 The offscreen snapshots (`make snapshots`) show two things that may not happen in the real app. Check them on screen:

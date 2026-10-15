@@ -299,6 +299,11 @@ final class FakeFrontApp: Sendable {
 
     var id: Int32? { value.withLock { $0 } }
 
+    /// The front app as the pipeline reads it; each process id is its own app, `test.app<id>`.
+    var current: FrontApp? {
+        id.map { FrontApp(processID: $0, app: DictationApp(bundleID: "test.app\($0)", name: "App \($0)")) }
+    }
+
     func activate(_ id: Int32?) {
         value.withLock { $0 = id }
     }

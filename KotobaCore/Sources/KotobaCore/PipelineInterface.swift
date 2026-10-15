@@ -70,9 +70,9 @@ extension DictationPipeline {
         public let missingSetup: @Sendable () async -> SetupItem?
         /// Follows the field after each paste for the owner's edits; nil learns nothing.
         public let readback: EditReadback?
-        /// The front app's process id, kept current by app activation events; nil when unknown. A submit Return
-        /// goes only to the app that was in front at the stop.
-        public let frontAppID: @Sendable () -> Int32?
+        /// The front app, kept current by app activation events; nil when unknown. A submit Return goes only to the
+        /// app that was in front at the stop, and the history keeps that app.
+        public let frontApp: @Sendable () -> FrontApp?
 
         public init(
             audio: any AudioSource,
@@ -84,7 +84,7 @@ extension DictationPipeline {
             cleaner: (any TextCleaner)? = nil,
             missingSetup: @escaping @Sendable () async -> SetupItem? = { nil },
             readback: EditReadback? = nil,
-            frontAppID: @escaping @Sendable () -> Int32? = { nil }
+            frontApp: @escaping @Sendable () -> FrontApp? = { nil }
         ) {
             self.audio = audio
             self.provider = provider
@@ -95,7 +95,7 @@ extension DictationPipeline {
             self.cleaner = cleaner
             self.missingSetup = missingSetup
             self.readback = readback
-            self.frontAppID = frontAppID
+            self.frontApp = frontApp
         }
     }
 
@@ -152,6 +152,19 @@ extension DictationPipeline {
     }
 }
 
+/// The app in front, as app activation events report it.
+public struct FrontApp: Sendable, Equatable {
+    /// The submit rule compares it: a process, not an app, so a relaunched app is another one.
+    public var processID: Int32
+    /// Nil for a process with no bundle id.
+    public var app: DictationApp?
+
+    public init(processID: Int32, app: DictationApp? = nil) {
+        self.processID = processID
+        self.app = app
+    }
+}
+
 /// Which kept dictations a retry sends again.
 public enum RetrySelection: Sendable, Equatable {
     /// The menu's Retry: every queued dictation.
@@ -160,18 +173,22 @@ public enum RetrySelection: Sendable, Equatable {
     case exceptNeedsSetup
     /// The owner saved a key: only the dictations that waited for one, once each.
     case onlyNeedsSetup
+    /// The History window's Retry: the chosen queued dictations.
+    case only(Set<DictationID>)
 
     func includes(_ record: DictationRecord) -> Bool {
         switch self {
         case .all: true
         case .exceptNeedsSetup: record.needsSetup == nil
         case .onlyNeedsSetup: record.needsSetup != nil
+        case .only(let ids): ids.contains(record.id)
         }
     }
 
     /// Two requests in one: anything that covers both.
     func merged(with other: Self) -> Self {
-        self == other ? self : .all
+        if case .only(let ids) = self, case .only(let others) = other { return .only(ids.union(others)) }
+        return self == other ? self : .all
     }
 }
 

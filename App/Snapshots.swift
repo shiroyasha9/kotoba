@@ -33,6 +33,7 @@ enum Snapshots {
         StatusBarItem.snapshots,
         OnboardingController.snapshots,
         FixLastDictationController.snapshots,
+        HistoryController.snapshots,
     ]
 
     private static let padding: CGFloat = 16

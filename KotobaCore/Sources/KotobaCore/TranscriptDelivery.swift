@@ -15,8 +15,8 @@ struct TranscriptDelivery: Sendable {
         let clipboard: ClipboardGuard.Pending
         let settings: DictationPipeline.Settings
         let mode: DictationMode
-        /// The front app at the stop; a submit Return goes only to it.
-        var frontAppAtStop: Int32?
+        /// The front app at the stop; a submit Return goes only to it, and the record keeps it.
+        var frontAppAtStop: FrontApp?
     }
 
     struct Outcome: Sendable {
@@ -36,7 +36,7 @@ struct TranscriptDelivery: Sendable {
     let store: any Store
     let clock: any PipelineClock
     let clipboard: ClipboardGuard
-    let frontAppID: @Sendable () -> Int32?
+    let frontApp: @Sendable () -> FrontApp?
 
     /// The transcribe and clean steps, shared with the retry queue.
     private var steps: TranscriptionSteps { TranscriptionSteps(provider: provider, cleaner: cleaner) }
@@ -54,6 +54,7 @@ struct TranscriptDelivery: Sendable {
         var record = DictationRecord(
             id: job.id, createdAt: job.createdAt, audio: job.audio, transcript: nil, status: .pending, latency: latency)
         record.mode = job.mode
+        record.app = job.frontAppAtStop?.app
         // Saved while the upload runs, so a crash keeps the audio queued.
         let pendingRecord = record
         async let savedPending: Void = store.saveOrLog(pendingRecord)
@@ -115,7 +116,7 @@ struct TranscriptDelivery: Sendable {
     }
 
     private func submit(job: Job, latency: inout LatencyLog) async -> Submitted {
-        guard frontAppID() == job.frontAppAtStop else {
+        guard frontApp()?.processID == job.frontAppAtStop?.processID else {
             Log.pipeline.info("Return not sent: the front app changed after the stop")
             return .frontAppChanged
         }

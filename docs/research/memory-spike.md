@@ -79,6 +79,21 @@ Spike `spikes/settings-memory/` (`build.sh`, `measure.sh`): a status-item app bu
 - ServiceManagement (launch at login, phase 2.5) loads at launch: +16-80 KB (onboarding agent, test binary). Lazy linking does not work: with `-Xlinker -lazy_framework`, ld prints "lazy-load will be ignored for 'ServiceManagement' because deployment target version is too low" and keeps `LC_LOAD_DYLIB`. Accepted (lead, 2026-10-16); no `dlopen` workaround.
 - Sparkle 2.10.0 (auto-update, 2026-10-16 01:45-02:01 IST, release agent): `SPUStandardUpdaterController` started at launch. Release builds launched by their binary, idle 35 s, `vmmap --summary` physical footprint, 5 rounds each: without Sparkle 15.0 / 15.6 / 15.4 / 15.5 / 15.4 MB (median 15.4), with Sparkle 16.8 / 15.6 / 15.6 / 16.0 / 15.9 MB (median 15.9). Cost: about +0.5 MB idle. The 16.8 MB round was the first launch, when Sparkle read the feed once (peak 20.7 MB); later launches do no network work until the daily check is due. Sparkle.framework adds 2.7 MB to the bundle.
 
+## History window (phase 3, 2026-10-16, 02:40-02:50 IST)
+
+Spike `spikes/history-memory/` (`build.sh`, `measure.sh`), built like the Settings spike: the real `App/History/{HistoryModel,HistoryView}.swift` and `App/InstalledApp.swift` plus KotobaCore and KotobaStorage sources, over a temporary history of 10,000 synthetic dictations; the window holds the first page (200 rows). Physical footprint from `vmmap --summary`, 2 rounds:
+
+| State | r1 | r2 |
+|---|---|---|
+| HistoryBase, idle 30 s | 11.8 MB | 11.8 MB |
+| HistorySpike, idle 30 s (SwiftUI linked, window never opened) | 12.3 MB | 12.3 MB |
+| History window open (8 s after open) | 38.4 MB | 39.0 MB |
+| 30 s after close | 36.1 MB | 36.2 MB |
+
+- Opening History adds about +26 MB; about +24 MB stays after close. As for Settings, the part that stays is SwiftUI's loaded runtime: `HistorySpike --leak-check` shows the window, its `NSHostingController` and the `HistoryModel` deallocated 2 s after close. The two windows share that runtime, so opening both costs less than the sum (not measured).
+- Store reads (`HistoryStoreTests`, debug build, 10,000 rows of about 30 words): a page of 200 rows about 1 ms, the next page about 1 ms, a search that matches nothing (full scan with `LIKE`) about 3 ms. No FTS index.
+- Hot path: the stop reads the front app (bundle id and name) under a `Mutex`: about 83 ns per read (`swiftc -O` probe, 1,000,000 reads). Each saved row has two more text columns.
+
 ## Learning from edits (phase 2.6, 2026-10-16)
 
 - `NSSpellChecker`: the first auto-learn loads it. Review measurement (`perf26/spell.swift`, 3 runs): `NSSpellChecker.shared` 7.5-33 ms on first use, first `checkSpelling` 1.2-14 ms, then 0.21-0.26 ms per word; footprint +1.28 to +1.34 MB, kept for the process lifetime. It loads only after an edit the owner made, and never while a dictation records or is sent (`EditLearner`). Idle before the first learn: no change to the floor.

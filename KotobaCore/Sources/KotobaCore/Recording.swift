@@ -23,6 +23,6 @@ extension DictationPipeline {
         /// The timer at `sound.deadline`; nil while the warning shows.
         var soundDeadline: Task<Void, Never>?
         /// The front app at the stop; a submit Return goes only to it.
-        var frontAppAtStop: Int32?
+        var frontAppAtStop: FrontApp?
     }
 }

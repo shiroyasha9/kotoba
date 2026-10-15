@@ -105,7 +105,7 @@ extension DictationPipeline {
 
     func stop(_ current: Recording, at now: Instant) {
         var current = current
-        current.frontAppAtStop = ports.frontAppID()
+        current.frontAppAtStop = ports.frontApp()
         endRecording(current)
         latencies.mark(.stop, of: current.id, at: now)
         inFlight.insert(current.id)
@@ -143,9 +143,11 @@ extension DictationPipeline {
     func keep(_ current: Recording, audio: RecordedAudio?, as status: DictationRecord.Status) async {
         let latency = latencies.take(current.id).log
         guard let audio else { return }
-        let record = DictationRecord(
+        var record = DictationRecord(
             id: current.id, createdAt: ports.clock.date, audio: audio, transcript: nil, status: status, latency: latency
         )
+        // Esc and quit come before any stop: the app in front now is where the text would have gone.
+        record.app = (current.frontAppAtStop ?? ports.frontApp())?.app
         await ports.store.saveOrLog(record)
     }
 
