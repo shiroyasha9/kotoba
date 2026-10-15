@@ -11,7 +11,7 @@ SWIFT_SRC   := App KotobaCore/Sources KotobaCore/Tests KotobaCore/Package.swift 
                KotobaStorage/Sources KotobaStorage/Tests KotobaStorage/Package.swift
 SWIFTFORMAT := xcrun swift-format
 
-.PHONY: gen build build-check test lint lint-files format format-lint check snapshots memory latency \
+.PHONY: gen build build-check test lint lint-files format format-lint privacy check snapshots memory latency \
 	release dmg appcast
 
 gen:
@@ -53,7 +53,11 @@ lint-files:
 format-lint:
 	$(SWIFTFORMAT) lint --strict --recursive --parallel $(SWIFT_SRC)
 
-check: format-lint lint build-check test
+# The repo is public: no home or temp paths, personal email addresses, API keys or private key blocks in tracked files.
+privacy:
+	scripts/privacy.sh
+
+check: privacy format-lint lint build-check test
 
 # Renders the registered views (App/Snapshots.swift) to PNGs, light and dark, offscreen: no screen capture, no TCC.
 SNAPSHOTS := build/snapshots$(if $(AGENT),-$(AGENT))

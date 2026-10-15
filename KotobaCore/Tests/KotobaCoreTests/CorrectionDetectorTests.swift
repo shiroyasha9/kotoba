@@ -92,7 +92,7 @@ struct CorrectionDetectorTests {
         Case(name: "hyphenated English words", pasted: "an ssl-based check", observed: "an access-based check"),
         Case(name: "markup", pasted: "done</li> <li>next", observed: "done - next"),
         Case(name: "domain", pasted: "deploy to vercel dot com", observed: "deploy to vercel.com"),
-        Case(name: "email address", pasted: "ping bob at acme dot dev", observed: "ping bob@acme.dev"),
+        Case(name: "email address", pasted: "ping bob at example dot org", observed: "ping bob@example.org"),
         Case(name: "URL", pasted: "open www dot vercel dot com", observed: "open www.vercel.com"),
         // A lowercase name with a web TLD reads as a host, so a library such as socket.io is added by hand (lead,
         // 2026-10-16: learning hosts costs more than missing a rare library name).
