@@ -1,0 +1,89 @@
+# Strict: `make lint` runs `swiftlint lint --strict`, so every warning fails the build.
+included:
+  - App
+  - KotobaCore/Sources
+  - KotobaCore/Tests
+  - KotobaCore/Package.swift
+excluded:
+  - KotobaCore/.build
+  - build
+
+# swift-format owns layout and adds trailing commas to multi-line collections.
+disabled_rules:
+  - trailing_comma
+
+opt_in_rules:
+  - force_unwrapping
+  - implicitly_unwrapped_optional
+  - fatal_error_message
+  - discouraged_optional_boolean
+  - unowned_variable_capture
+  - unhandled_throwing_task
+  - weak_delegate
+  - discarded_notification_center_observer
+  - legacy_objc_type
+  - empty_count
+  - first_where
+  - contains_over_filter_count
+  - contains_over_filter_is_empty
+  - contains_over_first_not_nil
+  - sorted_first_last
+  - toggle_bool
+  - redundant_nil_coalescing
+  - identical_operands
+  - yoda_condition
+  - shorthand_optional_binding
+  - prefer_self_in_static_references
+  - convenience_type
+  - strict_fileprivate
+  - unavailable_function
+
+force_try: error
+force_cast: error
+force_unwrapping: error
+line_length:
+  warning: 120
+  ignores_comments: true
+identifier_name:
+  excluded: [id, at, to, x, y, ok]
+
+custom_rules:
+  no_print:
+    name: "No print"
+    regex: "\\b(print|debugPrint|dump|NSLog)\\s*\\("
+    match_kinds: identifier
+    message: "Log with os.Logger (see CODING_STANDARDS.md)."
+    severity: error
+  no_fixed_sleep:
+    name: "No fixed sleep"
+    regex: "(\\bThread\\.sleep|(?<![.\\w])(?<!func )(usleep|nanosleep|sleep)\\s*\\(|\\.asyncAfter\\s*\\()"
+    message: "No fixed waits. React to an event; for a real timeout, sleep on the injected PipelineClock."
+    severity: error
+  no_task_sleep_in_core:
+    name: "No Task.sleep in KotobaCore"
+    included: ["KotobaCore/Sources/.*\\.swift"]
+    regex: "\\bTask\\.sleep\\b"
+    message: "KotobaCore takes time from the PipelineClock port so tests control it."
+    severity: error
+  no_banned_frameworks:
+    name: "No SwiftData, CoreData or WebKit"
+    regex: "^\\s*(@\\w+\\s+)*import\\s+(SwiftData|CoreData|WebKit)\\b"
+    message: "kotoba uses system SQLite and has no web views (docs/spec.md)."
+    severity: error
+  core_is_pure_swift:
+    name: "KotobaCore stays platform-free"
+    included: ["KotobaCore/Sources/.*\\.swift"]
+    regex: "^\\s*(@\\w+\\s+)*import\\s+((typealias|struct|class|enum|protocol|let|var|func)\\s+)?(?!(Foundation|os|Synchronization)\\b)\\w+"
+    message: "KotobaCore imports only Foundation, os and Synchronization. Platform code lives in App/ behind a port."
+    severity: error
+  no_shared_urlsession:
+    name: "No URLSession.shared"
+    regex: "\\bURLSession\\s*\\.\\s*shared\\b"
+    message: "Each TranscriptionProvider owns one long-lived URLSession."
+    severity: error
+  url_session_construction:
+    name: "URLSession construction"
+    regex: "\\bURLSession\\s*\\("
+    excluded_match_kinds: [comment, doccomment, string]
+    message: "One long-lived URLSession per provider, built in its init; a session per request costs a TLS handshake. Mark that one line with `// swiftlint:disable:next url_session_construction`."
+    severity: error

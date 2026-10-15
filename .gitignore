@@ -1,0 +1,17 @@
+node_modules/
+results/
+*.wav
+*.flac
+*.sqlite
+*.sqlite-*
+.DS_Store
+
+# Swift / Xcode (kotoba app)
+Kotoba.xcodeproj/
+App/Info.plist
+App/Kotoba.entitlements
+build/
+.build/
+.swiftpm/
+DerivedData/
+xcuserdata/

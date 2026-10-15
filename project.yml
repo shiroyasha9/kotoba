@@ -1,0 +1,53 @@
+# Source of truth for the Xcode project. Run `make gen`; Kotoba.xcodeproj, App/Info.plist and
+# App/Kotoba.entitlements are generated and gitignored.
+name: Kotoba
+options:
+  deploymentTarget:
+    macOS: "26.0"
+  createIntermediateGroups: true
+packages:
+  KotobaCore:
+    path: KotobaCore
+settings:
+  base:
+    MARKETING_VERSION: "0.1.0"
+    CURRENT_PROJECT_VERSION: "1"
+    SWIFT_VERSION: "6.0"
+    SWIFT_STRICT_CONCURRENCY: complete
+    SWIFT_TREAT_WARNINGS_AS_ERRORS: YES
+    GCC_TREAT_WARNINGS_AS_ERRORS: YES
+    # Every build, Debug included, is signed with the same Developer ID so TCC grants and
+    # Keychain access survive rebuilds. The keychain also holds another team's identity: keep the full name.
+    CODE_SIGN_STYLE: Manual
+    CODE_SIGN_IDENTITY: "Developer ID Application: Mubin Ansari (7U6G55576W)"
+    DEVELOPMENT_TEAM: 7U6G55576W
+    ENABLE_HARDENED_RUNTIME: YES
+targets:
+  Kotoba:
+    type: application
+    platform: macOS
+    sources:
+      - path: App
+        excludes:
+          - Info.plist
+          - Kotoba.entitlements
+    dependencies:
+      - package: KotobaCore
+    scheme: {}
+    settings:
+      base:
+        PRODUCT_NAME: kotoba
+        PRODUCT_BUNDLE_IDENTIFIER: tech.teensy.kotoba
+    info:
+      path: App/Info.plist
+      properties:
+        CFBundleDisplayName: kotoba
+        LSUIElement: true
+        LSApplicationCategoryType: public.app-category.productivity
+        NSSupportsAutomaticTermination: false
+        NSSupportsSuddenTermination: false
+        NSMicrophoneUsageDescription: kotoba records your voice while you dictate and sends the audio to the speech provider you chose.
+    entitlements:
+      path: App/Kotoba.entitlements
+      properties:
+        com.apple.security.device.audio-input: true
