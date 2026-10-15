@@ -410,6 +410,7 @@ Rows from each agent's phase 2.5 work. The numbers continue the list above.
 The offscreen snapshots (`make snapshots`) show two things that may not happen in the real app. Check them on screen:
 - Row 54: the "Undo" title on the dark Cancelled pill renders black on dark offscreen.
 - Row 74: the empty Azure endpoint's example URL renders as bright as typed text offscreen.
+- History window (`history-window`): the search field's “Search” placeholder renders as dark as typed text, and the selected row grey. On screen the placeholder must be grey and the selection blue.
 - Dark mode: the Settings sidebar labels and the pill's glass button titles (Undo, Retry) render near black offscreen (text on glass, docs/research/native-ui.md). On screen they must be light.
 
 ## Gates (after a day of use; each needs the owner's go because it reads the app database)

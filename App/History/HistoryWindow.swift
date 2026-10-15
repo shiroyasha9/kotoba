@@ -67,12 +67,7 @@ final class HistoryController: NSObject, NSWindowDelegate {
                 await model.apply(change)
             }
         }
-        let controller = NSHostingController(rootView: HistoryView(model: model))
-        controller.sceneBridgingOptions = [.toolbars]
-        let window = NSWindow(contentViewController: controller)
-        window.title = "History"
-        window.styleMask = [.titled, .closable, .miniaturizable, .resizable, .fullSizeContentView]
-        window.isReleasedWhenClosed = false
+        let window = Self.window(showing: model)
         window.delegate = self
         // The size and place the owner left it at; centred at the default size the first time.
         if !window.setFrameUsingName("History") {
@@ -80,6 +75,17 @@ final class HistoryController: NSObject, NSWindowDelegate {
             window.center()
         }
         window.setFrameAutosaveName("History")
+        return window
+    }
+
+    /// The window and its content, toolbar included; the snapshot run draws the same window.
+    static func window(showing model: HistoryModel) -> NSWindow {
+        let controller = NSHostingController(rootView: HistoryView(model: model))
+        controller.sceneBridgingOptions = [.toolbars]
+        let window = NSWindow(contentViewController: controller)
+        window.title = "History"
+        window.styleMask = [.titled, .closable, .miniaturizable, .resizable, .fullSizeContentView]
+        window.isReleasedWhenClosed = false
         return window
     }
 
