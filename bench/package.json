@@ -1,0 +1,15 @@
+{
+  "name": "kotoba-bench",
+  "type": "module",
+  "private": true,
+  "scripts": {
+    "bench": "bun --env-file=\"$KOTOBA_ENV_FILE\" run.ts",
+    "review": "bun review/server.ts",
+    "typecheck": "tsc --noEmit",
+    "test": "bun test"
+  },
+  "devDependencies": {
+    "@types/bun": "latest",
+    "typescript": "^7"
+  }
+}

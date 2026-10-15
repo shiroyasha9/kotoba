@@ -1,0 +1,169 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Reference Review</title>
+<style>
+	:root {
+		--bg: #f7f7f5;
+		--surface: #ffffff;
+		--text: #1d1d1b;
+		--muted: #66665f;
+		--border: #d9d9d3;
+		--accent: #2f5bd3;
+		--accent-text: #ffffff;
+		--add-bg: #fde68a;
+		--add-text: #3d2c00;
+		--del-text: #b42318;
+		--ok: #1f7a3d;
+		--warn: #a14d00;
+		color-scheme: light;
+	}
+	@media (prefers-color-scheme: dark) {
+		:root {
+			--bg: #141413;
+			--surface: #1e1e1c;
+			--text: #ececea;
+			--muted: #a3a39c;
+			--border: #3a3a36;
+			--accent: #7b9cff;
+			--accent-text: #0e1530;
+			--add-bg: #5c4a0f;
+			--add-text: #fff3c4;
+			--del-text: #ff8a80;
+			--ok: #6fd391;
+			--warn: #f0a35c;
+			color-scheme: dark;
+		}
+	}
+	* { box-sizing: border-box; }
+	body {
+		margin: 0;
+		background: var(--bg);
+		color: var(--text);
+		font: 15px/1.5 system-ui, -apple-system, "Segoe UI", sans-serif;
+	}
+	main { max-width: 860px; margin: 0 auto; padding: 16px 16px 48px; }
+	header { display: flex; flex-wrap: wrap; align-items: baseline; justify-content: space-between; gap: 4px 16px; }
+	h1 { font-size: 18px; margin: 0; }
+	.progress { font-variant-numeric: tabular-nums; color: var(--muted); }
+	.progress strong { color: var(--text); }
+	details.help { margin: 12px 0; background: var(--surface); border: 1px solid var(--border); border-radius: 8px; padding: 8px 12px; }
+	details.help summary { cursor: pointer; font-weight: 600; }
+	details.help p, details.help ul { margin: 8px 0; }
+	details.help ul { padding-left: 20px; }
+	kbd {
+		font: 12px ui-monospace, SFMono-Regular, Menlo, monospace;
+		border: 1px solid var(--border);
+		border-bottom-width: 2px;
+		border-radius: 4px;
+		padding: 0 4px;
+		background: var(--bg);
+	}
+	.meta { display: flex; flex-wrap: wrap; gap: 4px 12px; color: var(--muted); font-size: 13px; margin: 12px 0 6px; }
+	.meta code { color: var(--text); overflow-wrap: anywhere; }
+	.badge { font-weight: 600; }
+	.badge.saved { color: var(--ok); }
+	.badge.unsaved { color: var(--warn); }
+	.player { display: flex; align-items: center; gap: 8px; }
+	audio { width: 100%; min-width: 0; }
+	.rate { font-variant-numeric: tabular-nums; color: var(--muted); font-size: 13px; min-width: 3ch; }
+	label.field { display: block; font-weight: 600; margin: 14px 0 6px; }
+	textarea {
+		width: 100%;
+		min-height: 9em;
+		resize: vertical;
+		padding: 10px 12px;
+		border: 1px solid var(--border);
+		border-radius: 8px;
+		background: var(--surface);
+		color: var(--text);
+		font: inherit;
+		font-size: 16px;
+	}
+	textarea:focus-visible, button:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+	.actions { display: flex; flex-wrap: wrap; gap: 8px; margin: 10px 0 4px; align-items: center; }
+	button {
+		font: inherit;
+		padding: 7px 14px;
+		border-radius: 8px;
+		border: 1px solid var(--border);
+		background: var(--surface);
+		color: var(--text);
+		cursor: pointer;
+		min-height: 36px;
+	}
+	button.primary { background: var(--accent); border-color: var(--accent); color: var(--accent-text); font-weight: 600; }
+	button:disabled { opacity: 0.5; cursor: default; }
+	.status { color: var(--muted); font-size: 13px; }
+	.status.error { color: var(--del-text); }
+	h2 { font-size: 15px; margin: 22px 0 8px; }
+	.alt { background: var(--surface); border: 1px solid var(--border); border-radius: 8px; padding: 10px 12px; margin-bottom: 10px; }
+	.alt-head { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin-bottom: 4px; }
+	.alt-head span { font-weight: 600; font-size: 13px; }
+	.alt-head small { color: var(--muted); font-weight: 400; }
+	.alt-head button { padding: 3px 10px; min-height: 30px; font-size: 13px; }
+	.alt-text { overflow-wrap: anywhere; white-space: pre-wrap; }
+	.alt-text.empty { color: var(--muted); font-style: italic; }
+	mark { background: var(--add-bg); color: var(--add-text); border-radius: 3px; padding: 0 1px; }
+	del { color: var(--del-text); }
+	.legend { color: var(--muted); font-size: 13px; margin: 0 0 8px; }
+	.done { background: var(--surface); border: 1px solid var(--border); border-radius: 8px; padding: 16px; margin-top: 16px; }
+	[hidden] { display: none !important; }
+</style>
+</head>
+<body>
+<main>
+	<header>
+		<h1>Reference review</h1>
+		<div class="progress" id="progress"></div>
+	</header>
+
+	<details class="help" id="help" open>
+		<summary>How to review</summary>
+		<p>Listen to the clip and type <strong>exactly what you meant to say</strong>, word for word. This text is the reference that every speech-to-text model is scored against.</p>
+		<ul>
+			<li>Keep the words you spoke. Do not clean them up into nicer prose, and do not add words you did not say.</li>
+			<li>Keep every identifier exact: file names, commands, flags, function names and product names in their real spelling and case (<code>auth.ts</code>, <code>--force</code>, <code>useEffect</code>).</li>
+			<li>Leave out fillers such as "um" and "uh". Normal punctuation is fine; the scorer ignores it.</li>
+			<li>If you cannot tell what you said, or the clip has no speech, press Skip.</li>
+		</ul>
+		<p>Keys: <kbd>Space</kbd> play or pause, <kbd>←</kbd> <kbd>→</kbd> seek 2 s, <kbd>Shift</kbd>+<kbd>←</kbd> 0.5x speed, <kbd>Shift</kbd>+<kbd>→</kbd> 1x speed, <kbd>⌘</kbd>+<kbd>Enter</kbd> save and go to the next clip. In the text box, hold <kbd>⌥</kbd> with the audio keys, or press <kbd>Esc</kbd> to leave the box.</p>
+	</details>
+
+	<section id="clip" hidden>
+		<div class="meta">
+			<span>App <code id="app"></code></span>
+			<span id="duration"></span>
+			<span class="badge" id="badge"></span>
+		</div>
+		<div class="player">
+			<audio id="audio" controls preload="auto"></audio>
+			<span class="rate" id="rate">1x</span>
+		</div>
+
+		<label class="field" for="text">What you meant to say</label>
+		<textarea id="text" spellcheck="false" autocapitalize="off" autocomplete="off"></textarea>
+		<div class="actions">
+			<button class="primary" id="save" title="⌘+Enter">Save &amp; next</button>
+			<button id="skip">Skip</button>
+			<button id="back">Back</button>
+			<span class="status" id="status" role="status"></span>
+		</div>
+
+		<h2>Other transcripts</h2>
+		<p class="legend"><mark>Highlighted</mark> words differ from your text; <del>struck</del> words are in your text but not in this one.</p>
+		<div id="alts"></div>
+	</section>
+
+	<section class="done" id="done" hidden>
+		<strong>All clips reviewed.</strong>
+		<p id="done-summary"></p>
+		<button id="restart">Go to the first clip</button>
+	</section>
+</main>
+
+<script type="module" src="./page.ts"></script>
+</body>
+</html>
