@@ -13,16 +13,23 @@ extension HistoryController {
         ].map { name, model in
             Snapshots.fixedWindow(named: name, size: defaultSize) { HistoryView(model: model) }
         }
-        return panes + [windowSnapshot()]
+        return panes + windowSnapshots()
     }
 
     /// The whole window as the owner sees it: title bar, toolbar with its buttons and the search field, and a selected
-    /// failed row (so Retry and Delete are on). The run fails when the content needs more room than the window.
-    private static func windowSnapshot() -> Snapshot {
-        Snapshot(name: "history-window") {
+    /// row: one with text (Copy, Paste Again and Delete on) and a failed one (Retry and Delete on). The run fails when
+    /// the content needs more room than the window.
+    private static func windowSnapshots() -> [Snapshot] {
+        [("history-window", 0), ("history-window-failed", 2)].map { name, selected in
+            windowSnapshot(named: name, selecting: selected)
+        }
+    }
+
+    private static func windowSnapshot(named name: String, selecting selected: Int) -> Snapshot {
+        Snapshot(name: name) {
             let rows = sampleRows()
             let model = HistoryModel(rows: rows)
-            model.selection = [rows[2].id]
+            model.selection = [rows[selected].id]
             return WindowImage(window: window(showing: model), contentSize: defaultSize)
         } check: { view in
             guard let content = (view as? WindowImage)?.shown.contentView else { return nil }

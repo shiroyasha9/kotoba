@@ -45,6 +45,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     var lastDictation: LastDictation?
     /// The History window; built with the store, its window only when it opens.
     var history: HistoryController?
+    private var queueRefresh: Task<Void, Never>?
+    private var isQueueRefreshDue = false
     /// The submit phrase toggle, in click order, to the pipeline (one consumer, as for the Undo holds).
     let submitPhraseChanges = AsyncStream.makeStream(of: Bool.self)
     /// Menu previews from the last 24 h, newest first; full transcripts stay in the store until copied.
@@ -158,7 +160,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         Task {
             for await change in pipeline.historyChanges {
                 history?.historyChanged(change)
-                await refreshQueues()
+                scheduleQueueRefresh()
             }
         }
         Task { [audio, indicator] in
@@ -216,7 +218,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         let wasRecording = if case .recording = state { true } else { false }
         state = newState
         learner.dictationStateChanged(newState)
-        history?.dictationStateChanged(newState)
+        history?.dictationStateChanged()
         if case .recording = newState {
             if !wasRecording {
                 isSecureInputOn = IsSecureEventInputEnabled()
@@ -256,6 +258,20 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             await setup.startHotkeys(hotkeys)
             CGEventPaster.isTrusted = true
             Log.app.info("Hotkey tap started")
+        }
+    }
+
+    /// A dictation writes the history two or three times; the menu reads its counts once for such a burst: one
+    /// refresh runs, and one more when a write came during it.
+    private func scheduleQueueRefresh() {
+        isQueueRefreshDue = true
+        guard queueRefresh == nil else { return }
+        queueRefresh = Task {
+            while isQueueRefreshDue {
+                isQueueRefreshDue = false
+                await refreshQueues()
+            }
+            queueRefresh = nil
         }
     }
 

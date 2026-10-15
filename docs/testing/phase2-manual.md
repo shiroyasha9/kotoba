@@ -395,7 +395,7 @@ Rows from each agent's phase 2.5 work. The numbers continue the list above.
 | 294 | In the search field: type text, press ⌘A, then ⌘C, then paste in another app | ⌘A selects the search text, ⌘C copies it (not the selected row) | |
 | 295 | Select a row, press ⌘C, then paste in another app | The row’s text pastes (the cleaned text for a cleanup dictation) | |
 | 296 | Right-click a cleanup dictation > **Copy Without Cleanup**; hover over the row | The raw transcript is on the clipboard; the help tag shows “Before cleanup: …” | |
-| 297 | Click into a text field in another app, open History, select a row, click **Paste Again** (toolbar) | kotoba hides, the app you were in comes to the front and the text pastes there; your clipboard comes back after about 1 s | |
+| 297 | Click into a text field in another app, open History, select a row, click **Paste Again** (toolbar) | The app you were in comes to the front and the text pastes there; History and any other kotoba window stay open behind it; your clipboard comes back after about 1 s | |
 | 298 | Start a dictation, then look at **Paste Again** in History while it records and transcribes | **Paste Again** is dimmed until the dictation ends | |
 | 299 | Turn Wi-Fi off, dictate, turn Wi-Fi on before the network retry, then in History select the “Not transcribed” row > **Retry** | The pill shows “Saved dictation recovered”; the row changes to “Recovered” with its text | |
 | 300 | Press Esc during a dictation and let Undo run out; in History select the “Cancelled” row > **Retry** | The audio is sent; the row changes to “Recovered” with its text | |
@@ -404,6 +404,9 @@ Rows from each agent's phase 2.5 work. The numbers continue the list above.
 | 303 | Close History, then open it again | It opens at the same size and place, with the search cleared | |
 | 304 | With no OpenRouter credit, dictate (“Refused” row); add credit, then select the row > **Retry** | The row changes to “Recovered” with its text | |
 | 305 | Turn Wi-Fi off, dictate, select the “Not transcribed” row > **Retry**, then **Delete** it before Wi-Fi returns; turn Wi-Fi on | The row stays deleted; no “Saved dictation recovered” pill | |
+| 306 | Open History while Settings is open; Paste Again a row | Settings stays open; the indicator shows at the next dictation | |
+| 307 | Right-click the empty part of the History list | No menu | |
+| 308 | Scroll History to the last loaded row, select it if it is “Not transcribed”, click **Retry** | The row stays in place and changes to “Recovered” | |
 
 ## Known offscreen-only doubts
 

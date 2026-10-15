@@ -15,7 +15,6 @@ final class HistoryController: NSObject, NSWindowDelegate {
     private let pipeline: DictationPipeline
     private var window: NSWindow?
     private var model: HistoryModel?
-    private var isDictating = false
     /// History changes for the open window, applied one at a time in order (two saves of one dictation must not land
     /// out of order). Both end when the window closes.
     private var changes: AsyncStream<HistoryChange>.Continuation?
@@ -33,21 +32,30 @@ final class HistoryController: NSObject, NSWindowDelegate {
         window.makeKeyAndOrderFront(nil)
     }
 
-    /// A history write (from `DictationPipeline.historyChanges`): an open window reads the row it names.
+    /// A history write (from `DictationPipeline.historyChanges`): an open window reads the row it names, and which
+    /// dictations are in flight (two in flight change no state when one ends).
     func historyChanged(_ change: HistoryChange) {
         changes?.yield(change)
+        readActivity()
     }
 
-    func dictationStateChanged(_ state: DictationState) {
-        isDictating =
-            switch state {
-            case .recording, .transcribing, .undoable: true
-            default: false
-            }
-        model?.isDictating = isDictating
+    /// A dictation started or ended: an open window reads which dictations are in flight.
+    func dictationStateChanged() {
+        readActivity()
+    }
+
+    private func readActivity() {
+        guard let model else { return }
+        Task { [pipeline] in
+            model.isQuiet = await pipeline.isQuiet
+            model.sending = await pipeline.inFlightIDs
+        }
     }
 
     func windowWillClose(_ notification: Notification) {
+        // A window that is still being freed keeps the name, and a new window with the same name would not save its
+        // frame.
+        window?.setFrameAutosaveName("")
         changes?.finish()
         applying?.cancel()
         changes = nil
@@ -58,8 +66,8 @@ final class HistoryController: NSObject, NSWindowDelegate {
 
     private func makeWindow() -> NSWindow {
         let model = HistoryModel(source: source)
-        model.isDictating = isDictating
         self.model = model
+        readActivity()
         let (stream, continuation) = AsyncStream.makeStream(of: HistoryChange.self)
         changes = continuation
         applying = Task {
@@ -98,26 +106,32 @@ final class HistoryController: NSObject, NSWindowDelegate {
             delete: { await pipeline.delete($0) },
             retry: { await pipeline.retry($0) },
             paste: { text, id in
-                // The window's flag follows the indicator, which can show an outcome while another dictation is sent.
-                guard await pipeline.isQuiet else { return }
-                await Self.returnFocus()
+                guard await pipeline.isQuiet, await Self.returnFocus() else { return }
                 await pipeline.pasteAgain(text, of: id)
             },
             copy: { await pipeline.copyAgain($0) }
         )
     }
 
-    /// kotoba is the active app while this window is key, so a Cmd-V would land in it. Hiding kotoba gives the focus
-    /// back to the app the owner was in (the indicator panel does not hide); the paste waits until that app is
-    /// active, at most `focusWait`.
-    private static func returnFocus() async {
-        guard NSApp.isActive else { return }
-        // The sequence observes from its creation, so the activation that `hide` causes is not missed.
+    /// kotoba is the active app while this window is key, so a Cmd-V would land in it. The last app the owner was in
+    /// comes back to the front (kotoba's windows stay as they are), and the paste waits for its activation, at most
+    /// `focusWait`. False when there is no such app: the paste would land in kotoba.
+    private static func returnFocus() async -> Bool {
+        guard NSApp.isActive else { return true }
+        guard let id = FrontAppObserver.lastOtherProcessID, let app = NSRunningApplication(processIdentifier: id),
+            !app.isTerminated
+        else { return false }
+        // The sequence observes from its creation, so the activation is not missed.
         let activations = NSWorkspace.shared.notificationCenter.notifications(
             named: NSWorkspace.didActivateApplicationNotification)
-        NSApp.hide(nil)
+        NSApp.yieldActivation(to: app)
+        _ = app.activate(from: .current, options: [])
         let wait = Task {
-            for await _ in activations { return }
+            for await note in activations
+            where (note.userInfo?[NSWorkspace.applicationUserInfoKey] as? NSRunningApplication)?.processIdentifier == id
+            {
+                return
+            }
         }
         let bound = Task {
             try? await Task.sleep(for: focusWait)  // Cancelled once the switch came: nothing to do.
@@ -125,5 +139,6 @@ final class HistoryController: NSObject, NSWindowDelegate {
         }
         await wait.value
         bound.cancel()
+        return true
     }
 }

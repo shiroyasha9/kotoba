@@ -203,9 +203,10 @@ struct AnnouncingStore: Store {
         try await base.queueForRetry(id)
     }
 
+    /// Announced only once done: a window that hides rows the store still has would show the wrong history.
     func delete(_ ids: Set<DictationID>) async throws {
-        defer { changes.yield(.deleted(ids)) }
         try await base.delete(ids)
+        changes.yield(.deleted(ids))
     }
 
     func prune(olderThan cutoff: Date) async throws {

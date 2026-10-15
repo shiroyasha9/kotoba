@@ -217,9 +217,10 @@ struct HistoryStoreTests {
         #expect(marks.first?.first == .integer(2))
     }
 
-    /// The cost the History window pays: a page, a deep page and a search on 10,000 rows of about 30 words. Measured
-    /// 2026-10-16 (debug build): about 1 ms a page, 3 ms for a search that matches nothing. The bound is loose for
-    /// other agents' builds on the same machine.
+    /// The cost the History window pays: a page, a deep page, a search and one changed row on 10,000 rows of about 30
+    /// words, and the menu's reads. Measured 2026-10-16 (debug build): about 0.8 ms a page, 3.3 ms for a search that
+    /// matches nothing, 0.06 ms for one row, 2.8 ms for the menu. The bound is loose for other agents' builds on the
+    /// same machine.
     @Test func aPageAndASearchOn10000RowsStayFast() async throws {
         let store = try HistoryStore(url: url)
         let words = "please move the standup to thursday and ask the team to review the pull request before lunch"
@@ -234,9 +235,16 @@ struct HistoryStoreTests {
         let deep = try await clock.measure { _ = try await store.page(after: first.last, limit: 200) }
         let hit = try await clock.measure { _ = try await store.page(matching: "Thursday", limit: 200) }
         let miss = try await clock.measure { _ = try await store.page(matching: "kubernetes", limit: 200) }
+        let row = try await clock.measure { _ = try await store.record(first[100].id, matching: "thursday") }
+        // The menu's reads after each burst of history writes (`AppDelegate.scheduleQueueRefresh`).
+        let menu = try await clock.measure {
+            _ = try await store.recovered(since: .distantPast)
+            _ = try await store.pendingCount()
+            _ = try await store.lastDelivered()
+        }
 
         #expect(first.count == 200)
-        for time in [page, deep, hit, miss] {
+        for time in [page, deep, hit, miss, row, menu] {
             #expect(time < .milliseconds(100))
         }
     }

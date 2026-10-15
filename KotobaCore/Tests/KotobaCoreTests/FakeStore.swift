@@ -51,7 +51,14 @@ actor FakeStore: Store {
     }
 
     func delete(_ ids: Set<DictationID>) async throws {
+        if let deleteError { throw deleteError }
         records.removeAll { ids.contains($0.id) }
+    }
+
+    private var deleteError: (any Error)?
+
+    func failDeletes(with error: any Error) {
+        deleteError = error
     }
 
     func prune(olderThan cutoff: Date) async throws {

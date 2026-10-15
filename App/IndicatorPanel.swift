@@ -195,8 +195,6 @@ final class IndicatorPanel {
         let pill = IndicatorPillView(frame: .zero)
         let panel = Self.makeFloatingPanel(holding: pill, frame: NSRect(x: 0, y: 0, width: 240, height: 40))
         panel.hidesOnDeactivate = false
-        // History's Paste Again hides kotoba to give the focus back; the pill must still show the next dictation.
-        panel.canHide = false
         pill.onAction = { [weak self] action in self?.perform(action) }
         pill.onClick = { [weak self] in self?.tapped() }
         pill.onHoverChanged = { [weak self] isInside in self?.hoverChanged(isInside: isInside) }

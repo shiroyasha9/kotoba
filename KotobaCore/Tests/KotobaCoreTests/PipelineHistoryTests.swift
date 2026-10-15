@@ -83,7 +83,23 @@ struct PipelineHistoryTests {
         let second = DictationID()
 
         #expect(RetrySelection.only([first]).merged(with: .only([second])) == .only([first, second]))
-        #expect(RetrySelection.only([first]).merged(with: .exceptNeedsSetup) == .all)
+    }
+
+    @Test func aHistoryRetryJoinedWithANetworkRetryStillLeavesTheOthersThatWaitForAKey() {
+        func record(_ id: DictationID, waitsForKey: Bool) -> DictationRecord {
+            var record = DictationRecord(
+                id: id, createdAt: .now, audio: RecordedAudio(file: URL(filePath: "/tmp/a.flac"), duration: .zero),
+                transcript: nil, status: .failed, latency: LatencyLog())
+            record.needsSetup = waitsForKey ? .key : nil
+            return record
+        }
+        let chosen = DictationID()
+        let merged = RetrySelection.only([chosen]).merged(with: .exceptNeedsSetup)
+
+        #expect(merged.includes(record(chosen, waitsForKey: true)))
+        #expect(merged.includes(record(DictationID(), waitsForKey: false)))
+        #expect(!merged.includes(record(DictationID(), waitsForKey: true)))
+        #expect(RetrySelection.exceptNeedsSetup.merged(with: .onlyNeedsSetup) == .all)
     }
 }
 
@@ -127,6 +143,24 @@ struct PipelineHistoryChangeTests {
         #expect(await world.store.records.map(\.status) == [.pasted])
     }
 
+    @Test func theDictationsInFlightAreKnownUntilTheyEnd() async throws {
+        let world = FakeWorld(transcript: "sending")
+        let pipeline = world.makePipeline()
+        let gate = Gate()
+        await world.provider.hold(at: gate)
+        await pipeline.tap(world)
+        await pipeline.tap(world)
+        #expect(await eventually { await gate.hasWaiters })
+        let id = try #require(await world.store.records.first?.id)
+
+        #expect(await pipeline.inFlightIDs == [id])
+        #expect(await !pipeline.isQuiet)
+        await gate.open()
+        await pipeline.settle()
+        #expect(await pipeline.inFlightIDs.isEmpty)
+        #expect(await pipeline.isQuiet)
+    }
+
     @Test func eachChangeNamesItsDictation() async throws {
         let world = FakeWorld(transcript: "named")
         let pipeline = world.makePipeline()
@@ -140,6 +174,19 @@ struct PipelineHistoryChangeTests {
         #expect(await changes.next() == .saved(id))
         #expect(await changes.next() == .saved(id))
         #expect(await changes.next() == .deleted([id]))
+    }
+
+    @Test func aFailedDeleteAnnouncesNothing() async throws {
+        let world = FakeWorld(transcript: "kept")
+        let pipeline = world.makePipeline()
+        var changes = pipeline.historyChanges.makeAsyncIterator()
+        await world.store.failDeletes(with: FakeError())
+
+        await pipeline.delete([DictationID()])
+        await pipeline.dictate(world)
+
+        let id = try #require(await world.store.records.first?.id)
+        #expect(await changes.next() == .saved(id))
     }
 
     @Test func aRejectedDictationIsSentAgainAndCanFailAgain() async throws {

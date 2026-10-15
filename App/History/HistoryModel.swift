@@ -32,26 +32,30 @@ final class HistoryModel {
         var rows: [DictationRecord]
     }
 
-    private(set) var rows: [DictationRecord] = [] {
-        didSet { rowsChanged() }
+    /// The loaded rows; `HistoryList` decides where each change puts a row.
+    private(set) var list = HistoryList() {
+        didSet {
+            days = Self.days(of: list.rows)
+            selected = list.rows.filter { selection.contains($0.id) }
+        }
     }
     private(set) var days: [Day] = []
     var search = ""
     var selection: Set<DictationID> = [] {
-        didSet { selected = rows.filter { selection.contains($0.id) } }
+        didSet { selected = list.rows.filter { selection.contains($0.id) } }
     }
     /// The selected rows, newest first.
     private(set) var selected: [DictationRecord] = []
-    /// Rows a retry can send: no text yet, and the audio file still on disk. Read once per row when its page loads,
-    /// not at each draw.
+    /// Rows a retry can send: no text yet, and the audio file still on disk. Read once per row when it comes in, not
+    /// at each draw.
     private(set) var retryable: Set<DictationID> = []
     /// False until the first read returns, so the empty state does not flash before the rows.
     private(set) var isLoaded = false
-    /// The store has no rows after the last one shown.
-    private(set) var isComplete = false
     private(set) var loadError: String?
-    /// A dictation is recording or being sent: Paste Again would race its paste, so it waits until the end.
-    var isDictating = false
+    /// No dictation is recording or being sent (`DictationPipeline.isQuiet`): Paste Again would race its paste.
+    var isQuiet = true
+    /// The dictations being sent now: their rows say so and cannot be deleted.
+    var sending: Set<DictationID> = []
     /// The rows the Delete confirmation asks about; nil when it is not shown.
     var pendingDelete: [DictationID]?
 
@@ -59,8 +63,6 @@ final class HistoryModel {
     /// Each read takes the next number; a result that comes back after a newer read started is dropped.
     @ObservationIgnored private var generation = 0
     @ObservationIgnored private var isLoadingMore = false
-    /// Rows deleted while the window is open: a read that started before the delete must not show them again.
-    @ObservationIgnored private var deleted: Set<DictationID> = []
     @ObservationIgnored private var icons: [String: NSImage?] = [:]
 
     init(source: Source?) {
@@ -71,16 +73,18 @@ final class HistoryModel {
     init(rows: [DictationRecord], search: String = "") {
         source = nil
         self.search = search
-        self.rows = rows
-        rowsChanged()
+        list.replace(with: rows, limit: rows.count + 1)
+        days = Self.days(of: list.rows)
+        retryable = Self.kept(rows)
         isLoaded = true
-        isComplete = true
     }
+
+    var rows: [DictationRecord] { list.rows }
+    var isComplete: Bool { list.isComplete }
 
     // MARK: Reading
 
-    /// Reads the first page again for a new search, or, with `keepingCount`, as many rows as are shown (a dictation
-    /// finished or changed while the window is open).
+    /// Reads the first page again for a new search, or, with `keepingCount`, as many rows as are shown (a prune).
     func reload(keepingCount: Bool = false) async {
         guard let source else { return }
         generation += 1
@@ -89,8 +93,8 @@ final class HistoryModel {
         do {
             let page = try await source.page(search, nil, limit)
             guard current == generation else { return }
-            rows = page.filter { !deleted.contains($0.id) }
-            isComplete = page.count < limit
+            list.replace(with: page, limit: limit)
+            retryable = Self.kept(list.rows)
             loadError = nil
         } catch {
             guard current == generation else { return }
@@ -110,8 +114,8 @@ final class HistoryModel {
         do {
             let page = try await source.page(search, last, Self.pageSize)
             guard current == generation else { return }
-            rows += page.filter { !deleted.contains($0.id) }
-            isComplete = page.count < Self.pageSize
+            list.append(page, limit: Self.pageSize)
+            retryable.formUnion(Self.kept(page))
         } catch {
             Log.app.error("Cannot read more history: \(error)")
         }
@@ -123,15 +127,13 @@ final class HistoryModel {
         switch change {
         case .saved(let id): await refresh(id)
         case .deleted(let ids):
-            deleted.formUnion(ids)
-            rows.removeAll { ids.contains($0.id) }
+            list.remove(ids)
+            retryable.subtract(ids)
             selection.subtract(ids)
         case .pruned: await reload(keepingCount: true)
         }
     }
 
-    /// Puts the row in its place, newest first, or takes it out when it no longer matches the search. A row older than
-    /// the last one shown waits for its page.
     private func refresh(_ id: DictationID) async {
         guard let source else { return }
         let current = generation
@@ -143,19 +145,17 @@ final class HistoryModel {
             return
         }
         // A read that started later saw this write too.
-        guard current == generation, !deleted.contains(id) else { return }
-        var updated = rows
-        updated.removeAll { $0.id == id }
-        if let record, isComplete || updated.last.map({ Self.isNewer(record, than: $0) }) ?? true {
-            updated.insert(record, at: updated.firstIndex { Self.isNewer(record, than: $0) } ?? updated.endIndex)
-        }
-        rows = updated
+        guard current == generation else { return }
+        list.update(id, to: record)
+        retryable.remove(id)
+        retryable.formUnion(Self.kept(record.map { [$0] } ?? []))
     }
 
-    /// The store's order: `created_at`, then the id's text, both descending.
-    private static func isNewer(_ record: DictationRecord, than other: DictationRecord) -> Bool {
-        record.createdAt != other.createdAt
-            ? record.createdAt > other.createdAt : record.id.rawValue.uuidString > other.id.rawValue.uuidString
+    /// The ids of `records` a retry can send: retryable, with the audio file still on disk.
+    private static func kept(_ records: [DictationRecord]) -> Set<DictationID> {
+        Set(
+            records.lazy.filter { $0.isRetryable && FileManager.default.fileExists(atPath: $0.audio.file.path) }.map(
+                \.id))
     }
 
     // MARK: Selection and actions
@@ -178,7 +178,7 @@ final class HistoryModel {
 
     /// One row only: two texts pasted in one go would read as one dictation.
     func canPasteAgain(_ records: [DictationRecord]) -> Bool {
-        !isDictating && records.count == 1 && records.first?.deliveredText != nil
+        isQuiet && records.count == 1 && records.first?.deliveredText != nil
     }
 
     func pasteAgain(_ records: [DictationRecord]) {
@@ -198,9 +198,9 @@ final class HistoryModel {
         Task { await source.retry(ids) }
     }
 
-    /// A row the pipeline may still write (a dictation in flight saves it again) is not deleted while one runs.
+    /// A dictation in flight is not deleted: its own save would bring the row back (the pipeline keeps it too).
     func canDelete(_ records: [DictationRecord]) -> Bool {
-        !records.isEmpty && !(isDictating && records.contains { $0.status == .pending })
+        !records.isEmpty && !records.contains { sending.contains($0.id) }
     }
 
     func askToDelete(_ records: [DictationRecord]) {
@@ -222,13 +222,6 @@ final class HistoryModel {
         let icon = InstalledApp.icon(of: app.bundleID)
         icons[app.bundleID] = icon
         return icon
-    }
-
-    private func rowsChanged() {
-        days = Self.days(of: rows)
-        selected = rows.filter { selection.contains($0.id) }
-        retryable = Set(
-            rows.lazy.filter { $0.isRetryable && FileManager.default.fileExists(atPath: $0.audio.file.path) }.map(\.id))
     }
 
     private static func days(of rows: [DictationRecord]) -> [Day] {

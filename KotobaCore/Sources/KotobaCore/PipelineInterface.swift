@@ -165,30 +165,49 @@ public struct FrontApp: Sendable, Equatable {
     }
 }
 
-/// Which kept dictations a retry sends again.
-public enum RetrySelection: Sendable, Equatable {
-    /// The menu's Retry: every queued dictation.
-    case all
-    /// Launch without a key: dictations that wait for a key stay waiting.
-    case exceptNeedsSetup
-    /// The owner saved a key: only the dictations that waited for one, once each.
-    case onlyNeedsSetup
-    /// The History window's Retry: the chosen queued dictations.
-    case only(Set<DictationID>)
+/// Which kept dictations a retry sends again: the ones a rule picks, and the ones the owner chose.
+public struct RetrySelection: Sendable, Equatable {
+    enum Rule: Sendable, Equatable {
+        case all
+        case exceptNeedsSetup
+        case onlyNeedsSetup
 
-    func includes(_ record: DictationRecord) -> Bool {
-        switch self {
-        case .all: true
-        case .exceptNeedsSetup: record.needsSetup == nil
-        case .onlyNeedsSetup: record.needsSetup != nil
-        case .only(let ids): ids.contains(record.id)
+        func includes(_ record: DictationRecord) -> Bool {
+            switch self {
+            case .all: true
+            case .exceptNeedsSetup: record.needsSetup == nil
+            case .onlyNeedsSetup: record.needsSetup != nil
+            }
         }
     }
 
-    /// Two requests in one: anything that covers both.
+    var rule: Rule?
+    var ids: Set<DictationID> = []
+
+    /// The menu's Retry: every queued dictation.
+    public static let all = Self(rule: .all)
+    /// Launch without a key: dictations that wait for a key stay waiting.
+    public static let exceptNeedsSetup = Self(rule: .exceptNeedsSetup)
+    /// The owner saved a key: only the dictations that waited for one, once each.
+    public static let onlyNeedsSetup = Self(rule: .onlyNeedsSetup)
+
+    /// The History window's Retry: the chosen queued dictations.
+    public static func only(_ ids: Set<DictationID>) -> Self {
+        Self(rule: nil, ids: ids)
+    }
+
+    func includes(_ record: DictationRecord) -> Bool {
+        ids.contains(record.id) || rule?.includes(record) == true
+    }
+
+    /// Two requests in one: the dictations of each. Two different rules cover both only as `.all`.
     func merged(with other: Self) -> Self {
-        if case .only(let ids) = self, case .only(let others) = other { return .only(ids.union(others)) }
-        return self == other ? self : .all
+        let merged: Rule? =
+            switch (rule, other.rule) {
+            case (nil, let one), (let one, nil): one
+            case (let one?, let two?): one == two ? one : .all
+            }
+        return Self(rule: merged, ids: ids.union(other.ids))
     }
 }
 

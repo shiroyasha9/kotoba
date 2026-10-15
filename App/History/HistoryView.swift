@@ -46,8 +46,7 @@ struct HistoryView: View {
                         HistoryRow(
                             record: record, icon: model.icon(for: record.app),
                             isRetryable: model.retryable.contains(record.id),
-                            // A pending row is the dictation being sent, or one left from a quit when none is.
-                            isSending: model.isDictating && record.status == .pending)
+                            isSending: model.sending.contains(record.id))
                     }
                 }
             }
@@ -74,7 +73,8 @@ struct HistoryView: View {
             Button("Copy", systemImage: "doc.on.doc") { model.copy(records) }
                 .help("Copy the text")
                 .disabled(!HistoryModel.hasText(records))
-            Button("Paste Again", systemImage: "doc.on.clipboard") { model.pasteAgain(records) }
+            // A clipboard, not a second "doc.on…" symbol: Copy and Paste Again must differ at a glance.
+            Button("Paste Again", systemImage: "clipboard") { model.pasteAgain(records) }
                 .help("Paste the text in the app you were in")
                 .disabled(!model.canPasteAgain(records))
             Button("Retry", systemImage: "arrow.clockwise") { model.retry(records) }
@@ -86,21 +86,24 @@ struct HistoryView: View {
         }
     }
 
+    /// No menu on the empty part of the list: every item needs a row.
     @ViewBuilder
     private func menu(for records: [DictationRecord]) -> some View {
-        Button("Copy") { model.copy(records) }
-            .disabled(!HistoryModel.hasText(records))
-        if records.contains(where: { LastDictation.rawText(of: $0) != nil }) {
-            Button("Copy Without Cleanup") { model.copy(records, raw: true) }
+        if !records.isEmpty {
+            Button("Copy") { model.copy(records) }
+                .disabled(!HistoryModel.hasText(records))
+            if records.contains(where: { LastDictation.rawText(of: $0) != nil }) {
+                Button("Copy Without Cleanup") { model.copy(records, raw: true) }
+            }
+            Button("Paste Again") { model.pasteAgain(records) }
+                .disabled(!model.canPasteAgain(records))
+            if model.canRetry(records) {
+                Button("Retry") { model.retry(records) }
+            }
+            Divider()
+            Button("Delete…", role: .destructive) { model.askToDelete(records) }
+                .disabled(!model.canDelete(records))
         }
-        Button("Paste Again") { model.pasteAgain(records) }
-            .disabled(!model.canPasteAgain(records))
-        if model.canRetry(records) {
-            Button("Retry") { model.retry(records) }
-        }
-        Divider()
-        Button("Delete…", role: .destructive) { model.askToDelete(records) }
-            .disabled(!model.canDelete(records))
     }
 
     private var deleteTitle: String {

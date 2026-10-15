@@ -3,14 +3,26 @@ import KotobaCore
 import Synchronization
 
 /// The front app, for the pipeline's submit rule (a Return goes only to the app in front at the stop) and for the
-/// history (each dictation keeps the app it went to). App activation notifications keep it, so a read is one short
-/// lock on any thread, with no hop to the main thread.
+/// history (each dictation keeps the app it went to), and the last app in front other than kotoba, where the History
+/// window's Paste Again goes. App activation notifications keep both, so a read is one short lock on any thread, with
+/// no hop to the main thread.
 enum FrontAppObserver {
-    private static let front = Mutex<FrontApp?>(nil)
+    private struct Apps {
+        var front: FrontApp?
+        var lastOther: Int32?
+    }
+
+    private static let apps = Mutex(Apps())
+    private static let ownProcessID = ProcessInfo.processInfo.processIdentifier
     @MainActor private static var observer: (any NSObjectProtocol)?
 
     static var current: FrontApp? {
-        front.withLock { $0 }
+        apps.withLock { $0.front }
+    }
+
+    /// The process id of the last app other than kotoba that was in front; nil when none was since launch.
+    static var lastOtherProcessID: Int32? {
+        apps.withLock { $0.lastOther }
     }
 
     /// Reads the front app now and again at each activation.
@@ -30,6 +42,11 @@ enum FrontAppObserver {
                 processID: app.processIdentifier,
                 app: app.bundleIdentifier.map { DictationApp(bundleID: $0, name: app.localizedName) })
         }
-        front.withLock { $0 = value }
+        apps.withLock { apps in
+            apps.front = value
+            if let id = value?.processID, id != ownProcessID {
+                apps.lastOther = id
+            }
+        }
     }
 }

@@ -254,6 +254,11 @@ extension DictationPipeline {
         emit(outcome == .idle && !inFlight.isEmpty ? .transcribing : outcome)
     }
 
+    /// The dictations being sent now: the History window labels their rows and keeps them from Delete.
+    public var inFlightIDs: Set<DictationID> {
+        inFlight
+    }
+
     /// No recording, no Undo window and no transcription in flight: "Paste Again" can paste.
     public var isQuiet: Bool {
         recording == nil && paused == nil && inFlight.isEmpty
