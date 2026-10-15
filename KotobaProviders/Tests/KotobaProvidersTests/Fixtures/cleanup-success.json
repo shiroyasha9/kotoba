@@ -1,0 +1,12 @@
+{
+  "id": "gen-1",
+  "provider": "Google",
+  "model": "google/gemini-3.5-flash-lite",
+  "choices": [
+    {
+      "finish_reason": "stop",
+      "message": { "role": "assistant", "content": "Can you open auth.ts and check why login fails when I pass --debug?\n" }
+    }
+  ],
+  "usage": { "prompt_tokens": 412, "completion_tokens": 18, "total_tokens": 430, "cost": 0.0000431 }
+}

@@ -4,9 +4,12 @@ Native macOS menu-bar dictation: tap a chord, speak, tap again, the cloud transc
 
 ## Commands
 
-- `make check`: the bar for every change (swift-format lint, `swiftlint --strict`, xcodebuild, `swift test`). Done means green.
-- `make format`: fixes formatting in place.
-- `make test`: KotobaCore tests only, the fast loop.
+- `make check`: the bar for every change (swift-format lint, `swiftlint --strict`, xcodebuild, `swift test`). Done means green. When other agents share the checkout, run `make check AGENT=<your name>`: your own xcodebuild and SwiftPM build folders, so parallel runs do not collide.
+- `make build` writes the app the owner runs (`build/DerivedData`); `make check` builds into `build/DerivedData-check`, so it never replaces a running bundle.
+- `make format FILES="a.swift b.swift"`: fixes formatting in place in your own files. Plain `make format` rewrites the whole tree, other agents' files too; use it only when you work alone.
+- `make lint-files FILES="a.swift b.swift"`: swift-format lint and swiftlint on your files only. While other agents edit, report your files' result; a red `make check` from another agent's file in progress is theirs to fix, not yours to report.
+- `make snapshots`: builds like `make check`, then renders every view registered in `App/Snapshots.swift` (indicator states at each anchor, Settings panes) to `build/snapshots/<name>-light.png` and `-dark.png` offscreen; no screen capture, no TCC. After a UI change, look at your PNGs with the Read tool. To add views, write a `static func snapshots() -> [Snapshot]` next to your view and add one line to `Snapshots.registry`. Glass does not render offscreen, so a glass view draws a stand-in shape (see `PillStandIn` in `App/IndicatorPanel.swift`). A blank or odd image is a bug until you prove it is an offscreen limit (2026-10-15: a "blank" Settings image was a real layout bug the owner then hit). Register whole windows, not only panes; `windowSnapshot` fails the run when content does not fit the window.
+- `make test`: all package tests (KotobaCore, KotobaProviders, KotobaStorage), each package under a hard limit (`TEST_LIMIT`, default 120 s; `scripts/timeout.pl` kills the whole process group). `FILTER=<test name>` runs one test. A test that hangs is a bug: give every awaited fake event a bound, never wait on the wall clock.
 - `make gen`: regenerates `Kotoba.xcodeproj` from `project.yml`. Edit `project.yml`; the project, `App/Info.plist` and `App/Kotoba.entitlements` are generated.
 - `bench/`: provider benchmark (bun, TypeScript), see `bench/README.md`. Runs against paid APIs need the owner's explicit go.
 
@@ -22,8 +25,9 @@ Native macOS menu-bar dictation: tap a chord, speak, tap again, the cloud transc
 - **Event-driven hot path** (key-down to Cmd-V sent): each step waits on its event (first audio buffer, HTTP response, pasteboard change). A real timeout sleeps on the injected `PipelineClock`, so tests control it.
 - **One long-lived URLSession per provider**, created in the provider's init and warmed at key-down. Lint flags every `URLSession(`; that one line carries `// swiftlint:disable:next url_session_construction`.
 - **Gates**: latency from stop tap to Cmd-V sent p50 <= 1.0 s and p90 <= 1.5 s; idle memory is measured with `footprint` (floor in `docs/research/memory-spike.md`). A change that adds work to the hot path or loads a framework at launch reports its measured cost.
-- **Test-first through the seam**: hotkey events in, assertions on the fakes out. `KotobaCore/Tests/KotobaCoreTests/DictationPipelineTests.swift` shows the style.
+- **Test-first through the seam**: hotkey events in, assertions on the fakes out. `KotobaCore/Tests/KotobaCoreTests/PipelineHotkeyTests.swift` shows the style.
 - **Signing**: every build uses the Developer ID in `project.yml` (team 7U6G55576W), so TCC grants and Keychain access survive rebuilds. The keychain holds another team's identity; keep the full identity name.
 - **Permissions**: the owner clicks Allow on every TCC prompt. Stop and ask when a prompt blocks you.
+- **Shared checkout**: several agents can work in this checkout at once. Test targets must always compile: a new test fails by assertion, with stub sources, never by a missing type. Edit only the files your task owns; to change a file another agent owns, message that agent with the interface you need.
 
 Code style and patterns: `CODING_STANDARDS.md`.

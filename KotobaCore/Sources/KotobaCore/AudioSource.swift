@@ -10,12 +10,17 @@ public protocol AudioSource: Sendable {
     func endCapture() async throws -> RecordedAudio
     /// Stops at once and keeps what was written.
     func cancelCapture() async -> RecordedAudio?
+    /// Stops at once and deletes the file.
+    func discardCapture() async
+    /// Turns the mic off and keeps the file open, for the Undo window after Esc.
+    func pauseCapture() async
+    /// Turns the mic back on and appends to the same file.
+    func resumeCapture() async throws
 }
 
 public enum CaptureEvent: Sendable, Equatable {
-    /// The first buffer reached the file. `at` is when its first sample was captured, not when
-    /// the buffer was delivered (delivery lags by one buffer, about 100 ms); it feeds
-    /// `LatencyMark.firstAudioBuffer`.
+    /// The first audio arrived. `at` is when its first sample was captured, not when it was
+    /// delivered; it feeds `LatencyMark.firstAudioBuffer`.
     case firstBuffer(at: ContinuousClock.Instant)
 }
 

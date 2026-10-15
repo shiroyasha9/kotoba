@@ -3,20 +3,22 @@ import Synchronization
 
 @testable import KotobaCore
 
-/// All ports wired to fakes. Tests drive `pipeline` with hotkey events and assert on the fakes.
+/// All ports wired to fakes. Tests drive the pipeline with hotkey events and assert on the fakes.
 struct FakeWorld {
     let audio = FakeAudioSource()
     let provider: FakeTranscriptionProvider
-    let paster = FakePaster()
-    let pasteboard = FakePasteboard()
+    let pasteboard: FakePasteboard
+    let paster: FakePaster
     let clock = ManualClock()
     let store = FakeStore()
 
-    init(transcript: String) {
-        provider = FakeTranscriptionProvider(
-            result: .success(Transcript(text: transcript, usage: TranscriptionUsage(audio: .seconds(1), costUSD: nil)))
-        )
+    init(transcript: String, clipboard: String? = "user's clipboard") {
+        provider = FakeTranscriptionProvider(transcript: transcript)
+        pasteboard = FakePasteboard(text: clipboard)
+        paster = FakePaster(pasteboard: pasteboard)
     }
+
+    let setup = FakeSetup()
 
     func makePipeline() -> DictationPipeline {
         DictationPipeline(
@@ -26,100 +28,237 @@ struct FakeWorld {
                 paster: paster,
                 pasteboard: pasteboard,
                 clock: clock,
-                store: store
-            )
+                store: store,
+                missingSetup: { [setup] in setup.missing }
+            ),
+            settings: .init(audioDirectory: URL(filePath: "/tmp/kotoba-tests"))
         )
+    }
+}
+
+struct FakeError: Error {}
+
+/// What the route still needs (a key or an endpoint); nil when it is ready.
+final class FakeSetup: Sendable {
+    private let value = Mutex<SetupItem?>(nil)
+
+    var missing: SetupItem? {
+        get { value.withLock { $0 } }
+        set { value.withLock { $0 = newValue } }
     }
 }
 
 actor FakeAudioSource: AudioSource {
     private(set) var files: [URL] = []
+    private(set) var isCapturing = false
+    /// The mic is off for the Undo window; the file is still open.
+    private(set) var isPaused = false
+    private(set) var resumes = 0
+    /// Files deleted by `discardCapture`.
+    private(set) var discarded: [URL] = []
+    /// When set, `beginCapture` waits for this gate.
+    var beginGate: Gate?
+    var beginError: (any Error)?
 
     private var continuation: AsyncStream<CaptureEvent>.Continuation?
 
+    func holdBegin(at gate: Gate) {
+        beginGate = gate
+    }
+
+    func failBegin(with error: any Error) {
+        beginError = error
+    }
+
     func beginCapture(into file: URL) async throws -> AsyncStream<CaptureEvent> {
+        await beginGate?.pass()
+        if let beginError { throw beginError }
         files.append(file)
+        isCapturing = true
         let (stream, continuation) = AsyncStream.makeStream(of: CaptureEvent.self)
         self.continuation = continuation
         return stream
     }
 
-    /// The first buffer arrived, captured at `instant`.
+    /// The first buffer arrived, its first sample captured at `instant`.
     func deliverFirstBuffer(at instant: ContinuousClock.Instant) {
         continuation?.yield(.firstBuffer(at: instant))
     }
 
     func endCapture() async throws -> RecordedAudio {
+        isCapturing = false
         continuation?.finish()
         return RecordedAudio(file: files.last ?? URL(filePath: "/dev/null"), duration: .seconds(1))
     }
 
     func cancelCapture() async -> RecordedAudio? {
+        isCapturing = false
         continuation?.finish()
         return files.last.map { RecordedAudio(file: $0, duration: .seconds(1)) }
+    }
+
+    func pauseCapture() async {
+        isCapturing = false
+        isPaused = true
+    }
+
+    func resumeCapture() async throws {
+        isCapturing = true
+        isPaused = false
+        resumes += 1
+    }
+
+    func discardCapture() async {
+        isCapturing = false
+        continuation?.finish()
+        discarded += files.popLast().map { [$0] } ?? []
     }
 }
 
 actor FakeTranscriptionProvider: TranscriptionProvider {
-    var result: Result<Transcript, any Error>
+    private var error: (any Error)?
+    private let transcript: String
     private(set) var requests: [TranscriptionRequest] = []
-    private(set) var warmUps = 0
+    /// When set, `transcribe` waits for this gate.
+    private var gate: Gate?
+    /// Gates for single recordings, by audio file.
+    private var gates: [URL: Gate] = [:]
 
-    init(result: Result<Transcript, any Error>) {
-        self.result = result
+    init(transcript: String) {
+        self.transcript = transcript
     }
 
-    func warmUp() async {
-        warmUps += 1
+    func fail(with error: (any Error)?) {
+        self.error = error
     }
+
+    func hold(at gate: Gate) {
+        self.gate = gate
+    }
+
+    /// Holds only the request for `audio`.
+    func hold(at gate: Gate, onlyFor audio: URL) {
+        gates[audio] = gate
+    }
+
+    func warmUp() async {}
 
     func transcribe(_ request: TranscriptionRequest) async throws -> Transcript {
         requests.append(request)
-        return try result.get()
+        await gate?.pass()
+        await gates[request.audio]?.pass()
+        if let error { throw error }
+        return Transcript(
+            text: transcript, usage: TranscriptionUsage(audio: .seconds(1), costUSD: nil), model: "fake/model-1")
     }
 }
 
 actor FakePaster: Paster {
     private(set) var pasteCount = 0
+    /// What the focused app received with each Cmd-V.
+    private(set) var pasted: [String] = []
+    private var error: (any Error)?
+    private let pasteboard: FakePasteboard?
+
+    init(pasteboard: FakePasteboard? = nil) {
+        self.pasteboard = pasteboard
+    }
+
+    func deny(with error: any Error) {
+        self.error = error
+    }
 
     func sendPaste() async throws {
+        if let error { throw error }
         pasteCount += 1
+        if let text = await pasteboard?.text {
+            pasted.append(text)
+        }
     }
 }
 
 actor FakePasteboard: Pasteboard {
-    private(set) var changeCount = 0
+    private var count = 0
+    /// Holds the next `changeCount` read, once, after it took its value.
+    private var changeCountGate: Gate?
+
+    var changeCount: Int {
+        get async {
+            // The value is read first, so a held read returns what was true before the hold.
+            let value = count
+            if let gate = changeCountGate {
+                changeCountGate = nil
+                await gate.pass()
+            }
+            return value
+        }
+    }
+
+    func holdNextChangeCountRead(at gate: Gate) {
+        changeCountGate = gate
+    }
+
+    /// The next write changes the contents at once but returns only when `gate` opens.
+    private var writeReturnGate: Gate?
+
+    func holdNextWriteReturn(at gate: Gate) {
+        writeReturnGate = gate
+    }
     private(set) var text: String?
-    private(set) var written: [String] = []
+    private(set) var isTransient = false
+    /// How many times the full contents were read.
+    private(set) var snapshots = 0
+
+    init(text: String? = nil) {
+        self.text = text
+    }
 
     func snapshot() async -> PasteboardSnapshot {
-        PasteboardSnapshot(items: text.map { [["public.utf8-plain-text": Data($0.utf8)]] } ?? [])
+        snapshots += 1
+        return PasteboardSnapshot(items: text.map { [["public.utf8-plain-text": Data($0.utf8)]] } ?? [])
     }
 
-    func writeTransient(_ text: String) async -> Int {
+    func write(_ text: String, isTransient transient: Bool) async -> Int {
         self.text = text
-        written.append(text)
-        changeCount += 1
-        return changeCount
+        isTransient = transient
+        count += 1
+        let written = count
+        if let gate = writeReturnGate {
+            writeReturnGate = nil
+            await gate.pass()
+        }
+        return written
     }
 
-    func restore(_ snapshot: PasteboardSnapshot) async {
+    func restore(_ snapshot: PasteboardSnapshot, ifChangeCount changeCount: Int) async {
+        guard count == changeCount else { return }
         text = snapshot.items.first?["public.utf8-plain-text"].flatMap { String(bytes: $0, encoding: .utf8) }
-        changeCount += 1
+        isTransient = false
+        count += 1
     }
 
     /// Another app copied something.
     func userCopies(_ text: String) {
         self.text = text
-        changeCount += 1
+        isTransient = false
+        count += 1
     }
 }
 
 /// Time moves only when a test calls `advance(by:)`; sleepers whose deadline passes wake then.
 final class ManualClock: PipelineClock {
+    private struct Sleeper {
+        let id: UUID
+        let deadline: ContinuousClock.Instant
+        let continuation: CheckedContinuation<Void, any Error>
+    }
+
     private struct State {
         var now = ContinuousClock.Instant.now
-        var sleepers: [(deadline: ContinuousClock.Instant, continuation: CheckedContinuation<Void, Never>)] = []
+        var date = Date(timeIntervalSince1970: 1_800_000_000)
+        var sleepers: [Sleeper] = []
+        /// Sleeps cancelled before they registered.
+        var cancelled: Set<UUID> = []
     }
 
     private let state = Mutex(State())
@@ -128,15 +267,40 @@ final class ManualClock: PipelineClock {
         state.withLock { $0.now }
     }
 
-    func sleep(for duration: Duration) async throws {
-        await withCheckedContinuation { continuation in
-            state.withLock { $0.sleepers.append(($0.now + duration, continuation)) }
+    var date: Date {
+        state.withLock { $0.date }
+    }
+
+    func sleep(until deadline: ContinuousClock.Instant) async throws {
+        let id = UUID()
+        try await withTaskCancellationHandler {
+            try await withCheckedThrowingContinuation { continuation in
+                let resumeNow = state.withLock { state in
+                    guard deadline > state.now, !state.cancelled.contains(id) else { return true }
+                    state.sleepers.append(Sleeper(id: id, deadline: deadline, continuation: continuation))
+                    return false
+                }
+                if resumeNow {
+                    continuation.resume()
+                }
+            }
+        } onCancel: {
+            let sleeper = state.withLock { state -> Sleeper? in
+                guard let index = state.sleepers.firstIndex(where: { $0.id == id }) else {
+                    state.cancelled.insert(id)
+                    return nil
+                }
+                return state.sleepers.remove(at: index)
+            }
+            sleeper?.continuation.resume(throwing: CancellationError())
         }
+        try Task.checkCancellation()
     }
 
     func advance(by duration: Duration) {
         let due = state.withLock { state in
             state.now += duration
+            state.date += duration / .seconds(1)
             let now = state.now
             let due = state.sleepers.filter { $0.deadline <= now }
             state.sleepers.removeAll { $0.deadline <= now }
@@ -150,17 +314,60 @@ final class ManualClock: PipelineClock {
 
 actor FakeStore: Store {
     private(set) var records: [DictationRecord] = []
+    /// Every status each dictation was saved with, in order.
+    private(set) var history: [DictationID: [DictationRecord.Status]] = [:]
 
     func save(_ record: DictationRecord) async throws {
         records.removeAll { $0.id == record.id }
         records.append(record)
+        history[record.id, default: []].append(record.status)
     }
 
     func pendingRetries() async throws -> [DictationRecord] {
-        records.filter { $0.status == .failed }
+        records.filter { $0.status == .pending || $0.status == .failed }
+    }
+
+    func recovered(since cutoff: Date) async throws -> [DictationRecord] {
+        records
+            .filter { $0.status == .recovered && ($0.recoveredAt ?? .distantPast) >= cutoff }
+            .sorted { ($0.recoveredAt ?? .distantPast) > ($1.recoveredAt ?? .distantPast) }
+    }
+
+    func status(of id: DictationID) async throws -> DictationRecord.Status? {
+        records.first { $0.id == id }?.status
+    }
+
+    func markCopied(_ id: DictationID) async throws {
+        guard let index = records.firstIndex(where: { $0.id == id }) else { return }
+        records[index].status = .copied
+        history[id, default: []].append(.copied)
     }
 
     func prune(olderThan cutoff: Date) async throws {
-        records.removeAll { $0.createdAt < cutoff }
+        records.removeAll { $0.createdAt < cutoff && $0.status != .pending && $0.status != .failed }
+    }
+}
+
+/// Yields until `condition` holds, for the few steps that run in tasks the test cannot await.
+func eventually(_ condition: () async -> Bool) async -> Bool {
+    for _ in 0..<10_000 {
+        if await condition() { return true }
+        await Task.yield()
+    }
+    return false
+}
+
+extension DictationPipeline {
+    /// Chord down and up within the tap threshold.
+    func tap(_ world: FakeWorld) async {
+        await handle(.chordDown)
+        await handle(.chordUp)
+    }
+
+    /// Tap to start, tap to stop, then wait for the paste.
+    func dictate(_ world: FakeWorld) async {
+        await tap(world)
+        await tap(world)
+        await settle()
     }
 }

@@ -1,0 +1,15 @@
+{
+  "durationMilliseconds": 12072,
+  "combinedPhrases": [
+    { "text": "Run make check, then open DictationPipeline.swift." }
+  ],
+  "phrases": [
+    {
+      "offsetMilliseconds": 40,
+      "durationMilliseconds": 11800,
+      "text": "Run make check, then open DictationPipeline.swift.",
+      "locale": "en-US",
+      "confidence": 0.91
+    }
+  ]
+}

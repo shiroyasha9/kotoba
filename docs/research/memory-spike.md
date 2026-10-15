@@ -40,6 +40,42 @@ Mode `--time-start`: per run, install a tap (requested 512 frames), `prepare()`,
 
 Every first buffer held 4800 frames (100 ms at 48 kHz) although 512 were requested, so the first callback comes about 100 ms after the first sample. The audio is not lost: the buffer starts about 40 ms after `start()`. For the latency log, `firstAudioBuffer` should use the buffer's host time, not the callback time. Run 1 equals the later runs, so a prepared engine has no extra cold-start cost here. The spec's 20-40 ms assumption is close for the built-in mic; Bluetooth input was not measured.
 
+## Stop wait: input tap vs sink node (2026-10-15, 20:49-20:50 IST)
+
+Question: after the stop tap, how long does capture wait for the audio that holds the stop moment? Spike `spikes/memory/StopLatency.swift` (same bundle ID and signature as the memory spike, built-in mic, 48 kHz). Each run requests a stop at a random moment and waits until a delivered buffer ends after it; 10 stops per method.
+
+| Method | Frames per callback | p50 | p90 | Max |
+|---|---|---|---|---|
+| Input tap, bufferSize 1024 (the first app build) | 4800 (100 ms; the tap ignores smaller requests) | 50.6-70.4 ms | 85.3-85.9 ms | 86.7-100.0 ms |
+| `AVAudioSinkNode` (one hardware cycle) | 512 (10.7 ms) | 5.6-8.4 ms | 10.8-12.5 ms | 13.1-13.2 ms |
+
+Ranges cover two runs. In the full stop path, `engine.stop()` took 12.7-19.9 ms and `prepare()` 7.1-21.6 ms, so the app runs both after the audio is handed to upload, not before.
+
+Result: the app now captures through a sink node and a lock-free ring drained by a writer thread (`App/AudioCapture.swift`, `App/CaptureWriter.swift`). New worst case for the stop wait: about 13 ms, was about 100 ms.
+
+## Follow-up measurements for the phase 1 review (2026-10-15, 21:10-21:20 IST)
+
+- **Writer setup before engine start (review item 7).** Creating the FLAC file and converter took 0.14-0.29 ms (10 runs), and 10.8 ms the first time in a process (codec load; 1,148 ms on the first run after a fresh build). The app now starts the engine first and builds the writer while audio waits in the ring, so this time is off the key-down path. Probe: scratchpad `writerprobe`, `AVAudioFile(forWriting:)` + `AVAudioConverter` in a loop.
+- **Ring buffer (item 22).** A zero-filled 1 << 19 Float ring added 4,096,456 B footprint to a probe process; a 1 << 16 ring without zero-fill added 1,999,304 B (the probe's own floor). Saving: 2.0 MiB idle. During capture the smaller ring dirties at most 256 KiB.
+- **Indicator panel (item 23).** Spike `spikes/memory/PanelCost.swift`: idle 11.7 MB; after the glass panel was created, shown once and hidden: 14.6 MB; 15 s after the panel was released: still 14.6 MB. Create + show took 68.8 ms the first time, then 16.2-23.1 ms. Releasing the panel frees nothing measurable and adds 16-23 ms to the next show, so the app keeps one panel for its lifetime (item 23 not applied).
+- **Indicator panel, second probe (phase 2, indicator agent).** A bare debug AppKit process that runs the real `App/IndicatorPanel.swift` and `App/IndicatorPillView.swift`, footprint from `task_info` `phys_footprint` (the number `footprint` shows), 3 runs. It agrees with the spike above: releasing the panel 32 s after hide freed about 0.25 MB (15.30 -> 15.03 MB), and the next show took 21-46 ms against 4-8 ms with the panel kept. The gain is in not building at launch: building the panel and views at launch (the old `init`, window deferred) added 4.8 MB (7.39 -> 12.19 MB) and took 158 ms. The first show took 69-127 ms and added 7.8 MB (7.3 -> 15.1 MB), most of it one-time AppKit, glass and font setup. `CGWindowListCopyWindowInfo` (the focused-window screen lookup at each show) took 7-23 ms on the first call and 0.4-5 ms later. Decision: build the panel on first show and keep it; no release timer. Probe: scratchpad `indicator-bench` (session-local, not kept).
+
+## Settings window (phase 2, 2026-10-15, before 21:30 IST)
+
+Spike `spikes/settings-memory/` (`build.sh`, `measure.sh`): a status-item app built with `swiftc -O` from the real `App/Settings/{SettingsWindow,DictionaryModel,DictionaryPane}.swift` plus KotobaCore and KotobaStorage sources, with the Dictionary pane holding 36 terms and 2 rules. `SettingsBase` is the same app with no SwiftUI. Physical footprint from `vmmap --summary`, 2 rounds:
+
+| State | r1 | r2 |
+|---|---|---|
+| SettingsBase, idle 30 s | 12.2 MB | 12.1 MB |
+| SettingsSpike, idle 30 s (SwiftUI linked, window never opened) | 12.3 MB | 12.2 MB |
+| Dictionary pane open (8 s after open) | 31.5 MB | 34.6 MB |
+| 30 s after close | 31.3 MB | 32.9 MB |
+
+- Linking SwiftUI costs about +0.1 MB at launch: the app's idle footprint does not change until Settings opens.
+- Opening Settings adds +19-21 MB that stays after close, more than the +15 MB of variant E (a smaller form).
+- No leak: `SettingsSpike --leak-check` opens and closes the window and checks weak references 2 s after close. The window, its `NSHostingController` and a per-open pane model are all deallocated. The memory that stays belongs to SwiftUI's loaded runtime, not to kotoba's objects. The app's `DictionaryModel` lives for the app's lifetime on purpose, because the pipeline reads it.
+- Decision (lead, 2026-10-15): +19-21 MB after close is accepted for now. The idle gate is measured from launch with Settings never opened. If the owner wants it lower, the option is AppKit panes.
+
 ## Commands
 
 ```sh
@@ -57,4 +93,4 @@ Microphone: the first launch of C showed authorization status notDetermined, and
 1. Does a prepared but not started engine (variant C) turn on the orange mic indicator? Not checked by eye during this run.
 2. Footprint after hours idle and after many dictations (fragmentation, URLSession, SQLite) is not measured; this spike covers 30 s after launch only.
 3. First-buffer timing on AirPods or other Bluetooth input is not measured.
-4. Should Settings and History stay SwiftUI given +15 MB that persists after close, or move to AppKit?
+4. Should Settings and History stay SwiftUI given +15-21 MB that persists after close, or move to AppKit? Accepted for now (see "Settings window"); AppKit panes are the option if the owner wants less.

@@ -1,0 +1,1 @@
+{"error":{"code":"InvalidRequest","message":"The format of input audio is not supported.","innerError":{"code":"InvalidAudioFormat","message":"The format of input audio is not supported."}}}

@@ -1,0 +1,10 @@
+{
+  "text": " Run make check, then open DictationPipeline.swift. ",
+  "usage": {
+    "seconds": 12.4,
+    "total_tokens": 113,
+    "input_tokens": 83,
+    "output_tokens": 30,
+    "cost": 0.000344
+  }
+}

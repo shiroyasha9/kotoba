@@ -4,13 +4,26 @@ included:
   - KotobaCore/Sources
   - KotobaCore/Tests
   - KotobaCore/Package.swift
+  - KotobaProviders/Sources
+  - KotobaProviders/Tests
+  - KotobaProviders/Package.swift
+  - KotobaStorage/Sources
+  - KotobaStorage/Tests
+  - KotobaStorage/Package.swift
 excluded:
+  - KotobaCore/.build-*
+  - KotobaProviders/.build-*
+  - KotobaStorage/.build-*
   - KotobaCore/.build
+  - KotobaProviders/.build
+  - KotobaStorage/.build
   - build
 
-# swift-format owns layout and adds trailing commas to multi-line collections.
+# swift-format owns layout: it adds trailing commas to multi-line collections and puts `{`
+# on its own line after a wrapped signature or condition list.
 disabled_rules:
   - trailing_comma
+  - opening_brace
 
 opt_in_rules:
   - force_unwrapping
@@ -76,10 +89,28 @@ custom_rules:
     regex: "^\\s*(@\\w+\\s+)*import\\s+((typealias|struct|class|enum|protocol|let|var|func)\\s+)?(?!(Foundation|os|Synchronization)\\b)\\w+"
     message: "KotobaCore imports only Foundation, os and Synchronization. Platform code lives in App/ behind a port."
     severity: error
+  providers_are_foundation_only:
+    name: "KotobaProviders stays platform-free"
+    included: ["KotobaProviders/Sources/.*\\.swift"]
+    regex: "^\\s*(@\\w+\\s+)*import\\s+((typealias|struct|class|enum|protocol|let|var|func)\\s+)?(?!(Foundation|os|Synchronization|KotobaCore)\\b)\\w+"
+    message: "KotobaProviders imports only Foundation, os, Synchronization and KotobaCore, so `swift test` covers it. Keychain and other platform code live in App/."
+    severity: error
+  storage_is_sqlite_only:
+    name: "KotobaStorage stays UI-free"
+    included: ["KotobaStorage/Sources/.*\\.swift"]
+    regex: "^\\s*(@\\w+\\s+)*import\\s+((typealias|struct|class|enum|protocol|let|var|func)\\s+)?(?!(Foundation|os|Synchronization|SQLite3|KotobaCore)\\b)\\w+"
+    message: "KotobaStorage imports only Foundation, os, Synchronization, SQLite3 and KotobaCore, so `swift test` covers it. UI lives in App/."
+    severity: error
   no_shared_urlsession:
     name: "No URLSession.shared"
     regex: "\\bURLSession\\s*\\.\\s*shared\\b"
     message: "Each TranscriptionProvider owns one long-lived URLSession."
+    severity: error
+  keychain_store_construction:
+    name: "KeychainStore construction"
+    regex: "\\bKeychainStore\\s*\\("
+    excluded_match_kinds: [comment, doccomment, string]
+    message: "Read and save keys through KeyVault, so a saved key always replaces the copy the router reads."
     severity: error
   url_session_construction:
     name: "URLSession construction"

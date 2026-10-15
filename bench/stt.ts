@@ -30,7 +30,21 @@ import { wer } from "./score.ts";
 export const GROK = "x-ai/grok-stt-1.0";
 export const MAI = "microsoft/mai-transcribe-2";
 
-export type SttVariantKey = "grok" | "grok+keyterms" | "mai" | "mai+phraseList" | "mai+clean";
+export type SttVariantKey =
+	| "grok"
+	| "grok+keyterms"
+	| "grok+keyterms+format"
+	| "grok+keyterms+fillers"
+	| "mai"
+	| "mai+phraseList"
+	| "mai+clean"
+	| "mai+zdr";
+
+/**
+ * JSON value for xAI's "true"/"false" form fields (`format`, `filler_words`)
+ * under provider.options.xai. Chosen by the 2026-10-15 probe (results/probe-raw.jsonl).
+ */
+export const XAI_TRUE: string | boolean = "true";
 
 export type SttVariant = {
 	key: SttVariantKey;
@@ -39,6 +53,10 @@ export type SttVariant = {
 	providerOptions?: Record<string, Record<string, unknown>>;
 	/** Variant this one should differ from; identical output on every clip suggests the option was dropped. */
 	base?: SttVariantKey;
+	/** OpenRouter data-policy routing, sent as top-level `provider` fields next to `options` (STT guide: only `zdr` and `data_collection` apply). */
+	routing?: { zdr?: boolean };
+	/** Runs in the sequential latency pass only, never in the accuracy pass. */
+	latencyOnly?: true;
 };
 
 /**
@@ -57,6 +75,19 @@ export function sttVariants(dict: DictionaryEntry[]): SttVariant[] {
 	return [
 		{ key: "grok", model: GROK },
 		{ key: "grok+keyterms", model: GROK, base: "grok", providerOptions: { xai: { keyterm: terms } } },
+		// `format` turns on inverse text normalization (numbers, units); it needs `language`, sent at the top level.
+		{
+			key: "grok+keyterms+format",
+			model: GROK,
+			base: "grok+keyterms",
+			providerOptions: { xai: { keyterm: terms, format: XAI_TRUE } },
+		},
+		{
+			key: "grok+keyterms+fillers",
+			model: GROK,
+			base: "grok+keyterms",
+			providerOptions: { xai: { keyterm: terms, filler_words: XAI_TRUE } },
+		},
 		{ key: "mai", model: MAI },
 		{
 			key: "mai+phraseList",
@@ -74,6 +105,8 @@ export function sttVariants(dict: DictionaryEntry[]): SttVariant[] {
 				},
 			},
 		},
+		// Same request as `mai`, restricted to Zero Data Retention endpoints; measures the latency cost of ZDR.
+		{ key: "mai+zdr", model: MAI, routing: { zdr: true }, latencyOnly: true },
 	];
 }
 
@@ -148,16 +181,18 @@ export function bestSttVariant(clips: Clip[], ok: Map<string, Map<string, SttRow
 	return best?.key ?? null;
 }
 
-type SttJob = { variant: SttVariant; clip: Clip; info: AudioInfo; format: AudioFormat };
+export type SttJob = { variant: SttVariant; clip: Clip; info: AudioInfo; format: AudioFormat };
 
-async function transcribe(p: Paths, sink: CallSink, { variant, clip, info, format }: SttJob): Promise<SttRow> {
+export async function transcribe(p: Paths, sink: CallSink, { variant, clip, info, format }: SttJob): Promise<SttRow> {
 	const file = format === "flac" ? audioPath(p, clip.id, "flac") : await ensureWav16(p, clip);
 	const audio = await Bun.file(file).bytes();
 	const body = JSON.stringify({
 		model: variant.model,
 		input_audio: { data: audio.toBase64(), format },
 		language: "en",
-		...(variant.providerOptions ? { provider: { options: variant.providerOptions } } : {}),
+		...(variant.providerOptions || variant.routing
+			? { provider: { ...variant.routing, ...(variant.providerOptions ? { options: variant.providerOptions } : {}) } }
+			: {}),
 	});
 	return loggedCall(sink, async (attempt) => {
 		const startedAt = new Date().toISOString();
@@ -256,7 +291,7 @@ export type SttContext = {
  */
 export async function runStt(ctx: SttContext): Promise<void> {
 	const { p, clips } = ctx;
-	const variants = sttVariants(ctx.dict);
+	const variants = sttVariants(ctx.dict).filter((v) => !v.latencyOnly);
 	const passthrough = variants.filter((v) => v.base);
 	if (!ctx.passthroughProbe) {
 		await runVariants(ctx, "all variants", variants.map((v) => [v, clips]));
@@ -390,13 +425,13 @@ async function runVariants(ctx: SttContext, stage: string, targets: [SttVariant,
 	if (budget.exceeded) await logEvent(p, { event: "cost-cap", detail: `stopped STT (${stage}) at $${budget.total.toFixed(4)}` });
 }
 
-export const LATENCY_VARIANTS: readonly SttVariantKey[] = ["grok", "mai"];
+export const LATENCY_VARIANTS: readonly SttVariantKey[] = ["grok", "mai", "grok+keyterms+format", "mai+zdr"];
 export const LATENCY_CLIPS = 40;
 
 /**
- * Gate latency pass: one request at a time, base grok and base mai only, on
- * up to 40 seeded-random 10-20 s clips, alternating which provider goes first
- * per clip. Rows go to latency-raw.jsonl, apart from the contended accuracy pass.
+ * Gate latency pass: one request at a time, the LATENCY_VARIANTS only, on
+ * up to 40 seeded-random 10-20 s clips, reversing the variant order on every
+ * other clip. Rows go to latency-raw.jsonl, apart from the contended accuracy pass.
  */
 export async function runLatency(ctx: SttContext): Promise<void> {
 	const { p, audio, budget } = ctx;

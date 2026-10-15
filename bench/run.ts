@@ -1,5 +1,5 @@
 // kotoba-bench-v1 entry point.
-// bun run bench [--limit N] [--only stt|cleanup|latency|report] [--probe N] [--concurrency N] [--dry-run] [--data DIR]
+// bun run bench [--limit N] [--only stt|cleanup|latency|report] [--probe N] [--concurrency N] [--cap USD] [--dry-run] [--data DIR]
 // A run without --only does the accuracy pass (STT, cleanup), then the sequential latency pass, then the report.
 
 import { parseArgs } from "node:util";
@@ -10,6 +10,7 @@ import { Budget, confirmModels, spentUsd } from "./openrouter.ts";
 import { writeReport } from "./report.ts";
 import { GROK, MAI, runLatency, runStt } from "./stt.ts";
 
+/** Default cap on all spend recorded in the raw files, across runs. `--cap` sets a per-run cap instead. */
 const COST_CAP_USD = 2;
 const PASSES = ["stt", "cleanup", "latency", "report"] as const;
 type Pass = (typeof PASSES)[number];
@@ -23,6 +24,8 @@ const { values } = parseArgs({
 		probe: { type: "string", default: "20" },
 		// Requests in flight for the accuracy pass; its latency is contended and not used for gates.
 		concurrency: { type: "string", default: "100" },
+		// USD this run may add on top of what the raw files already record (the owner's go names it).
+		cap: { type: "string" },
 		"dry-run": { type: "boolean", default: false },
 		data: { type: "string", default: Bun.env.KOTOBA_BENCH_DATA },
 	},
@@ -33,6 +36,8 @@ if (only && !PASSES.includes(only)) fail(`--only must be one of ${PASSES.join(",
 const limit = intArg(values, "limit", 1);
 const passthroughProbe = intArg(values, "probe", 0)!;
 const concurrency = intArg(values, "concurrency", 1)!;
+const runCap = values.cap === undefined ? undefined : Number(values.cap);
+if (runCap !== undefined && !(runCap > 0)) fail("--cap must be a positive number of USD");
 const dryRun = values["dry-run"];
 if (!values.data) fail("set KOTOBA_BENCH_DATA or pass --data DIR");
 const runs = (pass: Pass) => !only || only === pass;
@@ -52,8 +57,8 @@ if (only !== "report") {
 	}
 	const audio = await prepareAudio(p, clips);
 	const spent = await spentUsd(p.rawFiles);
-	const budget = new Budget(COST_CAP_USD, spent);
-	console.log(`spent so far (from raw files): $${spent.toFixed(4)} of $${COST_CAP_USD} cap`);
+	const budget = new Budget(runCap === undefined ? COST_CAP_USD : spent + runCap, spent);
+	console.log(`spent so far (from raw files): $${spent.toFixed(4)}; this run stops past $${budget.cap.toFixed(4)} total`);
 	if (budget.exceeded) {
 		console.error("cost cap already reached; only the report will be rebuilt");
 	} else {

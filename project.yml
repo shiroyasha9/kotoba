@@ -8,6 +8,10 @@ options:
 packages:
   KotobaCore:
     path: KotobaCore
+  KotobaProviders:
+    path: KotobaProviders
+  KotobaStorage:
+    path: KotobaStorage
 settings:
   base:
     MARKETING_VERSION: "0.1.0"
@@ -33,6 +37,8 @@ targets:
           - Kotoba.entitlements
     dependencies:
       - package: KotobaCore
+      - package: KotobaProviders
+      - package: KotobaStorage
     scheme: {}
     settings:
       base:

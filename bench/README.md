@@ -30,15 +30,15 @@ bun run review                     # local page to hand-correct references, http
 ```
 
 - Accuracy pass: `--concurrency` requests in flight (default 100). Its latency is contended (one home uplink) and is not for gates.
-- Latency pass: one request at a time, base `grok` and `mai` only, on 40 seeded-random 10-20 s clips, providers alternating per clip. Its p50/p90 are the gate numbers.
+- Latency pass: one request at a time, `grok`, `mai` and `grok+keyterms+format` only (`LATENCY_VARIANTS` in `stt.ts`), on 40 seeded-random 10-20 s clips, the variant order reversed on every other clip. Its p50/p90 are the gate numbers.
 - Passthrough STT variants run on `--probe` clips first (default 20) and extend to every clip only when their text matches the base variant on fewer than 90% of them. `--probe 0` runs every variant on every clip.
 - Resume-safe: a (clip, variant) pair with a successful row is not sent again. Rerun the same command after a stop.
-- Cost cap: $2 of `usage.cost` across all raw files, including earlier runs. Each STT variant first runs alone on its shortest clip to measure the real price per audio second; a variant whose projected cost would pass the cap is skipped.
+- Cost cap: $2 of `usage.cost` across all raw files, including earlier runs. `--cap USD` instead lets this run add at most USD on top of what the raw files already record (`probe-raw.jsonl` included). Each STT variant first runs alone on its shortest clip to measure the real price per audio second; a variant whose projected cost would pass the cap is skipped.
 - 429, 5xx and network errors retry with backoff (6 attempts).
 
 ## What it measures
 
-- STT via OpenRouter `/audio/transcriptions`: `x-ai/grok-stt-1.0` (plain and with xAI `keyterm`), `microsoft/mai-transcribe-2` (plain, with Azure `phraseList`, and with `transcribeStyle: "clean"`). Provider options go through `provider.options.<tag>`; the report column "same text as base" flags options that the provider probably dropped.
+- STT via OpenRouter `/audio/transcriptions`: `x-ai/grok-stt-1.0` (plain, with xAI `keyterm`, and with `keyterm` plus `format` or `filler_words`; a 2026-10-15 probe showed OpenRouter forwards both), `microsoft/mai-transcribe-2` (plain, with Azure `phraseList`, and with `transcribeStyle: "clean"`). Provider options go through `provider.options.<tag>`; the report column "same text as base" flags options that the provider probably dropped.
 - Baselines: Wispr `asrText` and `formattedText`; Wispr `e2eLatency` (ms).
 - Cleanup: the output of the STT variant with the lowest WER over all scored clips, through Qwen 3.8 27B (Cerebras only), Gemini 3.5 Flash-Lite and Claude Haiku 5.5 with streaming, plus a no-LLM dictionary find/replace. Scored on the edited subset (against `editedText`) and on a seeded sample of 100 clips (against `pastedText`, a proxy for Wispr's accepted output).
 - Reference: `editedText` when it differs from `formattedText` (after trimming), else `pastedText`, else `formattedText`.

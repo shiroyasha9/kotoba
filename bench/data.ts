@@ -42,6 +42,7 @@ export function paths(dataDir: string) {
 	const sttRaw = join(results, "stt-raw.jsonl");
 	const cleanupRaw = join(results, "cleanup-raw.jsonl");
 	const latencyRaw = join(results, "latency-raw.jsonl");
+	const probeRaw = join(results, "probe-raw.jsonl");
 	return {
 		dataDir,
 		clips: join(dataDir, "clips"),
@@ -57,8 +58,10 @@ export function paths(dataDir: string) {
 		sttRaw,
 		cleanupRaw,
 		latencyRaw,
+		/** One-off option probes (paid); kept out of the STT tables. */
+		probeRaw,
 		/** Every file with paid rows; the cost cap and the report sum `cost` over these. */
-		rawFiles: [sttRaw, cleanupRaw, latencyRaw],
+		rawFiles: [sttRaw, cleanupRaw, latencyRaw, probeRaw],
 		runLog: join(results, "run-log.jsonl"),
 		report: join(results, "report.md"),
 	};
@@ -98,6 +101,13 @@ export async function loadClips(p: Paths, limit?: number): Promise<{ clips: Clip
 	}
 	clips.sort((a, b) => a.id.localeCompare(b.id));
 	return { clips: limit ? clips.slice(0, limit) : clips, skipped };
+}
+
+export type ReferenceRow = { clipId: string; text: string; source: "owner" | "edited"; savedAt: string };
+
+/** Hand-corrected references; the file is append-only, so the last row per clip wins. */
+export async function loadReferences(p: Paths): Promise<Map<string, ReferenceRow>> {
+	return new Map((await readJsonl<ReferenceRow>(p.references)).map((r) => [r.clipId, r]));
 }
 
 export async function loadDictionary(p: Paths): Promise<DictionaryEntry[]> {

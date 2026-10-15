@@ -3,6 +3,7 @@
 import { CLEANUP_MODELS, type CleanupRow, cleanupSets } from "./cleanup.ts";
 import {
 	type AudioInfo,
+	BENCH_SEED,
 	type Clip,
 	DURATION_BUCKETS,
 	type DictionaryEntry,
@@ -10,6 +11,8 @@ import {
 	applyDictionary,
 	dictionaryTerms,
 	durationBucket,
+	loadReferences,
+	mulberry32,
 } from "./data.ts";
 import { okRowsByVariant, readJsonl, sumCost } from "./openrouter.ts";
 import { shortDiff, termRecall, wer } from "./score.ts";
@@ -36,11 +39,12 @@ function table(head: string[], rows: (string | number)[][]): string {
 	].join("\n");
 }
 
-type Scored = { errors: number; words: number; hits: number; terms: number; n: number };
+type ClipErrors = { errors: number; words: number };
+type Scored = { errors: number; words: number; hits: number; terms: number; n: number; perClip: ClipErrors[] };
 
 /** Corpus WER and term recall of `hyp(clip)` over `clips`; clips without a hypothesis are left out and counted. */
 function score(clips: Clip[], hyp: (c: Clip) => string | null | undefined, terms: string[], ref = (c: Clip) => c.reference): Scored {
-	const s: Scored = { errors: 0, words: 0, hits: 0, terms: 0, n: 0 };
+	const s: Scored = { errors: 0, words: 0, hits: 0, terms: 0, n: 0, perClip: [] };
 	for (const c of clips) {
 		const h = hyp(c);
 		if (h == null) continue;
@@ -51,8 +55,29 @@ function score(clips: Clip[], hyp: (c: Clip) => string | null | undefined, terms
 		s.hits += t.hits;
 		s.terms += t.total;
 		s.n++;
+		s.perClip.push({ errors: w.errors, words: w.refWords });
 	}
 	return s;
+}
+
+/** 95% percentile-bootstrap CI of corpus WER: resample clips with replacement, seeded with BENCH_SEED. */
+function werCi(perClip: ClipErrors[], rounds = 2000): [number, number] | null {
+	if (!perClip.length) return null;
+	const rand = mulberry32(BENCH_SEED);
+	const rates: number[] = [];
+	for (let b = 0; b < rounds; b++) {
+		let errors = 0;
+		let words = 0;
+		for (let i = 0; i < perClip.length; i++) {
+			const c = perClip[Math.floor(rand() * perClip.length)]!;
+			errors += c.errors;
+			words += c.words;
+		}
+		if (words) rates.push(errors / words);
+	}
+	const lo = percentile(rates, 0.025);
+	const hi = percentile(rates, 0.975);
+	return lo === null || hi === null ? null : [lo, hi];
 }
 
 const werCell = (s: Scored, of: number) => `${fmtPct(s.errors, s.words)} (${s.n}/${of})`;
@@ -73,6 +98,7 @@ export async function writeReport(p: Paths, clips: Clip[], dict: DictionaryEntry
 	const sttCost = sumCost(sttRows);
 	const cleanupCost = sumCost(cleanupRows);
 	const latencyCost = sumCost(latencyRows);
+	const probeCost = sumCost(await readJsonl<SttRow>(p.probeRaw));
 	const byField = (f: Clip["refField"]) => clips.filter((c) => c.refField === f).length;
 
 	out.push(
@@ -85,7 +111,7 @@ export async function writeReport(p: Paths, clips: Clip[], dict: DictionaryEntry
 		`- Clips with a reference and audio: ${clips.length}. Edited subset (editedText differs from formattedText): ${edited.length}.`,
 		`- Reference field: editedText ${byField("editedText")}, pastedText ${byField("pastedText")}, formattedText ${byField("formattedText")}.`,
 		`- Audio indexed: ${audio.size}, total ${(([...audio.values()].reduce((s, a) => s + a.durationSec, 0)) / 60).toFixed(1)} min.`,
-		`- Cost from raw files: STT ${fmtUsd(sttCost)}, cleanup ${fmtUsd(cleanupCost)}, latency pass ${fmtUsd(latencyCost)}, total ${fmtUsd(sttCost + cleanupCost + latencyCost)}.`,
+		`- Cost from raw files: STT ${fmtUsd(sttCost)}, cleanup ${fmtUsd(cleanupCost)}, latency pass ${fmtUsd(latencyCost)}, option probes ${fmtUsd(probeCost)}, total ${fmtUsd(sttCost + cleanupCost + latencyCost + probeCost)}.`,
 		"- WER: corpus WER = (S + D + I) / reference words after normalization (lowercase, punctuation removed except inside identifier-shaped tokens, fillers um/uh/erm/hmm dropped). Cells show `WER (clips scored/clips in set)`.",
 		"- Term recall: technical reference tokens (inner `_ . / - :`, camelCase, letters+digits, backticked, or dictionary terms) found exactly, case-sensitive, in the output.",
 		"- Caveat: outside the edited subset the reference is Wispr's own pasted/formatted text, so the 'all' columns favor Wispr formattedText and any output that formats like it. Use the edited columns to compare.",
@@ -301,6 +327,78 @@ export async function writeReport(p: Paths, clips: Clip[], dict: DictionaryEntry
 			),
 			"",
 		);
+	}
+
+	// --- Owner references ---
+	// Hand-corrected references from review/ (plus the 18 Wispr edits); the clips that have one.
+	const refs = await loadReferences(p);
+	const refClips = clips.filter((c) => refs.has(c.id));
+	const ownerRef = (c: Clip) => refs.get(c.id)!.text;
+	const fromOwner = refClips.filter((c) => refs.get(c.id)!.source === "owner").length;
+	out.push("## Owner references", "");
+	if (!refClips.length) {
+		out.push("No hand-corrected references yet (`references.jsonl`).", "");
+	} else {
+		type Hyp = { label: string; hyp: (c: Clip) => string | null | undefined };
+		const hyps: Hyp[] = variantKeys
+			.filter((key) => ok.has(key))
+			.map((key) => ({ label: key, hyp: (c: Clip) => ok.get(key)!.get(c.id)?.text }));
+		hyps.push({ label: "Wispr asrText", hyp: (c) => c.asrText });
+		for (const source of sources) {
+			const withCleanup = new Set<string>();
+			for (const key of [...new Set(cleanupRows.map((r) => r.variant))]) {
+				const byClip = okRowsByVariant(cleanupRows.filter((r) => r.variant === key && r.sttVariant === source)).get(key);
+				if (!byClip) continue;
+				for (const id of byClip.keys()) withCleanup.add(id);
+				hyps.push({ label: `cleanup ${key} (input ${source})`, hyp: (c) => byClip.get(c.id)?.text });
+			}
+			if (withCleanup.size) {
+				hyps.push({
+					label: `raw ${source}, clips with cleanup output`,
+					hyp: (c) => (withCleanup.has(c.id) ? ok.get(source)?.get(c.id)?.text : undefined),
+				});
+			}
+		}
+		const scored = hyps.map((h) => ({ ...h, s: score(refClips, h.hyp, terms, ownerRef) }));
+		out.push(
+			`${refClips.length} clips have a hand-corrected reference: ${fromOwner} from the owner, ${refClips.length - fromOwner} Wispr edits. The last row per clip in references.jsonl wins.`,
+			"",
+			table(
+				["variant", "n", "WER", "WER 95% CI", "term recall"],
+				scored.map(({ label, s }) => {
+					const ci = werCi(s.perClip);
+					return [
+						label,
+						s.n,
+						fmtPct(s.errors, s.words),
+						ci ? `${(100 * ci[0]).toFixed(1)}-${(100 * ci[1]).toFixed(1)}%` : "-",
+						termCell(s),
+					];
+				}),
+			),
+			"",
+			"CI: 95% percentile bootstrap over clips (2000 resamples, seed BENCH_SEED). Cleanup rows cover only clips in the cleanup sets; compare them with the raw row on the same clips.",
+			"",
+		);
+		const buckets = DURATION_BUCKETS.filter((b) => refClips.filter((c) => dur(c) !== null && durationBucket(dur(c)!) === b).length >= 5);
+		if (buckets.length) {
+			const inBucket = (b: string) => refClips.filter((c) => dur(c) !== null && durationBucket(dur(c)!) === b);
+			out.push(
+				"WER by audio duration (buckets with 5 or more reference clips; a cell needs 5 or more scored clips):",
+				"",
+				table(
+					["variant", ...buckets],
+					scored.map(({ label, hyp }) => [
+						label,
+						...buckets.map((b) => {
+							const s = score(inBucket(b), hyp, terms, ownerRef);
+							return s.n >= 5 ? `${fmtPct(s.errors, s.words)} (n=${s.n})` : "-";
+						}),
+					]),
+				),
+				"",
+			);
+		}
 	}
 
 	if (events.length) {

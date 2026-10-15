@@ -1,0 +1,1 @@
+{"input_audio":{"format":"flac","data":"ZkxhQwAAACJzdHViIGF1ZGlv"},"language":"en","model":"microsoft/mai-transcribe-2","provider":{"options":{"azure":{"phraseList":{"phrases":["DictationPipeline","src/main.swift"]}}},"zdr":true}}

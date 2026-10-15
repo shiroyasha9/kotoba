@@ -6,7 +6,7 @@ Status: agreed with the owner on 2026-10-15 (grill session). Research behind eac
 
 The owner is a developer in India on an Apple Silicon Mac. They dictate about 200 words per minute, mostly prompts for Claude Code, Codex and Cursor, typed into terminals (cmux), editors and browsers. The prompts are full of identifiers, file names, paths and CLI flags.
 
-They pay about Rs 400 a month for Wispr Flow Pro. Wispr mis-transcribes technical terms often: about 10,000 manual fixes over about 73,000 words. Wispr is an Electron app (reported at 0.75-1 GB RAM) and its measured average end-to-end latency on the owner's machine is 1,254 ms (average network part 372 ms, from Wispr's own local history).
+They pay about Rs 400 a month for Wispr Flow Pro. Wispr mis-transcribes technical terms often. (Wispr's own counter shows about 10,000 corrected words over about 73,000 words, but that counter includes its formatter's changes; the owner's real edits are far fewer, see `docs/research/auto-learning.md`.) Wispr is an Electron app (reported at 0.75-1 GB RAM) and its measured average end-to-end latency on the owner's machine is 1,254 ms (average network part 372 ms, from Wispr's own local history).
 
 Cloud speech-to-text through the owner's own API key costs about $0.10 per hour of audio. No existing app combines: native and light, cloud-only, own keys, top-accuracy models (xAI Grok Voice Transcribe 2.0, Microsoft MAI-Transcribe-2), fast release-to-paste, and a permissive licence.
 
@@ -24,6 +24,7 @@ The app is open-source (Apache-2.0) and distributed as a notarized DMG on GitHub
 3. As a developer, I want audio capture to start at the instant of the key press, with no clipped first word, so that I do not repeat myself.
 4. As a developer, I want the last word kept when I stop, so that the end of a sentence is not cut.
 5. As a developer, I want Esc to cancel a recording and keep its audio in history, so that I can abort without losing it.
+5a. As a developer, I want an Undo for 5 s after Esc that resumes the same recording, so that an accidental Esc does not lose what I said so far (like Wispr Flow).
 6. As a developer, I want a warning after 10 minutes of recording (no automatic stop), so that I notice a forgotten recording.
 7. As a developer, I want the start sound to play only after capture has started, so that the sound means "you can speak now".
 8. As a developer, I want to turn sound cues off, so that I can dictate in quiet places.
@@ -35,6 +36,7 @@ The app is open-source (Apache-2.0) and distributed as a notarized DMG on GitHub
 12. As a developer, I want a small floating indicator with the recording state and the mic level, so that I know kotoba hears me.
 13. As a developer, I want the indicator to show "transcribing", "failed - retry" and "secure input on" states, so that I know what happens after I stop.
 14. As a developer, I want the indicator to use native Liquid Glass when it costs little memory, so that it looks native on macOS 26.
+14a. As a developer, I want the indicator at the bottom center of the screen by default, and I want to drag it to the left or right edge (phase 2), so that it does not cover what I work on.
 
 ### Transcription and paste
 15. As a developer, I want text pasted into the focused app (cmux, Terminal, Cursor, Codex, browsers, Slack) within about one second of the stop tap, so that dictation is faster than typing.
@@ -52,9 +54,10 @@ The app is open-source (Apache-2.0) and distributed as a notarized DMG on GitHub
 ### Dictionary and cleanup (phase 2)
 24. As a developer, I want a personal dictionary sent to the model as keyterms or phrase list, so that identifiers and names are recognised.
 25. As a developer, I want find-and-replace rules applied after transcription, so that systematic errors are fixed every time.
-26. As a Wispr Flow user, I want a one-time import of my Wispr dictionary, so that I start with my existing vocabulary.
+26. As a Wispr Flow user, I want a one-click import of my Wispr dictionary (words and replacement rules), found automatically on my Mac, so that I switch from Wispr Flow with my existing vocabulary.
 27. As a developer, I want a second hotkey or mode for LLM cleanup (filler removal, punctuation, "make this a clean prompt"), so that I choose when to pay its latency.
 28. As a developer, I want the cleanup prompt to treat my transcript as data, so that the LLM never answers or obeys my dictated prompt.
+28a. As a developer, I want to pick the microphone and set a preference order of microphones, so that kotoba uses my preferred mic whenever it is connected.
 
 ### Modes, history, learning (phase 3)
 29. As a developer, I want per-app modes (cleanup prompt, language, provider by frontmost app), so that terminals keep code formatting and chat apps get prose.
@@ -97,12 +100,14 @@ The app is open-source (Apache-2.0) and distributed as a notarized DMG on GitHub
 
 ### Hotkey state machine
 - Chord: Ctrl+Opt+Cmd (modifier-only, so it works during secure input). Captured with a CGEventTap on flagsChanged, callback kept short and off the main thread, tap re-enabled when the system disables it.
-- Tap (chord down and up under about 400 ms): start; next tap: stop and paste. Hold over the threshold: push-to-talk, stop on release. Esc during recording: cancel, keep audio. Threshold tuned after owner testing.
+- Tap (chord down and up under about 400 ms): start; next tap: stop and paste. Hold over the threshold: push-to-talk, stop on release. Esc during recording: cancel, keep audio. After Esc the indicator shows Undo for 5 s (mic off during the window); clicking Undo or tapping the chord in that window resumes the same recording, appending to the same audio file, and the next stop transcribes the whole recording. After 5 s the cancel is final. Threshold tuned after owner testing.
 - Secure input state (`IsSecureEventInputEnabled`) shown in the indicator.
+- Indicator position (phase 2, like Wispr Flow): three anchors, on the screen that holds the focused window. Bottom center (default): a horizontal pill just above the Dock or the screen bottom. Left edge and right edge: a vertical pill at mid-height while listening or transcribing; states with text (warnings, Cancelled + Undo, errors) stay a horizontal pill at the edge. Drag the indicator; during the drag the three anchors show as drop targets, and on release it snaps to the nearest one. The anchor is saved in UserDefaults. An "Indicator Position" submenu sets it too. The pill respects the visible frame (Dock, menu bar, notch).
 
 ### Audio
-- No pre-roll and no always-open mic: the owner rejected the always-on orange mic dot (2026-10-15). The audio engine is prepared while idle but not started; it starts on key-down (about 20-40 ms) before any UI or sound work; capture is written to disk from the first buffer; one extra buffer is captured after stop. The mic is open only while recording. Verified 2026-10-15 by the owner: a prepared-but-not-started engine shows no orange mic dot.
+- No pre-roll and no always-open mic: the owner rejected the always-on orange mic dot (2026-10-15). The audio engine is prepared while idle but not started; it starts on key-down (about 20-40 ms) before any UI or sound work; capture is written to disk from the first buffer; capture ends with the hardware cycle that holds the stop moment (AVAudioSinkNode, about 10.7 ms cycles; stop wait worst case 13 ms, measured 2026-10-15). The mic is open only while recording. Verified 2026-10-15 by the owner: a prepared-but-not-started engine shows no orange mic dot.
 - Route changes rebuild the engine. When AirPods are the output, use the built-in mic.
+- Microphone choice (phase 2): a "Microphone" submenu lists the connected inputs with the current one checked, for a quick switch; Settings holds a drag-to-order preference list, saved by device UID. kotoba records from the first connected device in the list; when none is connected, it uses the system default input. Only an owner action adds a mic to the list (a menu pick, or a drag into the list); other connected mics show apart and are never saved by accident. A mic that connects during a recording takes over at the next dictation. The Bluetooth-to-built-in rule applies only when kotoba follows the system default; a Bluetooth mic the owner put in the list is used as listed.
 - Upload format: 16 kHz mono FLAC (native in `AVAudioFile`). Opus only for providers that accept it, if the benchmark shows a gain.
 
 ### Transcription providers
@@ -111,8 +116,13 @@ The app is open-source (Apache-2.0) and distributed as a notarized DMG on GitHub
 - MAI-Transcribe-2 is public preview; its $0.10/h price is a promotion until 2026-12-31.
 
 ### Paste
-- Save all pasteboard types, write the transcript marked transient/concealed, post Cmd-V via CGEvent, restore after about 1.0 s only if the pasteboard did not change since. No fixed pre-paste sleep. A new paste never waits for a previous restore.
+- Snapshot all pasteboard types and the changeCount at chord-down (off the hot path); before writing, take a new snapshot only if the changeCount changed since. Write the transcript marked transient/concealed, post Cmd-V via CGEvent, restore after about 1.0 s only if the pasteboard did not change since. No fixed pre-paste sleep. A new paste never waits for a previous restore.
 - AX value insertion is not used as the main path (Electron apps report false success).
+
+### Wispr Flow import (phase 2)
+- Wispr Flow keeps its dictionary locally in its SQLite database: table `Dictionary` (`phrase`, `replacement`, `isDeleted`); the owner's backup of 2026-10-14 has 36 live entries, 2 with a replacement.
+- One click in Settings: find Wispr's database on disk, APFS-clone `flow.sqlite` and `flow.sqlite-wal` into a temp folder and read the clone (SQLite never opens Wispr's own files, and edits still in the WAL are included; `immutable=1` would skip the WAL). If either source file changes during the clone, clone again (at most 3 tries). Delete the clone after, import live entries: `phrase` only -> dictionary term; `phrase` + `replacement` -> find/replace rule; `source='user_edits'` + `observedSource` (Wispr's learned corrections) -> term plus a rule `observedSource` -> `phrase`. Personal and team-dictionary rows both import; `isSnippet=1` rows are counted but not imported (snippets are a later feature). De-duplicate case-insensitively, inside the import too (the backup has duplicates such as `zod`) and against existing entries; show a count before applying.
+- History import is not in scope.
 
 ### Cleanup
 - Not on the 1 s path. Main path: raw transcript + find/replace (+ provider formatting if the benchmark shows it helps). LLM cleanup runs only on its own hotkey or mode. Transcript is wrapped as data in the prompt.
@@ -126,8 +136,20 @@ The app is open-source (Apache-2.0) and distributed as a notarized DMG on GitHub
 
 ### Phases
 1. Core loop: hotkey state machine, prepared audio engine and capture, OpenRouter provider, paste with restore, indicator with mic level, offline queue with retry, latency log, memory spike.
-2. Dictionary (keyterms + find/replace) with Wispr import, xAI and Azure direct providers, cleanup hotkey.
+2. Dictionary (keyterms + find/replace) with Wispr import, microphone choice and preference order, indicator position (bottom center, left, right), xAI and Azure direct providers, cleanup hotkey.
 3. Per-app modes, History window, learning from corrections, usage and cost tracker, context awareness (off by default).
+
+### Polish and learning (phase 2.5, lead decisions 2026-10-15; owner may override)
+
+Plans: `docs/research/ux-polish.md` (49 items, IDs used below) and `docs/research/auto-learning.md`. Text rules: `CODING_STANDARDS.md`, "User-facing text".
+- Onboarding is its own window, 6 steps (Welcome, Microphone, Accessibility, key with "Get a Key…" and a free key check, Try It, Done with launch at login). It opens on first launch and from "Finish Setting Up kotoba…"; no permission prompt appears before its step. The dictation chord stays ⌃⌥⌘ (no picker in v1). Price text: "a few cents per hour" plus the provider's pricing link.
+- Readiness (mic access, Accessibility, key/endpoint) is one App value used by the menu status line, onboarding and the menu bar icon.
+- Settings panes: General, Speech (was Providers), Dictionary, Microphone. General holds the cleanup chord and model, launch at login (default on), sounds and indicator position; the menu keeps status, Microphone and Speech Model.
+- xAI direct and Azure direct sit under "Advanced" in the Speech pane, with no "untested" label.
+- Error pills carry one action button and stay 8 s (hover pauses). `rejected` carries a reason (no credit, empty transcript, other).
+- Failed dictations retry by themselves when the network returns (story 22, not built in phase 1).
+- Learning (story 32), first build: a pure `CorrectionDetector` in KotobaCore, a `dictionary_suggestions` table, a Suggestions section in the Dictionary pane with a menu count, and "Fix Last Dictation…" (edit the last transcript, learn from the diff, copy the fixed text; no re-paste). Suggest and confirm, never auto-add. Identifiers, names and acronyms are learned; paths, URLs and numbers are not. A common heard word gives a term only, never a rule (applies to the Wispr import too). No LLM review until the local filters measure under 80% precision on the Wispr pairs.
+- Later learning steps, in order: Accessibility readback after paste (after a spike on the owner's apps), history mining (with the History window), context sources (off by default).
 
 ### Wispr Flow transition
 - The owner keeps Wispr Flow until kotoba passes the gates and one week of daily use.
@@ -153,11 +175,13 @@ The app is open-source (Apache-2.0) and distributed as a notarized DMG on GitHub
 
 ## Further Notes
 
-- Benchmark kotoba-bench-v1 (go given 2026-10-15): 275 of the owner's Wispr Flow clips (avg 32.7 s, 210 from cmux), references from the owner's edited text where available; Grok and MAI via OpenRouter; Wispr's own ASR as a free baseline; 3 cleanup LLMs on the 135 edited clips; cost cap $2, expected under $1.
-- OpenRouter documents no keyterm passthrough; keyterm gains need the direct routes.
+- Benchmark kotoba-bench-v1 (go given 2026-10-15): 275 of the owner's Wispr Flow clips (275 clips with audio, avg 21.9 s, 210 from cmux), references from the owner's edited text where available; Grok and MAI via OpenRouter; Wispr's own ASR as a free baseline; 3 cleanup LLMs on the 18 clips the owner really edited plus a 100-clip sample; cost cap $2, spent $1.00. Results: MAI + phraseList via OpenRouter best (WER 8.1%, term recall 73.2%, sequential latency p50 881 / p90 1461 ms for 10-20 s clips); Grok slower and less accurate; no cleanup LLM beat the raw transcript on WER. Report in the runbooks folder.
+- OpenRouter passes provider options through (`provider.options.<tag>`): MAI phraseList and Grok keyterms both work through it (kotoba-bench-v1: MAI term recall 58.7% -> 73.2%), but this is not in OpenRouter's docs.
 - Weekly watch (proposed, not scheduled): VoiceInk releases, the Artificial Analysis STT leaderboard, Grok and MAI prices.
 
 ## Unresolved Questions
 
 1. MAI-Transcribe-2 price after 2026-12-31 and phrase-list limits are not published.
-2. Which provider route becomes the default depends on kotoba-bench-v1.
+2. Default route (decided 2026-10-15 from kotoba-bench-v1 and `docs/research/mai-routing.md`): MAI-Transcribe-2 + phraseList via OpenRouter. Neither OpenRouter nor Vercel AI Gateway can pick an Azure region; direct Azure `centralindia` stays the fallback if real use misses the latency gate.
+3. Wispr Flow's live database: `~/Library/Application Support/Wispr Flow/flow.sqlite` (+ `-wal`), found by a directory listing on 2026-10-15. `Dictionary.isDeleted` is TINYINT(1), integer 0/1 (backup copy, 2026-10-15). Resolved.
+4. Azure direct sends no `transcribeStyle`, so Azure applies its default (`verbatim` per Microsoft's docs). Which style the OpenRouter route used in kotoba-bench-v1 is unknown. Check on the first live Azure test: compare the direct output with the OpenRouter output for the same clip.

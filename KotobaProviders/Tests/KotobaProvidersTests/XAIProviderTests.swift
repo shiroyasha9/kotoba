@@ -1,0 +1,92 @@
+import Foundation
+import KotobaCore
+import Testing
+
+@testable import KotobaProviders
+
+/// Grok direct from xAI, through the router with `route = .xaiGrok`. Fixture shapes from the xAI STT reference.
+struct XAIProviderTests {
+    @Test func requestIsMultipartWithOptionsBeforeTheFile() async throws {
+        let stub = StubHost(reply: .fixture("xai-success"))
+        stub.settings.route = .xaiGrok
+
+        _ = try await stub.provider().transcribe(stub.request(terms: ["DictationPipeline", "src/main.swift"]))
+
+        let sent = try #require(stub.requests.only)
+        #expect(sent.url == stub.url("/v1/stt"))
+        #expect(sent.method == "POST")
+        #expect(sent.headers["Authorization"] == "Bearer sk-or-test")
+        #expect(sent.headers["Content-Type"] == "multipart/form-data; boundary=test-boundary")
+        #expect(sent.body == StubReply.fixtureData("request-xai", extension: "multipart"))
+    }
+
+    @Test func grokOptionsAreSentAsTrueFalseFields() async throws {
+        let stub = StubHost(reply: .fixture("xai-success"))
+        stub.settings.route = .xaiGrok
+        stub.settings.isGrokFormatOn = true
+        stub.settings.keepsGrokFillerWords = true
+
+        _ = try await stub.provider().transcribe(stub.request())
+
+        let body = String(bytes: try #require(stub.requests.only).body, encoding: .utf8) ?? ""
+        #expect(body.contains("name=\"format\"\r\n\r\ntrue\r\n"))
+        #expect(body.contains("name=\"filler_words\"\r\n\r\ntrue\r\n"))
+        #expect(!body.contains("name=\"keyterm\""))
+    }
+
+    @Test func successReturnsTrimmedTextDurationAndRoute() async throws {
+        let stub = StubHost(reply: .fixture("xai-success"))
+        stub.settings.route = .xaiGrok
+
+        let transcript = try await stub.provider().transcribe(stub.request())
+
+        #expect(
+            transcript
+                == Transcript(
+                    text: "The balance is $167,983.15.", usage: .init(audio: .seconds(8.4), costUSD: nil),
+                    model: "xai-direct/grok-stt"))
+    }
+
+    @Test func missingXAIKeyNamesTheProviderToSetUp() async {
+        let stub = StubHost(reply: .fixture("xai-success"))
+        stub.settings.route = .xaiGrok
+        let provider = stub.provider(key: nil)
+
+        await #expect(throws: ProviderError.needsSetup(provider: "xAI", item: .key)) {
+            try await provider.transcribe(stub.request())
+        }
+        #expect(stub.requests.isEmpty)
+    }
+
+    @Test func warmUpSendsAHeadRequestToTheEndpoint() async throws {
+        let stub = StubHost(reply: .status(405))
+        stub.settings.route = .xaiGrok
+
+        await stub.provider().warmUp()
+
+        let sent = try #require(stub.requests.only)
+        #expect(sent.method == "HEAD")
+        #expect(sent.url == stub.url("/v1/stt"))
+    }
+
+    @Test(arguments: [
+        (
+            StubReply.fixture("xai-error-400", status: 400),
+            ProviderError.rejected(status: 400, message: "format requires language")
+        ),
+        (.raw(status: 401, body: #"{"error":"Incorrect API key provided"}"#), .auth(status: 401)),
+        (.raw(status: 429, headers: ["Retry-After": "3"], body: ""), .rateLimited(retryAfter: .seconds(3))),
+        (.raw(status: 500, body: ""), .server(status: 500)),
+        (.raw(status: 200, body: #"{"text":"  ","language":"en","duration":1.0}"#), .emptyTranscript),
+        (.failure(.notConnectedToInternet), .offline),
+    ])
+    func failureMapsToProviderError(reply: StubReply, expected: ProviderError) async {
+        let stub = StubHost(reply: reply)
+        stub.settings.route = .xaiGrok
+        let provider = stub.provider()
+
+        await #expect(throws: expected) {
+            try await provider.transcribe(stub.request())
+        }
+    }
+}

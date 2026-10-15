@@ -1,0 +1,248 @@
+import Foundation
+import KotobaCore
+import Testing
+
+@testable import KotobaProviders
+
+/// Requests go to a `StubURLProtocol` host owned by one test; replies come from `Fixtures/` (shapes from
+/// OpenRouter's STT and error docs). No test reaches the network.
+struct OpenRouterProviderTests {
+    // MARK: Request building
+
+    @Test func maiRequestSendsFLACAndThePhraseList() async throws {
+        let stub = StubHost(reply: .fixture("success"))
+        let provider = stub.provider()
+
+        _ = try await provider.transcribe(stub.request(terms: ["DictationPipeline", "swiftlint"]))
+
+        let sent = try #require(stub.requests.only)
+        #expect(sent.url == stub.baseURL.appending(path: "audio/transcriptions"))
+        #expect(sent.method == "POST")
+        #expect(sent.headers["Authorization"] == "Bearer sk-or-test")
+        #expect(sent.headers["Content-Type"] == "application/json")
+        let body = try sent.json()
+        #expect(body["model"] as? String == "microsoft/mai-transcribe-2")
+        #expect(body["language"] as? String == "en")
+        let audio = try #require(body["input_audio"] as? [String: String])
+        #expect(audio["format"] == "flac")
+        #expect(audio["data"] == StubHost.audioBytes.base64EncodedString())
+        let options = try #require((body["provider"] as? [String: Any])?["options"] as? [String: Any])
+        #expect(options.keys.sorted() == ["azure"])
+        let azure = try #require(options["azure"] as? [String: Any])
+        #expect((azure["phraseList"] as? [String: Any])?["phrases"] as? [String] == ["DictationPipeline", "swiftlint"])
+    }
+
+    @Test func requestBodyMatchesTheRecordedBytes() async throws {
+        let stub = StubHost(reply: .fixture("success"))
+
+        _ = try await stub.provider().transcribe(stub.request(terms: ["DictationPipeline", "src/main.swift"]))
+
+        let body = try #require(stub.requests.only).body
+        let expected = StubReply.fixtureText("request-mai").trimmingCharacters(in: .newlines)
+        #expect(String(bytes: body, encoding: .utf8) == expected)
+    }
+
+    @Test func audioLargerThanOneChunkIsEncodedWhole() async throws {
+        let stub = StubHost(reply: .fixture("success"))
+        let audio = Data((0..<150_001).map { UInt8(truncatingIfNeeded: $0 &* 31) })
+
+        _ = try await stub.provider().transcribe(stub.request(audio: audio))
+
+        let sent = try #require(stub.requests.only).json()
+        #expect((sent["input_audio"] as? [String: String])?["data"] == audio.base64EncodedString())
+    }
+
+    @Test func grokRequestSendsKeytermsAndDefaultOptions() async throws {
+        let stub = StubHost(reply: .fixture("success"))
+        stub.settings.route = .openRouterGrok
+
+        _ = try await stub.provider().transcribe(stub.request(terms: ["kotoba"]))
+
+        let body = try #require(stub.requests.only).json()
+        #expect(body["model"] as? String == "x-ai/grok-stt-1.0")
+        #expect(body["language"] as? String == "en")
+        let options = try #require((body["provider"] as? [String: Any])?["options"] as? [String: Any])
+        #expect(options.keys.sorted() == ["xai"])
+        let xai = try #require(options["xai"] as? [String: Any])
+        #expect(xai.keys.sorted() == ["filler_words", "format", "keyterm"])
+        #expect(xai["keyterm"] as? [String] == ["kotoba"])
+        #expect(xai["format"] as? Bool == false)
+        #expect(xai["filler_words"] as? Bool == false)
+    }
+
+    @Test func grokFormatSendsXAILanguage() async throws {
+        let stub = StubHost(reply: .fixture("success"))
+        stub.settings.route = .openRouterGrok
+        stub.settings.isGrokFormatOn = true
+
+        _ = try await stub.provider().transcribe(stub.request())
+
+        let xai = try #require(stub.requests.only).json().xaiOptions
+        #expect(xai.keys.sorted() == ["filler_words", "format", "language"])
+        #expect(xai["format"] as? Bool == true)
+        #expect(xai["language"] as? String == "en")
+    }
+
+    @Test func grokFillerWordsAreKeptWhenOn() async throws {
+        let stub = StubHost(reply: .fixture("success"))
+        stub.settings.route = .openRouterGrok
+        stub.settings.keepsGrokFillerWords = true
+
+        _ = try await stub.provider().transcribe(stub.request())
+
+        let xai = try #require(stub.requests.only).json().xaiOptions
+        #expect(xai["filler_words"] as? Bool == true)
+        #expect(xai["format"] as? Bool == false)
+    }
+
+    @Test func modeSwitchAppliesToTheNextRequest() async throws {
+        let stub = StubHost(reply: .fixture("success"))
+        let provider = stub.provider()
+
+        _ = try await provider.transcribe(stub.request())
+        stub.settings.route = .openRouterGrok
+        _ = try await provider.transcribe(stub.request())
+
+        #expect(
+            try stub.requests.map { try $0.json()["model"] as? String } == [
+                "microsoft/mai-transcribe-2", "x-ai/grok-stt-1.0",
+            ])
+    }
+
+    @Test func transcriptReportsTheModelItWasSentWithWhenTheSettingChangesMidRequest() async throws {
+        let stub = StubHost(reply: .fixture("success"))
+        let settings = stub.settings
+        stub.onRequest { settings.route = .openRouterGrok }
+
+        let transcript = try await stub.provider().transcribe(stub.request())
+
+        #expect(transcript.model == "microsoft/mai-transcribe-2")
+        #expect(try #require(stub.requests.only).json()["model"] as? String == "microsoft/mai-transcribe-2")
+        #expect(settings.route == .openRouterGrok)
+    }
+
+    @Test(arguments: [
+        (TranscriptionRoute.openRouterMAI, true),
+        (.openRouterGrok, false),
+    ])
+    func zeroDataRetentionIsSentPerRoute(route: TranscriptionRoute, zdr: Bool) async throws {
+        let stub = StubHost(reply: .fixture("success"))
+        stub.settings.route = route
+
+        _ = try await stub.provider().transcribe(stub.request())
+
+        let body = try #require(stub.requests.only).json()
+        let provider = try #require(body["provider"] as? [String: Any])
+        #expect(provider["zdr"] as? Bool == zdr)
+    }
+
+    @Test func settingsDefaultToMAIWithGrokOptionsOff() {
+        let settings = StubHost(reply: .status(200)).settings
+
+        #expect(settings.route == .openRouterMAI)
+        #expect(!settings.isGrokFormatOn)
+        #expect(!settings.keepsGrokFillerWords)
+    }
+
+    @Test func maiRequestWithoutTermsSendsOnlyZDR() async throws {
+        let stub = StubHost(reply: .fixture("success"))
+
+        _ = try await stub.provider().transcribe(stub.request(terms: []))
+
+        let body = try #require(stub.requests.only).json()
+        let provider = try #require(body["provider"] as? [String: Any])
+        #expect(provider.keys.sorted() == ["zdr"])
+    }
+
+    @Test func missingKeyNeedsSetupWithoutARequest() async {
+        let stub = StubHost(reply: .fixture("success"))
+        let provider = stub.provider(key: nil)
+
+        await #expect(throws: ProviderError.needsSetup(provider: "OpenRouter", item: .key)) {
+            try await provider.transcribe(stub.request())
+        }
+        #expect(stub.requests.isEmpty)
+    }
+
+    @Test func keyStoreFailureOtherThanMissingIsRetryable() async {
+        let stub = StubHost(reply: .fixture("success"))
+        let provider = stub.provider(isKeyLocked: true)
+
+        await #expect(throws: ProviderError.keyUnavailable) {
+            try await provider.transcribe(stub.request())
+        }
+        #expect(stub.requests.isEmpty)
+    }
+
+    @Test func warmUpSendsAHeadRequestToTheSameHost() async throws {
+        let stub = StubHost(reply: .status(200))
+
+        await stub.provider().warmUp()
+
+        let sent = try #require(stub.requests.only)
+        #expect(sent.method == "HEAD")
+        #expect(sent.url == stub.baseURL.appending(path: "models/microsoft/mai-transcribe-2/endpoints"))
+        #expect(sent.headers["Authorization"] == nil)
+    }
+
+    @Test func failedWarmUpIsSilent() async {
+        let stub = StubHost(reply: .failure(.notConnectedToInternet))
+
+        await stub.provider(key: nil).warmUp()
+
+        #expect(stub.requests.count == 1)
+    }
+
+    // MARK: Response parsing
+
+    @Test func successReturnsTrimmedTextAndUsage() async throws {
+        let stub = StubHost(reply: .fixture("success"))
+
+        let transcript = try await stub.provider().transcribe(stub.request())
+
+        #expect(transcript.text == "Run make check, then open DictationPipeline.swift.")
+        #expect(transcript.usage.audio == .seconds(12.4))
+        #expect(transcript.usage.costUSD == Decimal(string: "0.000344"))
+    }
+
+    @Test func successWithoutUsageReportsNoCost() async throws {
+        let stub = StubHost(reply: .fixture("success-no-usage"))
+
+        let transcript = try await stub.provider().transcribe(stub.request())
+
+        #expect(
+            transcript
+                == Transcript(
+                    text: "hello", usage: .init(audio: .zero, costUSD: nil), model: "microsoft/mai-transcribe-2"))
+    }
+
+    @Test(arguments: [
+        (StubReply.fixture("empty-text"), ProviderError.emptyTranscript),
+        (.raw(status: 200, body: "<html>"), .server(status: 200)),
+        (.fixture("error-401", status: 401), .auth(status: 401)),
+        (.raw(status: 403, body: ""), .auth(status: 403)),
+        (.fixture("error-429", status: 429, headers: ["Retry-After": "7"]), .rateLimited(retryAfter: .seconds(7))),
+        (.fixture("error-429", status: 429), .rateLimited(retryAfter: nil)),
+        (.raw(status: 408, body: ""), .server(status: 408)),
+        (.fixture("error-502", status: 502), .server(status: 502)),
+        (.raw(status: 503, body: ""), .server(status: 503)),
+        (.fixture("error-400", status: 400), .rejected(status: 400, message: "Unsupported audio format")),
+        (
+            .fixture("error-402", status: 402),
+            .rejected(
+                status: 402, message: "Insufficient credits. Add more using https://openrouter.ai/settings/credits")
+        ),
+        (.raw(status: 413, body: "Payload Too Large"), .rejected(status: 413, message: "Payload Too Large")),
+        (.failure(.notConnectedToInternet), .offline),
+        (.failure(.timedOut), .offline),
+        (.failure(.networkConnectionLost), .offline),
+    ])
+    func failureMapsToProviderError(reply: StubReply, expected: ProviderError) async {
+        let stub = StubHost(reply: reply)
+        let provider = stub.provider()
+
+        await #expect(throws: expected) {
+            try await provider.transcribe(stub.request())
+        }
+    }
+}

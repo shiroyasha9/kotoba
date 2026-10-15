@@ -1,7 +1,7 @@
 import { describe, expect, test } from "bun:test";
 import { DURATION_BUCKETS, type ManifestRow, durationBucket } from "../data.ts";
 import type { RawRow } from "../openrouter.ts";
-import { allocate, candidates, selectClips, wordDistance } from "./select.ts";
+import { type Candidate, allocate, candidates, reviewOrder, selectClips, wordDistance } from "./select.ts";
 
 const DURATIONS = [3, 15, 30, 60];
 
@@ -100,4 +100,11 @@ describe("selectClips", () => {
 		}
 		expect(picked / total).toBeGreaterThan(disagreeing * 1.5);
 	});
+});
+
+test("reviewOrder: shortest first, clipId breaks ties, input untouched", () => {
+	const c = (id: string, duration: number) => ({ id, duration }) as Candidate;
+	const input = [c("b", 12), c("c", 3.5), c("a", 12), c("d", 40)];
+	expect(reviewOrder(input).map((x) => x.id)).toEqual(["c", "a", "b", "d"]);
+	expect(input.map((x) => x.id)).toEqual(["b", "c", "a", "d"]);
 });

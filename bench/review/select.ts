@@ -108,3 +108,8 @@ export function selectClips(pool: Candidate[], n = SAMPLE_SIZE, seed = BENCH_SEE
 	}
 	return shuffle(picked, rand);
 }
+
+/** Review order: shortest clip first, so the owner finishes more clips per sitting; clipId breaks ties. */
+export function reviewOrder(clips: Candidate[]): Candidate[] {
+	return [...clips].sort((a, b) => a.duration - b.duration || a.id.localeCompare(b.id));
+}

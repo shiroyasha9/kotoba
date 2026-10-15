@@ -12,6 +12,7 @@ App/Info.plist
 App/Kotoba.entitlements
 build/
 .build/
+.build-*/
 .swiftpm/
 DerivedData/
 xcuserdata/
