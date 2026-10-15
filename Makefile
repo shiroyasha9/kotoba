@@ -11,7 +11,8 @@ SWIFT_SRC   := App KotobaCore/Sources KotobaCore/Tests KotobaCore/Package.swift 
                KotobaStorage/Sources KotobaStorage/Tests KotobaStorage/Package.swift
 SWIFTFORMAT := xcrun swift-format
 
-.PHONY: gen build build-check test lint lint-files format format-lint check snapshots memory latency
+.PHONY: gen build build-check test lint lint-files format format-lint check snapshots memory latency \
+	release dmg appcast
 
 gen:
 	xcodegen generate --use-cache --quiet
@@ -65,3 +66,59 @@ memory:
 
 latency:
 	RUN=$(RUN) scripts/latency.sh
+
+# Release (docs/release.md): `make dmg` builds, notarizes and staples the app and the DMG; `make appcast` writes the
+# Sparkle feed for that DMG. Everything lands in build/release/; nothing is uploaded.
+RELEASE        := build/release
+ARCHIVE        := $(RELEASE)/kotoba.xcarchive
+RELEASE_APP    := $(RELEASE)/export/kotoba.app
+VERSION        := $(shell awk '$$1 == "MARKETING_VERSION:" { gsub(/"/, "", $$2); print $$2 }' project.yml)
+DMG            := $(RELEASE)/kotoba-$(VERSION).dmg
+SIGN_IDENTITY  := $(shell awk -F'"' '/CODE_SIGN_IDENTITY:/ { print $$2; exit }' project.yml)
+# Your notarytool keychain profile (`xcrun notarytool store-credentials`): `make dmg NOTARY_PROFILE=<name>`.
+NOTARY_PROFILE ?=
+SPARKLE_BIN    := $(RELEASE)/DerivedData/SourcePackages/artifacts/sparkle/Sparkle/bin
+# The Keychain account of the EdDSA private key (`generate_keys --account kotoba`); SUPublicEDKey is its public key.
+SPARKLE_ACCOUNT := kotoba
+DOWNLOAD_URL   := https://github.com/shiroyasha9/kotoba/releases/download/v$(VERSION)/
+
+# Archive, not build: only the archive export re-signs Sparkle's XPC services, Autoupdate and Updater.app with the
+# Developer ID, hardened runtime and a secure timestamp. The archive is also universal (arm64 and x86_64).
+release: gen
+	test -n "$(NOTARY_PROFILE)" || { echo "Set NOTARY_PROFILE to your notarytool keychain profile: make dmg NOTARY_PROFILE=<name>"; exit 1; }
+	rm -rf $(ARCHIVE) $(RELEASE)/export
+	xcodebuild -project $(PROJECT) -scheme $(SCHEME) -configuration Release -quiet \
+		-destination 'generic/platform=macOS' -archivePath $(ARCHIVE) -derivedDataPath $(RELEASE)/DerivedData \
+		CODE_SIGN_INJECT_BASE_ENTITLEMENTS=NO OTHER_CODE_SIGN_FLAGS=--timestamp archive
+	xcodebuild -exportArchive -quiet -archivePath $(ARCHIVE) -exportPath $(RELEASE)/export \
+		-exportOptionsPlist scripts/ExportOptions.plist
+	scripts/verify-release.sh $(RELEASE_APP)
+	ditto -c -k --keepParent $(RELEASE_APP) $(RELEASE)/kotoba-notarize.zip
+	xcrun notarytool submit $(RELEASE)/kotoba-notarize.zip --keychain-profile $(NOTARY_PROFILE) --wait
+	rm $(RELEASE)/kotoba-notarize.zip
+	xcrun stapler staple $(RELEASE_APP)
+
+# APFS with lzfse, as Sparkle recommends for DMG updates. The DMG gets its own signature, notarization and ticket,
+# so Gatekeeper accepts it before it is opened.
+dmg: release
+	rm -rf $(RELEASE)/dmg $(DMG) && mkdir -p $(RELEASE)/dmg
+	ditto $(RELEASE_APP) $(RELEASE)/dmg/kotoba.app
+	ln -s /Applications $(RELEASE)/dmg/Applications
+	hdiutil create -quiet -volname kotoba -srcfolder $(RELEASE)/dmg -fs APFS -format ULFO $(DMG)
+	rm -rf $(RELEASE)/dmg
+	codesign --sign "$(SIGN_IDENTITY)" --timestamp $(DMG)
+	xcrun notarytool submit $(DMG) --keychain-profile $(NOTARY_PROFILE) --wait
+	xcrun stapler staple $(DMG)
+	xcrun stapler validate $(DMG)
+	spctl -a -vv -t install $(DMG)
+
+# One item, the current DMG: each GitHub release carries its own appcast.xml, and the feed URL reads the latest
+# release's copy. NOTES=<file.md> embeds release notes. generate_appcast signs with the key in the login Keychain.
+appcast:
+	test -f $(DMG) || { echo "$(DMG) is missing: run make dmg first"; exit 1; }
+	rm -rf $(RELEASE)/updates && mkdir -p $(RELEASE)/updates
+	cp -c $(DMG) $(RELEASE)/updates/
+	$(if $(NOTES),cp $(NOTES) $(RELEASE)/updates/kotoba-$(VERSION).md)
+	$(SPARKLE_BIN)/generate_appcast --account $(SPARKLE_ACCOUNT) --download-url-prefix $(DOWNLOAD_URL) \
+		--maximum-versions 1 --maximum-deltas 0 $(if $(NOTES),--embed-release-notes) \
+		-o $(RELEASE)/appcast.xml $(RELEASE)/updates
