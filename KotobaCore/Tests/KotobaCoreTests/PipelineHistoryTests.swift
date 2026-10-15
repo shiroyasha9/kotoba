@@ -86,3 +86,77 @@ struct PipelineHistoryTests {
         #expect(RetrySelection.only([first]).merged(with: .exceptNeedsSetup) == .all)
     }
 }
+
+/// Delete and the change stream: what an open History window relies on.
+struct PipelineHistoryChangeTests {
+
+    @Test func aDictationDeletedDuringItsRetryStaysDeleted() async throws {
+        let world = FakeWorld(transcript: "too late")
+        let pipeline = world.makePipeline()
+        await world.provider.fail(with: FakeError())
+        await pipeline.dictate(world)
+        let id = try #require(await world.store.records.first?.id)
+        await world.provider.fail(with: nil)
+        let gate = Gate()
+        await world.provider.hold(at: gate)
+
+        let retry = Task { await pipeline.retry([id]) }
+        #expect(await eventually { await gate.hasWaiters })
+        await pipeline.delete([id])
+        await gate.open()
+        await retry.value
+
+        #expect(await world.store.records.isEmpty)
+        #expect(await pipeline.state != .recovered(id))
+    }
+
+    @Test func aDictationInFlightIsNotDeleted() async throws {
+        let world = FakeWorld(transcript: "still sending")
+        let pipeline = world.makePipeline()
+        let gate = Gate()
+        await world.provider.hold(at: gate)
+        await pipeline.tap(world)
+        await pipeline.tap(world)
+        #expect(await eventually { await gate.hasWaiters })
+        let id = try #require(await world.store.records.first?.id)
+
+        await pipeline.delete([id])
+        await gate.open()
+        await pipeline.settle()
+
+        #expect(await world.store.records.map(\.status) == [.pasted])
+    }
+
+    @Test func eachChangeNamesItsDictation() async throws {
+        let world = FakeWorld(transcript: "named")
+        let pipeline = world.makePipeline()
+        var changes = pipeline.historyChanges.makeAsyncIterator()
+
+        await pipeline.dictate(world)
+        let id = try #require(await world.store.records.first?.id)
+        await pipeline.delete([id])
+
+        // Saved pending at the stop, saved pasted, then deleted.
+        #expect(await changes.next() == .saved(id))
+        #expect(await changes.next() == .saved(id))
+        #expect(await changes.next() == .deleted([id]))
+    }
+
+    @Test func aRejectedDictationIsSentAgainAndCanFailAgain() async throws {
+        let world = FakeWorld(transcript: "with credit")
+        let pipeline = world.makePipeline()
+        await world.provider.fail(with: ProviderError.rejected(status: 400, message: "Unsupported audio"))
+        await pipeline.dictate(world)
+        let rejected = try #require(await world.store.records.first)
+        #expect(rejected.status == .rejected && rejected.isRetryable)
+
+        await world.provider.fail(with: FakeError())
+        await pipeline.retry([rejected.id])
+        // A retry that fails again leaves a failed dictation, which the menu's Retry counts.
+        #expect(try #require(await world.store.records.first).status == .failed)
+
+        await world.provider.fail(with: nil)
+        await pipeline.retry([rejected.id])
+        #expect(try #require(await world.store.records.first).status == .recovered)
+    }
+}

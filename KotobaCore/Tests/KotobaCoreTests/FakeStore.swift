@@ -14,6 +14,13 @@ actor FakeStore: Store {
         history[record.id, default: []].append(record.status)
     }
 
+    func update(_ record: DictationRecord) async throws -> Bool {
+        guard let index = records.firstIndex(where: { $0.id == record.id }) else { return false }
+        records[index] = record
+        history[record.id, default: []].append(record.status)
+        return true
+    }
+
     func pendingRetries() async throws -> [DictationRecord] {
         records.filter { $0.status == .pending || $0.status == .failed }
     }
@@ -35,11 +42,16 @@ actor FakeStore: Store {
     }
 
     func queueForRetry(_ id: DictationID) async throws {
-        guard let index = records.firstIndex(where: { $0.id == id }), records[index].status == .cancelled else {
-            return
-        }
+        guard let index = records.firstIndex(where: { $0.id == id }),
+            [.cancelled, .rejected].contains(records[index].status)
+        else { return }
         records[index].status = .failed
+        records[index].rejectReason = nil
         history[id, default: []].append(.failed)
+    }
+
+    func delete(_ ids: Set<DictationID>) async throws {
+        records.removeAll { ids.contains($0.id) }
     }
 
     func prune(olderThan cutoff: Date) async throws {

@@ -56,6 +56,8 @@ public actor HistoryStore: Store {
     private static let retryable = sqlList([.pending, .failed])
     private static let kept = sqlList([.pending, .failed, .rejected])
     private static let delivered = sqlList([.pasted, .copied])
+    /// The kept rows the History window's Retry puts back in the queue.
+    private static let requeued = sqlList([.cancelled, .rejected])
 
     /// ~/Library/Application Support/kotoba/
     public static var directory: URL {
@@ -86,10 +88,9 @@ public actor HistoryStore: Store {
     }
 
     public func save(_ record: DictationRecord) throws {
-        let id = Value.text(record.id.rawValue.uuidString)
-        try database.transaction { () throws(SQLiteError) in
-            try database.run(
-                """
+        _ = try write(
+            record,
+            sql: """
                 INSERT INTO dictations (\(Self.columns))
                 VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14)
                 ON CONFLICT (id) DO UPDATE SET
@@ -97,8 +98,33 @@ public actor HistoryStore: Store {
                     transcript = excluded.transcript, model = excluded.model, status = excluded.status,
                     recovered_at = excluded.recovered_at, cleaned_text = excluded.cleaned_text,
                     needs_setup = excluded.needs_setup, mode = excluded.mode, reject_reason = excluded.reject_reason,
-                    app_bundle_id = excluded.app_bundle_id, app_name = excluded.app_name;
-                """,
+                    app_bundle_id = excluded.app_bundle_id, app_name = excluded.app_name
+                RETURNING id;
+                """)
+    }
+
+    /// The same columns as `save`, in one statement that finds no row once the History window deleted it.
+    public func update(_ record: DictationRecord) throws -> Bool {
+        try write(
+            record,
+            sql: """
+                UPDATE dictations SET (
+                    audio_path, audio_duration_ms, transcript, model, status, recovered_at, cleaned_text, needs_setup,
+                    mode, reject_reason, app_bundle_id, app_name
+                ) = (?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14)
+                WHERE id = ?1
+                RETURNING id;
+                """)
+    }
+
+    /// Runs `sql` with the record's columns as ?1-?14 (`columns` order), then replaces its latency marks, in one
+    /// transaction. False when `sql` wrote no row.
+    private func write(_ record: DictationRecord, sql: String) throws -> Bool {
+        let id = Value.text(record.id.rawValue.uuidString)
+        var isWritten = false
+        try database.transaction { () throws(SQLiteError) in
+            isWritten = try !database.query(
+                sql,
                 [
                     id, .real(record.createdAt.timeIntervalSince1970), .text(record.audio.file.path),
                     .integer(Int64(record.audio.duration / .milliseconds(1))), Self.text(record.transcript),
@@ -108,7 +134,8 @@ public actor HistoryStore: Store {
                     Self.text(record.rejectReason?.rawValue), Self.text(record.app?.bundleID),
                     Self.text(record.app?.name),
                 ]
-            )
+            ).isEmpty
+            guard isWritten else { return }
             try database.run("DELETE FROM latency_marks WHERE dictation_id = ?1;", [id])
             let marks = record.latency.offsets.sorted { $0.key.rawValue < $1.key.rawValue }
             guard !marks.isEmpty else { return }
@@ -119,6 +146,7 @@ public actor HistoryStore: Store {
                 marks.flatMap { mark, offset in [id, .text(mark.rawValue), .real(offset / .milliseconds(1))] }
             )
         }
+        return isWritten
     }
 
     public func pendingRetries() throws -> [DictationRecord] {
@@ -159,31 +187,7 @@ public actor HistoryStore: Store {
         try deleteRows(where: "created_at < ?1 AND status NOT IN \(Self.kept)", [.real(cutoff.timeIntervalSince1970)])
     }
 
-    /// One page of the History window, newest first: the rows after `last` (the previous page's last row) whose text
-    /// or app name contains `search` (case-insensitive for ASCII letters); an empty `search` matches every row.
-    /// A search that matches nothing scans every row: about 3 ms on 10,000 rows (debug build, `HistoryStoreTests`), so
-    /// the history needs no FTS index. A page is about 1 ms.
-    public func page(matching search: String = "", after last: DictationRecord? = nil, limit: Int) throws
-        -> [DictationRecord]
-    {
-        var conditions: [String] = []
-        var values: [Value] = [.integer(Int64(limit))]
-        if !search.isEmpty {
-            values.append(.text("%" + Self.escapedForLike(search) + "%"))
-            conditions.append(
-                "(cleaned_text LIKE ?2 ESCAPE '\\' OR transcript LIKE ?2 ESCAPE '\\' OR app_name LIKE ?2 ESCAPE '\\')")
-        }
-        if let last {
-            values += [.real(last.createdAt.timeIntervalSince1970), .text(last.id.rawValue.uuidString)]
-            conditions.append("(created_at, id) < (?\(values.count - 1), ?\(values.count))")
-        }
-        let filter = conditions.isEmpty ? "1" : conditions.joined(separator: " AND ")
-        return try records(
-            where: "\(filter) ORDER BY created_at DESC, id DESC LIMIT ?1", values, withLatency: false)
-    }
-
-    /// Deletes the dictations, their latency marks and their audio files (the History window's Delete).
-    public func delete(_ ids: [DictationID]) throws {
+    public func delete(_ ids: Set<DictationID>) throws {
         guard !ids.isEmpty else { return }
         let placeholders = (1...ids.count).map { "?\($0)" }.joined(separator: ", ")
         try deleteRows(where: "id IN (\(placeholders))", ids.map { .text($0.rawValue.uuidString) })
@@ -199,11 +203,8 @@ public actor HistoryStore: Store {
 
     public func queueForRetry(_ id: DictationID) throws {
         try database.run(
-            "UPDATE dictations SET status = ?2 WHERE id = ?1 AND status = ?3;",
-            [
-                .text(id.rawValue.uuidString), .text(DictationRecord.Status.failed.rawValue),
-                .text(DictationRecord.Status.cancelled.rawValue),
-            ])
+            "UPDATE dictations SET status = ?2, reject_reason = NULL WHERE id = ?1 AND status IN \(Self.requeued);",
+            [.text(id.rawValue.uuidString), .text(DictationRecord.Status.failed.rawValue)])
     }
 
     /// Number of dictations waiting for a retry, for the menu.
@@ -268,11 +269,6 @@ public actor HistoryStore: Store {
         return log
     }
 
-    /// `\`, `%` and `_` match only themselves in a LIKE pattern with `ESCAPE '\'`.
-    private static func escapedForLike(_ text: String) -> String {
-        text.replacing("\\", with: "\\\\").replacing("%", with: "\\%").replacing("_", with: "\\_")
-    }
-
     private static func sqlList(_ statuses: [DictationRecord.Status]) -> String {
         "(" + statuses.map { "'\($0.rawValue)'" }.joined(separator: ", ") + ")"
     }
@@ -283,5 +279,59 @@ public actor HistoryStore: Store {
 
     private static func string(_ value: Value) -> String? {
         if case .text(let text) = value { text } else { nil }
+    }
+}
+
+// MARK: - History window
+
+extension HistoryStore {
+    /// One page of the History window, newest first: the rows after `last` (the previous page's last row) whose text
+    /// or app name contains `search` (case-insensitive for ASCII letters); an empty `search` matches every row.
+    /// A search that matches nothing scans every row: about 3 ms on 10,000 rows (debug build, `HistoryStoreTests`), so
+    /// the history needs no FTS index. A page is about 1 ms.
+    public func page(matching search: String = "", after last: DictationRecord? = nil, limit: Int) throws
+        -> [DictationRecord]
+    {
+        var conditions: [String] = []
+        var values: [Value] = [.integer(Int64(limit))]
+        if let match = Self.match(search, parameter: 2) {
+            conditions.append(match.condition)
+            values.append(match.pattern)
+        }
+        if let last {
+            values += [.real(last.createdAt.timeIntervalSince1970), .text(last.id.rawValue.uuidString)]
+            conditions.append("(created_at, id) < (?\(values.count - 1), ?\(values.count))")
+        }
+        let filter = conditions.isEmpty ? "1" : conditions.joined(separator: " AND ")
+        return try records(
+            where: "\(filter) ORDER BY created_at DESC, id DESC LIMIT ?1", values, withLatency: false)
+    }
+
+    /// One row, without latency marks, when it exists and matches `search` as in `page`: an open History window reads
+    /// the dictation a change names.
+    public func record(_ id: DictationID, matching search: String = "") throws -> DictationRecord? {
+        var condition = "id = ?1"
+        var values: [Value] = [.text(id.rawValue.uuidString)]
+        if let match = Self.match(search, parameter: 2) {
+            condition += " AND " + match.condition
+            values.append(match.pattern)
+        }
+        return try records(where: condition, values, withLatency: false).first
+    }
+
+    /// The condition that `search` is in the text or app name, with its LIKE pattern bound as `?parameter`; nil for an
+    /// empty search.
+    private static func match(_ search: String, parameter: Int) -> (condition: String, pattern: Value)? {
+        guard !search.isEmpty else { return nil }
+        let like = "LIKE ?\(parameter) ESCAPE '\\'"
+        return (
+            "(cleaned_text \(like) OR transcript \(like) OR app_name \(like))",
+            .text("%" + escapedForLike(search) + "%")
+        )
+    }
+
+    /// `\`, `%` and `_` match only themselves in a LIKE pattern with `ESCAPE '\'`.
+    private static func escapedForLike(_ text: String) -> String {
+        text.replacing("\\", with: "\\\\").replacing("%", with: "\\%").replacing("_", with: "\\_")
     }
 }

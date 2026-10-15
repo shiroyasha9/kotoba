@@ -13,16 +13,17 @@ final class HistoryController: NSObject, NSWindowDelegate {
 
     private let store: HistoryStore
     private let pipeline: DictationPipeline
-    /// The window deleted rows, which the pipeline does not announce: the menu reads its counts again.
-    private let onEdit: @MainActor () async -> Void
     private var window: NSWindow?
     private var model: HistoryModel?
     private var isDictating = false
+    /// History changes for the open window, applied one at a time in order (two saves of one dictation must not land
+    /// out of order). Both end when the window closes.
+    private var changes: AsyncStream<HistoryChange>.Continuation?
+    private var applying: Task<Void, Never>?
 
-    init(store: HistoryStore, pipeline: DictationPipeline, onEdit: @escaping @MainActor () async -> Void) {
+    init(store: HistoryStore, pipeline: DictationPipeline) {
         self.store = store
         self.pipeline = pipeline
-        self.onEdit = onEdit
     }
 
     func show() {
@@ -32,10 +33,9 @@ final class HistoryController: NSObject, NSWindowDelegate {
         window.makeKeyAndOrderFront(nil)
     }
 
-    /// A history write (from `DictationPipeline.historyChanges`): an open window reads its rows again.
-    func storeChanged() {
-        guard let model else { return }
-        Task { await model.reload(keepingCount: true) }
+    /// A history write (from `DictationPipeline.historyChanges`): an open window reads the row it names.
+    func historyChanged(_ change: HistoryChange) {
+        changes?.yield(change)
     }
 
     func dictationStateChanged(_ state: DictationState) {
@@ -48,6 +48,10 @@ final class HistoryController: NSObject, NSWindowDelegate {
     }
 
     func windowWillClose(_ notification: Notification) {
+        changes?.finish()
+        applying?.cancel()
+        changes = nil
+        applying = nil
         window = nil
         model = nil
     }
@@ -56,6 +60,13 @@ final class HistoryController: NSObject, NSWindowDelegate {
         let model = HistoryModel(source: source)
         model.isDictating = isDictating
         self.model = model
+        let (stream, continuation) = AsyncStream.makeStream(of: HistoryChange.self)
+        changes = continuation
+        applying = Task {
+            for await change in stream {
+                await model.apply(change)
+            }
+        }
         let controller = NSHostingController(rootView: HistoryView(model: model))
         controller.sceneBridgingOptions = [.toolbars]
         let window = NSWindow(contentViewController: controller)
@@ -77,10 +88,8 @@ final class HistoryController: NSObject, NSWindowDelegate {
         let pipeline = pipeline
         return HistoryModel.Source(
             page: { try await store.page(matching: $0, after: $1, limit: $2) },
-            delete: { [onEdit] ids in
-                try await store.delete(ids)
-                await onEdit()
-            },
+            record: { try await store.record($0, matching: $1) },
+            delete: { await pipeline.delete($0) },
             retry: { await pipeline.retry($0) },
             paste: { text, id in
                 // The window's flag follows the indicator, which can show an outcome while another dictation is sent.

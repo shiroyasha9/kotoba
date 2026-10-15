@@ -15,7 +15,10 @@ final class HistoryModel {
         /// The rows after `after` whose text or app contains the search, newest first.
         var page:
             @MainActor (_ search: String, _ after: DictationRecord?, _ limit: Int) async throws -> [DictationRecord]
-        var delete: @MainActor ([DictationID]) async throws -> Void
+        /// One row when it exists and matches the search.
+        var record: @MainActor (DictationID, _ search: String) async throws -> DictationRecord?
+        /// The pipeline announces what it deleted (`HistoryChange.deleted`); the window removes rows only then.
+        var delete: @MainActor (Set<DictationID>) async -> Void
         var retry: @MainActor (Set<DictationID>) async -> Void
         var paste: @MainActor (String, DictationID) async -> Void
         var copy: @MainActor (String) async -> Void
@@ -56,6 +59,8 @@ final class HistoryModel {
     /// Each read takes the next number; a result that comes back after a newer read started is dropped.
     @ObservationIgnored private var generation = 0
     @ObservationIgnored private var isLoadingMore = false
+    /// Rows deleted while the window is open: a read that started before the delete must not show them again.
+    @ObservationIgnored private var deleted: Set<DictationID> = []
     @ObservationIgnored private var icons: [String: NSImage?] = [:]
 
     init(source: Source?) {
@@ -84,7 +89,7 @@ final class HistoryModel {
         do {
             let page = try await source.page(search, nil, limit)
             guard current == generation else { return }
-            rows = page
+            rows = page.filter { !deleted.contains($0.id) }
             isComplete = page.count < limit
             loadError = nil
         } catch {
@@ -105,11 +110,52 @@ final class HistoryModel {
         do {
             let page = try await source.page(search, last, Self.pageSize)
             guard current == generation else { return }
-            rows += page
+            rows += page.filter { !deleted.contains($0.id) }
             isComplete = page.count < Self.pageSize
         } catch {
             Log.app.error("Cannot read more history: \(error)")
         }
+    }
+
+    /// One history write while the window is open: reads only the row it names, or drops the deleted rows. A prune
+    /// does not name its rows, so the shown rows are read again.
+    func apply(_ change: HistoryChange) async {
+        switch change {
+        case .saved(let id): await refresh(id)
+        case .deleted(let ids):
+            deleted.formUnion(ids)
+            rows.removeAll { ids.contains($0.id) }
+            selection.subtract(ids)
+        case .pruned: await reload(keepingCount: true)
+        }
+    }
+
+    /// Puts the row in its place, newest first, or takes it out when it no longer matches the search. A row older than
+    /// the last one shown waits for its page.
+    private func refresh(_ id: DictationID) async {
+        guard let source else { return }
+        let current = generation
+        let record: DictationRecord?
+        do {
+            record = try await source.record(id, search)
+        } catch {
+            Log.app.error("Cannot read dictation \(id.rawValue): \(error)")
+            return
+        }
+        // A read that started later saw this write too.
+        guard current == generation, !deleted.contains(id) else { return }
+        var updated = rows
+        updated.removeAll { $0.id == id }
+        if let record, isComplete || updated.last.map({ Self.isNewer(record, than: $0) }) ?? true {
+            updated.insert(record, at: updated.firstIndex { Self.isNewer(record, than: $0) } ?? updated.endIndex)
+        }
+        rows = updated
+    }
+
+    /// The store's order: `created_at`, then the id's text, both descending.
+    private static func isNewer(_ record: DictationRecord, than other: DictationRecord) -> Bool {
+        record.createdAt != other.createdAt
+            ? record.createdAt > other.createdAt : record.id.rawValue.uuidString > other.id.rawValue.uuidString
     }
 
     // MARK: Selection and actions
@@ -164,18 +210,7 @@ final class HistoryModel {
 
     func delete(_ ids: [DictationID]) {
         guard let source else { return }
-        Task {
-            do {
-                try await source.delete(ids)
-                // A read that started before the delete would bring the rows back.
-                generation += 1
-                let deleted = Set(ids)
-                rows.removeAll { deleted.contains($0.id) }
-                selection.subtract(deleted)
-            } catch {
-                Log.app.error("Cannot delete dictations: \(error)")
-            }
-        }
+        Task { await source.delete(Set(ids)) }
     }
 
     // MARK: Display

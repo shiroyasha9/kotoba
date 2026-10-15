@@ -3,6 +3,9 @@ import Foundation
 /// Durable history: kept audio, the offline retry queue and latency logs.
 public protocol Store: Sendable {
     func save(_ record: DictationRecord) async throws
+    /// Writes a record whose row still exists and returns true; returns false and writes nothing when the row is gone
+    /// (the owner deleted it while a retry ran), so a late write never brings a deleted dictation back.
+    func update(_ record: DictationRecord) async throws -> Bool
     /// Records with status `.pending` or `.failed`: dictations whose audio has no transcript yet.
     func pendingRetries() async throws -> [DictationRecord]
     /// The stored status of one dictation, or nil when there is no row.
@@ -12,8 +15,11 @@ public protocol Store: Sendable {
     func recovered(since cutoff: Date) async throws -> [DictationRecord]
     /// Sets one record's status to `.copied`, keeping everything else.
     func markCopied(_ id: DictationID) async throws
-    /// Puts a `.cancelled` record in the retry queue as `.failed`; a record with any other status keeps it.
+    /// Puts a `.cancelled` or `.rejected` record in the retry queue as `.failed`; a record with any other status keeps
+    /// it.
     func queueForRetry(_ id: DictationID) async throws
+    /// Deletes the records, their latency logs and their audio files (the History window's Delete).
+    func delete(_ ids: Set<DictationID>) async throws
     /// Deletes records and their audio created before `cutoff` (retention period), except
     /// `.pending`, `.failed` and `.rejected` ones. Runs at launch or when idle, never on the dictation path.
     func prune(olderThan cutoff: Date) async throws
@@ -103,10 +109,14 @@ extension DictationRecord {
     /// The text kotoba pasted or offers to copy: the cleaned text of a cleanup dictation, else the transcript.
     public var deliveredText: String? { cleanedText ?? transcript }
 
-    /// A dictation with no text yet that a retry can send, while its audio is kept: queued, failed, or cancelled
-    /// (`DictationPipeline.retry(_:)` queues it first). A rejected one would get the same answer again.
+    /// A dictation with no text yet that the History window's Retry can send, while its audio is kept: queued, failed,
+    /// cancelled or rejected (`DictationPipeline.retry(_:)` queues the last two first). A rejected one can succeed once
+    /// the owner fixed the cause, for example added credit.
     public var isRetryable: Bool {
-        status == .pending || status == .failed || status == .cancelled
+        switch status {
+        case .pending, .failed, .cancelled, .rejected: true
+        case .pasted, .copied, .recovered: false
+        }
     }
 
     /// Records a failed request: `.failed` (retried), with `needsSetup` when only a setting can help,
@@ -134,16 +144,41 @@ extension Store {
             Log.pipeline.error("Cannot save dictation \(record.id.rawValue): \(error)")
         }
     }
+
+    /// Updates and logs a failure. False only when the row is gone: the dictation was deleted, so it has no outcome.
+    func updateOrLog(_ record: DictationRecord) async -> Bool {
+        do {
+            return try await update(record)
+        } catch {
+            Log.pipeline.error("Cannot save dictation \(record.id.rawValue): \(error)")
+            return true
+        }
+    }
+}
+
+/// One write to the history, as `DictationPipeline.historyChanges` reports it, so a reader updates only what changed.
+public enum HistoryChange: Sendable, Equatable {
+    /// The dictation's row was written: a new dictation, a new status, a retry's transcript.
+    case saved(DictationID)
+    case deleted(Set<DictationID>)
+    /// Rows past the retention period were deleted; which ones is not reported.
+    case pruned
 }
 
 /// Passes every call to `base` and announces each write, so the app reads its counts and lists again only then.
 struct AnnouncingStore: Store {
     let base: any Store
-    let changes: AsyncStream<Void>.Continuation
+    let changes: AsyncStream<HistoryChange>.Continuation
 
     func save(_ record: DictationRecord) async throws {
-        defer { changes.yield() }
+        defer { changes.yield(.saved(record.id)) }
         try await base.save(record)
+    }
+
+    func update(_ record: DictationRecord) async throws -> Bool {
+        let isWritten = try await base.update(record)
+        if isWritten { changes.yield(.saved(record.id)) }
+        return isWritten
     }
 
     func pendingRetries() async throws -> [DictationRecord] {
@@ -159,17 +194,22 @@ struct AnnouncingStore: Store {
     }
 
     func markCopied(_ id: DictationID) async throws {
-        defer { changes.yield() }
+        defer { changes.yield(.saved(id)) }
         try await base.markCopied(id)
     }
 
     func queueForRetry(_ id: DictationID) async throws {
-        defer { changes.yield() }
+        defer { changes.yield(.saved(id)) }
         try await base.queueForRetry(id)
     }
 
+    func delete(_ ids: Set<DictationID>) async throws {
+        defer { changes.yield(.deleted(ids)) }
+        try await base.delete(ids)
+    }
+
     func prune(olderThan cutoff: Date) async throws {
-        defer { changes.yield() }
+        defer { changes.yield(.pruned) }
         try await base.prune(olderThan: cutoff)
     }
 }

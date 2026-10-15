@@ -94,7 +94,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         )
         self.pipeline = pipeline
         lastDictation = LastDictation(store: store, pipeline: pipeline)
-        history = HistoryController(store: store, pipeline: pipeline) { [weak self] in await self?.refreshQueues() }
+        history = HistoryController(store: store, pipeline: pipeline)
 
         observe(pipeline)
         observeReadiness()
@@ -156,8 +156,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         // Each history write can change the Retry count, the Recovered list, "Fix Last Dictation…" and an open
         // History window.
         Task {
-            for await _ in pipeline.historyChanges {
-                history?.storeChanged()
+            for await change in pipeline.historyChanges {
+                history?.historyChanged(change)
                 await refreshQueues()
             }
         }

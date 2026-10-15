@@ -241,17 +241,51 @@ struct HistoryStoreTests {
         }
     }
 
-    @Test func onlyACancelledDictationIsQueuedForRetry() async throws {
+    @Test func aCancelledOrRejectedDictationIsQueuedForRetry() async throws {
         let store = try HistoryStore(url: url)
-        let cancelled = record(.cancelled)
+        let cancelled = record(.cancelled, at: 1_000)
+        var rejected = record(.rejected, at: 2_000)
+        rejected.rejectReason = .other
         let pasted = record(.pasted)
-        try await store.save(cancelled)
-        try await store.save(pasted)
+        for saved in [cancelled, rejected, pasted] {
+            try await store.save(saved)
+        }
 
-        try await store.queueForRetry(cancelled.id)
-        try await store.queueForRetry(pasted.id)
+        for saved in [cancelled, rejected, pasted] {
+            try await store.queueForRetry(saved.id)
+        }
 
-        #expect(try await store.pendingRetries().map(\.id) == [cancelled.id])
+        let queued = try await store.pendingRetries()
+        #expect(queued.map(\.id) == [cancelled.id, rejected.id])
+        #expect(queued.allSatisfy { $0.status == .failed && $0.rejectReason == nil })
         #expect(try await store.status(of: pasted.id) == .pasted)
+    }
+
+    @Test func anUpdateWritesOnlyARowThatStillExists() async throws {
+        let store = try HistoryStore(url: url)
+        var kept = spoken("first try", at: 1_000)
+        let deleted = spoken("gone", at: 2_000)
+        try await store.save(kept)
+        try await store.save(deleted)
+        try await store.delete([deleted.id])
+
+        kept.status = .recovered
+        kept.latency = LatencyLog()
+        #expect(try await store.update(kept))
+        #expect(try await !store.update(deleted))
+
+        #expect(try await store.page(limit: 10) == [kept])
+    }
+
+    @Test func oneRowIsReadOnlyWhenItMatchesTheSearch() async throws {
+        let store = try HistoryStore(url: url)
+        var saved = spoken("deploy to Vercel", at: 1_000)
+        saved.latency = LatencyLog()
+        try await store.save(saved)
+
+        #expect(try await store.record(saved.id, matching: "vercel") == saved)
+        #expect(try await store.record(saved.id) == saved)
+        #expect(try await store.record(saved.id, matching: "netlify") == nil)
+        #expect(try await store.record(DictationID()) == nil)
     }
 }

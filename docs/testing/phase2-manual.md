@@ -402,6 +402,8 @@ Rows from each agent's phase 2.5 work. The numbers continue the list above.
 | 301 | Select two rows, press Delete; click **Delete** in the dialog | “Delete 2 Dictations?”; the rows are gone, and their audio files are gone from `~/Library/Application Support/kotoba/audio` | |
 | 302 | Scroll History with more than 200 dictations | Older rows load as you reach the end; no pause | |
 | 303 | Close History, then open it again | It opens at the same size and place, with the search cleared | |
+| 304 | With no OpenRouter credit, dictate (“Refused” row); add credit, then select the row > **Retry** | The row changes to “Recovered” with its text | |
+| 305 | Turn Wi-Fi off, dictate, select the “Not transcribed” row > **Retry**, then **Delete** it before Wi-Fi returns; turn Wi-Fi on | The row stays deleted; no “Saved dictation recovered” pill | |
 
 ## Known offscreen-only doubts
 

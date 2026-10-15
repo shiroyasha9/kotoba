@@ -9,8 +9,8 @@ public actor DictationPipeline {
     public private(set) var state: DictationState = .idle
     /// Every state change, for the indicator and sound cues.
     public nonisolated let states: AsyncStream<DictationState>
-    /// After each write to the store, coalesced: the menu reads its counts and lists again.
-    public nonisolated let historyChanges: AsyncStream<Void>
+    /// Each write to the store, in order: the menu reads its counts and lists again, an open History window its rows.
+    public nonisolated let historyChanges: AsyncStream<HistoryChange>
 
     let ports: Ports
     var settings: Settings
@@ -42,7 +42,8 @@ public actor DictationPipeline {
     var handledSoundEvents = 0
 
     public init(ports: Ports, settings: Settings) {
-        let (historyChanges, changes) = AsyncStream.makeStream(of: Void.self, bufferingPolicy: .bufferingNewest(1))
+        // Not coalesced: each change names its rows. A dictation makes two or three.
+        let (historyChanges, changes) = AsyncStream.makeStream(of: HistoryChange.self)
         self.historyChanges = historyChanges
         var ports = ports
         ports.store = AnnouncingStore(base: ports.store, changes: changes)
@@ -101,7 +102,7 @@ public actor DictationPipeline {
     }
 
     /// The History window's Retry: sends the chosen kept dictations again, each after no dictation is live. A cancelled
-    /// one joins the queue first; the others must already be queued (`DictationRecord.isRetryable`).
+    /// or rejected one joins the queue first (`DictationRecord.isRetryable`).
     public func retry(_ ids: Set<DictationID>) async {
         for id in ids {
             do {
@@ -111,6 +112,17 @@ public actor DictationPipeline {
             }
         }
         await retryPending(.only(ids))
+    }
+
+    /// The History window's Delete. A dictation in flight is kept: its own save would bring the row back.
+    public func delete(_ ids: Set<DictationID>) async {
+        let deletable = ids.subtracting(inFlight)
+        guard !deletable.isEmpty else { return }
+        do {
+            try await ports.store.delete(deletable)
+        } catch {
+            Log.pipeline.error("Cannot delete dictations: \(error)")
+        }
     }
 
     /// A key, an endpoint or credit arrived: once the route has everything, the waiting dictations are sent once each.

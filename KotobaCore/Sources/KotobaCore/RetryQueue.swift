@@ -75,7 +75,8 @@ public actor RetryQueue {
             await waitUntilQuiet()
             guard await isStillQueued(record, isInFlight: isInFlight) else { continue }
             let retried = await retry(record, settings: await settings())
-            await store.saveOrLog(retried)
+            // Deleted from the History window during the request: it stays deleted and shows no outcome.
+            guard await store.updateOrLog(retried) else { continue }
             results.append(retried)
         }
         return results
