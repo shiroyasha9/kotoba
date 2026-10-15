@@ -8,6 +8,7 @@ Date: 2026-10-16 (research at 00:30-00:55 IST). Scope: which languages MAI-Trans
 - No source says that MAI or Grok writes Hinglish in Latin script. MAI names Hinglish code-switching but not the output script. Only Sarvam Saaras v4 (`mode: "translit"`) documents romanized output. Wispr Flow does it, but only when the user picks "Hinglish" by hand.
 - kotoba-bench-v1 sent `language: "en"` on every request (`bench/stt.ts:192`). All its numbers (MAI WER 8.1%) are for forced English. Auto-detect on the owner's English is not measured.
 - Recommended v1: English (default), Hinglish (Latin script) and Hindi (Devanagari) as the owner's languages; 19 more languages in the picker that pass a published per-language bar (table below). Hinglish route: benchmark MAI auto-detect against Sarvam `translit` on 30 of the owner's clips, then pick. Cost of the benchmark: about $0.35, under 10 minutes of run time.
+- Synthetic Hinglish bench (2026-10-16, section below): MAI writes Hindi words in Devanagari and English words mostly in Latin, also with `language: "en"`. The words are right (romanized WER about 4%), only the script is wrong. Grok with auto-detect writes Urdu script. Proposed route: MAI with `en`, then a local Devanagari-to-Latin step. Sarvam `translit` is still untested.
 
 ## 1. Language support per provider
 
@@ -181,10 +182,73 @@ How kotoba keeps "nothing in the wrong language":
 - Run time: accuracy pass under 3 minutes; sequential latency pass about 2 minutes (60 requests at ~1-2 s).
 - Sarvam needs a sign-up by the owner (free credits on sign-up; amount not stated). https://www.sarvam.ai/api-pricing
 
+## Synthetic Hinglish bench
+
+Run: 2026-10-16, 01:11-01:15 IST. Owner's go at 01:11 IST. Harness: `bench/hinglish/` (`bun run hinglish`). Data and raw rows are in the runbooks folder `2026-10-16-kotoba-hinglish/`, not in git.
+
+### Set-up
+
+- TTS: OpenRouter `/audio/speech`, `google/gemini-3.8-flash-lite-tts`, voices Kore, Aoede and Puck, 24 kHz PCM (Gemini TTS rejects `mp3`). Listed price: $6 per 1M audio tokens at 25 tokens/s, so $0.54 per audio hour.
+- Texts: 30 Hinglish developer texts (prompts to agents, Slack messages) and 10 Hindi texts, in `bench/hinglish/texts.ts`. The TTS read Hindi words in Devanagari and English words in Latin script. Each text was spoken in 3 voices: 120 clips, 18.7 min of audio, clip length 7.4-10.8 s (p50 9.4 s).
+- References: romanized Hinglish for set H, Devanagari for set D.
+- STT variants on OpenRouter: `mai+auto` (no `language`), `mai+hi` (`language: "hi"`), `grok+auto` (no `language`), `mai` (`language: "en"`, today's setting).
+- Metrics: share of letters by script; WER after Hinglish spelling folds (a Devanagari word against a romanized reference is an error); "romanized WER", which romanizes both sides first with ICU Devanagari-Latin and simple schwa and spelling rules (approximate); latency in the accuracy pass (16 requests in flight) and in a sequential pass (20 Hinglish clips x 4 variants).
+
+### Results
+
+Set H, Hinglish (90 clips):
+
+| Variant | Latin letters | Devanagari letters | Urdu (Arabic) letters | Clips with Devanagari | WER | Romanized WER (approx.) | Sequential latency p50 / p90 ms |
+| --- | --- | --- | --- | --- | --- | --- | --- |
+| mai+auto | 55.3% | 44.7% | 0.0% | 90 | 70.9% | 4.6% | 1023 / 1047 |
+| mai+hi | 54.6% | 45.4% | 0.0% | 90 | 71.2% | 4.8% | 1017 / 1053 |
+| grok+auto | 17.4% | 60.4% | 22.2% | 70 | 92.7% | 39.6% | 814 / 982 |
+| mai (en) | 57.9% | 42.1% | 0.0% | 90 | 69.5% | 3.8% | 1018 / 1118 |
+
+Set D, Hindi (30 clips):
+
+| Variant | Devanagari letters | Urdu (Arabic) letters | WER | Romanized WER (approx.) |
+| --- | --- | --- | --- | --- |
+| mai+auto | 100.0% | 0.0% | 2.1% | 2.1% |
+| mai+hi | 100.0% | 0.0% | 2.1% | 2.1% |
+| grok+auto | 50.0% | 50.0% | 53.8% | 53.8% |
+| mai (en) | 95.4% | 0.0% | 5.5% | 3.0% |
+
+Findings:
+
+1. No variant gives romanized Hinglish. MAI writes every Hindi word in Devanagari and most English words in Latin script, even with `language: "en"`. Sample: "भाई, ये PR अभी merge मत करना। Staging पे tests fail हो रहे हैं।"
+2. MAI recognizes the words well: romanized WER is 3.8-4.8% on Hinglish and 2.1% on Hindi. Most remaining errors are English words written in Devanagari ("डॉक्यूमेंटेशन", "सर्विस"): about 60 of 783 English words with `en`, 88 with auto-detect. Other errors are numbers written as digits ("pandrah" -> 15) and split or joined words (setup, codebase).
+3. `language: "hi"` gave the same text as auto-detect on 88.9% of the Hinglish clips and 96.7% of the Hindi clips. `language: "en"` gave the same text on only 65.6% and 60.0%, so OpenRouter does forward `language` to MAI. Forced `en` keeps more English words in Latin script.
+4. Grok writes Urdu script on 20 of 90 Hinglish clips and on half of the Hindi letters. With auto-detect, Grok cannot be used for Hindi or Hinglish.
+5. Latency: MAI sequential p50 is about 1.02 s on clips of about 9 s. This is the provider round-trip only; the 1.0 s gate is measured from the stop tap to Cmd-V. Grok is about 0.2 s faster.
+6. The romanized WER uses romanization rules that were tuned on these references (the spoken forms romanize to the references with 0 errors). It shows how well the words are recognized. It does not show how good the romanized spelling is.
+
+### Recommendation
+
+- Hinglish route: MAI with `language: "en"` (today's request), followed by a local Devanagari-to-Latin step that changes only the Devanagari words. MAI already recognizes the words; only the script is wrong. This adds no second request.
+- ICU (`StringTransform`) with the rules in `bench/hinglish/score.ts` gives readable but not casual spelling ("tumhen", "men", "achchha", apostrophes in "isli'e"). Before it ships, test a better transliterator (IndicXlit, or more rules) on these outputs. Measure its cost on the hot path.
+- English words that MAI writes in Devanagari (about 8%) do not come back to English through transliteration. Sarvam `saaras:v4` `translit` is still the only documented romanized output. Benchmark it on the same 120 clips before the decision; this needs a Sarvam key from the owner.
+- Hindi (Devanagari): MAI with auto-detect or `hi` (WER 2.1%). Do not use Grok for Hindi or Hinglish without a forced language. Grok with `language: "hi"` was not tested.
+- These are synthetic voices with clean audio. Confirm on 10-20 of the owner's own clips before the decision.
+
+### Cost and duration
+
+- Recorded in the raw files: TTS $0.1706 (listed-price estimate from audio length; OpenRouter `/generation` returned 404 for TTS generation ids), STT $0.1506 (`usage.cost`: accuracy $0.1290, latency $0.0216). Total $0.3212, cap $1.
+- One failed attempt before the run: Gemini rejected `mp3` (400, no cost).
+- Run time: about 4 min.
+- The OpenRouter `/credits` total moved by only $0.0009 during the run, so it does not confirm the TTS estimate.
+
+### Unresolved questions
+
+1. What is the real TTS cost? `/generation` has no TTS rows, and `/credits` did not move.
+2. Does Sarvam `translit` beat MAI plus local transliteration on these clips and on the owner's clips?
+3. Which casual spelling does the owner want ("mein" or "men", "nahi" or "nahin")? This sets the transliteration rules.
+4. Does Grok with a forced `language: "hi"` stop the Urdu output?
+
 ## Unresolved questions
 
-1. Which script does MAI-Transcribe-2 use for Hinglish: Latin, Devanagari, mixed, or Urdu? No source says. Only the benchmark answers this.
-2. Does OpenRouter map top-level `language` to Azure `locales`? Does `provider.options.azure.locales` pass through? Does MAI-2 accept `verbose_json` on OpenRouter (needed for the detected language)?
+1. Which script does MAI-Transcribe-2 use for Hinglish: Latin, Devanagari, mixed, or Urdu? No source says. Only the benchmark answers this. Synthetic bench: mixed (Hindi words in Devanagari, English words mostly in Latin).
+2. Does OpenRouter map top-level `language` to Azure `locales`? (Synthetic bench: `language` changes MAI output, so it is forwarded; the field it maps to is still unknown.) Does `provider.options.azure.locales` pass through? Does MAI-2 accept `verbose_json` on OpenRouter (needed for the detected language)?
 3. How much does auto-detect cost on the owner's English (WER, wrong-language rate) compared with forced `en`? kotoba-bench-v1 only measured forced `en`.
 4. Which languages does the owner want besides English, Hindi and Hinglish? The 20 others in the table are untested by us.
 5. Where does Sarvam serve its API from, and what is its latency from India for 10-30 s clips? Its docs give no region and no REST latency.
