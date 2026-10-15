@@ -67,7 +67,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         CGEventPaster.trackKeyboardLayout()
         FrontAppObserver.track()
         CGEventPaster.warmUp()
-        NSApp.mainMenu = .editOnlyMain()
+        NSApp.mainMenu = .hiddenMain()
         statusItem = StatusBarItem(target: self) { [weak self] in self?.menuModel() }
         updater?.onWaitingUpdateChange = { [weak self] in self?.updateIcon() }
         let store: HistoryStore

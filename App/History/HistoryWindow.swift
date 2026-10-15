@@ -52,6 +52,12 @@ final class HistoryController: NSObject, NSWindowDelegate {
         }
     }
 
+    /// Edit > Find… (⌘F): no view in the window answers it, so AppKit sends it to the key window's delegate. SwiftUI's
+    /// toolbar search field does not take it on its own.
+    @objc func performTextFinderAction(_ sender: Any?) {
+        model?.findRequests += 1
+    }
+
     func windowWillClose(_ notification: Notification) {
         // A window that is still being freed keeps the name, and a new window with the same name would not save its
         // frame.

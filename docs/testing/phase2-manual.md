@@ -407,6 +407,9 @@ Rows from each agent's phase 2.5 work. The numbers continue the list above.
 | 306 | Open History while Settings is open; Paste Again a row | Settings stays open; the indicator shows at the next dictation | |
 | 307 | Right-click the empty part of the History list | No menu | |
 | 308 | Scroll History to the last loaded row, select it if it is “Not transcribed”, click **Retry** | The row stays in place and changes to “Recovered” | |
+| 309 | Open Settings, press ⌘W; open History, press ⌘W; open **Fix Last Dictation…**, press ⌘W | Each window closes; no beep | |
+| 310 | In History, click a row, press ⌘F, type a word | The search field gets the focus and the list filters | |
+| 311 | Move and resize Settings and History, close each, reopen it at once (within 2 s) | Each opens at the size and place you left it | |
 
 ## Known offscreen-only doubts
 

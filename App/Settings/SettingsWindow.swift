@@ -114,6 +114,9 @@ final class SettingsWindow: NSObject, NSWindowDelegate {
     }
 
     func windowWillClose(_ notification: Notification) {
+        // A window that is still being freed keeps the name, and a new window with the same name would not save its
+        // frame.
+        window?.setFrameAutosaveName("")
         window = nil
         selection.id = nil
     }

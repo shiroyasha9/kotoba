@@ -55,10 +55,13 @@ extension NSMenuItem {
 }
 
 extension NSMenu {
-    /// A main menu with only the standard Edit items. An `LSUIElement` app shows no menu bar, but without
-    /// these key equivalents Cmd-X/C/V/A/Z find no action and the Settings text fields beep.
+    /// A main menu with the standard File > Close and Edit items. An `LSUIElement` app shows no menu bar, but without
+    /// these key equivalents Cmd-W, Cmd-X/C/V/A/Z and Cmd-F find no action and the windows beep. Find… goes along the
+    /// responder chain to the key window's delegate; the History window answers it by focusing its search field.
     @MainActor
-    static func editOnlyMain() -> NSMenu {
+    static func hiddenMain() -> NSMenu {
+        let file = NSMenu(title: "File")
+        file.addItem(withTitle: "Close", action: #selector(NSWindow.performClose(_:)), keyEquivalent: "w")
         let edit = NSMenu(title: "Edit")
         edit.addItem(withTitle: "Undo", action: Selector(("undo:")), keyEquivalent: "z")
         let redo = edit.addItem(withTitle: "Redo", action: Selector(("redo:")), keyEquivalent: "z")
@@ -68,10 +71,18 @@ extension NSMenu {
         edit.addItem(withTitle: "Copy", action: #selector(NSText.copy(_:)), keyEquivalent: "c")
         edit.addItem(withTitle: "Paste", action: #selector(NSText.paste(_:)), keyEquivalent: "v")
         edit.addItem(withTitle: "Select All", action: #selector(NSText.selectAll(_:)), keyEquivalent: "a")
-        let editItem = NSMenuItem(title: "Edit", action: nil, keyEquivalent: "")
-        editItem.submenu = edit
+        edit.addItem(.separator())
+        let find = NSMenu(title: "Find")
+        let findItem = find.addItem(
+            withTitle: "Find…", action: #selector(NSResponder.performTextFinderAction(_:)), keyEquivalent: "f")
+        findItem.tag = NSTextFinder.Action.showFindInterface.rawValue
+        edit.addItem(withTitle: "Find", action: nil, keyEquivalent: "").submenu = find
         let main = NSMenu()
-        main.addItem(editItem)
+        for (title, menu) in [("File", file), ("Edit", edit)] {
+            let item = NSMenuItem(title: title, action: nil, keyEquivalent: "")
+            item.submenu = menu
+            main.addItem(item)
+        }
         return main
     }
 }

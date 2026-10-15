@@ -56,6 +56,8 @@ final class HistoryModel {
     var isQuiet = true
     /// The dictations being sent now: their rows say so and cannot be deleted.
     var sending: Set<DictationID> = []
+    /// Each Edit > Find… adds one; the view focuses its search field.
+    var findRequests = 0
     /// The rows the Delete confirmation asks about; nil when it is not shown.
     var pendingDelete: [DictationID]?
 

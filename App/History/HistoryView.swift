@@ -5,11 +5,14 @@ import SwiftUI
 /// The History window's content: dictations by day, newest first, with search, a toolbar and a context menu.
 struct HistoryView: View {
     @Bindable var model: HistoryModel
+    @FocusState private var isSearchFocused: Bool
 
     var body: some View {
         content
             .frame(minWidth: 480, minHeight: 360)
             .searchable(text: $model.search, placement: .toolbar, prompt: "Search")
+            .searchFocused($isSearchFocused)
+            .onChange(of: model.findRequests) { isSearchFocused = true }
             .toolbar { toolbar(for: model.selected) }
             .task(id: model.search) { await model.reload() }
             .confirmationDialog(

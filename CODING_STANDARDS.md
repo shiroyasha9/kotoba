@@ -42,7 +42,7 @@
 
 ## Windows and text entry
 
-- kotoba is `LSUIElement` (no Dock icon, no visible menu bar), but it keeps a hidden main menu with a standard Edit menu (Undo, Redo, Cut, Copy, Paste, Select All). Without it, Cmd-X/C/V/A/Z do nothing in any text field and macOS beeps. Never remove it; a new window with text entry needs no extra wiring.
+- kotoba is `LSUIElement` (no Dock icon, no visible menu bar), but it keeps a hidden main menu with the standard File > Close and Edit menu (Undo, Redo, Cut, Copy, Paste, Select All, Find > Find…). Without it, Cmd-W and Cmd-X/C/V/A/Z do nothing in any text field and macOS beeps. Never remove it; a new window with text entry needs no extra wiring.
 - Every new window or pane with a text field gets a manual test row in `docs/testing/phase2-manual.md` for Cmd-V and Cmd-A, because snapshots and unit tests cannot catch a missing responder action.
 
 ## User-facing text
