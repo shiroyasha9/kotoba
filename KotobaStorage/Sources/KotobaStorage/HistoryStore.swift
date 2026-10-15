@@ -2,11 +2,12 @@ import Foundation
 import KotobaCore
 import SQLite3
 
-/// Dictation history in system SQLite: kept audio, the retry queue and latency marks.
+/// Dictation history in system SQLite: kept audio, the retry queue, latency marks, and the usage ledger (one row per
+/// billed answer, `UsageLedger.swift`), which deleting history never touches.
 /// `scripts/latency.sh` reads `latency_marks` (offsets in ms after key-down) for the latency gate
 /// report; keep the schema and file path in step with it.
 public actor HistoryStore: Store {
-    private typealias Value = SQLiteDatabase.Value
+    typealias Value = SQLiteDatabase.Value
 
     private static let schema = """
         PRAGMA journal_mode = WAL;
@@ -37,6 +38,7 @@ public actor HistoryStore: Store {
             offset_ms REAL NOT NULL,
             PRIMARY KEY (dictation_id, mark)
         );
+        \(ledgerSchema)
         """
 
     /// Columns added after the first build the owner ran; an older database gets them on open.
@@ -59,14 +61,11 @@ public actor HistoryStore: Store {
     /// The kept rows the History window's Retry puts back in the queue.
     private static let requeued = sqlList([.cancelled, .rejected])
 
-    /// ~/Library/Application Support/kotoba/
-    public static var directory: URL {
-        URL.applicationSupportDirectory.appending(path: "kotoba", directoryHint: .isDirectory)
-    }
+    let database: SQLiteDatabase
 
-    private let database: SQLiteDatabase
-
-    public init(url: URL = directory.appending(path: "kotoba.sqlite")) throws {
+    /// `url` has no default: only the app knows where the owner's database is (`AppFiles`), so a test or a snapshot
+    /// run cannot open it by leaving the argument out.
+    public init(url: URL) throws {
         try FileManager.default.createDirectory(at: url.deletingLastPathComponent(), withIntermediateDirectories: true)
         database = try SQLiteDatabase(url: url)
         try database.execute(Self.schema)
@@ -74,16 +73,21 @@ public actor HistoryStore: Store {
         try database.execute("PRAGMA foreign_keys = ON;")
     }
 
+    /// One transaction that also reads the columns, so a quit halfway leaves the old schema for the next launch, and
+    /// a second process that opens the file at the same time waits and then finds the work done.
     private static func migrate(_ database: SQLiteDatabase) throws(SQLiteError) {
-        let existing = Set(
-            try database.query("PRAGMA table_info(dictations);").compactMap { string($0[1]) })
-        for (name, type) in addedColumns where !existing.contains(name) {
-            try database.execute("ALTER TABLE dictations ADD COLUMN \(name) \(type);")
-        }
-        // A phase 2 build kept "waits for a key" as needs_key = 1.
-        if existing.contains("needs_key") {
-            try database.execute(
-                "UPDATE dictations SET needs_setup = 'key' WHERE needs_key = 1 AND needs_setup IS NULL;")
+        try database.transaction { () throws(SQLiteError) in
+            let existing = Set(
+                try database.query("PRAGMA table_info(dictations);").compactMap { string($0[1]) })
+            for (name, type) in addedColumns where !existing.contains(name) {
+                try database.execute("ALTER TABLE dictations ADD COLUMN \(name) \(type);")
+            }
+            try fillLedger(database)
+            // A phase 2 build kept "waits for a key" as needs_key = 1.
+            if existing.contains("needs_key") {
+                try database.execute(
+                    "UPDATE dictations SET needs_setup = 'key' WHERE needs_key = 1 AND needs_setup IS NULL;")
+            }
         }
     }
 
@@ -118,11 +122,13 @@ public actor HistoryStore: Store {
     }
 
     /// Runs `sql` with the record's columns as ?1-?14 (`columns` order), then replaces its latency marks, in one
-    /// transaction. False when `sql` wrote no row.
+    /// transaction; the record's usage entries go to the ledger even when `sql` wrote no row (the dictation was
+    /// deleted during a retry, and the answer was still billed). False when `sql` wrote no row.
     private func write(_ record: DictationRecord, sql: String) throws -> Bool {
         let id = Value.text(record.id.rawValue.uuidString)
         var isWritten = false
         try database.transaction { () throws(SQLiteError) in
+            try Self.addToLedger(record.usage, in: database)
             isWritten = try !database.query(
                 sql,
                 [
@@ -160,6 +166,10 @@ public actor HistoryStore: Store {
         try records(
             where: "status IN \(Self.delivered) ORDER BY created_at DESC LIMIT 1", withLatency: false
         ).first
+    }
+
+    public func queuedRecord(_ id: DictationID) throws -> DictationRecord? {
+        try records(where: "id = ?1 AND status IN \(Self.retryable)", [.text(id.rawValue.uuidString)]).first
     }
 
     public func status(of id: DictationID) throws -> DictationRecord.Status? {
@@ -214,7 +224,7 @@ public actor HistoryStore: Store {
         return Int(count)
     }
 
-    private func records(
+    func records(
         where condition: String,
         _ values: [Value] = [],
         withLatency: Bool = true
@@ -279,59 +289,5 @@ public actor HistoryStore: Store {
 
     private static func string(_ value: Value) -> String? {
         if case .text(let text) = value { text } else { nil }
-    }
-}
-
-// MARK: - History window
-
-extension HistoryStore {
-    /// One page of the History window, newest first: the rows after `last` (the previous page's last row) whose text
-    /// or app name contains `search` (case-insensitive for ASCII letters); an empty `search` matches every row.
-    /// A search that matches nothing scans every row: about 3 ms on 10,000 rows (debug build, `HistoryStoreTests`), so
-    /// the history needs no FTS index. A page is about 1 ms.
-    public func page(matching search: String = "", after last: DictationRecord? = nil, limit: Int) throws
-        -> [DictationRecord]
-    {
-        var conditions: [String] = []
-        var values: [Value] = [.integer(Int64(limit))]
-        if let match = Self.match(search, parameter: 2) {
-            conditions.append(match.condition)
-            values.append(match.pattern)
-        }
-        if let last {
-            values += [.real(last.createdAt.timeIntervalSince1970), .text(last.id.rawValue.uuidString)]
-            conditions.append("(created_at, id) < (?\(values.count - 1), ?\(values.count))")
-        }
-        let filter = conditions.isEmpty ? "1" : conditions.joined(separator: " AND ")
-        return try records(
-            where: "\(filter) ORDER BY created_at DESC, id DESC LIMIT ?1", values, withLatency: false)
-    }
-
-    /// One row, without latency marks, when it exists and matches `search` as in `page`: an open History window reads
-    /// the dictation a change names.
-    public func record(_ id: DictationID, matching search: String = "") throws -> DictationRecord? {
-        var condition = "id = ?1"
-        var values: [Value] = [.text(id.rawValue.uuidString)]
-        if let match = Self.match(search, parameter: 2) {
-            condition += " AND " + match.condition
-            values.append(match.pattern)
-        }
-        return try records(where: condition, values, withLatency: false).first
-    }
-
-    /// The condition that `search` is in the text or app name, with its LIKE pattern bound as `?parameter`; nil for an
-    /// empty search.
-    private static func match(_ search: String, parameter: Int) -> (condition: String, pattern: Value)? {
-        guard !search.isEmpty else { return nil }
-        let like = "LIKE ?\(parameter) ESCAPE '\\'"
-        return (
-            "(cleaned_text \(like) OR transcript \(like) OR app_name \(like))",
-            .text("%" + escapedForLike(search) + "%")
-        )
-    }
-
-    /// `\`, `%` and `_` match only themselves in a LIKE pattern with `ESCAPE '\'`.
-    private static func escapedForLike(_ text: String) -> String {
-        text.replacing("\\", with: "\\\\").replacing("%", with: "\\%").replacing("_", with: "\\_")
     }
 }

@@ -8,8 +8,9 @@ public protocol Store: Sendable {
     func update(_ record: DictationRecord) async throws -> Bool
     /// Records with status `.pending` or `.failed`: dictations whose audio has no transcript yet.
     func pendingRetries() async throws -> [DictationRecord]
-    /// The stored status of one dictation, or nil when there is no row.
-    func status(of id: DictationID) async throws -> DictationRecord.Status?
+    /// The stored record, latency marks included, while it is `.pending` or `.failed`; nil otherwise. A retry sends
+    /// this fresh copy, so it keeps what a live try wrote after the queue was read.
+    func queuedRecord(_ id: DictationID) async throws -> DictationRecord?
     /// Records with status `.recovered` and `recoveredAt` at or after `cutoff`, newest first. For
     /// the menu, so their latency logs may be left empty.
     func recovered(since cutoff: Date) async throws -> [DictationRecord]
@@ -70,6 +71,9 @@ public struct DictationRecord: Sendable, Equatable, Identifiable {
     public var recoveredAt: Date?
     /// The app in front at the stop, where the text went; nil when unknown (and for dictations kept before this).
     public var app: DictationApp?
+    /// The answers billed since this record was read from the store: the store adds each one to the usage ledger once
+    /// (by `UsageEntry.id`), so saving the record again adds nothing. A record read back has none.
+    public var usage: [UsageEntry] = []
     public var latency: LatencyLog
 
     public init(
@@ -108,6 +112,31 @@ public struct DictationApp: Sendable, Hashable {
 extension DictationRecord {
     /// The text kotoba pasted or offers to copy: the cleaned text of a cleanup dictation, else the transcript.
     public var deliveredText: String? { cleanedText ?? transcript }
+
+    /// The words of `deliveredText`, as the History window counts them; the usage ledger counts each answer's text
+    /// the same way. Nil when there is no text.
+    public var wordCount: Int? {
+        deliveredText.map(Self.wordCount(of:))
+    }
+
+    /// Runs of non-space characters, counted without building them, over Unicode scalars with an ASCII fast path:
+    /// about 0.4 µs for 50 words against 11 µs over characters (release build, 100,000 runs). It runs before Cmd-V,
+    /// for each speech answer's ledger entry.
+    public static func wordCount(of text: String) -> Int {
+        var count = 0
+        var isInWord = false
+        for scalar in text.unicodeScalars {
+            let isSpace =
+                scalar.isASCII ? scalar == " " || (9...13).contains(scalar.value) : scalar.properties.isWhitespace
+            if isSpace {
+                isInWord = false
+            } else if !isInWord {
+                isInWord = true
+                count += 1
+            }
+        }
+        return count
+    }
 
     /// A dictation with no text yet that the History window's Retry can send, while its audio is kept: queued, failed,
     /// cancelled or rejected (`DictationPipeline.retry(_:)` queues the last two first). A rejected one can succeed once
@@ -185,8 +214,8 @@ struct AnnouncingStore: Store {
         try await base.pendingRetries()
     }
 
-    func status(of id: DictationID) async throws -> DictationRecord.Status? {
-        try await base.status(of: id)
+    func queuedRecord(_ id: DictationID) async throws -> DictationRecord? {
+        try await base.queuedRecord(id)
     }
 
     func recovered(since cutoff: Date) async throws -> [DictationRecord] {

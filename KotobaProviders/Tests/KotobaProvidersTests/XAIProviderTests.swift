@@ -34,7 +34,7 @@ struct XAIProviderTests {
         #expect(!body.contains("name=\"keyterm\""))
     }
 
-    @Test func successReturnsTrimmedTextDurationAndRoute() async throws {
+    @Test func successReturnsTheTextDurationAndRoute() async throws {
         let stub = StubHost(reply: .fixture("xai-success"))
         stub.settings.route = .xaiGrok
 
@@ -43,8 +43,21 @@ struct XAIProviderTests {
         #expect(
             transcript
                 == Transcript(
-                    text: "The balance is $167,983.15.", usage: .init(audio: .seconds(8.4), costUSD: nil),
+                    // 8.4 s at $0.10 per hour: xAI reports no cost, and Grok bills the exact length.
+                    text: " The balance is $167,983.15. ",
+                    usage: .init(audio: .seconds(8.4), cost: .estimated(Decimal(84_000) / 360_000_000)),
                     model: "xai-direct/grok-stt"))
+    }
+
+    /// The pipeline decides it heard no speech; the provider keeps the cost of the 1 s xAI counted.
+    @Test func anEmptyAnswerKeepsItsUsage() async throws {
+        let stub = StubHost(reply: .raw(status: 200, body: #"{"text":"  ","language":"en","duration":1.0}"#))
+        stub.settings.route = .xaiGrok
+
+        let transcript = try await stub.provider().transcribe(stub.request())
+
+        #expect(transcript.text == "  ")
+        #expect(transcript.usage == .init(audio: .seconds(1), cost: .estimated(Decimal(10_000) / 360_000_000)))
     }
 
     @Test func missingXAIKeyNamesTheProviderToSetUp() async {
@@ -77,7 +90,6 @@ struct XAIProviderTests {
         (.raw(status: 401, body: #"{"error":"Incorrect API key provided"}"#), .auth(status: 401)),
         (.raw(status: 429, headers: ["Retry-After": "3"], body: ""), .rateLimited(retryAfter: .seconds(3))),
         (.raw(status: 500, body: ""), .server(status: 500)),
-        (.raw(status: 200, body: #"{"text":"  ","language":"en","duration":1.0}"#), .emptyTranscript),
         (.failure(.notConnectedToInternet), .offline),
     ])
     func failureMapsToProviderError(reply: StubReply, expected: ProviderError) async {

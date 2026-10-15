@@ -24,7 +24,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         readiness: readiness, routeSettings: routeSettings, vault: vault, router: router,
         openSpeechSettings: { [weak self] in self?.settingsController.show(selecting: .speech) })
     private let settings = DictationPipeline.Settings(
-        audioDirectory: HistoryStore.directory.appending(path: "audio", directoryHint: .isDirectory),
+        audioDirectory: AppFiles.audio,
         isSubmitPhraseOn: AppDefaults.isSubmitPhraseOn
     )
     private lazy var indicator = IndicatorPanel()
@@ -72,13 +72,14 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         updater?.onWaitingUpdateChange = { [weak self] in self?.updateIcon() }
         let store: HistoryStore
         do {
-            store = try HistoryStore()
+            store = try HistoryStore(url: AppFiles.history)
         } catch {
             Log.app.fault("Cannot open the history database: \(error)")
             launchIssue = StatusText.historyUnavailable
             return
         }
         self.store = store
+        settingsController.history = store
         let pipeline = DictationPipeline(
             ports: .init(
                 audio: audio,
@@ -155,12 +156,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
                 render(state)
             }
         }
-        // Each history write can change the Retry count, the Recovered list, "Fix Last Dictation…" and an open
-        // History window.
         Task {
             for await change in pipeline.historyChanges {
-                history?.historyChanged(change)
-                scheduleQueueRefresh()
+                historyChanged(change)
             }
         }
         Task {
@@ -264,6 +262,18 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             Log.app.info("Hotkey tap started")
         }
     }
+}
+
+// MARK: - History writes
+
+extension AppDelegate {
+    /// Each history write can change the Retry count, the Recovered list, "Fix Last Dictation…", an open History window
+    /// and a shown Usage pane.
+    private func historyChanged(_ change: HistoryChange) {
+        history?.historyChanged(change)
+        settingsController.historyChanged()
+        scheduleQueueRefresh()
+    }
 
     /// A dictation writes the history two or three times; the menu reads its counts once for such a burst: one
     /// refresh runs, and one more when a write came during it.
@@ -296,5 +306,4 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         hasRawLastDictation = last.flatMap(LastDictation.rawText) != nil
         updateIcon()
     }
-
 }

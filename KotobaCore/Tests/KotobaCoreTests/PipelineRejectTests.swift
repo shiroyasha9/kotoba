@@ -98,14 +98,33 @@ struct PipelineRejectTests {
         #expect(await pipeline.state == .rejected(record.id, .other))
     }
 
-    @Test func anEmptyTranscriptGetsOneRetryThenIsRejected() async throws {
-        let world = FakeWorld(transcript: "")
-        let pipeline = world.makePipeline()
-        await world.provider.fail(with: ProviderError.emptyTranscript)
+    /// Routes send text with spaces or a newline around it; the pipeline trims it, and the cleaned text too.
+    @Test func theAnswersAreTrimmedBeforeThePaste() async throws {
+        let world = FakeWorld(transcript: " ship it \n")
+        let pipeline = world.makePipeline(cleaner: FakeTextCleaner(result: .success("Ship it.\n")))
 
         await pipeline.dictate(world)
-        #expect(try #require(await world.store.records.first).status == .failed)
-        #expect(try #require(await world.store.records.first).rejectReason == nil)
+        await pipeline.cleanupTap()
+        await pipeline.tap(world)
+        await pipeline.settle()
+
+        #expect(await world.paster.pasted == ["ship it", "Ship it."])
+        #expect(await world.store.records.map(\.transcript) == ["ship it", "ship it"])
+    }
+
+    /// The provider answers with no words; the pipeline decides it heard no speech.
+    @Test(arguments: ["", " \n "])
+    func anEmptyTranscriptGetsOneRetryThenIsRejected(heard: String) async throws {
+        let world = FakeWorld(transcript: heard)
+        let pipeline = world.makePipeline()
+
+        await pipeline.dictate(world)
+        let failed = try #require(await world.store.records.first)
+        #expect(failed.status == .failed)
+        #expect(failed.rejectReason == nil)
+        #expect(failed.transcript == nil)
+        #expect(await pipeline.state == .failed(failed.id))
+        #expect(await world.paster.pasteCount == 0)
         await pipeline.retryPending()
         let rejected = try #require(await world.store.records.first)
         #expect(rejected.status == .rejected)
@@ -113,5 +132,43 @@ struct PipelineRejectTests {
         await pipeline.retryPending()
 
         #expect(await world.provider.requests.count == 2)
+    }
+
+    /// An answer with no words is billed: each try is a ledger entry with no words and its cost.
+    @Test func anEmptyTranscriptKeepsTheCostOfEachTry() async throws {
+        let world = FakeWorld(transcript: "")
+        await world.provider.charge(.reported(Decimal(5) / 100_000), audio: .seconds(2))
+        let pipeline = world.makePipeline()
+
+        await pipeline.dictate(world)
+        await pipeline.retryPending()
+
+        let rejected = try #require(await world.store.records.first)
+        #expect(rejected.status == .rejected)
+        #expect(rejected.model == "fake/model-1")
+        let ledger = await world.store.ledger
+        #expect(ledger.map(\.dictation) == [rejected.id, rejected.id])
+        #expect(ledger.map(\.deliveredWords) == [0, 0])
+        #expect(ledger.map(\.cost) == [.reported(Decimal(5) / 100_000), .reported(Decimal(5) / 100_000)])
+    }
+
+    /// An empty cleanup answer pastes the raw transcript, as a failed cleanup does, and keeps the cleanup's cost.
+    @Test func anEmptyCleanupKeepsItsCostAndPastesTheRawTranscript() async throws {
+        let world = FakeWorld(transcript: "ship it")
+        let cleaner = FakeTextCleaner(result: .success(" "), cost: .reported(Decimal(2) / 10_000))
+        let pipeline = world.makePipeline(cleaner: cleaner)
+
+        await pipeline.cleanupTap()
+        await pipeline.tap(world)
+        await pipeline.settle()
+
+        let record = try #require(await world.store.records.first)
+        #expect(await world.paster.pasted == ["ship it"])
+        #expect(record.cleanedText == nil)
+        let cleanup = try #require(await world.store.ledger.last)
+        #expect(cleanup.kind == .cleanup)
+        #expect(cleanup.deliveredWords == 0)
+        #expect(cleanup.cost == .reported(Decimal(2) / 10_000))
+        #expect(await pipeline.state == .cleanupFailed(record.id))
     }
 }

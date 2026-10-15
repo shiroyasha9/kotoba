@@ -123,7 +123,8 @@ extension DictationPipeline {
 
         /// The request for one recording, with the language and dictionary from these settings.
         func request(for audio: RecordedAudio) -> TranscriptionRequest {
-            TranscriptionRequest(audio: audio.file, language: language, dictionaryTerms: dictionary.keyterms)
+            TranscriptionRequest(
+                audio: audio.file, duration: audio.duration, language: language, dictionaryTerms: dictionary.keyterms)
         }
 
         public init(

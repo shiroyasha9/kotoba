@@ -62,8 +62,9 @@ final class AzureProvider: RouteClient {
             })
         let body = try ProviderHTTP.decode(SuccessBody.self, from: data, response: response, label: label)
         // One channel: the first combined phrase is the whole transcript. Azure reports no cost in the response.
-        let text = try ProviderHTTP.nonEmpty(body.combinedPhrases.first?.text, label: label)
-        let usage = TranscriptionUsage(audio: .milliseconds(body.durationMilliseconds ?? 0), costUSD: nil)
+        let text = body.combinedPhrases.first?.text ?? ""
+        let usage = TranscriptionUsage.priced(
+            audio: body.durationMilliseconds.map { .milliseconds($0) }, cost: nil, for: request, on: options.route)
         return Transcript(text: text, usage: usage, model: label)
     }
 

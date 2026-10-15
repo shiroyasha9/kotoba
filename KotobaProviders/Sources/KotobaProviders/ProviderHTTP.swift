@@ -164,13 +164,6 @@ enum ProviderHTTP {
         }
     }
 
-    /// `text` trimmed; an empty or missing text is `ProviderError.emptyTranscript`.
-    static func nonEmpty(_ text: String?, label: String) throws(ProviderError) -> String {
-        let trimmed = (text ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !trimmed.isEmpty else { throw logged(.emptyTranscript, label: label) }
-        return trimmed
-    }
-
     /// The error for a non-2xx status, the same on every route: 401/403 auth, 402 no credit, 429 rate limit,
     /// 408/5xx server, any other 4xx rejected with the body's message.
     static func error(status: Int, retryAfter: String?, body: Data) -> ProviderError {

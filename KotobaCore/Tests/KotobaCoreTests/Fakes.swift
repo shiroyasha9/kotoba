@@ -137,6 +137,9 @@ actor FakeTranscriptionProvider: TranscriptionProvider {
     private var gate: Gate?
     /// Gates for single recordings, by audio file.
     private var gates: [URL: Gate] = [:]
+    /// The usage each answer reports.
+    private var usageAudio: Duration = .seconds(1)
+    private var cost: Cost?
 
     init(transcript: String) {
         self.transcript = transcript
@@ -144,6 +147,12 @@ actor FakeTranscriptionProvider: TranscriptionProvider {
 
     func fail(with error: (any Error)?) {
         self.error = error
+    }
+
+    /// Each answer from now on reports `audio` and `cost`.
+    func charge(_ cost: Cost?, audio: Duration) {
+        self.cost = cost
+        usageAudio = audio
     }
 
     func hold(at gate: Gate) {
@@ -163,7 +172,7 @@ actor FakeTranscriptionProvider: TranscriptionProvider {
         await gates[request.audio]?.pass()
         if let error { throw error }
         return Transcript(
-            text: transcript, usage: TranscriptionUsage(audio: .seconds(1), costUSD: nil), model: "fake/model-1")
+            text: transcript, usage: TranscriptionUsage(audio: usageAudio, cost: cost), model: "fake/model-1")
     }
 }
 

@@ -8,7 +8,7 @@ struct RetryQueueTests {
 
     func makeQueue() -> RetryQueue {
         RetryQueue(
-            steps: TranscriptionSteps(provider: world.provider, cleaner: nil),
+            steps: TranscriptionSteps(provider: world.provider, cleaner: nil, clock: world.clock),
             store: world.store,
             clock: world.clock,
             clipboard: ClipboardGuard(pasteboard: world.pasteboard)
@@ -92,6 +92,6 @@ struct RetryQueueTests {
 
         #expect(second.isEmpty)
         #expect(firstResults.count == 2)
-        #expect(try await world.store.status(of: waiting.id) == .recovered)
+        #expect(await world.store.records.first { $0.id == waiting.id }?.status == .recovered)
     }
 }

@@ -208,12 +208,14 @@ actor FakeTextCleaner: TextCleaner {
 
     private let result: Result<String, any Error>
     private let gate: Gate?
+    private let cost: Cost?
     private(set) var requests: [Request] = []
     private(set) var warmUps = 0
 
-    init(result: Result<String, any Error>, gate: Gate? = nil) {
+    init(result: Result<String, any Error>, gate: Gate? = nil, cost: Cost? = nil) {
         self.result = result
         self.gate = gate
+        self.cost = cost
     }
 
     func warmUp() async {
@@ -223,7 +225,7 @@ actor FakeTextCleaner: TextCleaner {
     func clean(_ transcript: String, vocabulary: [String]) async throws -> CleanedText {
         requests.append(Request(transcript: transcript, vocabulary: vocabulary))
         await gate?.pass()
-        return CleanedText(text: try result.get(), model: "fake/cleaner", costUSD: nil)
+        return CleanedText(text: try result.get(), model: "fake/cleaner", cost: cost)
     }
 }
 

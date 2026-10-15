@@ -413,6 +413,21 @@ Rows from each agent's phase 2.5 work. The numbers continue the list above.
 | 312 | Open History from the menu while a text field in another app has the focus, quit that app, then **Paste Again** a row | Nothing pastes into History; “Couldn’t Paste” says the text is on the clipboard; ⌘V in another app pastes it | |
 | 313 | Start two dictations back to back so both are sent at once; watch their rows in History | Each row says “Transcribing” only until its own text arrives, then Delete works on it | |
 
+### Usage pane (phase 3)
+
+| # | Do this | Expect | Result |
+|---|---|---|---|
+| 314 | With no dictations this month, open Settings > **Usage** | “No Dictations This Month”; **Last 30 Days** shows the same state when it is empty too | |
+| 315 | Dictate three times in Notes and once in Terminal, one of them with the cleanup chord, then open Settings > **Usage** | Dictations 4; Words equal the sum of the History window’s word counts (the cleaned text for the cleanup dictation); Notes is above Terminal under **Top Apps** with its icon | |
+| 316 | Look at **Spend** and **Spend by Model** after the dictations of row 315 (MAI-Transcribe-2 via OpenRouter) | Up to four decimals (for example $0.0021); one row “MAI-Transcribe-2 via OpenRouter” · Speech model, with no “Estimated”; the model rows add up to **Spend** | |
+| 317 | Dictate once with the cleanup chord, then reopen **Usage** | A “Gemini 3.5 Flash-Lite” row (or the chosen cleanup model) with “Cleanup model” under it | |
+| 318 | Compare **Spend** for this month with the Activity page on openrouter.ai for the same days | The two agree to the cent (kotoba keeps the cost OpenRouter reports for each dictation) | |
+| 319 | Turn Wi-Fi off, dictate, turn it on so the dictation is recovered; reopen **Usage** | Dictations and Spend count it once; Audio counts it once | |
+| 320 | Switch between **This Month** and **Last 30 Days** | The numbers change at once, with no pause | |
+| 321 | Keep Settings open on **Usage** and dictate | The numbers change when the dictation is pasted, without leaving the pane | |
+| 322 | Note **Spend** and **Audio**; in History select all of today’s dictations and delete them; look at **Usage** again | Spend, Audio, Words and Dictations do not change | |
+| 323 | Say nothing for 3 s as a dictation (“No speech heard”), then look at **Usage** | Audio and Spend go up (the empty answer is billed); Dictations and Words do not | |
+
 ## Known offscreen-only doubts
 
 The offscreen snapshots (`make snapshots`) show two things that may not happen in the real app. Check them on screen:

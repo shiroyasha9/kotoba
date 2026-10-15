@@ -196,30 +196,76 @@ struct OpenRouterProviderTests {
 
     // MARK: Response parsing
 
-    @Test func successReturnsTrimmedTextAndUsage() async throws {
+    /// The text as sent: the pipeline trims it.
+    @Test func successReturnsTheTextAndUsage() async throws {
         let stub = StubHost(reply: .fixture("success"))
 
         let transcript = try await stub.provider().transcribe(stub.request())
 
-        #expect(transcript.text == "Run make check, then open DictationPipeline.swift.")
+        #expect(transcript.text == " Run make check, then open DictationPipeline.swift. ")
         #expect(transcript.usage.audio == .seconds(12.4))
-        #expect(transcript.usage.costUSD == Decimal(string: "0.000344"))
+        #expect(transcript.usage.cost == .reported(try #require(Decimal(string: "0.000344"))))
     }
 
-    @Test func successWithoutUsageReportsNoCost() async throws {
-        let stub = StubHost(reply: .fixture("success-no-usage"))
+    /// With the owner's own provider key (BYOK), `cost` is only OpenRouter's fee and
+    /// `cost_details.upstream_inference_cost` is what the provider charged
+    /// (https://openrouter.ai/docs/use-cases/usage-accounting); the fixture follows that page's fields. Without BYOK the
+    /// upstream cost is the same money as `cost` (kotoba-bench-v1 rows had both equal), so it is not added.
+    @Test func aBYOKAnswerCostsTheFeeAndTheProviderCharge() async throws {
+        let stub = StubHost(reply: .fixture("success-byok"))
 
         let transcript = try await stub.provider().transcribe(stub.request())
 
+        #expect(transcript.usage.cost == .reported(try #require(Decimal(string: "0.0001166"))))
+    }
+
+    /// BYOK without the provider's charge: the fee alone would look reported and far too low, so the list price.
+    @Test func aBYOKAnswerWithoutTheProviderChargeIsEstimated() async throws {
+        let stub = StubHost(
+            reply: .raw(status: 200, body: #"{"text":"hi","usage":{"seconds":2,"is_byok":true,"cost":0.0000056}}"#))
+
+        let transcript = try await stub.provider().transcribe(stub.request())
+
+        #expect(transcript.usage.cost == .estimated(Decimal(20_000) / 360_000_000))
+    }
+
+    @Test func aNonBYOKAnswerCostsItsCost() async throws {
+        let stub = StubHost(reply: .fixture("success-not-byok"))
+
+        let transcript = try await stub.provider().transcribe(stub.request())
+
+        #expect(transcript.usage.cost == .reported(try #require(Decimal(string: "0.0000556"))))
+    }
+
+    /// No `usage`: the recording's length, at the list price.
+    @Test func successWithoutUsageEstimatesTheCost() async throws {
+        let stub = StubHost(reply: .fixture("success-no-usage"))
+
+        let transcript = try await stub.provider().transcribe(stub.request(duration: .milliseconds(9_200)))
+
+        // 10 s billed (whole seconds) at $0.10 per hour.
+        let usage = TranscriptionUsage(audio: .milliseconds(9_200), cost: .estimated(Decimal(100_000) / 360_000_000))
+        #expect(transcript == Transcript(text: "hello", usage: usage, model: "microsoft/mai-transcribe-2"))
+    }
+
+    /// Recorded in kotoba-bench-v1 (Grok, a 19.9 s clip): OpenRouter bills an answer with no words. The pipeline
+    /// decides it heard no speech; the provider keeps the cost.
+    @Test func anEmptyAnswerKeepsItsUsage() async throws {
+        let stub = StubHost(reply: .fixture("empty-text-billed"))
+        stub.settings.route = .openRouterGrok
+
+        let transcript = try await stub.provider().transcribe(stub.request())
+
+        let cost = try #require(Decimal(string: "0.0005540000000004432"))
         #expect(
             transcript
                 == Transcript(
-                    text: "hello", usage: .init(audio: .zero, costUSD: nil), model: "microsoft/mai-transcribe-2"))
+                    text: "", usage: .init(audio: .seconds(19.944), cost: .reported(cost)),
+                    model: "x-ai/grok-stt-1.0"))
     }
 
     @Test(arguments: [
-        (StubReply.fixture("empty-text"), ProviderError.emptyTranscript),
-        (.raw(status: 200, body: "<html>"), .server(status: 200)),
+        (StubReply.raw(status: 200, body: "<html>"), ProviderError.server(status: 200)),
         (.fixture("error-401", status: 401), .auth(status: 401)),
         (.raw(status: 403, body: ""), .auth(status: 403)),
         (.fixture("error-429", status: 429, headers: ["Retry-After": "7"]), .rateLimited(retryAfter: .seconds(7))),

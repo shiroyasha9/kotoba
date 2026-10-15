@@ -44,14 +44,26 @@ struct AzureProviderTests {
             transcript
                 == Transcript(
                     text: "Run make check, then open DictationPipeline.swift.",
-                    usage: .init(audio: .milliseconds(12_072), costUSD: nil), model: "azure-direct/mai-transcribe-2"))
+                    // 13 s billed (whole seconds) at $0.10 per hour: Azure reports no cost.
+                    usage: .init(audio: .milliseconds(12_072), cost: .estimated(Decimal(130_000) / 360_000_000)),
+                    model: "azure-direct/mai-transcribe-2"))
+    }
+
+    /// No phrases: the pipeline decides it heard no speech; the provider keeps the 2 s Azure bills.
+    @Test func anEmptyAnswerKeepsItsUsage() async throws {
+        let stub = StubHost(reply: .fixture("azure-empty"))
+        stub.useAzure()
+
+        let transcript = try await stub.provider().transcribe(stub.request())
+
+        #expect(transcript.text.isEmpty)
+        #expect(transcript.usage == .init(audio: .seconds(2), cost: .estimated(Decimal(20_000) / 360_000_000)))
     }
 
     @Test(arguments: [
-        (StubReply.fixture("azure-empty"), ProviderError.emptyTranscript),
         (
-            .fixture("azure-error-400", status: 400),
-            .rejected(status: 400, message: "The format of input audio is not supported.")
+            StubReply.fixture("azure-error-400", status: 400),
+            ProviderError.rejected(status: 400, message: "The format of input audio is not supported.")
         ),
         (.fixture("azure-error-401", status: 401), .auth(status: 401)),
         (.raw(status: 429, headers: ["Retry-After": "2"], body: ""), .rateLimited(retryAfter: .seconds(2))),

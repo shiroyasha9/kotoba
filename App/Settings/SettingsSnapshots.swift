@@ -16,6 +16,7 @@ extension SettingsPane {
             windowSnapshot(sampleDictionary, selecting: .speech, named: "settings-window-speech"),
             windowSnapshot(sampleDictionary, selecting: .microphones, named: "settings-window-microphone"),
             windowSnapshot(sampleDictionary, selecting: .general, named: "settings-window-general"),
+            windowSnapshot(sampleDictionary, selecting: .usage, named: "settings-window-usage"),
         ]
     }
 
@@ -81,6 +82,7 @@ extension SettingsPane {
             .dictionary(sampleModel(dictionary, suggestions: suggestions)),
             .microphones(MicrophoneModel(source: .sample()) {}),
             .speech(.sample(route: .openRouterMAI, azureEndpoint: "")),
+            .usage(.sample),
         ]
         return SettingsWindow.windowSnapshot(of: panes, selecting: id, named: name)
     }

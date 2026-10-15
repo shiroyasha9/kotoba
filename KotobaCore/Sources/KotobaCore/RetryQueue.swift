@@ -73,8 +73,8 @@ public actor RetryQueue {
         var results: [DictationRecord] = []
         for record in queued where selection.includes(record) {
             await waitUntilQuiet()
-            guard await isStillQueued(record, isInFlight: isInFlight) else { continue }
-            let retried = await retry(record, settings: await settings())
+            guard let fresh = await stillQueued(record.id, isInFlight: isInFlight) else { continue }
+            let retried = await retry(fresh, settings: await settings())
             // Deleted from the History window during the request: it stays deleted and shows no outcome.
             guard await store.updateOrLog(retried) else { continue }
             results.append(retried)
@@ -82,36 +82,34 @@ public actor RetryQueue {
         return results
     }
 
-    /// A live dictation saves a `.pending` row while it uploads, so the queue read can hold it;
-    /// by its turn it may be in flight or already pasted.
-    private func isStillQueued(
-        _ record: DictationRecord,
+    /// The record as stored now, when it is still queued. A live dictation saves a `.pending` row while it uploads,
+    /// so the queue read can hold it; by its turn it may be in flight, already pasted, or failed with a new model and
+    /// new latency marks that the copy from the queue read lacks.
+    private func stillQueued(
+        _ id: DictationID,
         isInFlight: @Sendable (DictationID) async -> Bool
-    ) async -> Bool {
-        guard await !isInFlight(record.id) else { return false }
+    ) async -> DictationRecord? {
+        guard await !isInFlight(id) else { return nil }
         do {
-            let status = try await store.status(of: record.id)
-            return status == .pending || status == .failed
+            return try await store.queuedRecord(id)
         } catch {
-            Log.pipeline.error("Retry: cannot read \(record.id.rawValue): \(error)")
-            return false
+            Log.pipeline.error("Retry: cannot read \(id.rawValue): \(error)")
+            return nil
         }
     }
 
     private func retry(_ record: DictationRecord, settings: DictationPipeline.Settings) async -> DictationRecord {
         var record = record
         do {
-            let transcribed = try await steps.transcribe(record.audio, settings: settings)
-            record.transcript = transcribed.text
-            record.model = transcribed.model
+            let transcribed = try await steps.transcribe(&record, settings: settings)
             if record.mode == .cleanup {
-                record.cleanedText = await steps.clean(transcribed.raw, settings: settings, id: record.id)
+                await steps.clean(transcribed.raw, into: &record, settings: settings)
             }
             record.status = .recovered
             record.needsSetup = nil
             record.recoveredAt = clock.date
         } catch {
-            Log.pipeline.error("Retry \(record.id.rawValue) failed: \(error)")
+            Log.pipeline.error("Retry \(record.id.rawValue) on \(record.model ?? "no answer") failed: \(error)")
             record.markFailed(by: error, onRetry: true)
         }
         return record

@@ -80,7 +80,8 @@ struct OpenRouterCleanerTests {
         #expect(body["reasoning"] as? [String: Bool] == ["enabled": false])
     }
 
-    @Test func successReturnsTrimmedTextModelAndCost() async throws {
+    /// The text as sent: the pipeline trims it.
+    @Test func successReturnsTheTextModelAndCost() async throws {
         let stub = StubHost(reply: .fixture("cleanup-success"))
 
         let cleaned = try await stub.cleaner().clean("raw", vocabulary: [])
@@ -88,16 +89,44 @@ struct OpenRouterCleanerTests {
         #expect(
             cleaned
                 == CleanedText(
-                    text: "Can you open auth.ts and check why login fails when I pass --debug?",
-                    model: "google/gemini-3.5-flash-lite", costUSD: Decimal(string: "0.0000431")))
+                    text: "Can you open auth.ts and check why login fails when I pass --debug?\n",
+                    model: "google/gemini-3.5-flash-lite", cost: .reported(try #require(Decimal(string: "0.0000431")))))
+    }
+
+    /// No `usage.cost`: the token counts at the model's list price.
+    @Test func anAnswerWithoutCostIsEstimatedFromItsTokens() async throws {
+        let body =
+            #"{"choices":[{"message":{"content":"Done."}}],"usage":{"prompt_tokens":498,"completion_tokens":70}}"#
+        let stub = StubHost(reply: .raw(status: 200, body: body))
+
+        let cleaned = try await stub.cleaner().clean("raw", vocabulary: [])
+
+        // kotoba-bench-v1 got usage.cost 0.0003244 for these counts on Gemini 3.5 Flash-Lite.
+        #expect(cleaned.cost == .estimated(try #require(Decimal(string: "0.0003244"))))
+    }
+
+    /// BYOK: OpenRouter's fee plus the provider's charge, as for transcription.
+    @Test func aBYOKAnswerCostsTheFeeAndTheProviderCharge() async throws {
+        let stub = StubHost(reply: .fixture("cleanup-byok"))
+
+        let cleaned = try await stub.cleaner().clean("raw", vocabulary: [])
+
+        #expect(cleaned.cost == .reported(try #require(Decimal(string: "0.00021"))))
+    }
+
+    /// The pipeline decides an empty answer failed; the cleaner keeps its cost.
+    @Test func anEmptyAnswerKeepsItsCost() async throws {
+        let body = #"{"choices":[{"message":{"content":" "}}],"usage":{"cost":0.0001345}}"#
+        let stub = StubHost(reply: .raw(status: 200, body: body))
+
+        let cleaned = try await stub.cleaner().clean("raw", vocabulary: [])
+
+        #expect(cleaned.text == " ")
+        #expect(cleaned.cost == .reported(try #require(Decimal(string: "0.0001345"))))
     }
 
     @Test(arguments: [
-        (
-            StubReply.raw(status: 200, body: #"{"choices":[{"message":{"content":" "}}]}"#),
-            ProviderError.emptyTranscript
-        ),
-        (.fixture("error-402", status: 402), .noCredit),
+        (StubReply.fixture("error-402", status: 402), ProviderError.noCredit),
         (.raw(status: 429, body: ""), .rateLimited(retryAfter: nil)),
         (.failure(.notConnectedToInternet), .offline),
     ])

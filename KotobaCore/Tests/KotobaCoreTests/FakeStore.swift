@@ -7,14 +7,22 @@ actor FakeStore: Store {
     private(set) var records: [DictationRecord] = []
     /// Every status each dictation was saved with, in order.
     private(set) var history: [DictationID: [DictationRecord.Status]] = [:]
+    /// The usage ledger: each entry once, kept when its dictation is deleted.
+    private(set) var ledger: [UsageEntry] = []
+
+    private func addToLedger(_ record: DictationRecord) {
+        ledger += record.usage.filter { entry in !ledger.contains { $0.id == entry.id } }
+    }
 
     func save(_ record: DictationRecord) async throws {
+        addToLedger(record)
         records.removeAll { $0.id == record.id }
         records.append(record)
         history[record.id, default: []].append(record.status)
     }
 
     func update(_ record: DictationRecord) async throws -> Bool {
+        addToLedger(record)
         guard let index = records.firstIndex(where: { $0.id == record.id }) else { return false }
         records[index] = record
         history[record.id, default: []].append(record.status)
@@ -33,6 +41,14 @@ actor FakeStore: Store {
 
     func status(of id: DictationID) async throws -> DictationRecord.Status? {
         records.first { $0.id == id }?.status
+    }
+
+    /// As the real store, which reads entries into the ledger and never back into a record.
+    func queuedRecord(_ id: DictationID) async throws -> DictationRecord? {
+        guard var record = records.first(where: { $0.id == id }), [.pending, .failed].contains(record.status)
+        else { return nil }
+        record.usage = []
+        return record
     }
 
     func markCopied(_ id: DictationID) async throws {

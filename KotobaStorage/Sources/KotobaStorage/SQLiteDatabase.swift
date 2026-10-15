@@ -24,6 +24,11 @@ final class SQLiteDatabase {
         var string: String? {
             if case .text(let text) = self { text } else { nil }
         }
+
+        /// The number of an `.integer` value; nil for any other.
+        var integer: Int64? {
+            if case .integer(let number) = self { number } else { nil }
+        }
     }
 
     /// SQLITE_TRANSIENT: SQLite copies bound text before the call returns.

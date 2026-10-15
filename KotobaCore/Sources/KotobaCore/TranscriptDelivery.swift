@@ -39,7 +39,7 @@ struct TranscriptDelivery: Sendable {
     let frontApp: @Sendable () -> FrontApp?
 
     /// The transcribe and clean steps, shared with the retry queue.
-    private var steps: TranscriptionSteps { TranscriptionSteps(provider: provider, cleaner: cleaner) }
+    private var steps: TranscriptionSteps { TranscriptionSteps(provider: provider, cleaner: cleaner, clock: clock) }
 
     /// `beforePaste` returns when it is safe to post Cmd-V (the chord is released).
     /// `isSubmitRequested` tells, once pasted, whether the owner stopped with Return or pressed it just after.
@@ -61,7 +61,7 @@ struct TranscriptDelivery: Sendable {
         mark(.uploadStart, at: clock.now)
         let result: Result<TranscriptionSteps.Transcribed, any Error>
         do {
-            result = .success(try await steps.transcribe(job.audio, settings: job.settings))
+            result = .success(try await steps.transcribe(&record, settings: job.settings))
         } catch {
             result = .failure(error)
         }
@@ -73,14 +73,12 @@ struct TranscriptDelivery: Sendable {
         var submitted: Submitted?
         switch result {
         case .failure(let error):
-            Log.pipeline.error("Transcription \(job.id.rawValue) failed: \(error)")
+            Log.pipeline.error("Transcription \(job.id.rawValue) on \(record.model ?? "no answer") failed: \(error)")
             record.markFailed(by: error)
         case .success(let transcribed):
-            record.transcript = transcribed.text
-            record.model = transcribed.model
             if job.mode == .cleanup {
                 mark(.cleanStart, at: clock.now)
-                record.cleanedText = await steps.clean(transcribed.raw, settings: job.settings, id: job.id)
+                await steps.clean(transcribed.raw, into: &record, settings: job.settings)
                 mark(.cleanResponse, at: clock.now)
                 isCleanupFailed = record.cleanedText == nil
             }
@@ -93,6 +91,8 @@ struct TranscriptDelivery: Sendable {
             Log.latency.info("\(job.id.rawValue) \(latency.summary, privacy: .public)")
         }
         record.latency = latency
+        // The answers' ledger entries go with this save. A crash between the answer and here (at most the cleanup and
+        // the paste, 1-2 s) loses them; the pending row is sent again at the next launch.
         await store.saveOrLog(record)
         let showing = Self.notice(for: record, isCleanupFailed: isCleanupFailed, submitted: submitted)
         return Outcome(record: record, restore: restore, showing: showing, isSubmitted: submitted == .sent)

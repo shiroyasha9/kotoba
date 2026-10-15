@@ -135,10 +135,12 @@ final class StubHost {
         return configuration
     }
 
-    func request(terms: [String] = [], audio: Data = StubHost.audioBytes) throws -> TranscriptionRequest {
+    func request(
+        terms: [String] = [], audio: Data = StubHost.audioBytes, duration: Duration = .seconds(10)
+    ) throws -> TranscriptionRequest {
         try audio.write(to: audioFile)
         return TranscriptionRequest(
-            audio: audioFile, language: Locale.Language(identifier: "en"), dictionaryTerms: terms)
+            audio: audioFile, duration: duration, language: Locale.Language(identifier: "en"), dictionaryTerms: terms)
     }
 }
 

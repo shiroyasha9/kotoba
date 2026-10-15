@@ -59,8 +59,8 @@ public final class OpenRouterCleaner: TextCleaner {
             baseURL.appending(path: "chat/completions"), contentType: "application/json", label: label,
             body: .data(request))
         let body = try ProviderHTTP.decode(SuccessBody.self, from: data, response: response, label: label)
-        let text = try ProviderHTTP.nonEmpty(body.choices.first?.message.content, label: label)
-        return CleanedText(text: text, model: model.rawValue, costUSD: body.usage?.cost)
+        let text = body.choices.first?.message.content ?? ""
+        return CleanedText(text: text, model: model.rawValue, cost: body.usage?.cost(of: model))
     }
 
     /// Non-streaming: the cleaned text is pasted whole, so only the total time counts.
@@ -203,12 +203,17 @@ private struct SuccessBody: Decodable {
         var message: ReplyMessage
     }
 
-    struct Usage: Decodable {
-        var cost: Decimal?
-    }
-
     var choices: [Choice]
-    var usage: Usage?
+    var usage: OpenRouterUsage?
+}
+
+extension OpenRouterUsage {
+    /// The charged cost, else an estimate from the token counts.
+    func cost(of model: CleanupModel) -> Cost? {
+        if let charged { return .reported(charged) }
+        guard let promptTokens, let completionTokens else { return nil }
+        return PriceList.estimate(model, inputTokens: promptTokens, outputTokens: completionTokens)
+    }
 }
 
 private struct ReplyMessage: Decodable {

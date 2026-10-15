@@ -183,26 +183,11 @@ struct HistoryRow: View {
             parts.append(name)
         }
         parts.append(record.audio.duration.formatted(.time(pattern: .minuteSecond)))
-        let words = record.deliveredText.map(Self.wordCount) ?? 0
+        let words = record.wordCount ?? 0
         if words > 0 {
             parts.append(StatusText.counted(words, "word"))
         }
         return parts.joined(separator: " · ")
-    }
-
-    /// Words are runs of non-space characters, counted without building them.
-    private static func wordCount(_ text: String) -> Int {
-        var count = 0
-        var isInWord = false
-        for character in text {
-            if character.isWhitespace {
-                isInWord = false
-            } else if !isInWord {
-                isInWord = true
-                count += 1
-            }
-        }
-        return count
     }
 }
 

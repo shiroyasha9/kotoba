@@ -6,8 +6,8 @@ public protocol TextCleaner: Sendable {
     /// Opens or refreshes the connection. The pipeline calls it when a press turns out to be the cleanup chord
     /// (`HotkeyEvent.cleanupModifier`).
     func warmUp() async
-    /// Throws `ProviderError`, like `TranscriptionProvider.transcribe`. `vocabulary` is the dictionary's keyterms,
-    /// already within the route limits.
+    /// Throws `ProviderError`, like `TranscriptionProvider.transcribe`, and like it returns an answer with no words
+    /// with its cost. `vocabulary` is the dictionary's keyterms, already within the route limits.
     func clean(_ transcript: String, vocabulary: [String]) async throws -> CleanedText
 }
 
@@ -15,12 +15,12 @@ public struct CleanedText: Sendable, Equatable {
     public var text: String
     /// The model identifier this request used.
     public var model: String
-    /// Nil when the route does not report cost.
-    public var costUSD: Decimal?
+    /// The reported cost, else an estimate from the model's list price; nil when neither is known.
+    public var cost: Cost?
 
-    public init(text: String, model: String, costUSD: Decimal?) {
+    public init(text: String, model: String, cost: Cost?) {
         self.text = text
         self.model = model
-        self.costUSD = costUSD
+        self.cost = cost
     }
 }

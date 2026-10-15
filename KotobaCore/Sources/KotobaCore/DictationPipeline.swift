@@ -60,7 +60,8 @@ public actor DictationPipeline {
             provider: ports.provider, cleaner: ports.cleaner, paster: ports.paster, store: ports.store,
             clock: ports.clock, clipboard: clipboard, frontApp: ports.frontApp)
         retries = RetryQueue(
-            steps: TranscriptionSteps(provider: ports.provider, cleaner: ports.cleaner), store: ports.store,
+            steps: TranscriptionSteps(provider: ports.provider, cleaner: ports.cleaner, clock: ports.clock),
+            store: ports.store,
             clock: ports.clock, clipboard: clipboard)
         (states, stateContinuation) = AsyncStream.makeStream(of: DictationState.self)
         (activity, activityContinuation) = AsyncStream.makeStream(

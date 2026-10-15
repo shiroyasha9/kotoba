@@ -18,6 +18,7 @@ enum SettingsPaneID: String, Hashable, CaseIterable {
     case speech
     case dictionary
     case microphones
+    case usage
 
     var title: String {
         switch self {
@@ -25,6 +26,7 @@ enum SettingsPaneID: String, Hashable, CaseIterable {
         case .speech: "Speech"
         case .dictionary: "Dictionary"
         case .microphones: "Microphone"
+        case .usage: "Usage"
         }
     }
 
@@ -35,6 +37,7 @@ enum SettingsPaneID: String, Hashable, CaseIterable {
         case .speech: "waveform"
         case .dictionary: "character.book.closed.fill"
         case .microphones: "mic.fill"
+        case .usage: "chart.bar.fill"
         }
     }
 
@@ -44,6 +47,7 @@ enum SettingsPaneID: String, Hashable, CaseIterable {
         case .speech: .blue
         case .dictionary: .orange
         case .microphones: .red
+        case .usage: .green
         }
     }
 
@@ -54,6 +58,7 @@ enum SettingsPaneID: String, Hashable, CaseIterable {
         case .speech: "The speech model that turns your voice into text, and its key."
         case .dictionary: "Names and terms kotoba should know, and words to replace."
         case .microphones: "The mic kotoba records from, and how to test it."
+        case .usage: "How much you dictate, and what it costs."
         }
     }
 }

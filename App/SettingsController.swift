@@ -16,6 +16,10 @@ final class SettingsController {
     /// The dictionary the Dictionary pane edits; "Fix Last Dictation…" adds to it and the menu counts its suggestions.
     /// Built once the dictionary file is read at launch.
     private(set) var dictionary: DictionaryModel?
+    /// The history whose usage ledger the Usage pane sums; set once the database opens at launch.
+    var history: HistoryStore?
+    /// The open window's Usage pane model, which reads again after each history write while it is shown.
+    private weak var usage: UsageModel?
 
     /// `router` checks a saved key in the Speech pane.
     init(
@@ -34,7 +38,7 @@ final class SettingsController {
     /// and hands it to the pipeline; Settings edits go to the pipeline from then on.
     func loadDictionary(into pipeline: DictationPipeline) async {
         do {
-            let store = try DictionaryStore(url: HistoryStore.directory.appending(path: "dictionary.sqlite"))
+            let store = try DictionaryStore(url: AppFiles.dictionary)
             let loaded = try await store.load()
             await pipeline.updateDictionary(loaded)
             // The model calls this inside its serial save chain, so edits reach the pipeline in order.
@@ -42,6 +46,11 @@ final class SettingsController {
         } catch {
             Log.app.error("Cannot open the dictionary: \(error)")
         }
+    }
+
+    /// A history write (from `DictationPipeline.historyChanges`): a shown Usage pane reads again.
+    func historyChanged() {
+        usage?.historyChanged()
     }
 
     /// `pane` opens a given pane, e.g. Speech for the pill's "Add Key…"; nil keeps the pane shown.
@@ -61,6 +70,11 @@ final class SettingsController {
             ))
         panes.append(
             .speech(SpeechSettingsModel(settings: routeSettings, vault: vault, checkKey: router.checkKey(_:for:))))
+        if let history {
+            let usage = UsageModel { try await history.usage(from: $0, to: .distantFuture) }
+            self.usage = usage
+            panes.append(.usage(usage))
+        }
         return panes
     }
 }

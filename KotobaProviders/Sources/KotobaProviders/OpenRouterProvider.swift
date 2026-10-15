@@ -54,8 +54,9 @@ final class OpenRouterProvider: RouteClient {
                 try writer.write(rest.dropFirst())  // `rest` is a non-empty object: drop its "{".
             })
         let body = try ProviderHTTP.decode(SuccessBody.self, from: data, response: response, label: label)
-        let usage = TranscriptionUsage(audio: .seconds(body.usage?.seconds ?? 0), costUSD: body.usage?.cost)
-        return Transcript(text: try ProviderHTTP.nonEmpty(body.text, label: label), usage: usage, model: label)
+        let usage = TranscriptionUsage.priced(
+            audio: body.usage?.seconds.map { .seconds($0) }, cost: body.usage?.charged, for: request, on: options.route)
+        return Transcript(text: body.text ?? "", usage: usage, model: label)
     }
 
     /// Every body field except `input_audio`. The dictionary terms come within the route limits
@@ -132,13 +133,8 @@ private struct XAIOptions: Encodable {
 }
 
 private struct SuccessBody: Decodable {
-    struct Usage: Decodable {
-        var seconds: Double?
-        var cost: Decimal?
-    }
-
     var text: String?
-    var usage: Usage?
+    var usage: OpenRouterUsage?
 }
 
 /// `GET /key`.
@@ -153,4 +149,54 @@ private struct KeyLimit: Decodable {
     }
 
     var limitRemaining: Double?
+}
+
+/// The `usage` of an OpenRouter answer, transcription or chat (https://openrouter.ai/docs/use-cases/usage-accounting:
+/// "always included automatically in every response").
+struct OpenRouterUsage: Decodable {
+    enum CodingKeys: String, CodingKey {
+        case seconds
+        case cost
+        case isBYOK = "is_byok"
+        case costDetails = "cost_details"
+        case promptTokens = "prompt_tokens"
+        case completionTokens = "completion_tokens"
+    }
+
+    /// Transcription: the audio the route counted.
+    var seconds: Double?
+    /// What OpenRouter charged the account; with the owner's own provider key (BYOK) only OpenRouter's fee.
+    var cost: Decimal?
+    var isBYOK: Bool
+    private var costDetails: CostDetails?
+    var promptTokens: Int?
+    /// Includes reasoning tokens.
+    var completionTokens: Int?
+
+    init(from decoder: any Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        seconds = try container.decodeIfPresent(Double.self, forKey: .seconds)
+        cost = try container.decodeIfPresent(Decimal.self, forKey: .cost)
+        isBYOK = try container.decodeIfPresent(Bool.self, forKey: .isBYOK) ?? false
+        costDetails = try container.decodeIfPresent(CostDetails.self, forKey: .costDetails)
+        promptTokens = try container.decodeIfPresent(Int.self, forKey: .promptTokens)
+        completionTokens = try container.decodeIfPresent(Int.self, forKey: .completionTokens)
+    }
+
+    /// What the request cost the owner: with BYOK the provider's charge is billed apart, so it is added, and nil
+    /// when it is missing (the caller estimates then). Without BYOK `upstream_inference_cost` is the same money as
+    /// `cost` (kotoba-bench-v1 rows had both equal), so it is not added.
+    var charged: Decimal? {
+        guard isBYOK else { return cost }
+        guard let upstream = costDetails?.upstreamInferenceCost else { return nil }
+        return (cost ?? 0) + upstream
+    }
+}
+
+private struct CostDetails: Decodable {
+    enum CodingKeys: String, CodingKey {
+        case upstreamInferenceCost = "upstream_inference_cost"
+    }
+
+    var upstreamInferenceCost: Decimal?
 }

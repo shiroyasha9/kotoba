@@ -29,6 +29,7 @@ enum Snapshots {
         SettingsPane.speechSnapshots,
         SettingsPane.microphoneSnapshots,
         SettingsPane.generalSnapshots,
+        SettingsPane.usageSnapshots,
         ChordRecorder.snapshots,
         StatusBarItem.snapshots,
         OnboardingController.snapshots,
@@ -64,9 +65,13 @@ enum Snapshots {
         }
     }
 
+    /// Set for the whole of a snapshot run: `AppFiles` refuses to name the owner's files then.
+    private(set) static var isRunning = false
+
     static func runIfRequested() {
         let arguments = CommandLine.arguments
         guard let flag = arguments.firstIndex(of: "--snapshots"), arguments.indices.contains(flag + 1) else { return }
+        isRunning = true
         let folder = URL(filePath: arguments[flag + 1], directoryHint: .isDirectory)
         NSApplication.shared.setActivationPolicy(.prohibited)
         var written = 0

@@ -94,6 +94,21 @@ Spike `spikes/history-memory/` (`build.sh`, `measure.sh`), built like the Settin
 - Store reads (`HistoryStoreTests`, debug build, 10,000 rows of about 30 words): a page of 200 rows about 1 ms, the next page about 1 ms, a search that matches nothing (full scan with `LIKE`) about 3 ms. No FTS index.
 - Hot path: the stop reads the front app (bundle id and name) under a `Mutex`: about 83 ns per read (`swiftc -O` probe, 1,000,000 reads). Each saved row has two more text columns.
 
+## Usage pane (phase 3, 2026-10-16)
+
+Spike `spikes/usage-memory/` (`build.sh`, `measure.sh`), built like the History spike: the real `App/Settings/{SettingsWindow,UsagePane}.swift` and `App/InstalledApp.swift` plus KotobaCore, KotobaStorage and KotobaProviders sources, over a temporary history of 10,000 synthetic dictations; Settings opens on the Usage pane, which reads both periods. Physical footprint from `vmmap --summary`, 2 rounds:
+
+| State | r1 | r2 |
+|---|---|---|
+| UsageBase, idle 30 s | 11.7 MB | 11.7 MB |
+| UsageSpike, idle 30 s (SwiftUI linked, window never opened) | 12.4 MB | 12.5 MB |
+| Settings open on Usage (8 s after open) | 32.7 MB | 32.6 MB |
+| 30 s after close | 30.1 MB | 30.1 MB |
+
+- Opening Settings on the Usage pane adds about +20 MB; about +18 MB stays after close, SwiftUI's loaded runtime as for the other Settings panes (+19-21 MB). `UsageSpike --leak-check`: the window, its `NSHostingController` and the `UsageModel` are deallocated 2 s after close. No Swift Charts: a list of at most a few models says the same, and Charts is one more framework to load.
+- Store reads (`UsageLedgerTests`, debug build): both periods over 12,000 ledger rows (10,000 dictations) about 18 ms (three statements per period on the ledger's `time` index). The one-time move of kept dictations into the ledger at the first launch after this change: about 165 ms for 10,000. The footprint rows above were measured with the first design (usage columns on `dictations`); the pane and its reads did not change in kind.
+- Hot path: before Cmd-V the pipeline builds one ledger entry per answer, no wait: the word count about 0.4 µs for 50 words and the entry about 0.4 µs (release build, 100,000 runs; the first word count over characters took 11 µs). The entry is written in the save after Cmd-V, in the same transaction. First design, measured: that save went from 91-96 µs to 121-125 µs per dictation (release build, 2,500 saves, 3 runs).
+
 ## Learning from edits (phase 2.6, 2026-10-16)
 
 - `NSSpellChecker`: the first auto-learn loads it. Review measurement (`perf26/spell.swift`, 3 runs): `NSSpellChecker.shared` 7.5-33 ms on first use, first `checkSpelling` 1.2-14 ms, then 0.21-0.26 ms per word; footprint +1.28 to +1.34 MB, kept for the process lifetime. It loads only after an edit the owner made, and never while a dictation records or is sent (`EditLearner`). Idle before the first learn: no change to the floor.

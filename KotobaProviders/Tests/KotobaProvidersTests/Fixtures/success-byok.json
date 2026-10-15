@@ -1,0 +1,9 @@
+{
+  "text": "Run make check.",
+  "usage": {
+    "seconds": 4,
+    "is_byok": true,
+    "cost": 0.0000056,
+    "cost_details": { "upstream_inference_cost": 0.000111 }
+  }
+}

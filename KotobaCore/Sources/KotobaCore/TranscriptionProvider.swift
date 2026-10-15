@@ -6,18 +6,23 @@ import Foundation
 public protocol TranscriptionProvider: Sendable {
     /// Opens or refreshes the connection. The pipeline calls it at key-down.
     func warmUp() async
+    /// Returns every answer, with its usage, even one with no words (it is billed); the pipeline decides that such
+    /// an answer heard no speech.
     func transcribe(_ request: TranscriptionRequest) async throws -> Transcript
 }
 
 public struct TranscriptionRequest: Sendable, Equatable {
     /// 16 kHz mono FLAC.
     public var audio: URL
+    /// The recording's length: the audio count and the cost estimate for a route whose answer has neither.
+    public var duration: Duration
     public var language: Locale.Language
     /// Dictionary terms, sent where the route supports them.
     public var dictionaryTerms: [String]
 
-    public init(audio: URL, language: Locale.Language, dictionaryTerms: [String]) {
+    public init(audio: URL, duration: Duration, language: Locale.Language, dictionaryTerms: [String]) {
         self.audio = audio
+        self.duration = duration
         self.language = language
         self.dictionaryTerms = dictionaryTerms
     }
@@ -38,13 +43,14 @@ public struct Transcript: Sendable, Equatable {
 }
 
 public struct TranscriptionUsage: Sendable, Equatable {
+    /// The audio length the route counted, or the recording's length when its answer has none.
     public var audio: Duration
-    /// Nil when the route does not report cost.
-    public var costUSD: Decimal?
+    /// The reported cost, else an estimate from the route's list price; nil when neither is known.
+    public var cost: Cost?
 
-    public init(audio: Duration, costUSD: Decimal?) {
+    public init(audio: Duration, cost: Cost?) {
         self.audio = audio
-        self.costUSD = costUSD
+        self.cost = cost
     }
 }
 
@@ -67,7 +73,7 @@ public enum ProviderError: Error, Sendable, Equatable {
     case noCredit
     /// Any other 4xx (bad request, payload too large). Retrying the same request gives the same answer.
     case rejected(status: Int, message: String)
-    /// The route answered but heard no speech.
+    /// The route answered with no words: the pipeline throws it after it kept the answer's usage.
     case emptyTranscript
 
     public enum Recovery: Sendable, Equatable {
