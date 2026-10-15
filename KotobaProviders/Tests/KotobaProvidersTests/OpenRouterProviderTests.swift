@@ -42,9 +42,10 @@ struct OpenRouterProviderTests {
         #expect(String(bytes: body, encoding: .utf8) == expected)
     }
 
-    @Test func audioLargerThanOneChunkIsEncodedWhole() async throws {
+    @Test(arguments: [0, BodyWriter.chunk - 1, BodyWriter.chunk, BodyWriter.chunk + 1, BodyWriter.chunk + 2, 150_001])
+    func audioIsEncodedWholeAcrossChunkBoundaries(byteCount: Int) async throws {
         let stub = StubHost(reply: .fixture("success"))
-        let audio = Data((0..<150_001).map { UInt8(truncatingIfNeeded: $0 &* 31) })
+        let audio = Data((0..<byteCount).map { UInt8(truncatingIfNeeded: $0 &* 31) })
 
         _ = try await stub.provider().transcribe(stub.request(audio: audio))
 

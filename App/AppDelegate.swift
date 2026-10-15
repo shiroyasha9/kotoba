@@ -37,8 +37,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private var pendingCount = 0
     /// A dictation was pasted or copied, so "Fix Last Dictation…" has something to fix.
     private var hasLastDictation = false
-    /// Retried transcripts from the last 24 h, newest first, for the Recovered submenu.
-    private var recovered: [DictationRecord] = []
+    /// Menu previews from the last 24 h, newest first; full transcripts stay in the store until copied.
+    private var recovered: [MenuChoice] = []
     private var isSecureInputOn = false
     /// Set when the history database does not open; the menu shows it instead of the status.
     private var launchIssue: String?
@@ -220,7 +220,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
     private func refreshQueues() async {
         guard let store, let pipeline else { return }
-        recovered = await pipeline.retries.recovered()
+        recovered = await pipeline.retries.recovered().map { record in
+            let preview = (record.deliveredText ?? "").prefix(41)
+            let title = preview.count > 40 ? String(preview.prefix(40)) + "…" : String(preview)
+            return MenuChoice(title: title, value: record.id.rawValue.uuidString)
+        }
         do {
             pendingCount = try await store.pendingCount()
             hasLastDictation = try await store.lastDelivered() != nil
@@ -302,11 +306,7 @@ extension AppDelegate: StatusMenuActions {
         return MenuModel(
             status: status,
             pendingCount: pendingCount,
-            recovered: recovered.map { record in
-                let text = record.deliveredText ?? ""
-                let title = text.count > 40 ? String(text.prefix(40)) + "…" : text
-                return MenuChoice(title: title, value: record.id.rawValue.uuidString)
-            },
+            recovered: recovered,
             microphones: AudioDevices.inputs().map { MenuChoice(title: $0.name, value: $0.uid) },
             microphoneInUse: input.map { ($0.uid, $0.name) },
             routes: MenuModel.routes(current: route),

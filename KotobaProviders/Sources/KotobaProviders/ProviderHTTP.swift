@@ -236,9 +236,12 @@ final class BodyWriter {
     func write(contentsOf file: URL, base64: Bool = false) throws {
         let input = try FileHandle(forReadingFrom: file)
         defer { try? input.close() }  // Read-only: closing cannot lose data.
-        while let chunk = try input.read(upToCount: Self.chunk), !chunk.isEmpty {
+        // FileHandle's autoreleased read buffers must drain per chunk, not after the whole upload body.
+        while try autoreleasepool(invoking: {
+            guard let chunk = try input.read(upToCount: Self.chunk), !chunk.isEmpty else { return false }
             try output.write(contentsOf: base64 ? chunk.base64EncodedData() : chunk)
-        }
+            return true
+        }) {}
     }
 }
 
