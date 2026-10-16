@@ -33,7 +33,7 @@ final class MainWindowController {
     private var modesUpdate: Task<Void, Never>?
     /// Counts each delivered dictation's dictionary words for the app's lifetime (`DictationPipeline.termReports`).
     private var termReports: Task<Void, Never>?
-    /// The open window's Usage and Insights pane models, which read again after each history write while shown;
+    /// The open window's Usage and Insights pane models, which read again after each usage ledger write while shown;
     /// Insights also after each dictionary write.
     private weak var usage: UsageModel?
     private weak var insights: InsightsModel?
@@ -89,18 +89,18 @@ final class MainWindowController {
     }
 
     /// A history write (from `DictationPipeline.historyChanges`): an open History pane reads the row it names; a shown
-    /// Home, Usage or Insights pane or History section reads again. Deleted audio changes nothing Home shows and no
-    /// usage; Insights reads only the ledger, which deleted dictations keep.
+    /// Home or History section reads again, and a shown Usage or Insights pane only when the usage ledger changed. Their
+    /// figures come from the ledger (Insights also takes each answered dictation's recorded length, which a later row
+    /// write keeps), so each dictation's pending save at upload start changes none of them. Deleted audio changes
+    /// nothing Home shows.
     func historyChanged(_ change: HistoryChange) {
         historyPane?.historyChanged(change)
         switch change {
         case .audioDeleted: break
-        case .deleted:
-            home?.historyChanged()
-            usage?.historyChanged()
-        case .saved, .usageAdded:
-            home?.historyChanged()
-            usage?.historyChanged()
+        case .saved, .deleted, .usageAdded: home?.historyChanged()
+        }
+        if change.isUsageAdded {
+            usage?.ledgerChanged()
             insights?.storeChanged()
         }
         general?.audio?.historyChanged()

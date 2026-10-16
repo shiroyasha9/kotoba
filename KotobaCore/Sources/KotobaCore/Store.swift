@@ -22,7 +22,7 @@ public protocol Store: Sendable {
     /// Puts a `.cancelled` or `.rejected` record in the retry queue as `.failed`; a record with any other status keeps
     /// it.
     func queueForRetry(_ id: DictationID) async throws
-    /// Deletes the records, their latency logs and their audio files (the History window's Delete), each audio file
+    /// Deletes the records, their latency logs and their audio files (the History pane's Delete), each audio file
     /// first: a record whose file cannot be removed stays, with its file, so no deleted dictation leaves audio with no
     /// record (`OrphanAudio` would bring it back). Returns the ids that stay for that reason.
     func delete(_ ids: Set<DictationID>) async throws -> Set<DictationID>
@@ -140,7 +140,7 @@ extension DictationRecord {
     /// The text kotoba pasted or offers to copy: the cleaned text of a cleanup dictation, else the transcript.
     public var deliveredText: String? { cleanedText ?? transcript }
 
-    /// The words of `deliveredText`, as the History window counts them; the usage ledger counts each answer's text
+    /// The words of `deliveredText`, as the History pane counts them; the usage ledger counts each answer's text
     /// the same way. Nil when there is no text.
     public var wordCount: Int? {
         deliveredText.map(Self.wordCount(of:))
@@ -165,7 +165,7 @@ extension DictationRecord {
         return count
     }
 
-    /// A dictation with no text yet that the History window's Retry can send, while its audio is kept: queued, failed,
+    /// A dictation with no text yet that the History pane's Retry can send, while its audio is kept: queued, failed,
     /// cancelled or rejected (`DictationPipeline.retry(_:)` queues the last two first). A rejected one can succeed once
     /// the owner fixed the cause, for example added credit. One with no audio cannot (`RecordedAudio.hasAudio`).
     public var isRetryable: Bool {
@@ -224,13 +224,24 @@ extension Store {
 
 /// One write to the history, as `DictationPipeline.historyChanges` reports it, so a reader updates only what changed.
 public enum HistoryChange: Sendable, Equatable {
-    /// The dictation's row was written: a new dictation, a new status, a retry's transcript.
-    case saved(DictationID)
+    /// The dictation's row was written: a new dictation, a new status, a retry's transcript. `isUsageAdded` when the
+    /// same write took billed answers to the usage ledger (`DictationRecord.usage`).
+    case saved(DictationID, isUsageAdded: Bool)
     case deleted(Set<DictationID>)
     /// Audio retention deleted the audio of these rows (`DictationRecord.isAudioDeleted`); the rows stay.
     case audioDeleted(Set<DictationID>)
     /// Billed answers went to the usage ledger with no row write (`Store.addUsage`).
     case usageAdded
+
+    /// The write took billed answers to the usage ledger; a row write with no answer (the pending save at upload
+    /// start, a status change) and a delete leave the ledger as it was.
+    public var isUsageAdded: Bool {
+        switch self {
+        case .saved(_, let isUsageAdded): isUsageAdded
+        case .usageAdded: true
+        case .deleted, .audioDeleted: false
+        }
+    }
 }
 
 /// Passes every call to `base` and announces each write, so the app reads its counts and lists again only then.
@@ -239,13 +250,18 @@ struct AnnouncingStore: Store {
     let changes: AsyncStream<HistoryChange>.Continuation
 
     func save(_ record: DictationRecord) async throws {
-        defer { changes.yield(.saved(record.id)) }
+        defer { changes.yield(.saved(record.id, isUsageAdded: !record.usage.isEmpty)) }
         try await base.save(record)
     }
 
+    /// A record whose row is gone still adds its billed answers to the ledger.
     func update(_ record: DictationRecord) async throws -> Bool {
         let isWritten = try await base.update(record)
-        if isWritten { changes.yield(.saved(record.id)) }
+        if isWritten {
+            changes.yield(.saved(record.id, isUsageAdded: !record.usage.isEmpty))
+        } else if !record.usage.isEmpty {
+            changes.yield(.usageAdded)
+        }
         return isWritten
     }
 
@@ -266,12 +282,12 @@ struct AnnouncingStore: Store {
     }
 
     func markCopied(_ id: DictationID) async throws {
-        defer { changes.yield(.saved(id)) }
+        defer { changes.yield(.saved(id, isUsageAdded: false)) }
         try await base.markCopied(id)
     }
 
     func queueForRetry(_ id: DictationID) async throws {
-        defer { changes.yield(.saved(id)) }
+        defer { changes.yield(.saved(id, isUsageAdded: false)) }
         try await base.queueForRetry(id)
     }
 

@@ -142,7 +142,7 @@ final class HistoryModel {
     /// rows whose audio retention deleted.
     func apply(_ change: HistoryChange) async {
         switch change {
-        case .saved(let id): await refresh(id)
+        case .saved(let id, _): await refresh(id)
         case .deleted(let ids):
             list.remove(ids)
             retryable.subtract(ids)

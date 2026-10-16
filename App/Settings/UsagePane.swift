@@ -14,7 +14,7 @@ extension Pane {
 }
 
 /// How much the owner dictates and what it costs, this month and in the last 30 days. Built with each main window;
-/// it reads the usage ledger while the pane is shown (`PaneReader`: when it appears and after each history write; three
+/// it reads the usage ledger while the pane is shown (`PaneReader`: when it appears and after each ledger write; three
 /// SQLite statements per period), so nothing runs at idle.
 @MainActor
 @Observable
@@ -61,8 +61,8 @@ final class UsageModel {
 
     var summary: UsageSummary? { reader.value?[period] }
 
-    /// A dictation was saved or deleted: a shown pane reads again.
-    func historyChanged() {
+    /// Billed answers went to the usage ledger: a shown pane reads again.
+    func ledgerChanged() {
         reader.changed()
     }
 }

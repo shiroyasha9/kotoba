@@ -3,7 +3,7 @@ import Testing
 
 @testable import KotobaCore
 
-/// What the History window reads and does: each dictation keeps the app it went to, and Retry sends one dictation.
+/// What the History pane reads and does: each dictation keeps the app it went to, and Retry sends one dictation.
 struct PipelineHistoryTests {
 
     @Test func aDictationKeepsTheAppInFrontAtTheStop() async throws {
@@ -103,7 +103,7 @@ struct PipelineHistoryTests {
     }
 }
 
-/// Delete and the change stream: what an open History window relies on.
+/// Delete and the change stream: what an open History pane relies on.
 struct PipelineHistoryChangeTests {
 
     @Test func aDictationDeletedDuringItsRetryStaysDeleted() async throws {
@@ -200,10 +200,62 @@ struct PipelineHistoryChangeTests {
         let id = try #require(await world.store.records.first?.id)
         _ = await pipeline.delete([id])
 
-        // Saved pending at the stop, saved pasted, then deleted.
-        #expect(await changes.next() == .saved(id))
-        #expect(await changes.next() == .saved(id))
+        // Saved pending at the stop, saved pasted with its answer's ledger entry, then deleted.
+        #expect(await changes.next() == .saved(id, isUsageAdded: false))
+        #expect(await changes.next() == .saved(id, isUsageAdded: true))
         #expect(await changes.next() == .deleted([id]))
+    }
+
+    /// No answer was billed, so the Usage and Insights panes have nothing to read again.
+    @Test func aDictationWithNoAnswerAddsNoUsage() async throws {
+        let world = FakeWorld(transcript: "offline")
+        let pipeline = world.makePipeline()
+        var changes = pipeline.historyChanges.makeAsyncIterator()
+        await world.provider.fail(with: FakeError())
+
+        await pipeline.dictate(world)
+
+        let id = try #require(await world.store.records.first?.id)
+        #expect(await changes.next() == .saved(id, isUsageAdded: false))
+        #expect(await changes.next() == .saved(id, isUsageAdded: false))
+    }
+
+    /// The store keeps the billed answer of a retry whose row was deleted during it, so the ledger changed.
+    @Test func aRetryOfADeletedDictationAnnouncesItsUsage() async throws {
+        let world = FakeWorld(transcript: "too late")
+        let pipeline = world.makePipeline()
+        await world.provider.fail(with: FakeError())
+        await pipeline.dictate(world)
+        let id = try #require(await world.store.records.first?.id)
+        await world.provider.fail(with: nil)
+        let gate = Gate()
+        await world.provider.hold(at: gate)
+        var changes = pipeline.historyChanges.makeAsyncIterator()
+        // The two saves of the failed dictation.
+        _ = await changes.next()
+        _ = await changes.next()
+
+        let retry = Task { await pipeline.retry([id]) }
+        #expect(await eventually { await gate.hasWaiters })
+        _ = await pipeline.delete([id])
+        await gate.open()
+        await retry.value
+
+        // Retry puts it in the queue first.
+        #expect(await changes.next() == .saved(id, isUsageAdded: false))
+        #expect(await changes.next() == .deleted([id]))
+        #expect(await changes.next() == .usageAdded)
+        #expect(await world.store.ledger.count == 1)
+    }
+
+    @Test func onlyLedgerWritesAddUsage() {
+        let id = DictationID()
+
+        #expect(HistoryChange.saved(id, isUsageAdded: true).isUsageAdded)
+        #expect(HistoryChange.usageAdded.isUsageAdded)
+        #expect(!HistoryChange.saved(id, isUsageAdded: false).isUsageAdded)
+        #expect(!HistoryChange.deleted([id]).isUsageAdded)
+        #expect(!HistoryChange.audioDeleted([id]).isUsageAdded)
     }
 
     @Test func aFailedDeleteAnnouncesNothingAndSaysSo() async throws {
@@ -216,7 +268,7 @@ struct PipelineHistoryChangeTests {
         await pipeline.dictate(world)
 
         let id = try #require(await world.store.records.first?.id)
-        #expect(await changes.next() == .saved(id))
+        #expect(await changes.next() == .saved(id, isUsageAdded: false))
     }
 
     /// A dictation whose audio file cannot be removed stays, so it never leaves audio with no row; the window keeps its
