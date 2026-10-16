@@ -103,8 +103,9 @@ extension DictationPipeline {
     }
 
     /// Sends the route's primer (`TranscriptionProvider.prime`) unless one is on its way, and keeps the live recording
-    /// primed every `Settings.primerInterval`; a route with no primer gets neither. Nothing waits for it. Its cost goes to the ledger with this dictation,
-    /// with no audio and no words, so minutes and words per minute stay what the owner dictated.
+    /// primed every `Settings.primerInterval`; a route with no primer gets neither. Nothing waits for it. Its cost goes
+    /// to the ledger with this dictation, with no audio and no words, so minutes and words per minute stay what the
+    /// owner dictated.
     func primeRoute(for id: DictationID) {
         guard ports.provider.hasPrimer, !isPrimerInFlight else { return }
         isPrimerInFlight = true
@@ -130,16 +131,17 @@ extension DictationPipeline {
     /// The next primer of the live recording `id`, `Settings.primerInterval` after the last one was sent (at once when
     /// that is past, as after a long Undo window). The stop and Esc cancel it.
     func armPrimer(for id: DictationID) {
-        guard recording?.id == id, recording?.primerTimer == nil, let primedAt, ports.provider.hasPrimer else { return }
+        guard recording?.id == id, recording?.primerTimer == nil, let primedAt else { return }
         recording?.primerTimer = work.schedule(at: primedAt + settings.primerInterval) {
             await self.primerTimerFired(id)
         }
     }
 
-    /// A primer that was still on its way at its recording's timer skipped that one; the next is armed here.
+    /// A primer that was still on its way at its recording's timer skipped that one; the next is armed here, unless
+    /// the route changed to one with no primer meanwhile.
     private func primerFinished() {
         isPrimerInFlight = false
-        if let id = recording?.id { armPrimer(for: id) }
+        if let id = recording?.id, ports.provider.hasPrimer { armPrimer(for: id) }
     }
 
     private func primerTimerFired(_ id: DictationID) {

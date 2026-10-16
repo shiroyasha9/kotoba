@@ -63,8 +63,6 @@ final class OpenRouterProvider: RouteClient {
     /// After a quiet minute OpenRouter MAI answered about 1.6 s slower, and the key-down `HEAD` did not change that;
     /// a billed transcription did (docs/research/latency-pass.md). The primer is one, with the route's model, language
     /// and data policy and no dictionary terms. A failure only means the next answer pays the cold start.
-    var hasPrimer: Bool { true }
-
     func prime(_ options: TranscriptionSettings.RouteOptions, language: Locale.Language) async -> Transcript? {
         let label = "primer \(options.route.rawValue)"
         let fields = Self.fields(terms: [], language: language, options: options)
@@ -76,6 +74,8 @@ final class OpenRouterProvider: RouteClient {
             recorded: .milliseconds(500), on: options.route)
         return Transcript(text: answer.text ?? "", usage: usage, model: options.route.rawValue)
     }
+
+    var hasPrimer: Bool { true }
 
     /// POSTs `input_audio` first, its base64 from `audio`, then the other fields, and decodes the answer.
     private func post(

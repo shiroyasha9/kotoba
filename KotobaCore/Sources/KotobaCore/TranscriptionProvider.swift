@@ -6,8 +6,7 @@ import Foundation
 public protocol TranscriptionProvider: Sendable {
     /// Opens or refreshes the connection. The pipeline calls it at key-down.
     func warmUp() async
-    /// Whether the current route has a primer. Read at each announcement and timer, so a route switched in the menu
-    /// applies to the next one; without a primer the pipeline sends none and arms no primer timer.
+    /// Whether the current route has a primer (`prime`); a route switched in the menu applies from the next dictation.
     var hasPrimer: Bool { get }
     /// Sends the route's smallest billed request through its whole path, so the answer at the stop does not pay the
     /// route's cold start. The pipeline calls it when a dictation is announced, never for a dropped shortcut press, and

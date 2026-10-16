@@ -41,6 +41,26 @@ Harness: `bench/latency/run.ts` (`bun run latency --exp <name>`). One request at
 | Primer: 90 s quiet, a primer, 10 s (a recording), then a 15 s clip | No primer: 3,407-4,021 ms (n 6). `GET /key`: 3,069-3,100 (n 3). `POST` with `{}` (400 from OpenRouter, free): 3,046-3,121 (n 3). 0.5 s of silence, app shape: 1,240-1,955 (n 3). 0.5 s of silence without the phrase list (what the app sends; the last run with the app's exact 110-byte FLAC): 1,904-2,003 (n 3). |
 | Path: Wi-Fi (en0, BOM) against the VPN (SIN), curl, a new connection per request (10 clips) | Both bimodal, about 0.8-1.4 s or 2.0-3.5 s; Wi-Fi p50 2,084 ms, VPN p50 2,466 ms. Not decisive. |
 
+### 2.1 Why a primed clip is still slower than a warm one (2026-10-17, 02:44-03:40 IST)
+
+`--exp spacing`: after 90 s quiet, a primer, a gap, then the same 15 s clip three times back to back (A, B, C). B and C are the warm reference (about 1.05-1.2 s on this path, with the usual spikes to 2.8 s).
+
+| Primer (then 10 s, unless named) | Primer body | Clip A after it |
+| --- | --- | --- |
+| None | - | 3,499 / 1,797 ms |
+| The app's silence, 0.5 s; gaps 2, 10, 25 s | 110 B | 1,859-1,977 ms (n 8, every gap) |
+| Two silent primers, one after the other | 110 B each | 1,921 ms |
+| Speech, first 3 s of the clip | about 70 KB | 2,169 / 1,594 ms |
+| White noise, 1 s, 16-bit 48 kHz stereo FLAC | 127-153 KB | 1,646 / 1,534 / 1,326 ms |
+| White noise, 1 s, 32-bit 48 kHz stereo WAV | 384 KB | 1,066 / 2,733 ms |
+| White noise, 15 s | 376 KB | 2,871 / 1,165 / 1,116 ms |
+| The clip itself, 15 s | about 360 KB | 1,152-1,247 ms (n 4) |
+
+- The primer was not in flight: every primer had answered before its gap started, and the gap (2-25 s) does not change A.
+- A second silent primer does not help. A large body does, whatever its length or content: with a primer of 360-384 KB, A is at the warm level (one spike in five, as for warm requests). So part of the cold path warms with the bytes sent (an upstream connection's congestion window is the likely cause; not verified), and survives at least 10 s of quiet.
+- On Wi-Fi without the VPN (curl on en0, Cloudflare BOM, a new connection per set, 2 runs each): after the silent primer clip A took 1,081 / 1,160 ms; after the 384 KB primer, 803 / 882 ms. So the extra gain of a large primer is about 0.3 s on Wi-Fi and about 0.75 s on the VPN path.
+- Cost of a large primer: still one billed second ($0.000028), but about 0.5 MB up per primer (base64), so about 50 MB a day at 100 dictations, and about 45 MB per hour of continuous recording with the 40 s re-primes. Not built: a decision for the lead.
+
 Reading: the slow part is on the provider side after the edge, and it is warm for at least 45 s after a billed transcription. A request that OpenRouter answers itself (auth, a 400) warms about 0.4 s of it; the rest needs a request that goes to the upstream. Which part is cold (OpenRouter's upstream connection, Azure, or both) cannot be seen from here: the response has no timing headers, and the generation stats endpoint is not documented for speech.
 
 ## 3. Changes
@@ -58,7 +78,8 @@ Reading: the slow part is on the provider side after the edge, and it is warm fo
 - Silence trim before upload (lead candidate, 2026-10-17; Superwhisper, Handy): measured on the 252 bench clips (99 min) with `ffmpeg silencedetect`, at least 0.3 s of silence at each end, 0.3 s kept at each end so soft onsets and last words stay. At -45 dB: 0.7% of the audio is trimmable (p50 0 s, p90 0.58 s per clip; 98 clips). At -35 dB (looser, more risk): 2.1% (p50 0.29 s, p90 1.38 s; 191 clips). At about 10 ms per audio second (section 2), that is 3-14 ms per dictation, and 0.7-2.1% of the billed seconds (at most $0.002 per hour of audio). The bench clips are Wispr Flow recordings; kotoba's own files start at key-down and can hold some more lead silence, but not enough to change this. Skipped: the gain is small and a cut can clip speech. Script and rows: `trim/` in the runbooks folder.
 
 - Request shape (multipart raw FLAC, no ZDR, no phrase list): no gain back to back (section 2).
-- Upload while recording: the stream spike (2026-10-16) showed OpenRouter needs a finished FLAC header (502 with `total_samples = 0`), and the upload is 1-89 ms of the wait here. Not worth it.
+- Upload while recording: not built or measured end to end tonight. The stream spike (2026-10-16, `<runbooks>/2026-10-16-kotoba-stream-spike/`) streamed the JSON body to OpenRouter during a 20 s recording: a FLAC stream fails (502: the header's `total_samples` is 0 until the file closes), a WAV with an open size (`0xFFFFFFFF`) is accepted. OpenRouter must have the whole JSON before it calls the provider, so streaming removes only our own upload after the stop: 22-89 ms for 300-600 KB on Wi-Fi in the app's log, about 200-300 ms on the 60 ms VPN path, plus the 2 ms body build. It does not touch the server time, which is most of the wait. It would take: `uploadTask(withStreamedRequest:)` with a bound stream pair fed by the capture writer (WAV, about 1.4x the bytes of FLAC as base64), a cancel for Esc and a resume for Undo, a fallback to the file upload, a limit near OpenRouter's 60 s upstream timeout, and provider-seam tests: about 2 days, with an open request through every recording.
+- A streaming speech endpoint (words while speaking, a final answer about 0.2-0.5 s after the stop) would remove most of the server wait, but OpenRouter's speech API is batch only; MAI streaming is on Vercel AI Gateway as a WebSocket at about $0.54/h (5.4x) through Paris (+200 ms, `mai-routing.md`), or on Azure direct with the owner's own resource. A new route, a new price and a new accuracy bench; not tested.
 - Other models: all slower than MAI through OpenRouter on this path.
 - Hedging (two requests at once): it cut both spikes in 20 pairs, at twice the speech cost and upload. The primer removes the larger, systematic cold cost first; hedge only if `make latency-log` still shows a tail after it (owner decision: it doubles the speech bill).
 - Local stop path: stop to `uploadStart` (capture end, FLAC close) and response to paste are measured by the new log line from now on; no old data exists outside the database.

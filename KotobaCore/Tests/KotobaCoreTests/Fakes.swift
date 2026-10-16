@@ -102,7 +102,7 @@ actor FakeTranscriptionProvider: TranscriptionProvider {
 
     func warmUp() async {}
 
-    /// False, as on a direct route: the pipeline sends no primer and arms no primer timer.
+    /// Whether the route has a primer; false acts as a direct route.
     nonisolated let hasPrimer: Bool
     /// How many primers the pipeline sent, and what each answers: nil (an answer with no cost) by default.
     private(set) var primes = 0

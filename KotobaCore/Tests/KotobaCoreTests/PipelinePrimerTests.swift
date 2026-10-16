@@ -161,7 +161,7 @@ struct PipelinePrimerTests {
         await pipeline.tap(world)
         await pipeline.settle()
 
-        #expect(world.clock.deadlines.contains(start + interval))
+        #expect(world.clock.deadlines.contains { $0 > start && $0 <= start + interval })
     }
 
     /// A direct route has no primer: nothing is sent and no timer wakes during the recording.
@@ -173,7 +173,7 @@ struct PipelinePrimerTests {
 
         await pipeline.tap(world)
         await pipeline.settle()
-        #expect(!world.clock.deadlines.contains(start + interval))
+        #expect(!world.clock.deadlines.contains { $0 > start && $0 <= start + interval })
         world.clock.advance(by: interval * 3)
         await pipeline.settle()
         await pipeline.tap(world)

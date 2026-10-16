@@ -1,5 +1,5 @@
 // Latency probe: where does the time between the last body byte and the answer go, and which request shape is fastest?
-// bun run latency --exp duration|shape|hedge|models|idle|primer [--clips N] [--repeat N] [--models SLUG,SLUG] [--cap USD] [--dry-run]
+// bun run latency --exp duration|shape|hedge|models|idle|primer|spacing [--clips N] [--repeat N] [--models SLUG,SLUG] [--cap USD] [--dry-run]
 //   [--data DIR] [--out DIR]
 // Requests go one at a time (a hedge pair goes as two at once), with the variant order rotated per clip, so variants
 // share the time of day. Every attempt is appended to `<out>/results/latency-raw.jsonl` as it completes; `--exp report`
@@ -19,7 +19,7 @@ import { LISTED_USD_PER_SEC, MAI, biasTerms } from "../stt.ts";
 
 /** Default cap on this probe's raw file, across runs. */
 const COST_CAP_USD = 0.5;
-const EXPERIMENTS = ["duration", "shape", "hedge", "models", "idle", "primer", "report"] as const;
+const EXPERIMENTS = ["duration", "shape", "hedge", "models", "idle", "primer", "spacing", "report"] as const;
 type Experiment = (typeof EXPERIMENTS)[number];
 /** Trim lengths for the duration sweep, in seconds. */
 const DURATIONS = [3, 6, 10, 15, 20, 30];
@@ -28,6 +28,8 @@ const IDLE_SEC = 90;
 const GAPS_SEC = [3, 15, 45];
 /** The primer experiment: the time from a primer (sent at key-down) to the measured request (sent at the stop). */
 const RECORDING_SEC = 10;
+/** The spacing experiment: time from the primer's answer to the first clip, as in a dictation of that length. */
+const SPACINGS_SEC = [2, 10, 25];
 const PRIMER_AUDIO =
 	"ZkxhQwAAACIQABAAAAALAAANA+gA8AAAH0Ae4Bk2cWCcfWPP6JuSCtMThAAAKCAAAAByZWZlcmVuY2UgbGliRkxBQyAxLjUuMCAyMDI1" +
 	"MDIxMQAAAAD/+MUIAG8AAABlVf/4dQgBDz/iAAAAZoI=";
@@ -41,6 +43,8 @@ const { values } = parseArgs({
 		models: { type: "string" },
 		// The primer experiment: which primers to compare (default all of PRIMERS).
 		primers: { type: "string" },
+		// The spacing experiment: which sets to run (default all: none, gap<N> for each spacing, double10).
+		sets: { type: "string" },
 		cap: { type: "string" },
 		"dry-run": { type: "boolean", default: false },
 		data: { type: "string", default: Bun.env.KOTOBA_BENCH_DATA },
@@ -135,7 +139,7 @@ async function body(v: Variant, file: string): Promise<{ url: string; init: Requ
 		return { url, init: { method: "POST", headers: { Authorization }, body: form }, bytes: audio.byteLength };
 	}
 	const json = JSON.stringify({
-		input_audio: { format: "flac", data: audio.toBase64() },
+		input_audio: { format: file.endsWith(".wav") ? "wav" : "flac", data: audio.toBase64() },
 		model: v.model,
 		language: "en",
 		...(Object.keys(provider).length ? { provider } : {}),
@@ -312,6 +316,63 @@ async function plan(): Promise<Job[][]> {
 							]
 						: [[measured("none", IDLE_SEC)]],
 				);
+		}
+		case "spacing": {
+			// Is a primed clip slower than a warm one? After `IDLE_SEC` quiet: no primer, or the app's primer and a gap;
+			// then the same 10-20 s clip three times back to back (A, B, C). B and C are the warm reference.
+			const [clip] = await pick(10, 20, 1);
+			if (!clip) fail("no 10-20 s clip in the bench data");
+			const full = audioPath(p, clip.clipId, "flac");
+			const silence = join(out, "audio", "silence-0.5s.flac");
+			await mkdir(join(out, "audio"), { recursive: true });
+			await Bun.write(silence, Buffer.from(PRIMER_AUDIO, "base64"));
+			const clipRun = (set: string, idleBefore: number): Job[][] =>
+				["A", "B", "C"].map((n, i) => [
+					{
+						exp,
+						variant: { ...APP, key: `${set}-${n}` },
+						clipId: clip.clipId,
+						file: full,
+						durationSec: clip.durationSec,
+						idleBefore: i ? 0 : idleBefore,
+					},
+				]);
+			const primer = (set: string, idleBefore: number): Job[] => [
+				{ exp, variant: { ...APP, key: `${set}-primer`, phrases: false }, clipId: "silence", file: silence, durationSec: 0.5, idleBefore },
+			];
+			const all: Record<string, Job[][]> = {
+				none: clipRun("none", IDLE_SEC),
+				...Object.fromEntries(SPACINGS_SEC.map((gap) => [`gap${gap}`, [primer(`gap${gap}`, IDLE_SEC), ...clipRun(`gap${gap}`, gap)]])),
+				// Two primers one after the other, then the clip 10 s after the second answer.
+				double10: [primer("double10", IDLE_SEC), primer("double10", 0), ...clipRun("double10", 10)],
+				// Size or speech? White noise of the clip's size and length, a 1 s body as large (48 kHz stereo), and the first
+				// 3 s of the clip (speech, a small body). Each file is made in `<out>/audio` before the run (run.log).
+				...Object.fromEntries(
+					[
+						["noise15", join(out, "audio", "noise-15s-16k.flac"), 15],
+						["noise1big", join(out, "audio", "noise-1s-48k.flac"), 1],
+						["noise1full", join(out, "audio", "noise-1s-48k-full.flac"), 1],
+						["noise1wav", join(out, "audio", "noise-1s-48k-s32.wav"), 1],
+						["speech3", join(out, "audio", `${clip.clipId}.3s.flac`), 3],
+					].map(([set, file, sec]) => [
+						set as string,
+						[
+							[{ exp, variant: { ...APP, key: `${set}-primer`, phrases: false }, clipId: "primer", file: file as string, durationSec: sec as number, idleBefore: IDLE_SEC }],
+							...clipRun(set as string, 10),
+						],
+					]),
+				),
+				// The clip itself as the primer: does a full-size body warm what the silent primer does not?
+				clip10: [
+					[{ exp, variant: { ...APP, key: "clip10-primer", phrases: false }, clipId: clip.clipId, file: full, durationSec: clip.durationSec, idleBefore: IDLE_SEC }],
+					...clipRun("clip10", 10),
+				],
+			};
+			const names = values.sets?.split(",") ?? Object.keys(all);
+			const unknown = names.filter((n) => !(n in all));
+			if (unknown.length) fail(`--sets takes ${Object.keys(all).join(", ")}; not ${unknown.join(", ")}`);
+			const sets = names.map((n) => all[n]!);
+			return Array.from({ length: repeat }, (_, r) => rotate(sets, r)).flat(2);
 		}
 		default:
 			return [];

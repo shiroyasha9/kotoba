@@ -35,7 +35,7 @@ public final class TranscriptionRouter: TranscriptionProvider {
     }
 
     public var hasPrimer: Bool {
-        client(for: settings.routeOptions.route.account).hasPrimer
+        client(for: settings.route.account).hasPrimer
     }
 
     public func prime(language: Locale.Language) async -> Transcript? {
