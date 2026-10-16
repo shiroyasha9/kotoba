@@ -1,4 +1,5 @@
 import Foundation
+import KotobaCore
 
 /// The App's own settings in UserDefaults, with their keys in one place. Provider settings live in
 /// `TranscriptionSettings`; `IndicatorPanel` reads and writes the indicator keys.
@@ -12,6 +13,7 @@ enum AppDefaults {
         case learnsFromEdits = "dictionary.learnsFromEdits"
         case indicatorAnchor = "indicator.anchor"
         case indicatorVisibility = "indicator.visibility"
+        case audioRetention = "history.audioRetention"
     }
 
     /// The values a setting has until the owner changes it, registered once at launch (`main.swift`) before anything
@@ -39,5 +41,26 @@ enum AppDefaults {
     /// default; read on each paste, from any thread.
     static var isLearningFromEdits: Bool {
         UserDefaults.standard.bool(forKey: Key.learnsFromEdits.rawValue)
+    }
+
+    /// How long a transcribed dictation keeps its audio (story 31). No registered default: launch stores the first
+    /// choice once (`chooseAudioRetention(hadDictations:)`), so an update never applies 7 days to an older history.
+    static var audioRetention: AudioRetention {
+        get { storedAudioRetention ?? .standard }
+        set { UserDefaults.standard.set(newValue.rawValue, forKey: Key.audioRetention.rawValue) }
+    }
+
+    /// Not `integer(forKey:)`: its 0 for a missing value is `.forever`.
+    private static var storedAudioRetention: AudioRetention? {
+        (UserDefaults.standard.object(forKey: Key.audioRetention.rawValue) as? Int).flatMap(AudioRetention.init)
+    }
+
+    /// Stores the period of an install that has none yet, before any retention runs: Forever when the history already
+    /// had dictations (an update), 7 days for a new install (`AudioRetention.firstChoice`).
+    static func chooseAudioRetention(hadDictations: Bool) -> AudioRetention {
+        if let stored = storedAudioRetention { return stored }
+        let chosen = AudioRetention.firstChoice(hasEarlierHistory: hadDictations)
+        audioRetention = chosen
+        return chosen
     }
 }

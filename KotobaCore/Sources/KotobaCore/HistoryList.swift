@@ -40,6 +40,13 @@ public struct HistoryList: Sendable, Equatable {
         rows.insert(record, at: rows.firstIndex { Self.isNewer(record, than: $0) } ?? rows.endIndex)
     }
 
+    /// Audio retention deleted the audio of these rows: shown ones change in place, with no read from the store.
+    public mutating func markAudioDeleted(_ ids: Set<DictationID>) {
+        for index in rows.indices where ids.contains(rows[index].id) {
+            rows[index].isAudioDeleted = true
+        }
+    }
+
     public mutating func remove(_ ids: Set<DictationID>) {
         deleted.formUnion(ids)
         rows.removeAll { ids.contains($0.id) }

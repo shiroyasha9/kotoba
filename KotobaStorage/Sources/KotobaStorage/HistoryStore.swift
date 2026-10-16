@@ -27,7 +27,9 @@ public actor HistoryStore: Store {
             mode TEXT NOT NULL DEFAULT 'transcript',
             reject_reason TEXT,
             app_bundle_id TEXT,
-            app_name TEXT
+            app_name TEXT,
+            audio_deleted INTEGER NOT NULL DEFAULT 0,
+            audio_bytes INTEGER
         );
         CREATE INDEX IF NOT EXISTS dictations_status ON dictations (status);
         -- The History window's order, newest first.
@@ -45,32 +47,45 @@ public actor HistoryStore: Store {
     private static let addedColumns = [
         ("model", "TEXT"), ("recovered_at", "REAL"), ("cleaned_text", "TEXT"), ("needs_setup", "TEXT"),
         ("mode", "TEXT NOT NULL DEFAULT 'transcript'"), ("reject_reason", "TEXT"), ("app_bundle_id", "TEXT"),
-        ("app_name", "TEXT"),
+        ("app_name", "TEXT"), ("audio_deleted", "INTEGER NOT NULL DEFAULT 0"), ("audio_bytes", "INTEGER"),
     ]
 
     private static let columns = """
         id, created_at, audio_path, audio_duration_ms, transcript, model, status, recovered_at, cleaned_text,
         needs_setup, mode, reject_reason, app_bundle_id, app_name
         """
+    /// What a read returns: the written columns, then the ones only `deleteAudio` writes.
+    private static let readColumns = columns + ", audio_deleted"
 
-    /// SQL lists of statuses, from `DictationRecord.Status`: the retry queue, the rows prune keeps, and the rows whose
-    /// text reached the owner.
+    /// SQL lists of statuses, from `DictationRecord.Status`: the retry queue, and the rows whose text reached the
+    /// owner.
     private static let retryable = sqlList([.pending, .failed])
-    private static let kept = sqlList([.pending, .failed, .rejected])
     private static let delivered = sqlList([.pasted, .copied])
     /// The kept rows the History window's Retry puts back in the queue.
     private static let requeued = sqlList([.cancelled, .rejected])
-
     let database: SQLiteDatabase
+    /// Where the audio files are (`DictationPipeline.Settings.audioDirectory`). Every use of a row's audio finds the
+    /// file by its name here (`audioFile(at:)`), never by the stored absolute path.
+    nonisolated let audioFolder: URL
+    /// The history had dictations when it opened: an install from before audio retention, when no period is stored
+    /// (`AudioRetention.firstChoice`).
+    public nonisolated let hadDictationsAtOpen: Bool
 
-    /// `url` has no default: only the app knows where the owner's database is (`AppFiles`), so a test or a snapshot
-    /// run cannot open it by leaving the argument out.
-    public init(url: URL) throws {
+    /// `url` and `audio` have no default: only the app knows where the owner's files are (`AppFiles`), so a test or a
+    /// snapshot run cannot open them by leaving an argument out.
+    public init(url: URL, audio: URL) throws {
+        audioFolder = audio
         try FileManager.default.createDirectory(at: url.deletingLastPathComponent(), withIntermediateDirectories: true)
         database = try SQLiteDatabase(url: url)
         try database.execute(Self.schema)
         try Self.migrate(database)
         try database.execute("PRAGMA foreign_keys = ON;")
+        // Statistics for the planner, so retention reads its partial index (SQLite's advice for each open; a no-op
+        // when they are current).
+        try database.execute("PRAGMA optimize = 0x10002;")
+        hadDictationsAtOpen =
+            try database.query("SELECT EXISTS (SELECT 1 FROM dictations);").first?.first
+            == .integer(1)
     }
 
     /// One transaction that also reads the columns, so a quit halfway leaves the old schema for the next launch, and
@@ -83,6 +98,8 @@ public actor HistoryStore: Store {
                 try database.execute("ALTER TABLE dictations ADD COLUMN \(name) \(type);")
             }
             try fillLedger(database)
+            // After the columns: an older database gets `audio_deleted` above.
+            try database.execute(keptAudioIndex)
             // A phase 2 build kept "waits for a key" as needs_key = 1.
             if existing.contains("needs_key") {
                 try database.execute(
@@ -95,14 +112,15 @@ public actor HistoryStore: Store {
         _ = try write(
             record,
             sql: """
-                INSERT INTO dictations (\(Self.columns))
-                VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14)
+                INSERT INTO dictations (\(Self.columns), audio_bytes)
+                VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15)
                 ON CONFLICT (id) DO UPDATE SET
                     audio_path = excluded.audio_path, audio_duration_ms = excluded.audio_duration_ms,
                     transcript = excluded.transcript, model = excluded.model, status = excluded.status,
                     recovered_at = excluded.recovered_at, cleaned_text = excluded.cleaned_text,
                     needs_setup = excluded.needs_setup, mode = excluded.mode, reject_reason = excluded.reject_reason,
-                    app_bundle_id = excluded.app_bundle_id, app_name = excluded.app_name
+                    app_bundle_id = excluded.app_bundle_id, app_name = excluded.app_name,
+                    audio_bytes = excluded.audio_bytes
                 RETURNING id;
                 """)
     }
@@ -114,18 +132,20 @@ public actor HistoryStore: Store {
             sql: """
                 UPDATE dictations SET (
                     audio_path, audio_duration_ms, transcript, model, status, recovered_at, cleaned_text, needs_setup,
-                    mode, reject_reason, app_bundle_id, app_name
-                ) = (?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14)
+                    mode, reject_reason, app_bundle_id, app_name, audio_bytes
+                ) = (?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15)
                 WHERE id = ?1
                 RETURNING id;
                 """)
     }
 
-    /// Runs `sql` with the record's columns as ?1-?14 (`columns` order), then replaces its latency marks, in one
+    /// Runs `sql` with the record's columns as ?1-?14 (`columns` order) and the audio file's size as ?15 (one `stat`,
+    /// about 10 µs, for the Settings size), then replaces its latency marks, in one
     /// transaction; the record's usage entries go to the ledger even when `sql` wrote no row (the dictation was
     /// deleted during a retry, and the answer was still billed). False when `sql` wrote no row.
     private func write(_ record: DictationRecord, sql: String) throws -> Bool {
         let id = Value.text(record.id.rawValue.uuidString)
+        let bytes = Self.allocatedSize(of: record.audio.file).map { Value.integer($0) } ?? .null
         var isWritten = false
         try database.transaction { () throws(SQLiteError) in
             try Self.addToLedger(record.usage, in: database)
@@ -138,7 +158,7 @@ public actor HistoryStore: Store {
                     record.recoveredAt.map { .real($0.timeIntervalSince1970) } ?? .null, Self.text(record.cleanedText),
                     Self.text(record.needsSetup?.rawValue), .text(record.mode.rawValue),
                     Self.text(record.rejectReason?.rawValue), Self.text(record.app?.bundleID),
-                    Self.text(record.app?.name),
+                    Self.text(record.app?.name), bytes,
                 ]
             ).isEmpty
             guard isWritten else { return }
@@ -193,10 +213,6 @@ public actor HistoryStore: Store {
         )
     }
 
-    public func prune(olderThan cutoff: Date) throws {
-        try deleteRows(where: "created_at < ?1 AND status NOT IN \(Self.kept)", [.real(cutoff.timeIntervalSince1970)])
-    }
-
     public func delete(_ ids: Set<DictationID>) throws {
         guard !ids.isEmpty else { return }
         let placeholders = (1...ids.count).map { "?\($0)" }.joined(separator: ", ")
@@ -207,7 +223,7 @@ public actor HistoryStore: Store {
     private func deleteRows(where condition: String, _ values: [Value]) throws {
         let deleted = try database.query("DELETE FROM dictations WHERE \(condition) RETURNING audio_path;", values)
         for case .text(let path) in deleted.map({ $0[0] }) {
-            try? FileManager.default.removeItem(atPath: path)  // A file already gone is fine.
+            _ = Self.removeAudio(at: audioFile(at: path))
         }
     }
 
@@ -229,9 +245,9 @@ public actor HistoryStore: Store {
         _ values: [Value] = [],
         withLatency: Bool = true
     ) throws -> [DictationRecord] {
-        let rows = try database.query("SELECT \(Self.columns) FROM dictations WHERE \(condition);", values)
+        let rows = try database.query("SELECT \(Self.readColumns) FROM dictations WHERE \(condition);", values)
         return try rows.compactMap { row in
-            guard var record = Self.record(from: row) else { return nil }
+            guard var record = Self.record(from: row, audioFolder: audioFolder) else { return nil }
             if withLatency {
                 record.latency = try latency(of: record.id)
             }
@@ -239,7 +255,7 @@ public actor HistoryStore: Store {
         }
     }
 
-    private static func record(from row: [Value]) -> DictationRecord? {
+    private static func record(from row: [Value], audioFolder: URL) -> DictationRecord? {
         guard
             case .text(let idText) = row[0], let uuid = UUID(uuidString: idText),
             case .real(let createdAt) = row[1],
@@ -251,7 +267,7 @@ public actor HistoryStore: Store {
         var record = DictationRecord(
             id: DictationID(rawValue: uuid),
             createdAt: Date(timeIntervalSince1970: createdAt),
-            audio: RecordedAudio(file: URL(filePath: path), duration: .milliseconds(durationMs)),
+            audio: RecordedAudio(file: audioFile(at: path, in: audioFolder), duration: .milliseconds(durationMs)),
             transcript: string(row[4]),
             model: string(row[5]),
             status: status,
@@ -263,6 +279,7 @@ public actor HistoryStore: Store {
         record.mode = string(row[10]).flatMap(DictationMode.init(rawValue:)) ?? .transcript
         record.rejectReason = string(row[11]).flatMap(RejectReason.init(rawValue:))
         record.app = string(row[12]).map { DictationApp(bundleID: $0, name: string(row[13])) }
+        record.isAudioDeleted = row[14] == .integer(1)
         return record
     }
 
@@ -279,7 +296,7 @@ public actor HistoryStore: Store {
         return log
     }
 
-    private static func sqlList(_ statuses: [DictationRecord.Status]) -> String {
+    static func sqlList(_ statuses: [DictationRecord.Status]) -> String {
         "(" + statuses.map { "'\($0.rawValue)'" }.joined(separator: ", ") + ")"
     }
 

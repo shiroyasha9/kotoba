@@ -176,7 +176,8 @@ struct HistoryRow: View {
         .help(LastDictation.rawText(of: record).map { "Before cleanup: \($0)" } ?? "")
     }
 
-    /// "Notes · 0:12 · 34 words": the app when known, the length, and the word count when there is text.
+    /// "Notes · 0:12 · 34 words · audio deleted": the app when known, the length, the word count when there is text, and
+    /// whether audio retention deleted the audio.
     private var details: String {
         var parts: [String] = []
         if let app = record.app, let name = app.name ?? InstalledApp.name(of: app.bundleID) {
@@ -186,6 +187,9 @@ struct HistoryRow: View {
         let words = record.wordCount ?? 0
         if words > 0 {
             parts.append(StatusText.counted(words, "word"))
+        }
+        if record.isAudioDeleted {
+            parts.append("audio deleted")
         }
         return parts.joined(separator: " · ")
     }

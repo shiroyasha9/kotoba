@@ -88,12 +88,12 @@ final class HistoryModel {
 
     // MARK: Reading
 
-    /// Reads the first page again for a new search, or, with `keepingCount`, as many rows as are shown (a prune).
-    func reload(keepingCount: Bool = false) async {
+    /// Reads the first page again for a new search.
+    func reload() async {
         guard let source else { return }
         generation += 1
         let current = generation
-        let limit = keepingCount ? max(Self.pageSize, rows.count) : Self.pageSize
+        let limit = Self.pageSize
         do {
             let page = try await source.page(search, nil, limit)
             guard current == generation else { return }
@@ -125,8 +125,8 @@ final class HistoryModel {
         }
     }
 
-    /// One history write while the window is open: reads only the row it names, or drops the deleted rows. A prune
-    /// does not name its rows, so the shown rows are read again.
+    /// One history write while the window is open: reads only the row it names, drops the deleted rows, or marks the
+    /// rows whose audio retention deleted.
     func apply(_ change: HistoryChange) async {
         switch change {
         case .saved(let id): await refresh(id)
@@ -134,7 +134,9 @@ final class HistoryModel {
             list.remove(ids)
             retryable.subtract(ids)
             selection.subtract(ids)
-        case .pruned: await reload(keepingCount: true)
+        case .audioDeleted(let ids):
+            list.markAudioDeleted(ids)
+            retryable.subtract(ids)
         }
     }
 

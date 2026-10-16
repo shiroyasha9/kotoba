@@ -120,6 +120,8 @@ extension DictationPipeline {
         public var undoWindow: Duration
         /// A transcript that ends with a submit phrase ("press enter", "press return") is pasted without it, then Return.
         public var isSubmitPhraseOn: Bool
+        /// How long a transcribed dictation keeps its audio.
+        public var audioRetention: AudioRetention
 
         /// The request for one recording, with the language and dictionary from these settings.
         func request(for audio: RecordedAudio) -> TranscriptionRequest {
@@ -137,7 +139,8 @@ extension DictationPipeline {
             restoreDelay: Duration = .seconds(1),
             chordReleaseWait: Duration = .seconds(2),
             undoWindow: Duration = .seconds(5),
-            isSubmitPhraseOn: Bool = true
+            isSubmitPhraseOn: Bool = true,
+            audioRetention: AudioRetention = .standard
         ) {
             self.audioDirectory = audioDirectory
             self.language = language
@@ -149,6 +152,7 @@ extension DictationPipeline {
             self.chordReleaseWait = chordReleaseWait
             self.undoWindow = undoWindow
             self.isSubmitPhraseOn = isSubmitPhraseOn
+            self.audioRetention = audioRetention
         }
     }
 }

@@ -21,9 +21,12 @@ public protocol Store: Sendable {
     func queueForRetry(_ id: DictationID) async throws
     /// Deletes the records, their latency logs and their audio files (the History window's Delete).
     func delete(_ ids: Set<DictationID>) async throws
-    /// Deletes records and their audio created before `cutoff` (retention period), except
-    /// `.pending`, `.failed` and `.rejected` ones. Runs at launch or when idle, never on the dictation path.
-    func prune(olderThan cutoff: Date) async throws
+    /// One batch of audio retention: of the dictations whose audio expired before `cutoff`
+    /// (`DictationRecord.isAudioExpired(before:)`), oldest text first and after `cursor`, deletes the files and marks
+    /// the rows `isAudioDeleted`; rows, their text and the usage ledger stay. Only a file inside the audio folder, found by
+    /// its name, is removed; a row whose file cannot be removed stays unmarked, so a later run tries it again. Audio
+    /// retention calls it on its events (`AudioRetention.swift`), never before a paste.
+    func deleteAudio(transcribedBefore cutoff: Date, after cursor: AudioCursor?) async throws -> AudioBatch
 }
 
 public struct DictationID: Hashable, Sendable {
@@ -35,7 +38,7 @@ public struct DictationID: Hashable, Sendable {
 }
 
 public struct DictationRecord: Sendable, Equatable, Identifiable {
-    public enum Status: String, Sendable, Equatable {
+    public enum Status: String, Sendable, Equatable, CaseIterable {
         /// Saved at stop, before transcription, so a crash keeps the audio queued.
         case pending
         case pasted
@@ -50,6 +53,14 @@ public struct DictationRecord: Sendable, Equatable, Identifiable {
         /// request again gives the same answer, so it is not retried. Audio kept.
         case rejected
 
+        /// The dictation has its text, so its audio is no longer needed: pasted, copied or recovered. The other
+        /// statuses keep their audio until the owner deletes the dictation.
+        public var isTranscribed: Bool {
+            switch self {
+            case .pasted, .copied, .recovered: true
+            case .pending, .failed, .cancelled, .rejected: false
+            }
+        }
     }
 
     public var id: DictationID
@@ -71,6 +82,8 @@ public struct DictationRecord: Sendable, Equatable, Identifiable {
     public var recoveredAt: Date?
     /// The app in front at the stop, where the text went; nil when unknown (and for dictations kept before this).
     public var app: DictationApp?
+    /// Audio retention deleted the audio file; the row keeps its text. Only `Store.deleteAudio` sets it.
+    public var isAudioDeleted = false
     /// The answers billed since this record was read from the store: the store adds each one to the usage ledger once
     /// (by `UsageEntry.id`), so saving the record again adds nothing. A record read back has none.
     public var usage: [UsageEntry] = []
@@ -142,10 +155,20 @@ extension DictationRecord {
     /// cancelled or rejected (`DictationPipeline.retry(_:)` queues the last two first). A rejected one can succeed once
     /// the owner fixed the cause, for example added credit.
     public var isRetryable: Bool {
-        switch status {
-        case .pending, .failed, .cancelled, .rejected: true
-        case .pasted, .copied, .recovered: false
-        }
+        !status.isTranscribed
+    }
+
+    /// When the dictation got its text: the retry that recovered it, else the dictation itself (its paste or copy
+    /// comes seconds after `createdAt`). Nil while it has none. Audio retention counts from here.
+    public var transcribedAt: Date? {
+        status.isTranscribed ? recoveredAt ?? createdAt : nil
+    }
+
+    /// The audio is still on disk and the dictation got its text before `cutoff`: audio retention deletes it.
+    /// `Store.deleteAudio` applies this rule to many rows (in SQL in the app's store).
+    public func isAudioExpired(before cutoff: Date) -> Bool {
+        guard let transcribedAt, !isAudioDeleted else { return false }
+        return transcribedAt < cutoff
     }
 
     /// Records a failed request: `.failed` (retried), with `needsSetup` when only a setting can help,
@@ -190,8 +213,8 @@ public enum HistoryChange: Sendable, Equatable {
     /// The dictation's row was written: a new dictation, a new status, a retry's transcript.
     case saved(DictationID)
     case deleted(Set<DictationID>)
-    /// Rows past the retention period were deleted; which ones is not reported.
-    case pruned
+    /// Audio retention deleted the audio of these rows (`DictationRecord.isAudioDeleted`); the rows stay.
+    case audioDeleted(Set<DictationID>)
 }
 
 /// Passes every call to `base` and announces each write, so the app reads its counts and lists again only then.
@@ -238,8 +261,10 @@ struct AnnouncingStore: Store {
         changes.yield(.deleted(ids))
     }
 
-    func prune(olderThan cutoff: Date) async throws {
-        defer { changes.yield(.pruned) }
-        try await base.prune(olderThan: cutoff)
+    /// Announced only when a file went: retention runs after each dictation, and many runs delete nothing.
+    func deleteAudio(transcribedBefore cutoff: Date, after cursor: AudioCursor?) async throws -> AudioBatch {
+        let batch = try await base.deleteAudio(transcribedBefore: cutoff, after: cursor)
+        if !batch.deleted.isEmpty { changes.yield(.audioDeleted(batch.deleted)) }
+        return batch
     }
 }

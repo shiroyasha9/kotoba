@@ -40,6 +40,7 @@ public actor DictationPipeline {
     let work: PendingWork
     /// The last stop's capture end; a new capture starts only after it, so the two never overlap.
     var captureEnd: Task<RecordedAudio, Never>?
+    var audioDeletion = AudioDeletion()
     /// Retries waiting until no dictation is live.
     private var quietWaiters = Waiters()
     /// Test seam: sound events taken so far (levels, a lost mic, the no-sound deadline). The capture stream gives
@@ -107,6 +108,8 @@ public actor DictationPipeline {
         for record in results where isQuiet {
             emit(.outcome(of: record))
         }
+        // A recovered dictation is delivered too: retention's event (story 31).
+        if results.contains(where: \.status.isTranscribed) { work.track { await self.deleteExpiredAudio() } }
     }
 
     /// The History window's Retry: sends the chosen kept dictations again, each after no dictation is live. A cancelled

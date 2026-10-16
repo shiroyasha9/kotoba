@@ -8,6 +8,7 @@ import Testing
 struct UsageLedgerMigrationTests {
     let folder = TemporaryFolder()
     var url: URL { folder.url.appending(path: "kotoba.sqlite") }
+    var audio: URL { folder.url }
 
     static let notes = DictationApp(bundleID: "com.apple.Notes", name: "Notes")
     static let mai = "microsoft/mai-transcribe-2"
@@ -31,9 +32,9 @@ struct UsageLedgerMigrationTests {
                 'um ship it', 'microsoft/mai-transcribe-2', 'pasted', 'Ship it.', 'com.apple.Notes', 'Notes');
             """)
 
-        _ = try HistoryStore(url: url)
+        _ = try HistoryStore(url: url, audio: audio)
         // A second open finds the fill done and adds nothing.
-        let summary = try await everything(try HistoryStore(url: url))
+        let summary = try await everything(try HistoryStore(url: url, audio: audio))
 
         #expect(summary.dictations == 1)
         #expect(summary.words == 2)
@@ -68,7 +69,7 @@ struct UsageLedgerMigrationTests {
             }
         }
 
-        let time = try ContinuousClock().measure { _ = try HistoryStore(url: url) }
+        let time = try ContinuousClock().measure { _ = try HistoryStore(url: url, audio: audio) }
 
         #expect(time < .seconds(2))
     }

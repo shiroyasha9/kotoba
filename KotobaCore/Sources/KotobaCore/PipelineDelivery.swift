@@ -22,6 +22,9 @@ extension DictationPipeline {
         {
             await readback.pasted(text)
         }
+        // After the paste: a dictation with text is the event that lets retention run (story 31). Tracked, so the
+        // retries below do not wait for the files.
+        if outcome.record.status.isTranscribed { work.track { await self.deleteExpiredAudio() } }
         // A transcript proves the route works, credit included: the dictations that waited are sent (decision 6).
         if outcome.record.transcript != nil { await setupChanged() }
     }

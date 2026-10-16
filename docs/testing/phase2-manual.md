@@ -428,6 +428,27 @@ Rows from each agent's phase 2.5 work. The numbers continue the list above.
 | 322 | Note **Spend** and **Audio**; in History select all of today’s dictations and delete them; look at **Usage** again | Spend, Audio, Words and Dictations do not change | |
 | 323 | Say nothing for 3 s as a dictation (“No speech heard”), then look at **Usage** | Audio and Spend go up (the empty answer is billed); Dictations and Words do not | |
 
+### Audio retention (phase 3)
+
+| # | Do this | Expect | Result |
+|---|---|---|---|
+| 324 | Open Settings > **General** on a fresh install | **History** section: **Keep audio** is “7 Days”; **Saved audio** shows “Zero KB” and **Delete Audio Now…** is dimmed | |
+| 325 | Keep Settings on **General** and dictate | **Saved audio** grows when the dictation is pasted, without leaving the pane | |
+| 326 | Have dictations from more than one day ago (pasted, one “Not transcribed”, one “Cancelled”); set **Keep audio** to “1 Day” | “Delete Audio Older Than 1 Day?” asks first and says how much it deletes. **Cancel** keeps the old period and deletes nothing. **Delete Audio**: the pasted rows older than a day show “audio deleted” in History and **Saved audio** gets smaller; the “Not transcribed” and “Cancelled” rows still say “audio saved” and **Retry** works on them | |
+| 327 | Select a row that shows “audio deleted” | Copy and Paste Again work; there is no Retry; the text is the same as before | |
+| 328 | Note **Spend** in **Usage**; set **Keep audio** to “1 Day” as in row 326; look at **Usage** again | Spend, Audio, Words and Dictations do not change | |
+| 329 | Click **Delete Audio Now…**, then **Cancel**; click it again, then **Delete Audio** | The dialog says how much it deletes. Cancel deletes nothing. **Delete Audio** deletes the audio of every transcribed dictation, today’s too: **Saved audio** goes to “Zero KB” and the button dims; failed, cancelled and refused rows keep theirs; every row stays in History | |
+| 330 | Set **Keep audio** to “Forever”, quit kotoba, reopen it | The setting is still “Forever” and no question is asked (a longer period applies at once); no audio is deleted at launch | |
+| 331 | Set **Keep audio** to “7 Days”, leave kotoba closed for more than 7 days after a dictation, then open it | Once dictation works, that dictation shows “audio deleted” in History, with no dictation needed | |
+| 332 | With Wi-Fi off, dictate once (“Not transcribed”); look at the **History** section | Under the section: “… of audio for Retry is kept until sent” with a size; it goes away once Retry sends the dictation | |
+| 333 | Update from a build without audio retention (dictations older than 7 days in History), open kotoba, then Settings > **General** | **Keep audio** is “Forever”; no audio was deleted; History shows no “audio deleted” | |
+| 334 | With only today’s dictations, set **Keep audio** from “30 Days” to “1 Day” | No question: nothing is old enough to delete, so the period applies at once | |
+| 335 | Set **Keep audio** to “1 Day” (confirm if asked) and keep kotoba running. Today, dictate once with Wi-Fi on and once with Wi-Fi off (“Not transcribed”). Tomorrow, without dictating or quitting, turn Wi-Fi on and **Retry** that row | Once Retry recovers it, retention runs: yesterday’s pasted dictation shows “audio deleted” (a recovered dictation is delivered too) | |
+
+Follow-ups (audio retention):
+
+- Audio files with no row (a crash or force quit during a recording, a failed save at the stop, a failed delete) are never counted, kept by retention or removed by **Delete Audio Now…**. They are unsaved dictations, so the fix is crash recovery (adopt them as queued dictations), not deletion.
+
 ## Known offscreen-only doubts
 
 The offscreen snapshots (`make snapshots`) show two things that may not happen in the real app. Check them on screen:

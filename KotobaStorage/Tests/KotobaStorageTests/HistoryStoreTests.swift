@@ -7,6 +7,7 @@ import Testing
 struct HistoryStoreTests {
     let folder = TemporaryFolder()
     var url: URL { folder.url.appending(path: "kotoba.sqlite") }
+    var audio: URL { folder.url }
 
     func record(_ status: DictationRecord.Status, at time: TimeInterval = 1_800_000_000) -> DictationRecord {
         var latency = LatencyLog()
@@ -19,20 +20,20 @@ struct HistoryStoreTests {
     }
 
     @Test func aSavedRecordComesBackWhole() async throws {
-        let store = try HistoryStore(url: url)
+        let store = try HistoryStore(url: url, audio: audio)
         var saved = record(.failed)
         saved.needsSetup = .endpoint
         saved.mode = .cleanup
         saved.model = "x-ai/grok-stt-1.0"
         try await store.save(saved)
 
-        let loaded = try #require(try await HistoryStore(url: url).pendingRetries().first)
+        let loaded = try #require(try await HistoryStore(url: url, audio: audio).pendingRetries().first)
         #expect(loaded == saved)
         #expect(try await store.status(of: saved.id) == .failed)
     }
 
     @Test func aRejectedRecordKeepsItsReason() async throws {
-        let store = try HistoryStore(url: url)
+        let store = try HistoryStore(url: url, audio: audio)
         var saved = record(.rejected)
         saved.rejectReason = .emptyTranscript
         try await store.save(saved)
@@ -43,7 +44,7 @@ struct HistoryStoreTests {
     }
 
     @Test func theLastDeliveredIsTheNewestPastedOrCopiedRow() async throws {
-        let store = try HistoryStore(url: url)
+        let store = try HistoryStore(url: url, audio: audio)
         #expect(try await store.lastDelivered() == nil)
         var pasted = record(.pasted, at: 1_800_000_000)
         pasted.transcript = "deploy it to versel"
@@ -61,7 +62,7 @@ struct HistoryStoreTests {
     }
 
     @Test func onlyPendingAndFailedAreQueued() async throws {
-        let store = try HistoryStore(url: url)
+        let store = try HistoryStore(url: url, audio: audio)
         for status in [DictationRecord.Status.pending, .failed, .pasted, .rejected, .cancelled] {
             try await store.save(record(status))
         }
@@ -71,7 +72,7 @@ struct HistoryStoreTests {
     }
 
     @Test func recoveredRowsAreListedNewestFirstUntilCopied() async throws {
-        let store = try HistoryStore(url: url)
+        let store = try HistoryStore(url: url, audio: audio)
         var older = record(.recovered)
         older.recoveredAt = Date(timeIntervalSince1970: 1_800_000_100)
         var newer = record(.recovered)
@@ -83,40 +84,6 @@ struct HistoryStoreTests {
         try await store.markCopied(newer.id)
         #expect(try await store.recovered(since: .distantPast).map(\.id) == [older.id])
         #expect(try await store.status(of: newer.id) == .copied)
-    }
-
-    @Test func pruneKeepsQueuedAndRejectedRows() async throws {
-        let store = try HistoryStore(url: url)
-        let pasted = record(.pasted, at: 1_000)
-        let failed = record(.failed, at: 1_000)
-        let rejected = record(.rejected, at: 1_000)
-        for saved in [pasted, failed, rejected] {
-            try await store.save(saved)
-        }
-
-        try await store.prune(olderThan: Date(timeIntervalSince1970: 2_000))
-
-        #expect(try await store.status(of: pasted.id) == nil)
-        #expect(try await store.status(of: failed.id) == .failed)
-        #expect(try await store.status(of: rejected.id) == .rejected)
-    }
-
-    @Test func pruneDeletesTheAudioFileAndLatencyMarksOfAPrunedRow() async throws {
-        let store = try HistoryStore(url: url)
-        let pasted = record(.pasted, at: 1_000)
-        let failed = record(.failed, at: 1_000)
-        for saved in [pasted, failed] {
-            try Data("flac".utf8).write(to: saved.audio.file)
-            try await store.save(saved)
-        }
-
-        try await store.prune(olderThan: Date(timeIntervalSince1970: 2_000))
-
-        #expect(!FileManager.default.fileExists(atPath: pasted.audio.file.path))
-        #expect(FileManager.default.fileExists(atPath: failed.audio.file.path))
-        // Two marks per record: only the failed row's remain, so the cascade ran on this connection.
-        let marks = try SQLiteDatabase(url: url).query("SELECT count(*) FROM latency_marks;")
-        #expect(marks.first?.first == .integer(2))
     }
 
     @Test func anOlderDatabaseGetsTheNewColumns() async throws {
@@ -132,12 +99,15 @@ struct HistoryStoreTests {
                 NULL, 'failed', 1);
             """)
 
-        let store = try HistoryStore(url: url)
+        let store = try HistoryStore(url: url, audio: audio)
 
         let migrated = try #require(try await store.pendingRetries().first)
         #expect(migrated.needsSetup == .key)
         #expect(migrated.mode == .transcript)
         #expect(migrated.app == nil)
+        #expect(!migrated.isAudioDeleted)
+        #expect(
+            try await store.deleteAudio(transcribedBefore: .distantFuture, after: nil).deleted.isEmpty)
     }
 
     // MARK: History window
@@ -150,16 +120,16 @@ struct HistoryStoreTests {
     }
 
     @Test func aRecordKeepsTheAppItWentTo() async throws {
-        let store = try HistoryStore(url: url)
+        let store = try HistoryStore(url: url, audio: audio)
         var saved = spoken("ship it", at: 1_000, app: DictationApp(bundleID: "com.apple.Notes", name: "Notes"))
         saved.latency = LatencyLog()
         try await store.save(saved)
 
-        #expect(try await HistoryStore(url: url).page(limit: 10) == [saved])
+        #expect(try await HistoryStore(url: url, audio: audio).page(limit: 10) == [saved])
     }
 
     @Test func pagesAreNewestFirstAndEachStartsAfterTheLastRowOfThePreviousOne() async throws {
-        let store = try HistoryStore(url: url)
+        let store = try HistoryStore(url: url, audio: audio)
         // Two rows share a time, so the cursor must also order by id.
         let rows = [1_000, 2_000, 2_000, 3_000, 4_000].map { spoken("words", at: TimeInterval($0)) }
         for row in rows {
@@ -179,7 +149,7 @@ struct HistoryStoreTests {
     }
 
     @Test func searchMatchesTheTranscriptTheCleanedTextOrTheAppName() async throws {
-        let store = try HistoryStore(url: url)
+        let store = try HistoryStore(url: url, audio: audio)
         let raw = spoken("deploy to Vercel", at: 1_000)
         var cleaned = spoken("um so the plan", at: 2_000)
         cleaned.cleanedText = "The Plan is ready."
@@ -199,7 +169,7 @@ struct HistoryStoreTests {
     }
 
     @Test func deleteRemovesTheRowItsMarksAndItsAudio() async throws {
-        let store = try HistoryStore(url: url)
+        let store = try HistoryStore(url: url, audio: audio)
         let deleted = record(.failed)
         let kept = record(.failed)
         for saved in [deleted, kept] {
@@ -222,7 +192,7 @@ struct HistoryStoreTests {
     /// matches nothing, 0.06 ms for one row, 2.8 ms for the menu. The bound is loose for other agents' builds on the
     /// same machine.
     @Test func aPageAndASearchOn10000RowsStayFast() async throws {
-        let store = try HistoryStore(url: url)
+        let store = try HistoryStore(url: url, audio: audio)
         let words = "please move the standup to thursday and ask the team to review the pull request before lunch"
             .split(separator: " ")
         for index in 0..<10_000 {
@@ -250,7 +220,7 @@ struct HistoryStoreTests {
     }
 
     @Test func aCancelledOrRejectedDictationIsQueuedForRetry() async throws {
-        let store = try HistoryStore(url: url)
+        let store = try HistoryStore(url: url, audio: audio)
         let cancelled = record(.cancelled, at: 1_000)
         var rejected = record(.rejected, at: 2_000)
         rejected.rejectReason = .other
@@ -270,7 +240,7 @@ struct HistoryStoreTests {
     }
 
     @Test func anUpdateWritesOnlyARowThatStillExists() async throws {
-        let store = try HistoryStore(url: url)
+        let store = try HistoryStore(url: url, audio: audio)
         var kept = spoken("first try", at: 1_000)
         let deleted = spoken("gone", at: 2_000)
         try await store.save(kept)
@@ -286,7 +256,7 @@ struct HistoryStoreTests {
     }
 
     @Test func oneRowIsReadOnlyWhenItMatchesTheSearch() async throws {
-        let store = try HistoryStore(url: url)
+        let store = try HistoryStore(url: url, audio: audio)
         var saved = spoken("deploy to Vercel", at: 1_000)
         saved.latency = LatencyLog()
         try await store.save(saved)

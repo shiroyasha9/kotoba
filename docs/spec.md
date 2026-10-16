@@ -128,7 +128,7 @@ The app is open-source (Apache-2.0) and distributed as a notarized DMG on GitHub
 - Not on the 1 s path. Main path: raw transcript + find/replace (+ provider formatting if the benchmark shows it helps). LLM cleanup runs only on its own hotkey or mode. Transcript is wrapped as data in the prompt.
 
 ### Storage
-- History in system SQLite (`libsqlite3`) behind a small wrapper, no dependency. Audio as FLAC files with a retention period. Keys in the Keychain via the Security framework.
+- History in system SQLite (`libsqlite3`) behind a small wrapper, no dependency. Audio as FLAC files with a retention period (lead, 2026-10-16): a transcribed dictation keeps its audio 1, 7 (default) or 30 days or forever, counted from its transcript; then only the file goes, never the row, its text or the usage ledger. Audio without a transcript (queued, failed, cancelled, refused) stays until it is transcribed or the owner deletes it. Retention runs on events only: at launch after the hotkey tap starts, after each transcribed dictation (live or by a retry), and when the setting changes; it works in batches, and each batch reads the setting as it is then. A new install gets 7 days; an install that already has dictations when retention first runs gets Forever, so an update never deletes audio unasked. A shorter period asks before it deletes. Only files inside the audio folder are removed, and a file that cannot be removed keeps its row unmarked. Keys in the Keychain via the Security framework.
 
 ### Tooling
 - XcodeGen (`project.yml`; generated project gitignored), swift-format, SwiftLint strict, Swift 6 language mode with strict concurrency. One `make check` target that agents and humans must pass.

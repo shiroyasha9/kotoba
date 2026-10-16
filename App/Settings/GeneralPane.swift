@@ -12,8 +12,8 @@ extension SettingsPane {
 }
 
 /// The General pane's settings: the dictation and cleanup shortcuts and the cleanup model, the spoken Return phrase,
-/// launch at login, sounds, the indicator's position and visibility, and automatic update checks. Each change applies
-/// at once.
+/// launch at login, sounds, the indicator's position and visibility, how long audio is kept, and automatic update
+/// checks. Each change applies at once.
 @MainActor
 @Observable
 final class GeneralModel {
@@ -69,10 +69,12 @@ final class GeneralModel {
     @ObservationIgnored private let setChecksForUpdates: (@MainActor (Bool) -> Void)?
     /// Observable itself: the rows and the cleanup model follow a new recording.
     @ObservationIgnored let chords: HotkeyChords
+    /// The History section; nil when the history database did not open.
+    @ObservationIgnored let audio: AudioRetentionModel?
 
     /// Reads the current values. `submitPhraseChanged` hands a new submit phrase setting to the pipeline.
     convenience init(
-        settings: TranscriptionSettings, indicator: IndicatorPanel, updater: Updater?,
+        settings: TranscriptionSettings, indicator: IndicatorPanel, updater: Updater?, audio: AudioRetentionModel?,
         submitPhraseChanged: @escaping @MainActor (Bool) -> Void
     ) {
         var setChecksForUpdates: (@MainActor (Bool) -> Void)?
@@ -87,7 +89,8 @@ final class GeneralModel {
             setSubmitPhrase: {
                 AppDefaults.isSubmitPhraseOn = $0
                 submitPhraseChanged($0)
-            }, checksForUpdates: updater?.checksAutomatically ?? false, setChecksForUpdates: setChecksForUpdates)
+            }, checksForUpdates: updater?.checksAutomatically ?? false, setChecksForUpdates: setChecksForUpdates,
+            audio: audio)
     }
 
     private init(
@@ -95,7 +98,7 @@ final class GeneralModel {
         indicatorAnchor: IndicatorAnchor, setAnchor: @escaping @MainActor (IndicatorAnchor) -> Void,
         indicatorVisibility: IndicatorVisibility, setVisibility: @escaping @MainActor (IndicatorVisibility) -> Void,
         isSubmitPhraseOn: Bool, setSubmitPhrase: @escaping @MainActor (Bool) -> Void,
-        checksForUpdates: Bool, setChecksForUpdates: (@MainActor (Bool) -> Void)?
+        checksForUpdates: Bool, setChecksForUpdates: (@MainActor (Bool) -> Void)?, audio: AudioRetentionModel?
     ) {
         self.settings = settings
         self.loginItem = loginItem
@@ -104,6 +107,7 @@ final class GeneralModel {
         self.setSubmitPhrase = setSubmitPhrase
         self.setChecksForUpdates = setChecksForUpdates
         self.chords = chords
+        self.audio = audio
         cleanupModel = settings.cleanupModel
         isLaunchAtLoginOn = loginItem.isOn()
         loginProblem = loginItem.problem()
@@ -130,7 +134,7 @@ final class GeneralModel {
             settings: .inMemory(), loginItem: loginItem, chords: HotkeyChords(defaults: nil), areSoundsOn: true,
             indicatorAnchor: .bottomCenter, setAnchor: { _ in }, indicatorVisibility: .whileDictating,
             setVisibility: { _ in }, isSubmitPhraseOn: true, setSubmitPhrase: { _ in }, checksForUpdates: true,
-            setChecksForUpdates: { _ in })
+            setChecksForUpdates: { _ in }, audio: .sample())
     }
 }
 
@@ -194,6 +198,9 @@ private struct GeneralPane: View {
                     Text("With “Always”, click the indicator to start and stop dictating.")
                 }
             }
+            if let audio = model.audio {
+                AudioSection(model: audio)
+            }
             if model.hasUpdater {
                 Section("Updates") {
                     Toggle("Check for updates automatically", isOn: $model.checksForUpdates)
@@ -208,7 +215,7 @@ private struct GeneralPane: View {
 extension SettingsPane {
     static func generalSnapshots() -> [Snapshot] {
         [
-            SettingsWindow.snapshot(of: .general(.sample()), named: "settings-general", height: 860),
+            SettingsWindow.snapshot(of: .general(.sample()), named: "settings-general", height: 1_000),
             loginFailureSnapshot(),
         ]
     }
@@ -225,7 +232,7 @@ extension SettingsPane {
                     return .failed
                 }))
         model.setLaunchAtLogin(true)
-        var snapshot = SettingsWindow.snapshot(of: .general(model), named: "settings-general-login-failed", height: 840)
+        var snapshot = SettingsWindow.snapshot(of: .general(model), named: "settings-general-login-failed", height: 980)
         snapshot.check = { _ in
             guard changes == 1, model.loginProblem == .failed, !model.isLaunchAtLoginOn else {
                 return "A failed launch-at-login change made \(changes) calls and kept no note"

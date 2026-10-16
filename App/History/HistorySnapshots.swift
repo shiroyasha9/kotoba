@@ -2,9 +2,9 @@ import AppKit
 import KotobaCore
 
 extension HistoryController {
-    /// The window's content at its default size: rows of each status over two days, the empty history, and a search
-    /// with no results. Synthetic text only. The toolbar and search field belong to the real window and are not in the
-    /// images.
+    /// The window's content at its default size: rows of each status over two days (yesterday's audio deleted), the
+    /// empty history, and a search with no results. Synthetic text only. The toolbar and search field belong to the
+    /// real window and are not in the images.
     static func snapshots() -> [Snapshot] {
         let panes = [
             ("history-rows", HistoryModel(rows: sampleRows())),
@@ -45,13 +45,14 @@ extension HistoryController {
         let kept = URL(filePath: "/System/Library/Sounds/Tink.aiff")
         func row(
             _ text: String?, minutesAgo: Double, seconds: Int, app: (String, String)?,
-            status: DictationRecord.Status = .pasted
+            status: DictationRecord.Status = .pasted, isAudioDeleted: Bool = false
         ) -> DictationRecord {
             var record = DictationRecord(
                 id: DictationID(), createdAt: now - minutesAgo * 60,
                 audio: RecordedAudio(file: kept, duration: .seconds(seconds)),
                 transcript: text, status: status, latency: LatencyLog())
             record.app = app.map { DictationApp(bundleID: $0.0, name: $0.1) }
+            record.isAudioDeleted = isAudioDeleted
             return record
         }
         var cleaned = row(
@@ -72,8 +73,8 @@ extension HistoryController {
             row(
                 "Thanks for the notes. I added two questions at the end of the doc, and I think the timeline in "
                     + "section three needs another week for testing on older Macs before we can commit to a date.",
-                minutesAgo: 60 * 26, seconds: 21, app: ("com.apple.MobileSMS", "Messages")),
-            row("See you at six.", minutesAgo: 60 * 27, seconds: 2, app: nil),
+                minutesAgo: 60 * 26, seconds: 21, app: ("com.apple.MobileSMS", "Messages"), isAudioDeleted: true),
+            row("See you at six.", minutesAgo: 60 * 27, seconds: 2, app: nil, isAudioDeleted: true),
         ]
     }
 }

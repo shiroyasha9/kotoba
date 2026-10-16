@@ -77,7 +77,30 @@ actor FakeStore: Store {
         deleteError = error
     }
 
-    func prune(olderThan cutoff: Date) async throws {
-        records.removeAll { $0.createdAt < cutoff && $0.status != .pending && $0.status != .failed }
+    /// The cutoff of each `deleteAudio` batch, in order.
+    private(set) var audioCutoffs: [Date] = []
+    /// When set, each `deleteAudio` batch waits for this gate.
+    private var audioGate: Gate?
+    private var audioBatchSize = 500
+
+    func holdAudioDeletion(at gate: Gate, batchSize: Int = 500) {
+        audioGate = gate
+        audioBatchSize = batchSize
+    }
+
+    /// As the real store: oldest text first, after `cursor`, up to a batch.
+    func deleteAudio(transcribedBefore cutoff: Date, after cursor: AudioCursor?) async throws -> AudioBatch {
+        audioCutoffs.append(cutoff)
+        await audioGate?.pass()
+        let expired = records.filter { $0.isAudioExpired(before: cutoff) }
+            .compactMap { record in record.transcribedAt.map { AudioCursor(transcribedAt: $0, id: record.id) } }
+            .sorted()
+            .filter { next in cursor.map { next > $0 } ?? true }
+            .prefix(audioBatchSize)
+        for index in records.indices where expired.contains(where: { $0.id == records[index].id }) {
+            records[index].isAudioDeleted = true
+        }
+        return AudioBatch(
+            deleted: Set(expired.map(\.id)), next: expired.count == audioBatchSize ? expired.last : nil)
     }
 }

@@ -31,6 +31,15 @@ struct HistoryListTests {
         #expect(list.rows.last?.status == .recovered)
     }
 
+    @Test func deletedAudioChangesOnlyItsRowsInPlace() {
+        var (list, rows) = firstPage()
+
+        list.markAudioDeleted([rows[0].id, DictationID()])
+
+        #expect(list.rows.map(\.id) == rows.map(\.id))
+        #expect(list.rows.map(\.isAudioDeleted) == [true, false, false])
+    }
+
     @Test func aNewRowGoesToItsPlace() {
         var (list, rows) = firstPage()
         let newest = row(4_000)

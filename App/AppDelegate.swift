@@ -23,7 +23,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     lazy var setup = SetupFlow(
         readiness: readiness, routeSettings: routeSettings, vault: vault, router: router,
         openSpeechSettings: { [weak self] in self?.settingsController.show(selecting: .speech) })
-    private let settings = DictationPipeline.Settings(
+    /// Its audio retention is set once the history opens (`AppDefaults.chooseAudioRetention`).
+    private var settings = DictationPipeline.Settings(
         audioDirectory: AppFiles.audio,
         isSubmitPhraseOn: AppDefaults.isSubmitPhraseOn
     )
@@ -49,6 +50,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private var isQueueRefreshDue = false
     /// The submit phrase toggle, in click order, to the pipeline (one consumer, as for the Undo holds).
     let submitPhraseChanges = AsyncStream.makeStream(of: Bool.self)
+    /// The History section's retention choices and "Delete Audio Now…", in click order, to the pipeline.
+    let audioRequests = AsyncStream.makeStream(of: AudioRequest.self)
     /// Menu previews from the last 24 h, newest first; full transcripts stay in the store until copied.
     var recovered: [MenuChoice] = []
     private var isSecureInputOn = false
@@ -58,7 +61,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     lazy var settingsController = SettingsController(
         routeSettings: routeSettings, vault: vault, router: router, microphones: microphones, audio: audio
     ) { [routeSettings, indicator, updater, weak self] in
-        GeneralModel(settings: routeSettings, indicator: indicator, updater: updater) {
+        GeneralModel(
+            settings: routeSettings, indicator: indicator, updater: updater,
+            audio: self.flatMap { app in
+                app.store.map { .live(requests: app.audioRequests.continuation, store: $0) }
+            }
+        ) {
             self?.submitPhraseChanged(isOn: $0)
         }
     }
@@ -70,16 +78,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         NSApp.mainMenu = .hiddenMain()
         statusItem = StatusBarItem(target: self) { [weak self] in self?.menuModel() }
         updater?.onWaitingUpdateChange = { [weak self] in self?.updateIcon() }
-        let store: HistoryStore
-        do {
-            store = try HistoryStore(url: AppFiles.history)
-        } catch {
-            Log.app.fault("Cannot open the history database: \(error)")
-            launchIssue = StatusText.historyUnavailable
-            return
-        }
-        self.store = store
-        settingsController.history = store
+        guard let store = openHistory() else { return }
         let pipeline = DictationPipeline(
             ports: .init(
                 audio: audio,
@@ -120,6 +119,23 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         }
     }
 
+    /// The history database, and the audio retention it decides on its first open (`AppDefaults.chooseAudioRetention`).
+    /// Nil when it does not open; the menu then says so.
+    private func openHistory() -> HistoryStore? {
+        let store: HistoryStore
+        do {
+            store = try HistoryStore(url: AppFiles.history, audio: AppFiles.audio)
+        } catch {
+            Log.app.fault("Cannot open the history database: \(error)")
+            launchIssue = StatusText.historyUnavailable
+            return nil
+        }
+        self.store = store
+        settings.audioRetention = AppDefaults.chooseAudioRetention(hadDictations: store.hadDictationsAtOpen)
+        settingsController.history = store
+        return store
+    }
+
     /// Quit waits until a live recording or an open Undo window is saved, so no audio is lost.
     func applicationShouldTerminate(_ sender: NSApplication) -> NSApplication.TerminateReply {
         guard let pipeline else { return .terminateNow }
@@ -149,6 +165,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
                 await pipeline.updateSubmitPhrase(isOn: isOn)
             }
         }
+        Task { [audioRequests = audioRequests.stream] in await AudioRequest.send(audioRequests, to: pipeline) }
         // A click on the idle or recording pill is a chord tap; the front app keeps focus, so the paste goes there.
         indicator.onTap = { [hotkeys] in hotkeys.sendTap() }
         Task {
@@ -260,6 +277,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             await setup.startHotkeys(hotkeys)
             CGEventPaster.isTrusted = true
             Log.app.info("Hotkey tap started")
+            // Story 31: launch's turn for audio retention, once dictation works; the pipeline and store do it off main.
+            await pipeline.deleteExpiredAudio()
         }
     }
 }
@@ -271,7 +290,7 @@ extension AppDelegate {
     /// and a shown Usage pane.
     private func historyChanged(_ change: HistoryChange) {
         history?.historyChanged(change)
-        settingsController.historyChanged()
+        settingsController.historyChanged(change)
         scheduleQueueRefresh()
     }
 

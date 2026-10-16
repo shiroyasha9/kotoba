@@ -20,6 +20,8 @@ final class SettingsController {
     var history: HistoryStore?
     /// The open window's Usage pane model, which reads again after each history write while it is shown.
     private weak var usage: UsageModel?
+    /// The open window's General pane model; its History section measures the saved audio again the same way.
+    private weak var general: GeneralModel?
 
     /// `router` checks a saved key in the Speech pane.
     init(
@@ -48,9 +50,11 @@ final class SettingsController {
         }
     }
 
-    /// A history write (from `DictationPipeline.historyChanges`): a shown Usage pane reads again.
-    func historyChanged() {
-        usage?.historyChanged()
+    /// A history write (from `DictationPipeline.historyChanges`): a shown Usage pane or History section reads again.
+    /// Deleted audio changes no usage.
+    func historyChanged(_ change: HistoryChange) {
+        if case .audioDeleted = change {} else { usage?.historyChanged() }
+        general?.audio?.historyChanged()
     }
 
     /// `pane` opens a given pane, e.g. Speech for the pill's "Add Key…"; nil keeps the pane shown.
@@ -59,7 +63,9 @@ final class SettingsController {
     }
 
     private func panes() -> [SettingsPane] {
-        var panes: [SettingsPane] = [.general(makeGeneral())]
+        let general = makeGeneral()
+        self.general = general
+        var panes: [SettingsPane] = [.general(general)]
         if let dictionary {
             panes.append(.dictionary(dictionary))
         }

@@ -8,6 +8,7 @@ import Testing
 struct UsageLedgerTests {
     let folder = TemporaryFolder()
     var url: URL { folder.url.appending(path: "kotoba.sqlite") }
+    var audio: URL { folder.url }
 
     static let notes = DictationApp(bundleID: "com.apple.Notes", name: "Notes")
     static let mail = DictationApp(bundleID: "com.apple.mail", name: "Mail")
@@ -49,14 +50,14 @@ struct UsageLedgerTests {
     }
 
     @Test func anEmptyLedgerHasNoUsage() async throws {
-        let store = try HistoryStore(url: url)
+        let store = try HistoryStore(url: url, audio: audio)
         try await store.save(dictation(at: 1_000))
 
         #expect(try await everything(store) == UsageSummary())
     }
 
     @Test func savingARecordAgainAddsItsAnswersOnce() async throws {
-        let store = try HistoryStore(url: url)
+        let store = try HistoryStore(url: url, audio: audio)
         let record = dictation(at: 1_000, [entry(at: 1_000, cost: .reported(try usd("0.001")))])
         try await store.save(record)
         try await store.save(record)
@@ -65,18 +66,20 @@ struct UsageLedgerTests {
         #expect(try await everything(store).cost == (try usd("0.001")))
     }
 
-    /// Story 33: what kotoba cost does not change when the owner deletes dictations or the history is pruned.
-    @Test func deletingOrPruningDictationsKeepsTheirSpend() async throws {
-        let store = try HistoryStore(url: url)
+    /// Story 33: what kotoba cost does not change when the owner deletes dictations or audio retention deletes audio.
+    @Test func deletingDictationsOrTheirAudioKeepsTheirSpend() async throws {
+        let store = try HistoryStore(url: url, audio: audio)
         let deleted = dictation(at: 1_000, [entry(at: 1_000, cost: .reported(try usd("0.001")))])
         let pruned = dictation(at: 2_000, [entry(at: 2_000, cost: .reported(try usd("0.002")))])
         try await store.save(deleted)
         try await store.save(pruned)
 
         try await store.delete([deleted.id])
-        try await store.prune(olderThan: Date(timeIntervalSince1970: 3_000))
+        let batch = try await store.deleteAudio(
+            transcribedBefore: Date(timeIntervalSince1970: 3_000), after: nil)
+        #expect(batch.deleted == [pruned.id])
 
-        #expect(try await store.page(limit: 10).isEmpty)
+        #expect(try await store.page(limit: 10).map(\.id) == [pruned.id])
         let summary = try await everything(store)
         #expect(summary.cost == (try usd("0.003")))
         #expect(summary.dictations == 2)
@@ -85,7 +88,7 @@ struct UsageLedgerTests {
 
     /// A retry's answer was billed even when the owner deleted the dictation while it ran.
     @Test func anUpdateOfADeletedDictationStillAddsItsAnswer() async throws {
-        let store = try HistoryStore(url: url)
+        let store = try HistoryStore(url: url, audio: audio)
         var record = dictation(at: 1_000)
         try await store.save(record)
         try await store.delete([record.id])
@@ -98,7 +101,7 @@ struct UsageLedgerTests {
 
     /// An answer counts in the period of the time it came, not of the dictation's key-down.
     @Test func onlyAnswersInTheRangeCount() async throws {
-        let store = try HistoryStore(url: url)
+        let store = try HistoryStore(url: url, audio: audio)
         let id = DictationID()
         // Spoken before the range, retried inside it.
         try await store.save(dictation(at: 500, [entry(at: 1_500, for: id, cost: .reported(try usd("0.001")))]))
@@ -119,7 +122,7 @@ struct UsageLedgerTests {
 
     /// Each try is billed: audio and cost add up; words and the dictation count come from answers with words.
     @Test func everyTryCountsItsAudioAndCostOnce() async throws {
-        let store = try HistoryStore(url: url)
+        let store = try HistoryStore(url: url, audio: audio)
         let id = DictationID()
         let empty = entry(at: 1_000, for: id, words: 0, cost: .reported(try usd("0.001")))
         let retried = entry(at: 2_000, for: id, words: 3, cost: .reported(try usd("0.001")))
@@ -135,7 +138,7 @@ struct UsageLedgerTests {
 
     /// Words are those of the delivered text: a used cleanup adds the change it made (4 spoken, 3 delivered).
     @Test func cleanupAnswersChangeTheWordsAndAddCostButNoAudio() async throws {
-        let store = try HistoryStore(url: url)
+        let store = try HistoryStore(url: url, audio: audio)
         let id = DictationID()
         try await store.save(
             dictation(
@@ -159,7 +162,7 @@ struct UsageLedgerTests {
     }
 
     @Test func theSpendIsSplitByModelMostFirstAndEstimatedWhenAnyPartIs() async throws {
-        let store = try HistoryStore(url: url)
+        let store = try HistoryStore(url: url, audio: audio)
         try await save(
             store, entry(at: 1_000, cost: .reported(try usd("0.001"))),
             entry(at: 2_000, model: "xai-direct/grok-stt", cost: .estimated(try usd("0.003"))),
@@ -179,7 +182,7 @@ struct UsageLedgerTests {
     }
 
     @Test func topAppsAreByWordsWithTheNewestName() async throws {
-        let store = try HistoryStore(url: url)
+        let store = try HistoryStore(url: url, audio: audio)
         try await save(
             store, entry(at: 1_000, words: 4, app: Self.mail), entry(at: 2_000, words: 1, app: Self.notes),
             entry(at: 3_000, words: 2, app: DictationApp(bundleID: "com.apple.Notes", name: "Notes 2")),
@@ -196,7 +199,7 @@ struct UsageLedgerTests {
     }
 
     @Test func aQueuedRecordIsReadFreshOnlyWhileItIsQueued() async throws {
-        let store = try HistoryStore(url: url)
+        let store = try HistoryStore(url: url, audio: audio)
         var failed = dictation(at: 1_000)
         failed.status = .failed
         failed.latency.record(.stop, offset: .seconds(2))
@@ -212,7 +215,7 @@ struct UsageLedgerTests {
     /// Measured 2026-10-16 (debug build): about 18 ms for both. The bound is loose for other agents' builds on the same
     /// machine.
     @Test func aSummaryOf10000DictationsStaysFast() async throws {
-        let store = try HistoryStore(url: url)
+        let store = try HistoryStore(url: url, audio: audio)
         let apps = [Self.notes, Self.mail, DictationApp(bundleID: "com.apple.Terminal", name: "Terminal"), nil]
         for index in 0..<10_000 {
             let id = DictationID()
