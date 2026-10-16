@@ -15,6 +15,8 @@ import Synchronization
 /// Copy Last's default chord (⌃⌘C) has a key, so by default every key-up comes here; a key-up that is not swallowed
 /// goes back unchanged (`handle`). The callback's own work for one key-up, measured 2026-10-17 in a `swiftc -O` probe
 /// (10,000 calls, best of 20, 3 runs): 0.12-0.16 µs in the classifier, 0.35-0.37 µs with the event reads and the lock.
+/// Each key-up also makes the window server's trip to this tap and back, as each key-down already does; that trip
+/// cannot be measured without synthetic input, so whether typing feels the same is an owner-trial check.
 /// Mouse-down events come from `MouseDownMonitors`, not the tap, so no click waits for kotoba.
 final class HotkeyTap: Sendable {
     private struct State {

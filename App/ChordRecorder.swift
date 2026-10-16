@@ -27,7 +27,8 @@ struct ChordRecorder: View {
                         .buttonStyle(.borderless)
                         .help(role == .cleanup ? "Turn off cleanup dictation" : "Turn off this shortcut")
                 }
-                if let defaultChord, chord != defaultChord {
+                // A default Copy Last that a dictation chord turned off would be refused: the note says why instead.
+                if let defaultChord, chord != defaultChord, role != .copyLast || chords.copyLastOffReason == nil {
                     Button("Reset", systemImage: "arrow.counterclockwise") { save(defaultChord) }
                         .labelStyle(.iconOnly)
                         .buttonStyle(.borderless)
@@ -78,6 +79,9 @@ struct ChordRecorder: View {
     private var note: (text: String, isProblem: Bool)? {
         if let refused = listener.refused {
             return (refused.problem.text(refused.chord, role: role, chords: chords), true)
+        }
+        if role == .copyLast, let reason = chords.copyLastOffReason {
+            return (reason.defaultCopyLastText(chords: chords), false)
         }
         guard let chord, chord.keyCode == nil else { return nil }
         if role == .pushToTalk, chords.separatePushToTalk == nil { return nil }
@@ -218,6 +222,19 @@ extension ChordProblem {
         }
     }
 
+    /// Why the default Copy Last chord is off: "⌃⌘C includes right ⌘, the hands-free shortcut, so Copy Last is off."
+    @MainActor
+    func defaultCopyLastText(chords: HotkeyChords) -> String {
+        let copyLast = Chord.defaultCopyLast.title
+        switch self {
+        case .copyLastIncludes(let other):
+            let held = chords.chord(other)?.title ?? ""
+            return "\(copyLast) includes \(held), the \(Self.name(other)) shortcut, so Copy Last is off."
+        case .copyLastSameAs(let other): return "\(copyLast) is the \(Self.name(other)) shortcut, so Copy Last is off."
+        default: return "Copy Last is off."
+        }
+    }
+
     /// A shortcut's name in a sentence: "This is the push-to-talk shortcut."
     private static func name(_ role: HotkeyChords.Role) -> String {
         switch role {
@@ -349,6 +366,10 @@ extension ChordRecorder {
                 chords: chords, role: .pasteLast,
                 listener: ChordListener(refused: (Chord(modifiers: [.control, .command]), .needsKey))))
         row("Copy last at its default", ChordRecorder(chords: chords, role: .copyLast))
+        row(
+            "Copy last off by a clash",
+            ChordRecorder(
+                chords: HotkeyChords(defaults: nil, handsFree: Chord(modifiers: .rightCommand)), role: .copyLast))
         row(
             "Copy last clash",
             ChordRecorder(

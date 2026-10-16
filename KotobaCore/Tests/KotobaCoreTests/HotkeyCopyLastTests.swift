@@ -52,6 +52,15 @@ extension HotkeyClassifierTests {
             ]
         ),
         Row(
+            name: "Copy Last pressed while Paste Last waits cancels the paste; both keys stay swallowed",
+            pasteLastChord: controlCommandV, copyLastChord: controlCommandC,
+            steps: [
+                (controlCommand, .pass), (down(KeyCode.ansiV), .swallow), (down(KeyCode.ansiC), copyLast),
+                (down(KeyCode.ansiV, isRepeat: true), .swallow), (up(KeyCode.ansiV), .swallow),
+                (up(KeyCode.ansiC), .swallow), (none, .pass),
+            ]
+        ),
+        Row(
             name: "after the chord, the key typed alone reaches the app",
             copyLastChord: controlCommandC,
             steps: [
@@ -93,4 +102,43 @@ extension ChordTests {
             name: "Paste Last’s own problem comes before Copy Last’s",
             pasteLast: Chord(modifiers: .function), copyLast: Chord(modifiers: .function), problem: .needsKey),
     ]
+}
+
+/// The default Copy Last chord gives way to a dictation chord the owner records: it turns off and says why.
+struct DefaultCopyLastTests {
+    static let rightCommand = Chord(modifiers: .rightCommand)
+
+    @Test func withTheDefaultChordsItIsOn() {
+        #expect(
+            Chord.copyLast(saved: nil, handsFree: .defaultHandsFree, pushToTalk: nil, cleanup: .defaultCleanup)
+                == .defaultCopyLast)
+        #expect(Chord.defaultCopyLastProblem(handsFree: .defaultHandsFree, cleanup: .defaultCleanup) == nil)
+    }
+
+    @Test func aHandsFreeChordThatClashesWinsAndCopyLastSaysWhy() {
+        let copyLast = Chord.copyLast(saved: nil, handsFree: Self.rightCommand, cleanup: .defaultCleanup)
+        #expect(copyLast == nil)
+        #expect(Chord.problem(handsFree: Self.rightCommand, cleanup: .defaultCleanup, copyLast: copyLast) == nil)
+        #expect(
+            Chord.defaultCopyLastProblem(handsFree: Self.rightCommand, cleanup: .defaultCleanup)
+                == .copyLastIncludes(.handsFree))
+    }
+
+    @Test func aPushToTalkChordThatClashesWins() {
+        let control = Chord(modifiers: .control)
+        #expect(Chord.copyLast(saved: nil, handsFree: .defaultHandsFree, pushToTalk: control, cleanup: nil) == nil)
+        #expect(
+            Chord.defaultCopyLastProblem(handsFree: .defaultHandsFree, pushToTalk: control, cleanup: nil)
+                == .copyLastIncludes(.pushToTalk))
+    }
+
+    @Test func aSavedChoiceStays() {
+        let saved = Chord(modifiers: [.control, .option], keyCode: KeyCode.ansiC)
+        #expect(Chord.copyLast(saved: .some(nil), handsFree: .defaultHandsFree, cleanup: nil) == nil)
+        #expect(Chord.copyLast(saved: .some(saved), handsFree: Self.rightCommand, cleanup: nil) == saved)
+    }
+
+    @Test func anotherChordsOwnProblemIsNotTheDefaultsProblem() {
+        #expect(Chord.defaultCopyLastProblem(handsFree: Chord(modifiers: .option), cleanup: nil) == nil)
+    }
 }

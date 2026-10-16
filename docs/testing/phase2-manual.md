@@ -413,13 +413,16 @@ Rows from each agent's phase 2.5 work. The numbers continue the list above.
 | 312 | Open History from the menu while a text field in another app has the focus, quit that app, then **Paste Again** a row | Nothing pastes into History; “Couldn’t Paste” says the text is on the clipboard; ⌘V in another app pastes it | |
 | 313 | Start two dictations back to back so both are sent at once; watch their rows in History | Each row says “Transcribing” only until its own text arrives, then Delete works on it | |
 | 720 | History: select a row with text from today; click **Play** in the toolbar (or press Space) | The audio plays from your speakers; a speaker symbol shows next to the time; the button reads **Stop**; at the end both go back | |
-| 721 | Play a row, then select another row and press Space; then start a dictation with the chord | The first audio stops and the second plays; the chord stops it before capture, so the speakers are not in the dictation | |
+| 721 | Play a row, then select another row and press Space; then start a dictation with the chord | The first audio stops and the second plays; the chord stops it a moment after capture starts (the first few milliseconds of the dictation can hold the audio’s end) | |
 | 722 | Right-click a row with audio > **Show Audio in Finder** | A Finder window opens with the row’s .flac file selected. Rows that read “audio deleted” have no Play and no Show Audio in Finder | |
 | 723 | Play a row, then close the main window | The audio stops | |
 | 724 | History: right-click a pasted row > **Transcribe Again** | The row reads “Transcribing”, then shows the new text; nothing pastes and the clipboard keeps what it held. Settings > Usage counts one more request | |
 | 725 | With keys for two speech models saved, right-click a pasted row > **Transcribe Again With** > the other model | The submenu lists only models other than the current one whose key is saved; the row gets that model’s text; the menu bar’s Speech Model does not change | |
 | 726 | Turn Wi-Fi off; right-click a pasted row > **Transcribe Again** | “Couldn’t Transcribe Again” with **OK** says the text stays and the audio stays saved; the row keeps its text and shows no error status. Hover **Retry** on a pasted row: the tooltip says the new text replaces the old and the audio stays | |
-| 727 | Select one pasted row; click **Retry** in the toolbar. Then select two pasted rows | The row is transcribed again, and it cannot be deleted until the answer comes. With two rows with text, **Retry** is off and the menu has no **Transcribe Again**, so one click never sends many paid requests | |
+| 727 | Select one pasted row; the toolbar button reads **Transcribe Again**; click it. Then select two pasted rows | The row is transcribed again, and it cannot be deleted until the answer comes. With two rows with text, the button reads **Retry** and is off, and the menu has no **Transcribe Again**, so one click never sends many paid requests | |
+| 728 | Start **Transcribe Again** on a row, close the main window at once and open it again | The row still reads “Transcribing” until the answer, and its **Transcribe Again** and **Delete** are off | |
+| 729 | Type a paragraph quickly in TextEdit with kotoba Dev running, then with it quit | Typing feels the same both ways (each key-up now goes through kotoba’s tap, as key-downs always did) | |
+| 730 | Settings > General: record right ⌘ for Hands-free | It is saved. “Copy last dictation” shows **Off** with “⌃⌘C includes right ⌘, the hands-free shortcut, so Copy Last is off.” Record ⌃⌥⌘ again: Copy Last shows ⌃⌘C again | |
 
 ### Usage pane (phase 3)
 

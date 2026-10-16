@@ -110,6 +110,30 @@ extension Chord {
         return copyLast?.problem(as: .copyLast, clashingWith: chords + [(pasteLast, .pasteLast)])
     }
 
+    /// The Copy Last chord in use: the one the owner saved (`.some(nil)`: off), else ⌃⌘C while it does not clash with
+    /// the other chords. A dictation chord the owner records wins over the default, which then turns off
+    /// (`defaultCopyLastProblem` says why).
+    public static func copyLast(
+        saved: Chord??, handsFree: Chord, pushToTalk: Chord? = nil, cleanup: Chord?, pasteLast: Chord? = nil
+    ) -> Chord? {
+        if let saved { return saved }
+        let problem = defaultCopyLastProblem(
+            handsFree: handsFree, pushToTalk: pushToTalk, cleanup: cleanup, pasteLast: pasteLast)
+        return problem == nil ? defaultCopyLast : nil
+    }
+
+    /// Why the default Copy Last chord is off with these chords, or nil when it can be on. A problem of another chord
+    /// is not the default's: saving refuses that chord first.
+    public static func defaultCopyLastProblem(
+        handsFree: Chord, pushToTalk: Chord? = nil, cleanup: Chord?, pasteLast: Chord? = nil
+    ) -> ChordProblem? {
+        guard problem(handsFree: handsFree, pushToTalk: pushToTalk, cleanup: cleanup, pasteLast: pasteLast) == nil
+        else { return nil }
+        return problem(
+            handsFree: handsFree, pushToTalk: pushToTalk, cleanup: cleanup, pasteLast: pasteLast,
+            copyLast: defaultCopyLast)
+    }
+
     /// The push-to-talk chord to keep after the owner saves `chord` (nil: Reset) as `role`; nil is the hands-free
     /// chord. Push to talk saved as the hands-free chord, or reset, keeps none, so it follows the hands-free chord. A
     /// push-to-talk chord the owner set stays when the hands-free chord changes, even to the same chord.

@@ -3,8 +3,9 @@ import Foundation
 import KotobaCore
 import Observation
 
-/// The owner's hands-free, push-to-talk, cleanup, Paste Last and Copy Last chords, saved in UserDefaults. Every text that names a
-/// chord reads it here, so views redraw when the owner records a new one, and the hotkey tap follows each change at once.
+/// The owner's hands-free, push-to-talk, cleanup, Paste Last and Copy Last chords, saved in UserDefaults. Every text
+/// that names a chord reads it here, so views redraw when the owner records a new one, and the hotkey tap follows each
+/// change at once.
 @MainActor
 @Observable
 final class HotkeyChords {
@@ -20,8 +21,9 @@ final class HotkeyChords {
     private(set) var cleanup: Chord?
     /// Unset (nil) by default: a default chord could take a shortcut another app uses. The menu item works without it.
     private(set) var pasteLast: Chord?
-    /// ⌃⌘C by default (`Chord.defaultCopyLast`), and off while that clashes with the saved chords. nil turns it off.
-    private(set) var copyLast: Chord?
+    /// The Copy Last chord the owner recorded or turned off (`.some(nil)`); nil (the default) uses ⌃⌘C while it does
+    /// not clash with the other chords (`Chord.copyLast(saved:…)`).
+    private var savedCopyLast: Chord??
     /// On while a shortcut recorder listens: the tap ignores every chord, so the press reaches the recorder.
     var isRecording = false {
         didSet { apply() }
@@ -36,22 +38,29 @@ final class HotkeyChords {
 
     init(
         defaults: UserDefaults?, handsFree: Chord = .defaultHandsFree, pushToTalk: Chord? = nil,
-        cleanup: Chord? = .defaultCleanup, pasteLast: Chord? = nil, copyLast: Chord? = .defaultCopyLast
+        cleanup: Chord? = .defaultCleanup, pasteLast: Chord? = nil, copyLast: Chord?? = nil
     ) {
         self.defaults = defaults
         self.handsFree = defaults.flatMap { Self.load(Key.handsFreeChord, from: $0) }.flatMap { $0 } ?? handsFree
         savedPushToTalk = defaults.flatMap { Self.load(Key.pushToTalkChord, from: $0) }.flatMap { $0 } ?? pushToTalk
         self.cleanup = defaults.flatMap { Self.load(Key.cleanupChord, from: $0) } ?? cleanup
         self.pasteLast = defaults.flatMap { Self.load(Key.pasteLastChord, from: $0) } ?? pasteLast
-        if let saved = defaults.flatMap({ Self.load(Key.copyLastChord, from: $0) }) {
-            self.copyLast = saved
-        } else {
-            // The default must not break chords saved before Copy Last had one, such as a right ⌘ hands-free chord.
-            let problem = Chord.problem(
-                handsFree: self.handsFree, pushToTalk: savedPushToTalk, cleanup: self.cleanup,
-                pasteLast: self.pasteLast, copyLast: copyLast)
-            self.copyLast = problem == nil ? copyLast : nil
-        }
+        savedCopyLast = defaults.flatMap { Self.load(Key.copyLastChord, from: $0) } ?? copyLast
+    }
+
+    /// The Copy Last chord in use: the saved one, else ⌃⌘C unless it clashes with the other chords.
+    var copyLast: Chord? {
+        Chord.copyLast(
+            saved: savedCopyLast, handsFree: handsFree, pushToTalk: savedPushToTalk, cleanup: cleanup,
+            pasteLast: pasteLast)
+    }
+
+    /// Why the default Copy Last chord is off: a dictation chord the owner recorded clashes with it. nil while the
+    /// owner chose Copy Last's chord, or the default is on.
+    var copyLastOffReason: ChordProblem? {
+        guard savedCopyLast == nil else { return nil }
+        return Chord.defaultCopyLastProblem(
+            handsFree: handsFree, pushToTalk: savedPushToTalk, cleanup: cleanup, pasteLast: pasteLast)
     }
 
     var pushToTalk: Chord { savedPushToTalk ?? handsFree }
@@ -71,23 +80,28 @@ final class HotkeyChords {
     }
 
     /// Saves `chord` (nil turns cleanup, Paste Last or Copy Last off, and gives push to talk the hands-free chord)
-    /// unless the chords cannot work together; then returns why and keeps the old one.
+    /// unless the chords cannot work together; then returns why and keeps the old one. A dictation chord that clashes
+    /// with the default Copy Last chord wins: Copy Last turns off and says why (`copyLastOffReason`).
     func save(_ chord: Chord?, as role: Role) -> ChordProblem? {
         var new = saved
+        var newSavedCopyLast = savedCopyLast
         switch role {
         case .handsFree: new.handsFree = chord ?? .defaultHandsFree
         case .pushToTalk: break
         case .cleanup: new.cleanup = chord
         case .pasteLast: new.pasteLast = chord
-        case .copyLast: new.copyLast = chord
+        case .copyLast: newSavedCopyLast = .some(chord)
         }
         new.pushToTalk = Chord.pushToTalk(afterSaving: chord, as: role, handsFree: new.handsFree, kept: savedPushToTalk)
+        new.copyLast = Chord.copyLast(
+            saved: newSavedCopyLast, handsFree: new.handsFree, pushToTalk: new.pushToTalk, cleanup: new.cleanup,
+            pasteLast: new.pasteLast)
         let problem = Chord.problem(
             handsFree: new.handsFree, pushToTalk: new.pushToTalk, cleanup: new.cleanup, pasteLast: new.pasteLast,
             copyLast: new.copyLast)
         if let problem { return problem }
-        (handsFree, savedPushToTalk, cleanup, pasteLast, copyLast) = (
-            new.handsFree, new.pushToTalk, new.cleanup, new.pasteLast, new.copyLast
+        (handsFree, savedPushToTalk, cleanup, pasteLast, savedCopyLast) = (
+            new.handsFree, new.pushToTalk, new.cleanup, new.pasteLast, newSavedCopyLast
         )
         defaults?.set(handsFree.storedValue, forKey: Key.handsFreeChord.rawValue)
         if let savedPushToTalk {
@@ -97,7 +111,10 @@ final class HotkeyChords {
         }
         defaults?.set(cleanup?.storedValue ?? Self.off, forKey: Key.cleanupChord.rawValue)
         defaults?.set(pasteLast?.storedValue ?? Self.off, forKey: Key.pasteLastChord.rawValue)
-        defaults?.set(copyLast?.storedValue ?? Self.off, forKey: Key.copyLastChord.rawValue)
+        // Saved only when the owner chose it, so the default keeps following the other chords.
+        if role == .copyLast {
+            defaults?.set(copyLast?.storedValue ?? Self.off, forKey: Key.copyLastChord.rawValue)
+        }
         apply()
         return nil
     }
