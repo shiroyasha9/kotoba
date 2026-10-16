@@ -17,6 +17,7 @@ extension Pane {
             windowSnapshot(selecting: .history, named: "window-history-toolbar", isFramed: true),
             windowSnapshot(selecting: .history, history: 2, named: "window-history-failed", isFramed: true),
             windowSnapshot(selecting: .history, history: 5, named: "window-history-no-audio", isFramed: true),
+            windowSnapshot(selecting: .history, isPlaying: true, named: "window-history-playing", isFramed: true),
             windowSnapshot(selecting: .insights, named: "window-insights"),
             windowSnapshot(selecting: .usage, named: "window-usage", isFramed: true),
             windowSnapshot(selecting: .general, named: "window-general"),
@@ -91,17 +92,19 @@ extension Pane {
         return model
     }
 
-    /// The whole window with every pane, showing `id`; `history` selects that History sample row.
+    /// The whole window with every pane, showing `id`; `history` selects that History sample row, and `isPlaying`
+    /// shows its audio playing.
     private static func windowSnapshot(
         suggestions: [DictionarySuggestion] = [],
         selecting id: PaneID,
         history selected: Int = 0,
+        isPlaying: Bool = false,
         named name: String,
         isFramed: Bool = false
     ) -> Snapshot {
         MainWindow.windowSnapshot(
-            of: samplePanes(suggestions: suggestions, history: selected), selecting: id, named: name,
-            isFramed: isFramed)
+            of: samplePanes(suggestions: suggestions, history: selected, isPlaying: isPlaying), selecting: id,
+            named: name, isFramed: isFramed)
     }
 
     /// The images in the README's "Screenshots" section, which `make readme-images` copies to docs/images: the whole
@@ -116,13 +119,17 @@ extension Pane {
         }
     }
 
-    /// Every pane with sample data; `history` selects that History sample row.
+    /// Every pane with sample data; `history` selects that History sample row, and `isPlaying` shows its audio playing.
     private static func samplePanes(
-        suggestions: [DictionarySuggestion] = [], history selected: Int = 0, home: HomeModel = .sample
+        suggestions: [DictionarySuggestion] = [], history selected: Int = 0, isPlaying: Bool = false,
+        home: HomeModel = .sample
     ) -> [Pane] {
         let rows = HistoryController.sampleRows()
         let history = HistoryModel(rows: rows)
         history.selection = [rows[selected].id]
+        if isPlaying {
+            history.playback.showAsPlaying(rows[selected].id)
+        }
         return [
             .home(home),
             .history(history),

@@ -130,6 +130,10 @@ Spike `spikes/insights-memory/` (`build.sh`, `measure.sh`), built like the Usage
 - `NSSpellChecker`: the first auto-learn loads it. Review measurement (`perf26/spell.swift`, 3 runs): `NSSpellChecker.shared` 7.5-33 ms on first use, first `checkSpelling` 1.2-14 ms, then 0.21-0.26 ms per word; footprint +1.28 to +1.34 MB, kept for the process lifetime. It loads only after an edit the owner made, and never while a dictation records or is sent (`EditLearner`). Idle before the first learn: no change to the floor.
 - Readback sessions: no thread, observer or timer between sessions. Live per-paste cost: measured at the gate run.
 
+## History audio playback (2026-10-17)
+
+- Play in History makes an `AVAudioPlayer` at the click and drops it when the audio ends or stops; nothing is made at launch or while the pane is closed, so the idle footprint does not change. AVFAudio is loaded at launch for capture already. Probe (02:38 IST, scratchpad `playprobe`, session-local): a `swiftc -O` AppKit process with a prepared `AVAudioEngine`, then one play of a 1.5 s 16 kHz mono FLAC, `phys_footprint` from `task_info`, 3 runs: idle 8.56-8.81 MB; playing +1.80-1.82 MB; after the stop +1.4 MB at 10 s (the system's audio output setup, kept for the process). The first play took 51-71 ms from the click to `play()`.
+
 ## Commands
 
 ```sh

@@ -61,8 +61,14 @@ final class HistoryModel {
     var readKey: ReadKey { ReadKey(search: search, attempt: attempt) }
     private var attempt = 0
     /// While a dictation records or is sent, Paste Again would race its paste; the rows being sent say so and cannot be
-    /// deleted.
-    var activity = PipelineActivity(isQuiet: true, inFlight: [])
+    /// deleted. Audio that plays stops, so the speakers do not reach the mic.
+    var activity = PipelineActivity(isQuiet: true, inFlight: []) {
+        didSet {
+            if !activity.isQuiet { playback.stop() }
+        }
+    }
+    /// A row's saved audio, played from the pane (`HistoryAudio.swift`).
+    let playback = AudioPlayback()
     /// Paste Again could not bring back the app the owner was in: the window says so.
     var isPasteFailureShown = false
     /// The rows the Delete confirmation asks about; nil when it is not shown.
@@ -167,6 +173,7 @@ final class HistoryModel {
         switch change {
         case .saved(let id, _): await refresh(id)
         case .deleted(let ids):
+            if let playing = playback.playing, ids.contains(playing) { playback.stop() }
             list.remove(ids)
             retryable.subtract(ids)
             selection.subtract(ids)

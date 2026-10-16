@@ -412,6 +412,10 @@ Rows from each agent's phase 2.5 work. The numbers continue the list above.
 | 311 | Move and resize Settings and History, close each, reopen it at once (within 2 s) | Each opens at the size and place you left it | |
 | 312 | Open History from the menu while a text field in another app has the focus, quit that app, then **Paste Again** a row | Nothing pastes into History; “Couldn’t Paste” says the text is on the clipboard; ⌘V in another app pastes it | |
 | 313 | Start two dictations back to back so both are sent at once; watch their rows in History | Each row says “Transcribing” only until its own text arrives, then Delete works on it | |
+| 720 | History: select a row with text from today; click **Play** in the toolbar (or press Space) | The audio plays from your speakers; a speaker symbol shows next to the time; the button reads **Stop**; at the end both go back | |
+| 721 | Play a row, then select another row and press Space; then start a dictation with the chord | The first audio stops and the second plays; the chord stops it before capture, so the speakers are not in the dictation | |
+| 722 | Right-click a row with audio > **Show Audio in Finder** | A Finder window opens with the row’s .flac file selected. Rows that read “audio deleted” have no Play and no Show Audio in Finder | |
+| 723 | Play a row, then close the main window | The audio stops | |
 
 ### Usage pane (phase 3)
 
@@ -608,20 +612,20 @@ The offscreen snapshots (`make snapshots`) show two things that may not happen i
 
 | # | Do this | Expect | Result |
 |---|---|---|---|
-| 448 | Settings > General, fresh install | “Copy last dictation” shows ⌃⌘C; Home > How to Dictate lists it | |
-| 449 | Dictate into TextEdit. Copy other text with ⌘C. Press ⌃⌘C, then ⌘V in TextEdit | The pill says “Copied. Press ⌘V to paste.”; ⌘V pastes the dictation; no “c” is typed and no menu action runs | |
-| 450 | Hold ⌃⌘ and hold C so it repeats, then let go | One copy; no “c” is typed | |
-| 451 | Start a dictation, press ⌃⌘C while it records, then stop it | The pill keeps showing the recording; the new dictation pastes; after it, ⌘V pastes the earlier dictation | |
-| 452 | Record ⌃⌘V for “Paste last dictation”, then try to record ⌃⌘V for “Copy last dictation” | Refused: “This is the Paste Last shortcut.” Copy Last keeps ⌃⌘C | |
-| 453 | Click the ⓧ next to ⌃⌘C; quit and reopen kotoba Dev | It shows **Off** after the restart; ⌃⌘C reaches the app again | |
+| 710 | Settings > General, fresh install | “Copy last dictation” shows ⌃⌘C; Home > How to Dictate lists it | |
+| 711 | Dictate into TextEdit. Copy other text with ⌘C. Press ⌃⌘C, then ⌘V in TextEdit | The pill says “Copied. Press ⌘V to paste.”; ⌘V pastes the dictation; no “c” is typed and no menu action runs | |
+| 712 | Hold ⌃⌘ and hold C so it repeats, then let go | One copy; no “c” is typed | |
+| 713 | Start a dictation, press ⌃⌘C while it records, then stop it | The pill keeps showing the recording; the new dictation pastes; after it, ⌘V pastes the earlier dictation | |
+| 714 | Record ⌃⌘V for “Paste last dictation”, then try to record ⌃⌘V for “Copy last dictation” | Refused: “This is the Paste Last shortcut.” Copy Last keeps ⌃⌘C | |
+| 715 | Click the ⓧ next to ⌃⌘C; quit and reopen kotoba Dev | It shows **Off** after the restart; ⌃⌘C reaches the app again | |
 
 ## Add Word from the menu (kotoba Dev)
 
 | # | Do this | Expect | Result |
 |---|---|---|---|
-| 454 | With the main window closed, menu bar menu > **Add Word…** | The main window opens at Dictionary with the add sheet in front, the cursor in its first field; ⌘V pastes and ⌘A selects all in it | |
-| 455 | Type a word, click **Add**; close the window; menu > **Add Word…** again | The word is in the list; the sheet opens again, empty | |
-| 456 | With the main window open at History, menu > **Add Word…**; press Esc; click **History**, then **Dictionary** | The window shows Dictionary with the sheet; Esc closes it; going back to Dictionary opens no sheet | |
+| 716 | With the main window closed, menu bar menu > **Add Word…** | The main window opens at Dictionary with the add sheet in front, the cursor in its first field; ⌘V pastes and ⌘A selects all in it | |
+| 717 | Type a word, click **Add**; close the window; menu > **Add Word…** again | The word is in the list; the sheet opens again, empty | |
+| 718 | With the main window open at History, menu > **Add Word…**; press Esc; click **History**, then **Dictionary** | The window shows Dictionary with the sheet; Esc closes it; going back to Dictionary opens no sheet | |
 
 ## Main window (0.3.0)
 

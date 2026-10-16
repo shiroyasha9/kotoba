@@ -65,7 +65,8 @@ struct HistoryView: View {
                         HistoryRow(
                             record: record, apps: model.apps,
                             isRetryable: model.retryable.contains(record.id),
-                            isSending: model.activity.inFlight.contains(record.id))
+                            isSending: model.activity.inFlight.contains(record.id),
+                            isPlaying: model.playback.playing == record.id)
                     }
                 }
             }
@@ -82,6 +83,12 @@ struct HistoryView: View {
             menu(for: model.rows.filter { ids.contains($0.id) })
         }
         .onDeleteCommand { model.askToDelete(model.selected) }
+        // Space plays and stops the selected row's audio, as Quick Look does in Finder.
+        .onKeyPress(.space) {
+            guard model.canPlay(model.selected) || model.isPlaying(model.selected) else { return .ignored }
+            model.togglePlay(model.selected)
+            return .handled
+        }
         // ⌘C copies the selected rows' text while the list has the focus; in the search field it copies the field's.
         .copyable(HistoryModel.text(of: model.selected).map { [$0] } ?? [])
     }
@@ -99,6 +106,14 @@ struct HistoryView: View {
             Button("Retry", systemImage: "arrow.clockwise") { model.retry(records) }
                 .help("Transcribe the saved audio again")
                 .disabled(!model.canRetry(records))
+            if model.isPlaying(records) {
+                Button("Stop", systemImage: "stop.fill") { model.togglePlay(records) }
+                    .help("Stop the audio")
+            } else {
+                Button("Play", systemImage: "play.fill") { model.togglePlay(records) }
+                    .help("Play the saved audio")
+                    .disabled(!model.canPlay(records))
+            }
             Button("Delete", systemImage: "trash") { model.askToDelete(records) }
                 .help("Delete the dictation and its audio")
                 .disabled(!model.canDelete(records))
@@ -118,6 +133,15 @@ struct HistoryView: View {
                 .disabled(!model.canPasteAgain(records))
             if model.canRetry(records) {
                 Button("Retry") { model.retry(records) }
+            }
+            if model.isPlaying(records) {
+                Button("Stop Audio") { model.togglePlay(records) }
+            } else if records.count == 1, records.contains(where: HistoryModel.hasAudio) {
+                Button("Play Audio") { model.togglePlay(records) }
+                    .disabled(!model.canPlay(records))
+            }
+            if records.count == 1, records.contains(where: HistoryModel.hasAudio) {
+                Button("Show Audio in Finder") { model.showInFinder(records) }
             }
             if model.canFix(records) {
                 Divider()
@@ -150,6 +174,7 @@ struct HistoryRow: View {
     /// No text yet, and the audio is kept for a retry.
     var isRetryable = false
     var isSending = false
+    var isPlaying = false
 
     var body: some View {
         HStack(alignment: .top, spacing: 10) {
@@ -177,9 +202,16 @@ struct HistoryRow: View {
             .alignmentGuide(.listRowSeparatorLeading) { $0[.leading] }
             Spacer(minLength: 8)
             VStack(alignment: .trailing, spacing: 3) {
-                Text(record.createdAt.formatted(date: .omitted, time: .shortened))
-                    .foregroundStyle(.secondary)
-                    .monospacedDigit()
+                HStack(spacing: 4) {
+                    if isPlaying {
+                        Image(systemName: "speaker.wave.2.fill")
+                            .foregroundStyle(.tint)
+                            .accessibilityLabel("Playing")
+                    }
+                    Text(record.createdAt.formatted(date: .omitted, time: .shortened))
+                        .foregroundStyle(.secondary)
+                        .monospacedDigit()
+                }
                 if let status = HistoryStatus(record, isSending: isSending) {
                     Label(status.title, systemImage: status.systemImage)
                         .foregroundStyle(status.isProblem ? AnyShapeStyle(.orange) : AnyShapeStyle(.secondary))
