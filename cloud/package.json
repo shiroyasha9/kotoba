@@ -1,0 +1,26 @@
+{
+  "name": "kotoba-cloud",
+  "type": "module",
+  "private": true,
+  "scripts": {
+    "dev": "wrangler dev",
+    "db:migrate": "wrangler d1 migrations apply DB --local",
+    "test": "vitest run",
+    "typecheck": "wrangler types --strict-vars=false --env-file .dev.vars.example && tsc --noEmit && tsc --noEmit -p scripts",
+    "lint": "biome check .",
+    "format": "biome check --write .",
+    "fake-azure": "bun scripts/fake-azure.ts",
+    "latency": "bun scripts/latency.ts"
+  },
+  "devDependencies": {
+    "@biomejs/biome": "2.5.15",
+    "@cloudflare/vitest-plugin": "1.4.4",
+    "@types/bun": "1.4.3",
+    "typescript": "7.0.2",
+    "vitest": "5.0.5",
+    "wrangler": "4.151.1"
+  },
+  "dependencies": {
+    "hono": "4.13.13"
+  }
+}

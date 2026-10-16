@@ -1,0 +1,285 @@
+import { DurableObject } from "cloudflare:workers";
+
+/**
+ * One Balance object per user (named by user id) holds the hours: SQLite storage, single-threaded, so every change is
+ * atomic. Plan hours (Pro, reset each month) are spent before pack hours (never expire). A dictation first takes a
+ * hold for its expected length (`authorize`, in parallel with the upstream request), then pays its real length after
+ * the response (`settle`). A hold blocks a second dictation from spending the same last seconds; an unsettled hold
+ * lapses after HOLD_MS. Every method takes `now` (ms) from the Worker, so tests control the clock.
+ */
+export const HOLD_MS = 10 * 60 * 1000;
+/** `use` rows only guard a settle against a repeat; after this long they go. Credits stay for good. */
+export const USE_ROWS_KEPT_MS = 30 * 24 * 60 * 60 * 1000;
+
+export interface BalanceSnapshot {
+  /** Plan seconds left this month plus pack seconds. */
+  secondsLeft: number;
+  planSecondsLeft: number;
+  packSeconds: number;
+  /** Unix ms; 0 when there is no active plan. */
+  planPeriodEnd: number;
+  /** Unix ms when the plan's monthly hours reset; 0 when there is no active plan. */
+  planResetsAt: number;
+}
+
+type Refusal<R extends string> = { ok: false; reason: R };
+export type Authorization = { ok: true; balance: BalanceSnapshot } | Refusal<"signed_out" | "out_of_hours">;
+export type AccountReply = { ok: true; balance: BalanceSnapshot } | Refusal<"signed_out">;
+
+export interface Plan {
+  /** The Paddle subscription the period belongs to. */
+  subscriptionId: string;
+  monthlySeconds: number;
+  /** Unix ms of the paid period, from Paddle's `billing_period`. */
+  periodStart: number;
+  periodEnd: number;
+}
+
+type LedgerKind = "trial" | "pack" | "plan" | "plan_end" | "use";
+
+interface AccountRow extends Record<string, SqlStorageValue> {
+  pack_seconds: number;
+  plan_subscription_id: string | null;
+  plan_monthly_seconds: number;
+  plan_seconds_left: number;
+  plan_period_start: number;
+  plan_period_end: number;
+  /** 0 when no plan is active. */
+  plan_window_end: number;
+  session_gen: number;
+}
+
+const SCHEMA = `
+CREATE TABLE IF NOT EXISTS account (
+  id INTEGER PRIMARY KEY CHECK (id = 1),
+  pack_seconds INTEGER NOT NULL DEFAULT 0,
+  plan_subscription_id TEXT,
+  plan_monthly_seconds INTEGER NOT NULL DEFAULT 0,
+  plan_seconds_left INTEGER NOT NULL DEFAULT 0,
+  plan_period_start INTEGER NOT NULL DEFAULT 0,
+  plan_period_end INTEGER NOT NULL DEFAULT 0,
+  plan_window_end INTEGER NOT NULL DEFAULT 0,
+  session_gen INTEGER NOT NULL DEFAULT 0
+);
+INSERT OR IGNORE INTO account (id) VALUES (1);
+CREATE TABLE IF NOT EXISTS ledger (
+  ref TEXT PRIMARY KEY,
+  at INTEGER NOT NULL,
+  kind TEXT NOT NULL,
+  plan_seconds INTEGER NOT NULL,
+  pack_seconds INTEGER NOT NULL,
+  absorbed_seconds INTEGER NOT NULL DEFAULT 0
+);
+CREATE INDEX IF NOT EXISTS ledger_kind_at ON ledger (kind, at);
+CREATE TABLE IF NOT EXISTS holds (
+  request_id TEXT PRIMARY KEY,
+  seconds INTEGER NOT NULL,
+  expires_at INTEGER NOT NULL
+);`;
+
+export class Balance extends DurableObject<Env> {
+  private readonly sql: SqlStorage;
+
+  constructor(ctx: DurableObjectState, env: Env) {
+    super(ctx, env);
+    this.sql = ctx.storage.sql;
+    this.sql.exec(SCHEMA);
+  }
+
+  /** Called at sign-in: grants the free trial once per user and returns the session generation for the token. */
+  signIn(trialSeconds: number, now: number): { generation: number; trialGranted: boolean } {
+    return this.ctx.storage.transactionSync(() => {
+      const trialGranted = this.addPackSeconds("trial", "trial", trialSeconds, now);
+      return { generation: this.row(now).session_gen, trialGranted };
+    });
+  }
+
+  /** Ends every session token (they carry the old generation). A token that is already ended cannot do it again. */
+  signOutEverywhere(generation: number): boolean {
+    const rows = this.sql
+      .exec("UPDATE account SET session_gen = session_gen + 1 WHERE session_gen = ? RETURNING session_gen", generation)
+      .toArray();
+    return rows.length > 0;
+  }
+
+  account(generation: number, now: number): AccountReply {
+    const row = this.row(now);
+    if (row.session_gen !== generation) return { ok: false, reason: "signed_out" };
+    return { ok: true, balance: snapshot(row) };
+  }
+
+  /** Holds `seconds` for one dictation when any time is left. A long last dictation may overshoot; `settle` absorbs it. */
+  authorize(requestId: string, seconds: number, generation: number, now: number): Authorization {
+    return this.ctx.storage.transactionSync(() => {
+      const row = this.row(now);
+      if (row.session_gen !== generation) return { ok: false, reason: "signed_out" } as const;
+      this.sql.exec("DELETE FROM holds WHERE expires_at <= ?", now);
+      const held = this.sql.exec<{ held: number }>("SELECT COALESCE(SUM(seconds), 0) AS held FROM holds").one().held;
+      const balance = snapshot(row);
+      if (balance.secondsLeft - held <= 0) return { ok: false, reason: "out_of_hours" } as const;
+      this.sql.exec(
+        "INSERT OR REPLACE INTO holds (request_id, seconds, expires_at) VALUES (?, ?, ?)",
+        requestId,
+        seconds,
+        now + HOLD_MS,
+      );
+      return { ok: true, balance } as const;
+    });
+  }
+
+  /** Pays a dictation's real length: plan seconds first, then pack seconds. Runs once per request id. */
+  settle(requestId: string, seconds: number, now: number): BalanceSnapshot {
+    return this.ctx.storage.transactionSync(() => {
+      const row = this.row(now);
+      this.sql.exec("DELETE FROM holds WHERE request_id = ?", requestId);
+      if (this.has(requestId)) return snapshot(row);
+      const { fromPlan, fromPack } = spend(row.plan_seconds_left, row.pack_seconds, seconds);
+      this.sql.exec(
+        "UPDATE account SET plan_seconds_left = plan_seconds_left - ?, pack_seconds = pack_seconds - ?",
+        fromPlan,
+        fromPack,
+      );
+      this.record(requestId, "use", now, -fromPlan, -fromPack, seconds - fromPlan - fromPack);
+      this.sql.exec("DELETE FROM ledger WHERE kind = 'use' AND at < ?", now - USE_ROWS_KEPT_MS);
+      return snapshot(this.row(now));
+    });
+  }
+
+  /** Drops a hold when the dictation failed before it cost anything. Safe to call for any id. */
+  release(requestId: string): void {
+    this.sql.exec("DELETE FROM holds WHERE request_id = ?", requestId);
+  }
+
+  /** Adds pack seconds once per `ref` (a Paddle transaction and price). Returns false for a repeat. */
+  addPack(ref: string, seconds: number, now: number): boolean {
+    return this.ctx.storage.transactionSync(() => this.addPackSeconds(ref, "pack", seconds, now));
+  }
+
+  /**
+   * Starts a paid plan period once per `ref` (the Paddle transaction). The monthly hours reset now; an annual period
+   * resets them again each month (`row`). Unused plan hours do not carry over. A late retry of an older period of the
+   * same subscription, or any period of a canceled one, changes nothing.
+   */
+  startPlan(ref: string, plan: Plan, now: number): boolean {
+    return this.ctx.storage.transactionSync(() => {
+      if (this.has(ref) || this.has(planEndRef(plan.subscriptionId))) return false;
+      const row = this.row(now);
+      if (row.plan_subscription_id === plan.subscriptionId && plan.periodEnd <= row.plan_period_end) return false;
+      this.sql.exec(
+        `UPDATE account SET plan_subscription_id = ?, plan_monthly_seconds = ?, plan_seconds_left = ?,
+           plan_period_start = ?, plan_period_end = ?, plan_window_end = ?`,
+        plan.subscriptionId,
+        plan.monthlySeconds,
+        plan.monthlySeconds,
+        plan.periodStart,
+        plan.periodEnd,
+        windowEnd(plan.periodStart, plan.periodEnd, Math.max(now, plan.periodStart)),
+      );
+      this.record(ref, "plan", now, plan.monthlySeconds, 0);
+      return true;
+    });
+  }
+
+  /**
+   * Ends the plan of `subscriptionId` now; a plan of another subscription stays. `final` (Paddle canceled it, which
+   * cannot be undone) also blocks any late period of that subscription. A pause is not final. Pack hours stay.
+   */
+  endPlan(subscriptionId: string, final: boolean, now: number): void {
+    this.ctx.storage.transactionSync(() => {
+      const ref = planEndRef(subscriptionId);
+      if (final && !this.has(ref)) this.record(ref, "plan_end", now, 0, 0);
+      this.sql.exec(
+        "UPDATE account SET plan_seconds_left = 0, plan_window_end = 0 WHERE plan_subscription_id = ?",
+        subscriptionId,
+      );
+    });
+  }
+
+  private addPackSeconds(ref: string, kind: LedgerKind, seconds: number, now: number): boolean {
+    if (this.has(ref)) return false;
+    this.sql.exec("UPDATE account SET pack_seconds = pack_seconds + ?", seconds);
+    this.record(ref, kind, now, 0, seconds);
+    return true;
+  }
+
+  private record(ref: string, kind: LedgerKind, now: number, planSeconds: number, packSeconds: number, absorbed = 0) {
+    this.sql.exec(
+      "INSERT INTO ledger (ref, at, kind, plan_seconds, pack_seconds, absorbed_seconds) VALUES (?, ?, ?, ?, ?, ?)",
+      ref,
+      now,
+      kind,
+      planSeconds,
+      packSeconds,
+      absorbed,
+    );
+  }
+
+  private has(ref: string): boolean {
+    return this.sql.exec("SELECT 1 FROM ledger WHERE ref = ?", ref).toArray().length > 0;
+  }
+
+  /** The account row at `now`; first resets the plan's monthly hours when a new month of the period has begun. */
+  private row(now: number): AccountRow {
+    const row = this.sql.exec<AccountRow>("SELECT * FROM account WHERE id = 1").one();
+    if (row.plan_window_end === 0 || now < row.plan_window_end) return row;
+    if (now >= row.plan_period_end) {
+      this.sql.exec("UPDATE account SET plan_seconds_left = 0, plan_window_end = 0");
+      return { ...row, plan_seconds_left: 0, plan_window_end: 0 };
+    }
+    const next = windowEnd(row.plan_period_start, row.plan_period_end, now);
+    this.sql.exec("UPDATE account SET plan_seconds_left = plan_monthly_seconds, plan_window_end = ?", next);
+    return { ...row, plan_seconds_left: row.plan_monthly_seconds, plan_window_end: next };
+  }
+}
+
+function planEndRef(subscriptionId: string): string {
+  return `end:${subscriptionId}`;
+}
+
+/** Plan seconds first, then pack seconds; what neither covers is absorbed (the last dictation's overshoot). */
+export function spend(planSeconds: number, packSeconds: number, seconds: number) {
+  const fromPlan = Math.min(seconds, planSeconds);
+  return { fromPlan, fromPack: Math.min(seconds - fromPlan, packSeconds) };
+}
+
+/** The balance after paying `seconds`, as `settle` will leave it. */
+export function afterPaying(balance: BalanceSnapshot, seconds: number): BalanceSnapshot {
+  const { fromPlan, fromPack } = spend(balance.planSecondsLeft, balance.packSeconds, seconds);
+  return {
+    ...balance,
+    secondsLeft: balance.secondsLeft - fromPlan - fromPack,
+    planSecondsLeft: balance.planSecondsLeft - fromPlan,
+    packSeconds: balance.packSeconds - fromPack,
+  };
+}
+
+function snapshot(row: AccountRow): BalanceSnapshot {
+  const active = row.plan_window_end !== 0;
+  return {
+    secondsLeft: row.plan_seconds_left + row.pack_seconds,
+    planSecondsLeft: row.plan_seconds_left,
+    packSeconds: row.pack_seconds,
+    planPeriodEnd: active ? row.plan_period_end : 0,
+    planResetsAt: row.plan_window_end,
+  };
+}
+
+/** The end of the plan month that holds `at`: whole calendar months from the period start, capped at the period end. */
+export function windowEnd(periodStart: number, periodEnd: number, at: number): number {
+  for (let months = 1; ; months++) {
+    const end = addMonths(periodStart, months);
+    if (end >= periodEnd) return periodEnd;
+    if (end > at) return end;
+  }
+}
+
+function addMonths(ms: number, months: number): number {
+  const date = new Date(ms);
+  const day = date.getUTCDate();
+  date.setUTCDate(1);
+  date.setUTCMonth(date.getUTCMonth() + months);
+  // Jan 31 + 1 month is the last day of February, as billing systems count it.
+  const last = new Date(Date.UTC(date.getUTCFullYear(), date.getUTCMonth() + 1, 0)).getUTCDate();
+  date.setUTCDate(Math.min(day, last));
+  return date.getTime();
+}

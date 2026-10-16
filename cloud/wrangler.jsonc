@@ -1,0 +1,53 @@
+// kotoba Cloud relay. Local prototype: run it with `bun run dev` (wrangler dev, Miniflare). Never deployed.
+{
+  "$schema": "./node_modules/wrangler/config-schema.json",
+  "name": "kotoba-cloud",
+  "main": "src/index.ts",
+  "compatibility_date": "2026-10-16",
+  "d1_databases": [
+    {
+      "binding": "DB",
+      "database_name": "kotoba-cloud",
+      // Local only: wrangler dev keys the local database by binding. A real id comes when the owner creates the database.
+      "database_id": "00000000-0000-0000-0000-000000000000",
+      "migrations_dir": "migrations"
+    }
+  ],
+  "durable_objects": {
+    "bindings": [
+      { "name": "BALANCE", "class_name": "Balance" },
+      { "name": "GLOBAL_METER", "class_name": "GlobalMeter" }
+    ]
+  },
+  "migrations": [{ "tag": "v1", "new_sqlite_classes": ["Balance", "GlobalMeter"] }],
+  "ratelimits": [
+    // Per user: dictations a minute. A person cannot finish more than a few; a script can.
+    { "name": "TRANSCRIBE_LIMITER", "namespace_id": "1001", "simple": { "limit": 30, "period": 60 } },
+    // Per client IP: sign-in codes asked for and tried.
+    { "name": "AUTH_LIMITER", "namespace_id": "1002", "simple": { "limit": 10, "period": 60 } }
+  ],
+  "vars": {
+    // "fake" answers from the Worker itself (dev and tests); "azure" calls AZURE_ENDPOINT with AZURE_KEY.
+    "UPSTREAM": "fake",
+    "AZURE_ENDPOINT": "http://127.0.0.1:8788",
+    // "console" prints sign-in codes to the wrangler dev log. No real mailer exists yet.
+    "MAILER": "console",
+    "MAX_AUDIO_BYTES": "33554432",
+    "MAX_AUDIO_SECONDS": "1200",
+    // Covers the upload too: 32 MB at 5 Mbit/s takes about 51 s.
+    "UPSTREAM_TIMEOUT_MS": "120000",
+    // All users together, seconds of audio per UTC day. 200 h is USD 20 at USD 0.10/h.
+    // Fake upstream only: how long it takes to answer.
+    "FAKE_DELAY_MS": "0",
+    "GLOBAL_DAILY_CAP_SECONDS": "720000",
+    "TRIAL_SECONDS": "3600",
+    "PADDLE_TOLERANCE_SECONDS": "5",
+    // Paddle price id -> what it sells. INR prices are overrides on the same price ids. These ids are placeholders.
+    "PADDLE_PRICES": {
+      "pri_pack_5h": { "kind": "pack", "seconds": 18000 },
+      "pri_pack_15h": { "kind": "pack", "seconds": 54000 },
+      "pri_pro_monthly": { "kind": "pro", "seconds": 28800 },
+      "pri_pro_annual": { "kind": "pro", "seconds": 28800 }
+    }
+  }
+}

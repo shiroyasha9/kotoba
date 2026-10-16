@@ -1,0 +1,23 @@
+{
+  "event_id": "evt_01kotobaupdate000000000000001",
+  "event_type": "subscription.updated",
+  "occurred_at": "2026-11-01T06:00:00.000000Z",
+  "notification_id": "ntf_01kotobaupdate000000000000001",
+  "data": {
+    "id": "sub_01kotobapro00000000000000001",
+    "status": "active",
+    "customer_id": "ctm_01kotobacustomer000000000001",
+    "custom_data": { "kotoba_user_id": "{{user}}" },
+    "current_billing_period": { "starts_at": "2026-10-17T06:00:00.000000Z", "ends_at": "2026-11-17T06:00:00.000000Z" },
+    "billing_cycle": { "interval": "month", "frequency": 1 },
+    "scheduled_change": { "action": "cancel", "effective_at": "2026-11-17T06:00:00.000000Z", "resume_at": null },
+    "items": [
+      {
+        "status": "active",
+        "quantity": 1,
+        "recurring": true,
+        "price": { "id": "pri_pro_monthly", "product_id": "pro_01kotobapro0000000000000001" }
+      }
+    ]
+  }
+}

@@ -1,0 +1,39 @@
+{
+  "event_id": "evt_01kotobapro00000000000000001",
+  "event_type": "transaction.completed",
+  "occurred_at": "2026-10-17T06:00:00.000000Z",
+  "notification_id": "ntf_01kotobapro00000000000000001",
+  "data": {
+    "id": "txn_01kotobapro00000000000000001",
+    "status": "completed",
+    "customer_id": "ctm_01kotobacustomer000000000001",
+    "custom_data": { "kotoba_user_id": "{{user}}" },
+    "origin": "web",
+    "collection_mode": "automatic",
+    "subscription_id": "sub_01kotobapro00000000000000001",
+    "billing_period": { "starts_at": "2026-10-17T06:00:00.000000Z", "ends_at": "2026-11-17T06:00:00.000000Z" },
+    "currency_code": "USD",
+    "created_at": "2026-10-17T05:59:10.000000Z",
+    "updated_at": "2026-10-17T06:00:00.000000Z",
+    "billed_at": "2026-10-17T06:00:00.000000Z",
+    "items": [
+      {
+        "price": {
+          "id": "pri_pro_monthly",
+          "product_id": "pro_01kotobapro0000000000000001",
+          "description": "kotoba Cloud Pro, monthly",
+          "type": "standard",
+          "billing_cycle": { "interval": "month", "frequency": 1 },
+          "trial_period": null,
+          "unit_price": { "amount": "400", "currency_code": "USD" },
+          "status": "active"
+        },
+        "quantity": 1,
+        "proration": null
+      }
+    ],
+    "details": {
+      "totals": { "subtotal": "400", "tax": "0", "total": "400", "grand_total": "400", "currency_code": "USD" }
+    }
+  }
+}
