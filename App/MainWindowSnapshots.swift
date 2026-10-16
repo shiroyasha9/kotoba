@@ -77,7 +77,7 @@ extension MainWindow {
             for id in path {
                 selection.id = id
                 window.title = id.title
-                settle()
+                Snapshots.settle()
                 window.layoutIfNeeded()
                 chromes.append((id, Chrome(window)))
             }
@@ -87,15 +87,6 @@ extension MainWindow {
             return chromes.first { $0.1 != expected }.map { id, chrome in
                 "\(id.title) has \(chrome); \(first.title) has \(expected)"
             }
-        }
-    }
-
-    /// Runs the main run loop until it has no more work, without waiting: SwiftUI applies a new pane's toolbar in later
-    /// turns. The snapshot run happens before the app's run loop starts. The bound stops a view that keeps scheduling
-    /// work.
-    private static func settle() {
-        for _ in 0..<1_000 where CFRunLoopRunInMode(.defaultMode, 0, true) != .handledSource {
-            return
         }
     }
 }

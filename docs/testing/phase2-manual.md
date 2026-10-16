@@ -636,6 +636,7 @@ Layout and copy pass over the main window. Snapshots cannot show the toolbar's g
 | 702 | On **Home**, look at a row with “No text” | It has no copy icon; its time lines up with the other rows’ times. With no dictations, **Recent Dictations** has no **Show All** | |
 | 703 | General > **Shortcuts**: set a cleanup shortcut that is not the default | The ⓧ and the reset arrow sit left of the shortcut; the right edges of the Dictate, Clean up and Paste last shortcuts line up | |
 | 704 | Dictionary: compare the **Learn from my edits** switch with a switch in General | Same size | |
+| 705 | Menu > **Fix Last Dictation…**; edit a word, click **Learn**; then do it with a long dictation where you fix many names | The window is as tall as its text and buttons, with no empty half; after **Learn** it grows downward (its top stays) to show **Words to Add**; with many words it stops growing and the form scrolls | |
 
 ## Dock app (story 35, kotoba Dev)
 

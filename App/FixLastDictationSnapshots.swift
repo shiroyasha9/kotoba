@@ -3,8 +3,9 @@ import KotobaCore
 import SwiftUI
 
 extension FixLastDictationController {
-    /// The window before Learn, after Learn with a strong and a weak word, with nothing found, with no dictation,
-    /// before the dictionary is loaded, and opened from a History row with a word selected and then added.
+    /// The window before Learn, after Learn with a strong and a weak word, with more words than fit, with nothing
+    /// found, with no dictation, before the dictionary is loaded, and opened from a History row with a word selected
+    /// and then added.
     static func snapshots() -> [Snapshot] {
         let pasted = "Deploy the ember branch to versel, then add it the change and tell the team."
         let fixed = "Deploy the embra branch to Vercel, then audit the change and tell the team."
@@ -17,6 +18,19 @@ extension FixLastDictationController {
             windowSnapshot(named: "fix-last-dictation-learned") {
                 let model = FixLastDictationModel(pasted: pasted, learner: sampleLearner) { _ in }
                 model.text = fixed
+                model.learn()
+                return model
+            },
+            // More words than fit: the window stops at its tallest and the form scrolls. Each name is one changed word
+            // in a sentence, so the edit stays a fix, not a rewrite.
+            windowSnapshot(named: "fix-last-dictation-many") {
+                let names = ["Zentyl", "Korvex", "Plinth", "Quorra", "Vantor", "Brisko", "Celdra", "Dunmar", "Fyrnel"]
+                let sentence = { (name: String) in "Ship \(name) to the team today." }
+                let model = FixLastDictationModel(
+                    pasted: names.map { sentence(String($0.dropLast())) }.joined(separator: " "),
+                    learner: sampleLearner
+                ) { _ in }
+                model.text = names.map(sentence).joined(separator: " ")
                 model.learn()
                 return model
             },
@@ -34,7 +48,7 @@ extension FixLastDictationController {
                 model.text = fixed
                 return model
             },
-            Snapshots.window(named: "fix-dictation-window", contentSize: size) {
+            Snapshots.fittedWindow(named: "fix-dictation-window") {
                 window(showing: rowModel(isAdded: false), title: "Fix Dictation") {}
             },
             windowSnapshot(named: "fix-dictation-word-added") { rowModel(isAdded: true) },
@@ -69,10 +83,10 @@ extension FixLastDictationController {
         var entries = PersonalDictionary()
     }
 
-    /// The window at its fixed size, with the shared fit check.
+    /// The window at the size its content takes, with the shared fit check.
     private static func windowSnapshot(named name: String, model: @escaping @MainActor () -> FixLastDictationModel)
         -> Snapshot
     {
-        Snapshots.fixedWindow(named: name, size: size) { FixLastDictationView(model: model()) {} }
+        Snapshots.fittedWindow(named: name) { window(showing: model(), title: "Fix Last Dictation") {} }
     }
 }

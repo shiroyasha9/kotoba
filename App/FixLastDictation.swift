@@ -11,7 +11,10 @@ import SwiftUI
 /// terminals.
 @MainActor
 final class FixLastDictationController: NSObject, NSWindowDelegate {
-    static let size = NSSize(width: 480, height: 400)
+    static let width: CGFloat = 480
+    /// The tallest the form gets; past it the form scrolls. Below it the window is as tall as its content, so it
+    /// grows when Learn adds the words it found.
+    static let maxFormHeight: CGFloat = 440
 
     /// Which dictation the open window fixes.
     private enum Fixing {
@@ -94,6 +97,8 @@ final class FixLastDictationController: NSObject, NSWindowDelegate {
         ) { [pasteboard] in _ = await pasteboard.write($0, isTransient: false) }
         let window = Self.window(showing: model, title: fixing.title) { [weak self] in self?.window?.close() }
         window.delegate = self
+        // Centred at its tallest (`FixLastDictationView` starts there); the content then sets the height, and the top
+        // edge stays as the window shrinks or grows.
         window.center()
         self.window = window
         self.fixing = fixing
@@ -112,7 +117,6 @@ final class FixLastDictationController: NSObject, NSWindowDelegate {
         window.title = title
         window.styleMask = [.titled, .closable]
         window.isReleasedWhenClosed = false
-        window.setContentSize(size)
         return window
     }
 }
@@ -216,6 +220,8 @@ final class FixLastDictationModel {
 struct FixLastDictationView: View {
     @Bindable var model: FixLastDictationModel
     let close: () -> Void
+    // Starts at the tallest, so the window opens at its tallest frame and only shrinks to the measured height.
+    @State private var formHeight = FixLastDictationController.maxFormHeight
 
     var body: some View {
         VStack(spacing: 0) {
@@ -236,11 +242,17 @@ struct FixLastDictationView: View {
                     }
                 }
                 .formStyle(.grouped)
+                // A form takes all the height it is offered; this gives it its content's, so the window (sized by its
+                // content) has no empty half and grows when Learn adds words.
+                .onScrollGeometryChange(for: CGFloat.self, of: \.contentSize.height) { _, height in
+                    formHeight = height
+                }
+                .frame(height: min(formHeight, FixLastDictationController.maxFormHeight))
                 buttons
                     .padding([.horizontal, .bottom], 20)
             }
         }
-        .frame(width: FixLastDictationController.size.width, height: FixLastDictationController.size.height)
+        .frame(width: FixLastDictationController.width)
     }
 
     private var footer: some View {
@@ -271,6 +283,8 @@ struct FixLastDictationView: View {
             }
         }
         .padding(20)
+        // As tall as the message and the button: the window fits its content.
+        .fixedSize(horizontal: false, vertical: true)
     }
 
     @ViewBuilder private func found(_ corrections: [DetectedCorrection]) -> some View {

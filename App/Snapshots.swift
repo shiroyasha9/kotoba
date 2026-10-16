@@ -82,6 +82,36 @@ enum Snapshots {
         }
     }
 
+    /// A real window at the size its content asks for (the hosting controller's size constraints), drawn once its
+    /// layout has settled: a view that measures itself (`onScrollGeometryChange`) takes its height a run loop turn
+    /// later. The run fails when the size still changes after a few rounds.
+    static func fittedWindow(named name: String, _ make: @escaping @MainActor () -> NSWindow) -> Snapshot {
+        var isSettled = false
+        return Snapshot(name: name) {
+            let window = make()
+            isSettled = false
+            // Each round applies the measured height; the next one finds it unchanged.
+            for _ in 0..<10 where !isSettled {
+                let size = window.contentLayoutRect.size
+                settle()
+                window.layoutIfNeeded()
+                isSettled = window.contentLayoutRect.size == size
+            }
+            return WindowImage(window: window, contentSize: window.contentLayoutRect.size)
+        } check: { _ in
+            isSettled ? nil : "the window's size kept changing"
+        }
+    }
+
+    /// Runs the main run loop until it has no more work, without waiting: SwiftUI applies a new pane's toolbar, or a
+    /// measured height, in later turns. The snapshot run happens before the app's run loop starts. The bound stops a
+    /// view that keeps scheduling work.
+    static func settle() {
+        for _ in 0..<1_000 where CFRunLoopRunInMode(.defaultMode, 0, true) != .handledSource {
+            return
+        }
+    }
+
     /// Content that needs more room than its fixed window.
     private static func fitProblem(of content: NSView, in size: NSSize) -> String? {
         let fitting = content.fittingSize
