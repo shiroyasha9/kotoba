@@ -43,9 +43,14 @@ struct OpenRouterPrimerTests {
         #expect(await stub.provider().prime(language: Locale.Language(identifier: "en"), size: .silent) == nil)
     }
 
-    @Test func directRoutesSendNoPrimer() async {
+    /// Only MAI through OpenRouter was measured, so only it primes: Grok through OpenRouter and the direct routes send
+    /// none.
+    @Test func onlyMAIThroughOpenRouterPrimes() async {
         let stub = StubHost(reply: .fixture("success"))
         #expect(stub.provider().hasPrimer)
+        stub.settings.route = .openRouterGrok
+        #expect(stub.provider().hasPrimer == false)
+        #expect(await stub.provider().prime(language: Locale.Language(identifier: "en"), size: .large) == nil)
         stub.settings.route = .xaiGrok
 
         #expect(stub.provider().hasPrimer == false)
@@ -85,8 +90,9 @@ struct OpenRouterPrimerTests {
                 ]))
     }
 
-    /// The bodies are built once and kept: a later primer copies and encodes nothing.
-    @Test func primerBodiesAreBuiltOnce() async throws {
+    /// The large body (about 512 KB) is built for each cold primer, off the pipeline actor, and released after its
+    /// send, so it never stays in the idle footprint; the silent body is tiny and kept.
+    @Test func theSilentBodyIsKeptAndTheLargeOneIsNot() async throws {
         let stub = StubHost(reply: .fixture("success"))
         let provider = stub.provider()
         let english = Locale.Language(identifier: "en")
@@ -100,21 +106,19 @@ struct OpenRouterPrimerTests {
         #expect(bodies.count == 4)
         #expect(bodies[0] == bodies[1])
         #expect(bodies[2] == bodies[3])
-        #expect(provider.primerBodyBuilds == 2)
+        #expect(provider.primerBodyBuilds == 1)
+        #expect(provider.keptPrimerBytes < 1_024)
     }
 
-    /// A kept body follows the request fields: a changed route option builds a new one.
-    @Test func aChangedRouteOptionBuildsANewPrimerBody() async throws {
+    /// A kept body follows the request fields: another language builds a new one.
+    @Test func anotherLanguageBuildsANewPrimerBody() async throws {
         let stub = StubHost(reply: .fixture("success"))
-        stub.settings.route = .openRouterGrok
         let provider = stub.provider()
-        let english = Locale.Language(identifier: "en")
 
-        _ = await provider.prime(language: english, size: .silent)
-        stub.settings.isGrokFormatOn = true
-        _ = await provider.prime(language: english, size: .silent)
+        _ = await provider.prime(language: Locale.Language(identifier: "en"), size: .silent)
+        _ = await provider.prime(language: Locale.Language(identifier: "hi"), size: .silent)
 
         #expect(provider.primerBodyBuilds == 2)
-        #expect(try #require(stub.requests.last).json().xaiOptions["format"] as? Bool == true)
+        #expect(try #require(stub.requests.last).json()["language"] as? String == "hi")
     }
 }

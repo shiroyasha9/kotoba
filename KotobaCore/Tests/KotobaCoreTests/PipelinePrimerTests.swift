@@ -281,4 +281,21 @@ struct PipelinePrimerTests {
 
         #expect(await world.provider.primeSizes == [.large, .silent, .silent])
     }
+
+    /// A route picked in the menu during a recording applies from the next primer: a route with none stops them.
+    @Test func aSwitchToARouteWithNoPrimerStopsTheRePrimes() async {
+        let world = FakeWorld(transcript: "switched")
+        let pipeline = world.makePipeline()
+        let interval = DictationPipeline.Settings(audioDirectory: URL(filePath: "/tmp")).primerInterval
+
+        await pipeline.tap(world)
+        await pipeline.settle()
+        world.provider.switchRoute(hasPrimer: false)
+        world.clock.advance(by: interval * 3)
+        await pipeline.settle()
+
+        let now = world.clock.now
+        #expect(await world.provider.primes == 1)
+        #expect(!world.clock.deadlines.contains { $0 > now && $0 <= now + interval })
+    }
 }

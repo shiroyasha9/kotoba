@@ -47,7 +47,7 @@ final class XAIProvider: RouteClient {
     }
 
     /// No primer: this route's cold start is not measured (docs/research/latency-pass.md).
-    var hasPrimer: Bool { false }
+    func hasPrimer(_ route: TranscriptionRoute) -> Bool { false }
 
     /// Never called: `hasPrimer` is false.
     func prime(_ options: TranscriptionSettings.RouteOptions, language: Locale.Language, size: PrimerSize) async

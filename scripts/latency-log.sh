@@ -6,8 +6,9 @@
 # The providers' upload lines ("upload <model>: reused ..., upload N ms, wait N ms") are summed apart: `wait` is the
 # last body byte handed to the network stack to the first byte of the answer. Primer lines ("upload primer <model>:")
 # are summed on their own; cleanup lines ("upload cleanup ...") are left out.
-# Each set is split by the quiet time before it (since the previous dictation or upload): the upstream path of
-# OpenRouter answers slower after a quiet minute (docs/research/latency-pass.md).
+# Each set is split by the quiet time before it: for a dictation from the last paste to its key-down, for an upload line
+# since the previous upload. The upstream path of OpenRouter answers slower after a quiet minute
+# (docs/research/latency-pass.md).
 # Usage: make latency-log               # the release app, last 7 days
 #        make latency-log DEV=1 LAST=2d # kotoba Dev (App/Install.swift), last 2 days
 #        make latency-log FROM=<file>   # a saved `log show --style compact` copy
@@ -44,8 +45,12 @@ lines |
   / stopToPasteMs=/ {
     now = seconds($1, $2); split("", m)
     for (i = 1; i <= NF; i++) if (split($i, kv, "=") == 2) m[kv[1]] = kv[2]
-    gap = (lastDictation == "" || now - lastDictation >= quiet) ? "after a quiet minute" : "within a minute"
-    lastDictation = now
+    if (!("pasteSent" in m)) next
+    # The line comes right after the paste, so its key-down was pasteSent ms before it: the quiet time runs from the
+    # last paste to this key-down, and the dictation itself does not count.
+    keyDown = now - m["pasteSent"] / 1000
+    gap = (lastPaste == "" || keyDown - lastPaste >= quiet) ? "after a quiet minute" : "within a minute"
+    lastPaste = now
     if ("cleanStart" in m || !("stop" in m) || !("uploadStart" in m) || !("response" in m) || !("pasteSent" in m)) next
     gated = m["audioMs"] >= 10000 && m["audioMs"] <= 20000
     for (pass = 1; pass <= 2; pass++) {

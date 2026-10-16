@@ -7,9 +7,10 @@ import Synchronization
 // rest warms only with the bytes sent, so a cold route gets a large one (docs/research/latency-pass.md, section 2.1).
 
 extension OpenRouterProvider {
-    var hasPrimer: Bool { true }
+    /// Only MAI was measured (latency-pass.md); Grok through OpenRouter gets no primer.
+    func hasPrimer(_ route: TranscriptionRoute) -> Bool { route == .openRouterMAI }
 
-    /// The route's model, language and data policy and no dictionary terms, from a body built once (`PrimerBodies`). A
+    /// The route's model, language and data policy and no dictionary terms (`PrimerBodies` says which body is kept). A
     /// failure only means the next answer pays the cold start.
     func prime(
         _ options: TranscriptionSettings.RouteOptions, language: Locale.Language, size: PrimerSize
@@ -17,7 +18,8 @@ extension OpenRouterProvider {
         let label = "primer \(options.route.rawValue)"
         let fields = Self.fields(terms: [], language: language, options: options)
         guard
-            let body = try? primerBodies.body(size, fields: fields, make: Self.primerBody),
+            let body = try? size == .silent
+                ? primerBodies.silent(fields: fields, make: Self.primerBody) : Self.primerBody(.large, fields: fields),
             let reply = try? await connection.send(
                 baseURL.appending(path: "audio/transcriptions"), contentType: "application/json", label: label,
                 body: .data(body)),
@@ -29,8 +31,6 @@ extension OpenRouterProvider {
         return Transcript(text: answer.text ?? "", usage: usage, model: options.route.rawValue)
     }
 
-    var primerBodyBuilds: Int { primerBodies.builds }
-
     /// Half a second of 16 kHz mono silence as FLAC (110 bytes), in base64: `flac --best --no-padding --no-seektable`
     /// on the output of `ffmpeg -f lavfi -i anullsrc=r=16000:cl=mono -t 0.5 -c:a pcm_s16le`. MAI bills it as one
     /// second.
@@ -39,14 +39,18 @@ extension OpenRouterProvider {
         + "MDIxMQAAAAD/+MUIAG8AAABlVf/4dQgBDz/iAAAAZoI="
 
     /// The JSON body: `input_audio` first, then the other fields. The large one is built in one buffer of its final
-    /// size, its WAV made and base64-encoded in place, so the kept body is all the build leaves in memory
-    /// (latency-pass.md, section 3).
+    /// size, its WAV made and base64-encoded in place, so the build allocates nothing else. The buffer is pages of its
+    /// own (`mmap`): its release gives them back to the system, where a `malloc` buffer of this size stayed in the
+    /// footprint after `free` (probe: 32 KiB against 544 KiB after release; latency-pass.md, section 3).
     private static func primerBody(_ size: PrimerSize, fields: RequestFields) throws -> Data {
         let format = size == .silent ? "flac" : "wav"
         let prefix = Data(#"{"input_audio":{"format":"\#(format)","data":""#.utf8)
         let suffix = Data(#""},"#.utf8) + (try ProviderHTTP.encode(fields).dropFirst())  // Drop the object's "{".
         guard size == .large else { return prefix + Data(primerAudio.utf8) + suffix }
-        var body = Data(count: prefix.count + Base64Writer.length(of: noiseWAVBytes) + suffix.count)
+        let count = prefix.count + Base64Writer.length(of: noiseWAVBytes) + suffix.count
+        let pages: UnsafeMutableRawPointer = mmap(nil, count, PROT_READ | PROT_WRITE, MAP_PRIVATE | MAP_ANON, -1, 0)
+        guard pages != MAP_FAILED else { throw POSIXError(POSIXErrorCode(rawValue: errno) ?? .ENOMEM) }
+        var body = Data(bytesNoCopy: pages, count: count, deallocator: .unmap)
         body.withUnsafeMutableBytes { out in
             out.copyBytes(from: prefix)
             var writer = Base64Writer(into: out, at: prefix.count)
@@ -141,21 +145,21 @@ private struct Base64Writer {
     }
 }
 
-/// The primer bodies, one per size for the last request fields (route, language, data policy, route options): built at
-/// the first primer of that kind and kept, so a primer copies no audio and encodes nothing. The large one holds about
-/// 512 KB (its base64).
+/// The silent primer's body for the last request fields (route, language, data policy, route options), built at its
+/// first primer and kept: it is under 1 KB. The large body (about 512 KB) is not kept: each cold primer builds it, off
+/// the pipeline actor (about 1.2 ms), and lets it go after its send, so it never stays in the idle footprint.
 final class PrimerBodies: Sendable {
-    private let kept = Mutex<(bodies: [PrimerSize: (fields: RequestFields, body: Data)], builds: Int)>(([:], 0))
+    private let kept = Mutex<(silent: (fields: RequestFields, body: Data)?, builds: Int)>((nil, 0))
 
+    /// Silent bodies built so far, for the tests.
     var builds: Int { kept.withLock { $0.builds } }
+    var keptBytes: Int { kept.withLock { $0.silent?.body.count ?? 0 } }
 
-    func body(
-        _ size: PrimerSize, fields: RequestFields, make: (PrimerSize, RequestFields) throws -> Data
-    ) throws -> Data {
-        if let entry = kept.withLock({ $0.bodies[size] }), entry.fields == fields { return entry.body }
-        let body = try make(size, fields)
+    func silent(fields: RequestFields, make: (PrimerSize, RequestFields) throws -> Data) throws -> Data {
+        if let entry = kept.withLock({ $0.silent }), entry.fields == fields { return entry.body }
+        let body = try make(.silent, fields)
         kept.withLock {
-            $0.bodies[size] = (fields, body)
+            $0.silent = (fields, body)
             $0.builds += 1
         }
         return body

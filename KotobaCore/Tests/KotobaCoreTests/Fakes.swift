@@ -68,7 +68,7 @@ actor FakeTranscriptionProvider: TranscriptionProvider {
 
     init(transcript: String, hasPrimer: Bool = true) {
         self.transcript = transcript
-        self.hasPrimer = hasPrimer
+        primerOn = Mutex(hasPrimer)
     }
 
     func fail(with error: (any Error)?) {
@@ -102,8 +102,14 @@ actor FakeTranscriptionProvider: TranscriptionProvider {
 
     func warmUp() async {}
 
-    /// Whether the route has a primer; false acts as a direct route.
-    nonisolated let hasPrimer: Bool
+    /// Whether the route has a primer; false acts as a direct route. `switchRoute(hasPrimer:)` changes it, as a route
+    /// picked in the menu does.
+    private let primerOn: Mutex<Bool>
+    nonisolated var hasPrimer: Bool { primerOn.withLock { $0 } }
+
+    nonisolated func switchRoute(hasPrimer: Bool) {
+        primerOn.withLock { $0 = hasPrimer }
+    }
     /// How many primers the pipeline sent, and what each answers: nil (an answer with no cost) by default.
     var primes: Int { primeSizes.count }
     /// Each primer's size, in order.
