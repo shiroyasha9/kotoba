@@ -62,7 +62,7 @@ enum SettingsPaneID: String, Hashable, CaseIterable {
     /// The line under the pane's title at the top of the pane.
     var summary: String {
         switch self {
-        case .general: "Your shortcut, how kotoba starts, and what it shows while you dictate."
+        case .general: "Your shortcuts, how kotoba starts, and what it shows while you dictate."
         case .speech: "The speech model that turns your voice into text, and its key."
         case .dictionary: "Names and terms kotoba should know, and words to replace."
         case .modes: "How kotoba cleans up text in each app."
