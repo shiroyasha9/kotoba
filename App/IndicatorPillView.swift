@@ -196,7 +196,8 @@ final class IndicatorPillView: NSView {
             case .round: NSEdgeInsets()
             }
         meter.isVertical = layout == .vertical
-        dot.isHidden = isRound || content.symbol != nil
+        // The spinner is the state while kotoba works, so a dot beside it would say it twice (owner, 2026-10-17).
+        dot.isHidden = isRound || content.symbol != nil || content.showsSpinner
         symbolView.isHidden = isRound || content.symbol == nil
         label.isHidden = !isHorizontal
         meter.isHidden = isRound || !content.showsMeter
