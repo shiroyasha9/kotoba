@@ -32,7 +32,9 @@ struct HistoryView: View {
             .alert("Couldn’t Transcribe Again", isPresented: $model.isTranscribeFailureShown) {
                 Button("OK") {}
             } message: {
-                Text("The speech model didn’t answer, or heard no words. The text stays as it was.")
+                Text(
+                    "The speech model didn’t answer, or heard no words. The text stays as it was, and the audio stays "
+                        + "saved, so you can try again.")
             }
             .alert("Couldn’t Delete", isPresented: $model.isDeleteFailureShown) {
                 Button("OK") {}
@@ -113,7 +115,7 @@ struct HistoryView: View {
             Button("Retry", systemImage: "arrow.clockwise") {
                 if model.canRetry(records) { model.retry(records) } else { model.transcribeAgain(records) }
             }
-            .help("Transcribe the saved audio again")
+            .help(model.canRetry(records) ? "Transcribe the saved audio again" : Self.transcribeAgainHelp)
             .disabled(!model.canRetry(records) && !model.canTranscribeAgain(records))
             if model.isPlaying(records) {
                 Button("Stop", systemImage: "stop.fill") { model.togglePlay(records) }
@@ -170,6 +172,7 @@ struct HistoryView: View {
     private func transcribeAgainItems(for records: [DictationRecord]) -> some View {
         let isEnabled = model.canTranscribeAgain(records)
         Button("Transcribe Again") { model.transcribeAgain(records) }
+            .help(Self.transcribeAgainHelp)
             .disabled(!isEnabled)
         let others = model.otherSpeechModels
         if !others.isEmpty {
@@ -181,6 +184,11 @@ struct HistoryView: View {
             .disabled(!isEnabled)
         }
     }
+
+    /// Transcribe Again keeps no copy of the old text: the audio is what can bring a text back.
+    private static let transcribeAgainHelp =
+        "Transcribe the saved audio again. The new text replaces this one; the audio stays saved, so you can do it "
+        + "again at any time."
 
     private var deleteTitle: String {
         let count = model.pendingDelete?.count ?? 0
