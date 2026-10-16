@@ -52,12 +52,14 @@ extension MainWindow {
     static func readmeSnapshot(
         of panes: [Pane], selecting id: Pane.ID, named name: String, isScrolledToEnd: Bool = false
     ) -> Snapshot {
-        Snapshots.fixedWindow(named: name, size: NSSize(width: 960, height: 610), check: overflow) {
+        var snapshot = Snapshots.fixedWindow(named: name, size: NSSize(width: 960, height: 610), check: overflow) {
             MainView(panes: panes, selection: Selection(panes: panes, showing: id))
                 .environment(\.drawsSidebarColors, true)
                 .defaultScrollAnchor(isScrolledToEnd ? .bottom : nil)
                 .toggleStyle(ActiveSwitchStyle())
         }
+        snapshot.scale = 2
+        return snapshot
     }
 
     /// Content that left the window's bounds: a pane taller than the window moves the split view.

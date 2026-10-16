@@ -54,6 +54,8 @@ final class HomeModel {
     let reader: PaneReader<Figures>
     let apps = InstalledApps()
     private let source: Source?
+    /// Which chart day is today.
+    private let now: @MainActor () -> Date
     /// The last Copy, which a pasteboard write ends at once; the next Copy replaces it.
     private var copying: Task<Void, Never>?
 
@@ -62,15 +64,17 @@ final class HomeModel {
         self.chords = chords
         identity = .running
         self.source = source
+        now = { .now }
         reader = PaneReader("Home") { try await source.read(.now) }
     }
 
-    /// For snapshots: fixed figures, no store.
+    /// For snapshots: fixed figures, no store, at `Snapshots.sampleNow`.
     init(readiness: Readiness, chords: HotkeyChords, figures: Figures, identity: Identity = .running) {
         self.readiness = readiness
         self.chords = chords
         self.identity = identity
         source = nil
+        now = { Snapshots.sampleNow }
         reader = PaneReader(value: figures)
     }
 
@@ -81,7 +85,7 @@ final class HomeModel {
 
     /// Words and dictations today: the last chart day when it is today.
     var today: DictationInsights.Day? {
-        reader.value?.insights.days.last.flatMap { Calendar.current.isDateInToday($0.start) ? $0 : nil }
+        reader.value?.insights.days.last.flatMap { Calendar.current.isDate($0.start, inSameDayAs: now()) ? $0 : nil }
     }
 
     /// The history was written: a shown Home reads again.

@@ -241,7 +241,7 @@ extension HomeModel {
     private static func sample(
         _ rows: [DictationRecord] = HistoryController.sampleRows(), identity: Identity = .running
     ) -> HomeModel {
-        let today = Calendar.current.startOfDay(for: .now)
+        let today = Calendar.current.startOfDay(for: Snapshots.sampleNow)
         let insights = DictationInsights(
             dictations: 1_204, wordsThisWeek: 3_575, wordsThisMonth: 12_840, words: 48_310, streak: 5,
             isTodayInStreak: true, days: [.init(start: today, words: 640, dictations: 14)])

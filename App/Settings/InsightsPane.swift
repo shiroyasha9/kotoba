@@ -227,7 +227,7 @@ extension InsightsModel {
     /// Two months of synthetic use: a streak that includes today, quiet weekends, four apps and a few learned words.
     static var sample: InsightsModel {
         let calendar = Calendar.current
-        let today = calendar.startOfDay(for: Date(timeIntervalSince1970: 1_800_000_000))
+        let today = calendar.startOfDay(for: Snapshots.sampleNow)
         let words = [
             420, 610, 0, 0, 540, 720, 380, 655, 510, 90, 0, 830, 760, 590, 640, 470, 0, 0, 910, 680, 720, 560, 805,
             120, 0, 690, 740, 610, 880, 350,

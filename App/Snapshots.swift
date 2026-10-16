@@ -12,6 +12,9 @@ struct Snapshot {
     /// Lets the run loop turn once the view is in its window, then lays it out again: a `List` sets each row's
     /// measured height in that turn, so without it a row of two lines draws as one, cut off.
     var settlesInWindow = false
+    /// Pixels per point; nil draws at the main screen's scale. The README images are always 2x, whatever screen the
+    /// run has.
+    var scale: CGFloat?
 }
 
 /// `make snapshots` launches the app binary with `--snapshots <folder>`. Before the app starts,
@@ -25,6 +28,10 @@ struct Snapshot {
 /// An explicit color or an AppKit label on the same glass draws right (docs/research/native-ui.md).
 @MainActor
 enum Snapshots {
+    /// The time every sample shows as now (2027-01-15 08:00 UTC): images change only when the UI changes, and the
+    /// public README images carry no render time.
+    static let sampleNow = Date(timeIntervalSince1970: 1_800_000_000)
+
     /// Each feature adds one line with its own snapshot list.
     private static let registry: [@MainActor () -> [Snapshot]] = [
         IndicatorPanel.snapshots,
@@ -202,7 +209,8 @@ enum Snapshots {
         // The window holds the backdrop's appearance while it draws, so it lives until the image is made.
         let window = try layOut(snapshot, in: appearance)
         guard let backdrop = window.contentView,
-            let bitmap = backdrop.bitmapImageRepForCachingDisplay(in: backdrop.bounds)
+            let bitmap = snapshot.scale.map({ bitmap(of: backdrop, scale: $0) })
+                ?? backdrop.bitmapImageRepForCachingDisplay(in: backdrop.bounds)
         else {
             throw SnapshotError.noBitmap(snapshot.name)
         }
@@ -211,6 +219,17 @@ enum Snapshots {
             throw SnapshotError.noBitmap(snapshot.name)
         }
         return png
+    }
+
+    /// A bitmap of `view`'s bounds at `scale` pixels per point, in sRGB as the screen's bitmaps are.
+    private static func bitmap(of view: NSView, scale: CGFloat) -> NSBitmapImageRep? {
+        let size = view.bounds.size
+        let bitmap = NSBitmapImageRep(
+            bitmapDataPlanes: nil, pixelsWide: Int(size.width * scale), pixelsHigh: Int(size.height * scale),
+            bitsPerSample: 8, samplesPerPixel: 4, hasAlpha: true, isPlanar: false, colorSpaceName: .deviceRGB,
+            bytesPerRow: 0, bitsPerPixel: 0)?.retagging(with: .sRGB)
+        bitmap?.size = size
+        return bitmap
     }
 
     /// Builds the snapshot's view and lays it out in a borderless window that is never ordered on screen, over the window
