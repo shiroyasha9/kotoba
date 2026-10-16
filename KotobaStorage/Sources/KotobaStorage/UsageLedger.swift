@@ -111,18 +111,22 @@ extension HistoryStore {
     /// The apps that got words at or after `start`, most words first, at most `limit`: the Modes pane's Add menu. One
     /// range read on the ledger's `time` index, the same one `usage` runs for its app list.
     public func recentApps(since start: Date, limit: Int) throws -> [DictationApp] {
-        try topApps(from: start, to: .distantFuture, limit: limit).map(\.app)
+        try topApps(from: start, to: nil, limit: limit).map(\.app)
     }
 
-    func topApps(from start: Date, to end: Date, limit: Int) throws -> [UsageSummary.AppWords] {
+    /// A nil bound is left out of the query: with no bound at all it scans the table, which costs less than a range
+    /// over the whole `time` index (one row lookup per entry).
+    func topApps(from start: Date?, to end: Date?, limit: Int) throws -> [UsageSummary.AppWords] {
+        let bounds = [start.map { ("time >= ", $0) }, end.map { ("time < ", $0) }].compactMap(\.self)
+        let range = bounds.indices.map { "\(bounds[$0].0)?\($0 + 2) AND " }.joined()
         // With one max() in the query, the bare `app_name` comes from the newest answer of each app.
-        try database.query(
+        return try database.query(
             """
             SELECT app_bundle_id, app_name, sum(words) AS words, max(time) FROM usage_ledger
-            WHERE time >= ?1 AND time < ?2 AND app_bundle_id IS NOT NULL
-            GROUP BY app_bundle_id ORDER BY words DESC, app_bundle_id LIMIT ?3;
+            WHERE \(range)app_bundle_id IS NOT NULL
+            GROUP BY app_bundle_id ORDER BY words DESC, app_bundle_id LIMIT ?1;
             """,
-            [.real(start.timeIntervalSince1970), .real(end.timeIntervalSince1970), .integer(Int64(limit))]
+            [.integer(Int64(limit))] + bounds.map { .real($0.1.timeIntervalSince1970) }
         ).compactMap { row in
             row[0].string.map {
                 .init(app: DictationApp(bundleID: $0, name: row[1].string), words: Int(row[2].integer ?? 0))

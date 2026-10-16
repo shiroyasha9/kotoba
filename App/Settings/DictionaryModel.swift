@@ -35,6 +35,8 @@ final class DictionaryModel {
 
     @ObservationIgnored private let store: DictionaryStore
     @ObservationIgnored private let onChange: @MainActor (PersonalDictionary) async -> Void
+    /// After each write to the store, so a reader of its learned words (Insights) reads again only then.
+    @ObservationIgnored private let onSaved: @MainActor () -> Void
     /// Each edit goes to the pipeline and then to disk, one edit after another, so both end with the last edit.
     @ObservationIgnored private var saving: Task<Void, Never>?
     @ObservationIgnored private var reading: Task<Void, Never>?
@@ -42,11 +44,12 @@ final class DictionaryModel {
     /// `suggestions` given (snapshots) skips reading them from the store.
     init(
         dictionary: PersonalDictionary, store: DictionaryStore, suggestions: [DictionarySuggestion]? = nil,
-        onChange: @escaping @MainActor (PersonalDictionary) async -> Void
+        onSaved: @escaping @MainActor () -> Void = {}, onChange: @escaping @MainActor (PersonalDictionary) async -> Void
     ) {
         self.dictionary = dictionary
         self.store = store
         self.onChange = onChange
+        self.onSaved = onSaved
         if let suggestions {
             self.suggestions = suggestions
         } else {
@@ -223,6 +226,7 @@ final class DictionaryModel {
         saving = Task {
             await previous?.value
             await work()
+            onSaved()
             await refreshSuggestions()
         }
     }

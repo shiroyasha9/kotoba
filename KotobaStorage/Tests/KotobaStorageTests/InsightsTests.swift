@@ -133,6 +133,32 @@ struct InsightsTests {
         #expect(insights.streak == 3)
     }
 
+    /// The day the clocks go back has 25 hours: a dictation late that evening is not on the next day.
+    @Test func daysFollowTheLocalCalendarWhenTheClocksGoBack() async throws {
+        var newYork = Calendar(identifier: .gregorian)
+        newYork.timeZone = try #require(TimeZone(identifier: "America/New_York"))
+        let store = try makeStore()
+        try await store.addUsage(
+            try [(10, 31), (11, 1), (11, 2)].map { speech(at: try date($0, $1, 23, minute: 30, in: newYork)) })
+
+        let insights = try await store.insights(at: try date(11, 2, 23, minute: 45, in: newYork), in: newYork)
+
+        #expect(insights.days.suffix(4).map(\.dictations) == [0, 1, 1, 1])
+        #expect(insights.streak == 3)
+    }
+
+    /// A row dated after the end of this week or month (a clock set ahead) counts in all time only.
+    @Test func weekAndMonthEndAtTheirLastDay() async throws {
+        let store = try makeStore()
+        try await store.addUsage([speech(at: try date(10, 14)), speech(at: try date(11, 20))])
+
+        let insights = try await store.insights(at: try date(10, 14, 18), in: Self.india)
+
+        #expect(insights.wordsThisWeek == 30)
+        #expect(insights.wordsThisMonth == 30)
+        #expect(insights.words == 60)
+    }
+
     /// Deleting dictations leaves the ledger, and the figures, as they were.
     @Test func topAppsAreByWordsAndOutliveDeletedDictations() async throws {
         let store = try makeStore()

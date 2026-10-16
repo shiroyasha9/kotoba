@@ -69,19 +69,19 @@ extension HistoryStore {
     /// The figures at `now` in `calendar`: one scan of the ledger for the totals, one day-range read per chart day on
     /// its `time` index, the top apps, and for a streak longer than the chart one more read per year of it.
     public func insights(at now: Date, in calendar: Calendar, apps: Int = 5) throws -> DictationInsights {
-        let week = calendar.dateInterval(of: .weekOfYear, for: now)?.start ?? now
-        let month = calendar.dateInterval(of: .month, for: now)?.start ?? now
+        let week = calendar.dateInterval(of: .weekOfYear, for: now) ?? DateInterval(start: now, duration: 0)
+        let month = calendar.dateInterval(of: .month, for: now) ?? DateInterval(start: now, duration: 0)
         let speech = "kind = '\(UsageEntry.Kind.speech.rawValue)' AND spoken_words > 0"
         let totals = try database.query(
             """
             SELECT count(DISTINCT CASE WHEN \(speech) THEN dictation_id END),
-                coalesce(sum(CASE WHEN time >= ?1 THEN words END), 0),
-                coalesce(sum(CASE WHEN time >= ?2 THEN words END), 0), coalesce(sum(words), 0),
+                coalesce(sum(CASE WHEN time >= ?1 AND time < ?2 THEN words END), 0),
+                coalesce(sum(CASE WHEN time >= ?3 AND time < ?4 THEN words END), 0), coalesce(sum(words), 0),
                 coalesce(sum(CASE WHEN \(speech) THEN spoken_words END), 0),
                 coalesce(sum(CASE WHEN \(speech) THEN audio_ms END), 0),
                 min(CASE WHEN \(speech) THEN time END)
             FROM usage_ledger;
-            """, [.real(week.timeIntervalSince1970), .real(month.timeIntervalSince1970)])
+            """, [week.start, week.end, month.start, month.end].map { .real($0.timeIntervalSince1970) })
         guard let row = totals.first, let count = row[0].integer, count > 0, case .real(let first) = row[6] else {
             return DictationInsights()
         }
@@ -95,7 +95,7 @@ extension HistoryStore {
             dictations: number(0), wordsThisWeek: number(1), wordsThisMonth: number(2), words: number(3),
             spokenWords: number(4), speakingTime: .milliseconds(number(5)), streak: streak,
             isTodayInStreak: isTodayInStreak, days: days,
-            apps: try topApps(from: .distantPast, to: .distantFuture, limit: apps))
+            apps: try topApps(from: nil, to: nil, limit: apps))
     }
 
     /// Counts back from the newest of `recent` (the days before today, or up to today) to the first day with no

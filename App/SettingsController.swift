@@ -24,7 +24,8 @@ final class SettingsController {
     var pipeline: DictationPipeline?
     /// The last change sent to the pipeline: each waits for the one before, so the pipeline gets them in order.
     private var modesUpdate: Task<Void, Never>?
-    /// The open window's Usage and Insights pane models, which read again after each history write while shown.
+    /// The open window's Usage and Insights pane models, which read again after each history write while shown;
+    /// Insights also after each dictionary write.
     private weak var usage: UsageModel?
     private weak var insights: InsightsModel?
     /// The open window's General pane model; its History section measures the saved audio again the same way.
@@ -51,8 +52,11 @@ final class SettingsController {
             let loaded = try await store.load()
             dictionaryStore = store
             await pipeline.updateDictionary(loaded)
-            // The model calls this inside its serial save chain, so edits reach the pipeline in order.
-            dictionary = DictionaryModel(dictionary: loaded, store: store) { await pipeline.updateDictionary($0) }
+            // The model calls both inside its serial save chain, so edits reach the pipeline in order, and Insights
+            // reads the learned words after they are on disk.
+            dictionary = DictionaryModel(
+                dictionary: loaded, store: store, onSaved: { [weak self] in self?.insights?.storeChanged() },
+                onChange: { await pipeline.updateDictionary($0) })
         } catch {
             Log.app.error("Cannot open the dictionary: \(error)")
         }
@@ -66,7 +70,7 @@ final class SettingsController {
         case .deleted: usage?.historyChanged()
         case .saved, .usageAdded:
             usage?.historyChanged()
-            insights?.historyChanged()
+            insights?.storeChanged()
         }
         general?.audio?.historyChanged()
     }
@@ -101,8 +105,10 @@ final class SettingsController {
             let usage = UsageModel { try await history.usage(from: $0, to: .distantFuture) }
             self.usage = usage
             panes.append(.usage(usage))
-            let insights = InsightsModel { [dictionaryStore] now in
-                async let learned = dictionaryStore?.learnedWords() ?? [:]
+            // The dictionary at the read: Settings can open before it is read at launch.
+            let insights = InsightsModel { [weak self] now in
+                let dictionary = self?.dictionaryStore
+                async let learned = dictionary?.learnedWords() ?? [:]
                 return .init(history: try await history.insights(at: now, in: .current), learned: try await learned)
             }
             self.insights = insights

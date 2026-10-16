@@ -14,8 +14,8 @@ extension SettingsPane {
 }
 
 /// How the owner dictates: speaking speed, streak, time saved, words, learned words and top apps. Built with each
-/// Settings window; it reads the usage ledger and the dictionary when the pane appears and after each history write
-/// while it is shown, so nothing runs at idle.
+/// Settings window; it reads the usage ledger and the dictionary when the pane appears, and while it is shown after
+/// each write to either and when the day changes, so nothing runs at idle.
 @MainActor
 @Observable
 final class InsightsModel {
@@ -30,14 +30,14 @@ final class InsightsModel {
 
     private(set) var figures: Figures?
     private(set) var isLoadFailed = false
-    /// Each top app's name and icon by bundle ID, read once per load, not at each draw.
+    /// Each top app's name and icon by bundle ID, looked up once for the model's life, not at each read or draw.
     private(set) var names: [String: String] = [:]
     private(set) var icons: [String: NSImage] = [:]
 
     /// The figures at a date. Nil for snapshots, which set the figures themselves.
     @ObservationIgnored private let read: (@MainActor (_ now: Date) async throws -> Figures)?
-    /// The read in progress; a history write during it asks for one more read after it, so a burst of writes costs
-    /// at most two reads.
+    /// The read in progress; a write during it asks for one more read after it, so a burst of writes costs at most two
+    /// reads.
     @ObservationIgnored private var reading: Task<Void, Never>?
     @ObservationIgnored private var isReadDue = false
     @ObservationIgnored private var isShown = false
@@ -65,8 +65,9 @@ final class InsightsModel {
         reading = nil
     }
 
-    /// A dictation was saved or deleted: a shown pane reads again; a hidden one reads when it appears.
-    func historyChanged() {
+    /// The ledger or the dictionary was written, or the day changed: a shown pane reads again; a hidden one reads when
+    /// it appears.
+    func storeChanged() {
         guard isShown else { return }
         reload()
     }
@@ -85,6 +86,8 @@ final class InsightsModel {
                     // `hide()` cancelled it; a newer read may already be running.
                     guard !Task.isCancelled else { return }
                     isLoadFailed = false
+                    // Most writes change no figure (a dictation's first save has no answer yet): no redraw then.
+                    guard loaded != figures else { continue }
                     figures = loaded
                     readApps()
                 } catch {
@@ -100,14 +103,16 @@ final class InsightsModel {
 
     /// A row keeps the app's name from its newest dictation; an app kept without one gets its installed name.
     private func readApps() {
-        var names: [String: String] = [:]
-        var icons: [String: NSImage] = [:]
         for app in figures?.history.apps.map(\.app) ?? [] {
-            names[app.bundleID] = app.name ?? InstalledApp.name(of: app.bundleID) ?? "Unknown app"
-            icons[app.bundleID] = InstalledApp.icon(of: app.bundleID)
+            if let name = app.name, names[app.bundleID] != name {
+                names[app.bundleID] = name
+            } else if app.name == nil, names[app.bundleID] == nil {
+                names[app.bundleID] = InstalledApp.name(of: app.bundleID) ?? "Unknown app"
+            }
+            if icons[app.bundleID] == nil {
+                icons[app.bundleID] = InstalledApp.icon(of: app.bundleID)
+            }
         }
-        self.names = names
-        self.icons = icons
     }
 }
 
@@ -146,6 +151,12 @@ private struct InsightsPane: View {
         .formStyle(.grouped)
         .onAppear(perform: model.show)
         .onDisappear(perform: model.hide)
+        // Today, the streak and the chart move at midnight; the task ends when the pane goes.
+        .task {
+            for await _ in NotificationCenter.default.notifications(named: .NSCalendarDayChanged) {
+                model.storeChanged()
+            }
+        }
     }
 
     private func highlights(_ insights: DictationInsights) -> some View {
@@ -185,22 +196,24 @@ private struct InsightsPane: View {
         }
     }
 
-    private func learned(_ learned: [SuggestionCandidate.Origin: Int]) -> some View {
-        let edits = learned[.edit] ?? 0
-        let fixes = learned[.fix] ?? 0
-        let parts = [
-            edits > 0 ? "\(edits.formatted()) from your edits" : nil,
-            fixes > 0 ? "\(fixes.formatted()) from Fix Last Dictation" : nil,
-        ]
+    private typealias Origin = SuggestionCandidate.Origin
+
+    private func learned(_ learned: [Origin: Int]) -> some View {
+        // Every origin counts; the two that exist today get a part each.
+        let total = learned.values.reduce(0, +)
+        let parts = [(Origin.edit, "from your edits"), (.fix, "from Fix Last Dictation")].compactMap { origin, text in
+            learned[origin].flatMap { $0 > 0 ? "\($0.formatted()) \(text)" : nil }
+        }
         return Section("Learning") {
             LabeledContent {
-                Text((edits + fixes).formatted())
+                Text(total.formatted())
             } label: {
                 Text("Words learned")
-                Text(
-                    edits + fixes > 0
-                        ? parts.compactMap(\.self).joined(separator: " · ")
-                        : "kotoba learns a word when you correct a dictation.")
+                if total == 0 {
+                    Text("kotoba learns a word when you correct a dictation.")
+                } else if !parts.isEmpty {
+                    Text(parts.joined(separator: " · "))
+                }
             }
         }
     }
