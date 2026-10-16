@@ -155,7 +155,7 @@ extension DictationPipeline {
         let audio = await ports.audio.cancelCapture()
         await current.captureEvents.value
         await keep(current, audio: audio, as: .cancelled)
-        emit(inFlight.isEmpty ? .idle : .transcribing)
+        emit(inFlightState)
         resumeQuietWaiters()
     }
 
@@ -221,7 +221,7 @@ extension DictationPipeline {
         await ports.audio.discardCapture()
         await current.captureEvents.value
         _ = latencies.take(current.id)
-        emit(inFlight.isEmpty ? .idle : .transcribing)
+        emit(inFlightState)
         resumeQuietWaiters()
     }
 }

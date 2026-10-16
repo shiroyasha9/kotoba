@@ -219,6 +219,62 @@ struct PipelineModeTests {
         await pipeline.settle()
         #expect(await pipeline.state == .idle)
     }
+
+    @Test func aShortcutPressDuringACleanupLeavesThePillOnCleaning() async {
+        let gate = Gate()
+        let pipeline = world.makePipeline(
+            cleaner: FakeTextCleaner(result: .success("clean words"), gate: gate), modes: writingApp)
+        await pipeline.cleanupTap()
+        await pipeline.tap(world)
+        #expect(await eventually { await gate.hasWaiters })
+
+        // The chord was part of another app's shortcut: the press is discarded.
+        await pipeline.handle(.chordDown)
+        await pipeline.handle(.chordInterrupted)
+        await pipeline.handle(.chordUp)
+
+        #expect(await pipeline.state == .cleaning)
+        await gate.open()
+        await pipeline.settle()
+    }
+
+    @Test func aFinalCancelDuringACleanupLeavesThePillOnCleaning() async {
+        let gate = Gate()
+        let pipeline = world.makePipeline(
+            cleaner: FakeTextCleaner(result: .success("clean words"), gate: gate), modes: writingApp)
+        await pipeline.cleanupTap()
+        await pipeline.tap(world)
+        #expect(await eventually { await gate.hasWaiters })
+
+        await pipeline.tap(world)
+        await pipeline.handle(.escape)
+        world.clock.advance(by: .seconds(5))
+        // Not `settle()`: it would wait for the held cleanup too.
+        #expect(await eventually { await world.store.records.contains { $0.status == .cancelled } })
+
+        #expect(await pipeline.state == .cleaning)
+        await gate.open()
+        await pipeline.settle()
+    }
+
+    @Test func aPlainDictationPastedDuringACleanupLeavesThePillOnCleaning() async {
+        let gate = Gate()
+        let pipeline = world.makePipeline(
+            cleaner: FakeTextCleaner(result: .success("clean words"), gate: gate), modes: writingApp)
+        await pipeline.cleanupTap()
+        await pipeline.tap(world)
+        #expect(await eventually { await gate.hasWaiters })
+
+        await pipeline.tap(world)
+        await pipeline.tap(world)
+        #expect(await eventually { await world.paster.pasted == ["raw words"] })
+        #expect(await eventually { await pipeline.state != .transcribing })
+
+        #expect(await pipeline.state == .cleaning)
+        await gate.open()
+        await pipeline.settle()
+        #expect(await world.paster.pasted == ["raw words", "clean words"])
+    }
 }
 
 /// The rules alone: which mode an app gets, and what a dictation into it does.

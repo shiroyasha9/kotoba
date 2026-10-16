@@ -12,25 +12,10 @@ final class MicrophonePreferences: Sendable {
         var id: String { uid }
     }
 
-    private static let key = AppDefaults.Key.microphoneOrder.rawValue
-
+    /// Empty when none is saved, or the saved order cannot be read.
     var entries: [Entry] {
-        get {
-            guard let data = UserDefaults.standard.data(forKey: Self.key) else { return [] }
-            do {
-                return try JSONDecoder().decode([Entry].self, from: data)
-            } catch {
-                Log.audio.error("Unreadable microphone order, starting empty: \(error)")
-                return []
-            }
-        }
-        set {
-            do {
-                UserDefaults.standard.set(try JSONEncoder().encode(newValue), forKey: Self.key)
-            } catch {
-                Log.audio.error("Cannot save the microphone order: \(error)")
-            }
-        }
+        get { AppDefaults.decoded(at: .microphoneOrder, or: []) }
+        set { AppDefaults.encode(newValue, at: .microphoneOrder) }
     }
 
     var order: [String] { entries.map(\.uid) }

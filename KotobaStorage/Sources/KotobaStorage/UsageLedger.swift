@@ -92,13 +92,7 @@ extension HistoryStore {
                 count(*) - count(cost_nano_usd)
             FROM usage_ledger WHERE \(inRange) GROUP BY kind, model ORDER BY 3 DESC, 1 DESC, 2;
             """, range)
-        // With one max() in the query, the bare `app_name` comes from the newest answer of each app.
-        let topApps = try database.query(
-            """
-            SELECT app_bundle_id, app_name, sum(words) AS words, max(time) FROM usage_ledger
-            WHERE \(inRange) AND app_bundle_id IS NOT NULL
-            GROUP BY app_bundle_id ORDER BY words DESC, app_bundle_id LIMIT ?3;
-            """, range + [.integer(Int64(apps))])
+        let topApps = try topApps(from: start, to: end, limit: apps)
         guard let row = totals.first?.map({ Int($0.integer ?? 0) }) else { return UsageSummary() }
         return UsageSummary(
             dictations: row[0], words: row[1], audio: .milliseconds(row[2]), cost: Self.usd(nano: row[3]),
@@ -111,11 +105,29 @@ extension HistoryStore {
                     kind, model: model, cost: Self.usd(nano: Int(row[2].integer ?? 0)),
                     isEstimated: row[3].integer == 1, unpricedAnswers: Int(row[4].integer ?? 0))
             },
-            apps: topApps.compactMap { row in
-                row[0].string.map {
-                    .init(app: DictationApp(bundleID: $0, name: row[1].string), words: Int(row[2].integer ?? 0))
-                }
-            })
+            apps: topApps)
+    }
+
+    /// The apps that got words at or after `start`, most words first, at most `limit`: the Modes pane's Add menu. One
+    /// range read on the ledger's `time` index, the same one `usage` runs for its app list.
+    public func recentApps(since start: Date, limit: Int) throws -> [DictationApp] {
+        try topApps(from: start, to: .distantFuture, limit: limit).map(\.app)
+    }
+
+    private func topApps(from start: Date, to end: Date, limit: Int) throws -> [UsageSummary.AppWords] {
+        // With one max() in the query, the bare `app_name` comes from the newest answer of each app.
+        try database.query(
+            """
+            SELECT app_bundle_id, app_name, sum(words) AS words, max(time) FROM usage_ledger
+            WHERE time >= ?1 AND time < ?2 AND app_bundle_id IS NOT NULL
+            GROUP BY app_bundle_id ORDER BY words DESC, app_bundle_id LIMIT ?3;
+            """,
+            [.real(start.timeIntervalSince1970), .real(end.timeIntervalSince1970), .integer(Int64(limit))]
+        ).compactMap { row in
+            row[0].string.map {
+                .init(app: DictationApp(bundleID: $0, name: row[1].string), words: Int(row[2].integer ?? 0))
+            }
+        }
     }
 }
 

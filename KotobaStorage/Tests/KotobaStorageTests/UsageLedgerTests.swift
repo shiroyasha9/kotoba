@@ -198,6 +198,19 @@ struct UsageLedgerTests {
             ])
     }
 
+    @Test func recentAppsAreTheAppsSinceTheStartByWords() async throws {
+        let store = try HistoryStore(url: url, audio: audio)
+        try await save(
+            store, entry(at: 1_000, words: 50, app: Self.mail), entry(at: 2_000, words: 1, app: Self.notes),
+            entry(at: 3_000, words: 3, app: DictationApp(bundleID: "com.apple.Terminal", name: "Terminal")),
+            entry(at: 4_000, words: 9))
+
+        let recent = try await store.recentApps(since: Date(timeIntervalSince1970: 2_000), limit: 5)
+
+        #expect(recent == [DictationApp(bundleID: "com.apple.Terminal", name: "Terminal"), Self.notes])
+        #expect(try await store.recentApps(since: .distantPast, limit: 1) == [Self.mail])
+    }
+
     @Test func aQueuedRecordIsReadFreshOnlyWhileItIsQueued() async throws {
         let store = try HistoryStore(url: url, audio: audio)
         var failed = dictation(at: 1_000)

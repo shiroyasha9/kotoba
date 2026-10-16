@@ -10,7 +10,8 @@ extension DictationPipeline {
             clipboard: clipboard, settings: settings, output: current.output,
             frontAppAtStop: current.frontAppAtStop)
         let outcome = await delivery.deliver(
-            job, beforePaste: { await self.waitForChordRelease() }, beforeCleanup: { await self.cleanupStarted() },
+            job, beforePaste: { await self.waitForChordRelease() },
+            beforeCleanup: { await self.cleanupStarted(current.id) },
             isSubmitRequested: { await self.submitRequests.contains(current.id) })
         if let write = outcome.restore {
             work.schedule(at: ports.clock.now + settings.restoreDelay) { await self.clipboard.restore(after: write) }
@@ -29,10 +30,12 @@ extension DictationPipeline {
         if outcome.record.transcript != nil { await setupChanged() }
     }
 
-    /// The transcript went to the cleaner: the indicator says so, unless a new recording or an Undo window shows.
-    func cleanupStarted() {
+    /// The transcript of `id` went to the cleaner: the indicator says so, unless a new recording or an Undo window
+    /// shows, or another dictation is still being transcribed.
+    func cleanupStarted(_ id: DictationID) {
+        cleaning.insert(id)
         guard recording == nil, paused == nil else { return }
-        emit(.cleaning)
+        emit(inFlightState)
     }
 
     /// Return while recording stops it. Just after a stop the tap may still swallow a Return (the indicator has not

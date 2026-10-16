@@ -202,9 +202,8 @@ extension ModesModel.Source {
             recentApps: {
                 guard let history else { return [] }
                 do {
-                    return try await history.usage(
-                        from: UsageModel.Period.last30Days.start(at: .now), to: .distantFuture, apps: 20
-                    ).apps.map(\.app)
+                    return try await history.recentApps(
+                        since: UsageModel.Period.last30Days.start(at: .now), limit: 20)
                 } catch {
                     Log.app.error("Cannot read the recent apps: \(error)")
                     return []
@@ -230,9 +229,6 @@ extension ModesModel.Source {
 
 private struct ModesPane: View {
     @Bindable var model: ModesModel
-    @State private var selection: Set<ModesModel.Row.ID> = []
-    /// The app list's rows, as tall as the system draws them; the list takes this height, so it never scrolls.
-    @State private var listHeight: CGFloat = 0
 
     var body: some View {
         Form {
@@ -254,13 +250,42 @@ private struct ModesPane: View {
                         + "Each cleanup takes a second or two longer.")
             }
             Section {
-                if model.rows.isEmpty {
-                    Text("No apps in the list: every app uses the mode below.")
-                        .foregroundStyle(.secondary)
-                } else {
-                    apps
+                EditableList(
+                    rows: model.rows, emptyText: "No apps in the list: every app uses the mode below.",
+                    addTitle: "Add App", addHelp: "Give an app its own mode", removeTitle: "Remove from List",
+                    remove: model.remove
+                ) { row in
+                    LabeledContent {
+                        Picker(row.name, selection: mode(of: row)) {
+                            modeChoices
+                        }
+                        .labelsHidden()
+                        .fixedSize()
+                    } label: {
+                        Label {
+                            Text(row.name)
+                        } icon: {
+                            icon(of: row.bundleID)
+                        }
+                    }
+                } addItems: {
+                    if !model.recent.isEmpty {
+                        Section("Recent Apps") {
+                            ForEach(model.recent, id: \.bundleID) { app in
+                                Button {
+                                    model.add(app)
+                                } label: {
+                                    Label {
+                                        Text(app.name ?? app.bundleID)
+                                    } icon: {
+                                        icon(of: app.bundleID)
+                                    }
+                                }
+                            }
+                        }
+                    }
+                    Button("Choose App…", action: model.chooseApp)
                 }
-                appButtons
             } header: {
                 Text("Apps")
             } footer: {
@@ -276,72 +301,6 @@ private struct ModesPane: View {
         }
         .formStyle(.grouped)
         .task { await model.appear() }
-    }
-
-    /// A native list inside the form's box, as in System Settings > Login Items, so rows can be selected and removed.
-    private var apps: some View {
-        List(selection: $selection) {
-            ForEach(model.rows) { row in
-                LabeledContent {
-                    Picker(row.name, selection: mode(of: row)) {
-                        modeChoices
-                    }
-                    .labelsHidden()
-                    .fixedSize()
-                } label: {
-                    Label {
-                        Text(row.name)
-                    } icon: {
-                        icon(of: row.bundleID)
-                    }
-                }
-            }
-        }
-        .listStyle(.plain)
-        .scrollContentBackground(.hidden)
-        .scrollDisabled(true)
-        .onScrollGeometryChange(for: CGFloat.self, of: \.contentSize.height) { _, height in listHeight = height }
-        .frame(height: listHeight)
-        .contextMenu(forSelectionType: ModesModel.Row.ID.self) { ids in
-            Button("Remove from List", role: .destructive) { remove(ids) }
-        }
-        .onDeleteCommand { remove(selection) }
-    }
-
-    /// Add (recent apps, then the open panel) and Remove under the list, as under every editable list in System
-    /// Settings.
-    private var appButtons: some View {
-        HStack {
-            Menu {
-                if !model.recent.isEmpty {
-                    Section("Recent Apps") {
-                        ForEach(model.recent, id: \.bundleID) { app in
-                            Button {
-                                model.add(app)
-                            } label: {
-                                Label {
-                                    Text(app.name ?? app.bundleID)
-                                } icon: {
-                                    icon(of: app.bundleID)
-                                }
-                            }
-                        }
-                    }
-                }
-                Button("Choose App…", action: model.chooseApp)
-            } label: {
-                Label("Add App", systemImage: "plus")
-            }
-            .menuIndicator(.hidden)
-            .fixedSize()
-            .help("Give an app its own mode")
-            Button("Remove from List", systemImage: "minus") { remove(selection) }
-                .disabled(selection.isEmpty)
-            Spacer()
-        }
-        .labelStyle(.iconOnly)
-        .buttonStyle(.borderless)
-        .menuStyle(.borderlessButton)
     }
 
     private var modeChoices: some View {
@@ -367,12 +326,6 @@ private struct ModesPane: View {
 
     private func cleansEveryDictation(_ mode: AppMode) -> Binding<Bool> {
         Binding(get: { model.cleansEveryDictation(mode) }, set: { model.setCleansEveryDictation(mode, $0) })
-    }
-
-    private func remove(_ ids: Set<ModesModel.Row.ID>) {
-        guard !ids.isEmpty else { return }
-        model.remove(ids)
-        selection = []
     }
 }
 

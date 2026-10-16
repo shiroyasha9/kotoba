@@ -187,9 +187,6 @@ final class MicrophoneModel {
 
 private struct MicrophonePane: View {
     @Bindable var model: MicrophoneModel
-    @State private var selection: Set<MicrophoneModel.Row.ID> = []
-    /// The order list's rows, as tall as the system draws them; the list takes this height, so it never scrolls.
-    @State private var orderHeight: CGFloat = 0
 
     var body: some View {
         Form {
@@ -205,13 +202,37 @@ private struct MicrophonePane: View {
                         Image(systemName: "exclamationmark.triangle.fill").symbolRenderingMode(.multicolor)
                     }
                 }
-                if model.listed.isEmpty {
-                    Text("No mics in your order: kotoba follows the system default input.")
-                        .foregroundStyle(.secondary)
-                } else {
-                    order
+                EditableList(
+                    rows: model.listed, emptyText: "No mics in your order: kotoba follows the system default input.",
+                    addTitle: "Add to Order",
+                    addHelp: model.others.isEmpty ? "No other mics are connected" : "Add a connected mic to the order",
+                    isAddDisabled: model.others.isEmpty, removeTitle: "Remove from Order", remove: model.remove,
+                    move: model.move
+                ) { row in
+                    LabeledContent {
+                        Text(status(of: row)).foregroundStyle(.secondary)
+                    } label: {
+                        Text(row.name).foregroundStyle(row.isConnected ? .primary : .secondary)
+                    }
+                } addItems: {
+                    ForEach(model.others) { row in
+                        Button {
+                            model.add(row)
+                        } label: {
+                            Text(row.name)
+                            if row.isBluetooth {
+                                Text(StatusText.bluetoothMicNote)
+                            }
+                        }
+                    }
+                } accessory: {
+                    // Clears the order, so it sits with the buttons that change it.
+                    Button("Follow System Default", action: model.followSystemDefault)
+                        .labelStyle(.titleOnly)
+                        .buttonStyle(.bordered)
+                        .controlSize(.small)
+                        .disabled(model.listed.isEmpty)
                 }
-                orderButtons
             } header: {
                 Text("Your Order")
             } footer: {
@@ -234,67 +255,6 @@ private struct MicrophonePane: View {
         .onDisappear(perform: model.disappear)
     }
 
-    /// The order as a native list inside the form's box, as in System Settings > Login Items: a form row cannot be
-    /// dragged, a list row can. The list is as tall as its rows measure, so it never scrolls inside the form.
-    private var order: some View {
-        List(selection: $selection) {
-            ForEach(model.listed) { row in
-                LabeledContent {
-                    Text(status(of: row)).foregroundStyle(.secondary)
-                } label: {
-                    Text(row.name).foregroundStyle(row.isConnected ? .primary : .secondary)
-                }
-            }
-            .onMove(perform: model.move)
-        }
-        .listStyle(.plain)
-        .scrollContentBackground(.hidden)
-        .scrollDisabled(true)
-        .onScrollGeometryChange(for: CGFloat.self, of: \.contentSize.height) { _, height in orderHeight = height }
-        .frame(height: orderHeight)
-        .contextMenu(forSelectionType: MicrophoneModel.Row.ID.self) { uids in
-            Button("Remove from Order", role: .destructive) { remove(uids) }
-        }
-        .onDeleteCommand { remove(selection) }
-    }
-
-    /// Add (a menu of the other connected mics) and Remove under the list, as under every editable list in System
-    /// Settings.
-    private var orderButtons: some View {
-        HStack {
-            Menu {
-                ForEach(model.others) { row in
-                    Button {
-                        model.add(row)
-                    } label: {
-                        Text(row.name)
-                        if row.isBluetooth {
-                            Text(StatusText.bluetoothMicNote)
-                        }
-                    }
-                }
-            } label: {
-                Label("Add to Order", systemImage: "plus")
-            }
-            .menuIndicator(.hidden)
-            .fixedSize()
-            .disabled(model.others.isEmpty)
-            .help(model.others.isEmpty ? "No other mics are connected" : "Add a connected mic to the order")
-            Button("Remove from Order", systemImage: "minus") { remove(selection) }
-                .disabled(selection.isEmpty)
-            Spacer()
-            // Clears the order, so it sits with the buttons that change it.
-            Button("Follow System Default", action: model.followSystemDefault)
-                .labelStyle(.titleOnly)
-                .buttonStyle(.bordered)
-                .controlSize(.small)
-                .disabled(model.listed.isEmpty)
-        }
-        .labelStyle(.iconOnly)
-        .buttonStyle(.borderless)
-        .menuStyle(.borderlessButton)
-    }
-
     /// "In use", "Not connected" and the Bluetooth note, the ones that apply.
     private func status(of row: MicrophoneModel.Row) -> String {
         var parts: [String] = []
@@ -308,12 +268,6 @@ private struct MicrophonePane: View {
             parts.append(StatusText.bluetoothMicNote)
         }
         return parts.joined(separator: " · ")
-    }
-
-    private func remove(_ uids: Set<MicrophoneModel.Row.ID>) {
-        guard !uids.isEmpty else { return }
-        model.remove(uids)
-        selection = []
     }
 }
 

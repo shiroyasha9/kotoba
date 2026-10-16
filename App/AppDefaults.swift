@@ -56,24 +56,30 @@ enum AppDefaults {
         (UserDefaults.standard.object(forKey: Key.audioRetention.rawValue) as? Int).flatMap(AudioRetention.init)
     }
 
-    /// The per-app modes (story 29) as JSON. A new install gets `ModeRules.standard`; so does a value this build cannot
-    /// read, with a log line, so a bad value never stops a dictation.
+    /// The per-app modes (story 29). A new install gets `ModeRules.standard`.
     static var modeRules: ModeRules {
-        get {
-            guard let data = UserDefaults.standard.data(forKey: Key.modes.rawValue) else { return .standard }
-            do {
-                return try JSONDecoder().decode(ModeRules.self, from: data)
-            } catch {
-                Log.app.error("Cannot read the modes, using the standard ones: \(error)")
-                return .standard
-            }
+        get { decoded(at: .modes, or: .standard) }
+        set { encode(newValue, at: .modes) }
+    }
+
+    /// A setting kept as JSON at `key`. A missing value, or one this build cannot read (logged), gives `fallback`, so a
+    /// bad value never stops kotoba.
+    static func decoded<Value: Decodable>(at key: Key, or fallback: Value) -> Value {
+        guard let data = UserDefaults.standard.data(forKey: key.rawValue) else { return fallback }
+        do {
+            return try JSONDecoder().decode(Value.self, from: data)
+        } catch {
+            Log.app.error("Cannot read the setting \(key.rawValue, privacy: .public), using the default: \(error)")
+            return fallback
         }
-        set {
-            do {
-                UserDefaults.standard.set(try JSONEncoder().encode(newValue), forKey: Key.modes.rawValue)
-            } catch {
-                Log.app.error("Cannot save the modes: \(error)")
-            }
+    }
+
+    /// Keeps `value` as JSON at `key`; a failure is logged and the stored value stays.
+    static func encode(_ value: some Encodable, at key: Key) {
+        do {
+            UserDefaults.standard.set(try JSONEncoder().encode(value), forKey: key.rawValue)
+        } catch {
+            Log.app.error("Cannot save the setting \(key.rawValue, privacy: .public): \(error)")
         }
     }
 

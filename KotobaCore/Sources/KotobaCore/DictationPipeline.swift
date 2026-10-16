@@ -33,6 +33,8 @@ public actor DictationPipeline {
     var latencies = LatencyRecorder()
     /// Dictations being transcribed in this process; a retry skips them.
     var inFlight: Set<DictationID> = []
+    /// The dictations in flight whose transcript is with the cleaner.
+    var cleaning: Set<DictationID> = []
     /// Dictations stopped with Return, or given a Return just after the stop: Return follows their paste.
     var submitRequests: Set<DictationID> = []
     /// The last dictation stopped, for a Return the tap swallowed just after the stop.
@@ -261,16 +263,24 @@ extension DictationPipeline {
         stateContinuation.yield(newState)
     }
 
-    /// A recording in progress keeps the indicator on recording; other transcriptions keep it on transcribing.
+    /// A recording in progress keeps the indicator on recording; other dictations in flight keep it on their step.
     func finishDictation(_ id: DictationID, showing outcome: DictationState) {
         inFlight.remove(id)
+        cleaning.remove(id)
         submitRequests.remove(id)
         // With another dictation in flight the state may not change, but this one is no longer sent.
         announceActivity()
         defer { resumeQuietWaiters() }
         // A live recording or an open Undo window keeps the indicator; the outcome would hide it.
         guard recording == nil, paused == nil else { return }
-        emit(outcome == .idle && !inFlight.isEmpty ? .transcribing : outcome)
+        emit(outcome == .idle ? inFlightState : outcome)
+    }
+
+    /// What the indicator shows when no recording or Undo window does: idle, or the step the dictations in flight
+    /// wait on. Cleaning only when all of them are with the cleaner; a dictation still being transcribed comes first.
+    var inFlightState: DictationState {
+        if inFlight.isEmpty { return .idle }
+        return inFlight.isSubset(of: cleaning) ? .cleaning : .transcribing
     }
 
     /// Sends the activity when it changed; every change of a recording, Undo window or dictation in flight comes with
