@@ -733,7 +733,7 @@ Rows 500-514 use kotoba Dev with the release kotoba quit. A fresh setup: `defaul
 
 ## Audit fixes (kotoba Dev, 2026-10-17)
 
-Rows 740-750 need real hardware or a TCC change, which a snapshot or unit test cannot make. Use kotoba Dev with the release kotoba quit. Read the log with `log show --last 5m --predicate 'subsystem == "tech.teensy.kotoba.dev"'`.
+Rows 740-751 need real hardware or a TCC change, which a snapshot or unit test cannot make. Use kotoba Dev with the release kotoba quit. Read the log with `log show --last 5m --predicate 'subsystem == "tech.teensy.kotoba.dev"'`.
 
 | # | Do this | Expect | Result |
 |---|---|---|---|
@@ -748,3 +748,4 @@ Rows 740-750 need real hardware or a TCC change, which a snapshot or unit test c
 | 748 | Disk full, partway: as row 747, but `mkfile 28m` (about 1 MB free), then dictate for 2 min | The first part pastes and the pill says “Pasted what was saved. Disk full?”. Afterwards remove the link, move the old `audio` folder back and `hdiutil detach /Volumes/KotobaFull` | |
 | 749 | Add the input source “Dvorak - QWERTY ⌘” and select it; dictate into TextEdit. Switch back afterwards | The text pastes (no beep, no ⌘. cancel) | |
 | 750 | Turn kotoba Dev off in Accessibility, wait 2 s, turn it on again (do not click kotoba). Then dictate with the chord into TextEdit | The chord starts the recording and the text pastes, with no relaunch. The log has “Hotkey tap made again after Accessibility came back” | |
+| 751 | Start `kill -STOP <pid>` on a running kotoba Dev (it hangs), then open a second copy (`open -n`). Afterwards `kill -CONT <pid>` and quit one copy | If the open fails, the second copy keeps running (the log has “This copy runs instead”); it never quits with no copy left. Note what the log says for a hung copy | |

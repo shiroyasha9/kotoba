@@ -8,6 +8,8 @@ import KotobaCore
 @MainActor
 final class CopyHandOver: NSObject, NSApplicationDelegate {
     private let running: NSRunningApplication
+    /// The app's delegate when this copy runs instead (`runInstead`); `NSApp.delegate` does not keep it.
+    private var instead: AppDelegate?
 
     /// The running copy this launch hands over to, or nil when this copy keeps running. One Launch Services query for
     /// this bundle id and a sysctl per copy: 0.6-2.3 ms cold (`swiftc -O` probe, 2026-10-17; asking NSWorkspace for
@@ -30,17 +32,36 @@ final class CopyHandOver: NSObject, NSApplicationDelegate {
         // The owner's open gave this copy the activation; the running copy takes it to show its window.
         NSApp.yieldActivation(to: running)
         guard let url = running.bundleURL else {
-            running.activate()
-            NSApp.terminate(nil)
+            if running.activate() {
+                NSApp.terminate(nil)
+            } else {
+                runInstead(because: "the running copy did not come to the front")
+            }
             return
         }
         // Opening the running copy's own bundle reaches that process with a reopen (`applicationShouldHandleReopen`).
         NSWorkspace.shared.openApplication(at: url, configuration: NSWorkspace.OpenConfiguration()) { _, error in
-            if let error {
-                Log.app.error("Cannot bring the running copy to the front: \(error)")
+            Task { @MainActor in
+                if let error {
+                    self.runInstead(because: "the running copy did not open: \(error)")
+                } else if self.running.isTerminated {
+                    self.runInstead(because: "the running copy quit")
+                } else {
+                    NSApp.terminate(nil)
+                }
             }
-            Task { @MainActor in NSApp.terminate(nil) }
         }
+    }
+
+    /// The hand-over failed: the running copy quit meanwhile, or did not answer the open (it may be quitting or
+    /// hung). This copy runs as a normal launch instead, so one copy always runs. A copy that is still quitting
+    /// cleanly, its pipeline saving a recording, answers the open and is not detected; it is gone a moment later.
+    private func runInstead(because reason: String) {
+        Log.app.notice("This copy runs instead: \(reason, privacy: .public)")
+        let delegate = AppDelegate()
+        instead = delegate
+        NSApp.delegate = delegate
+        delegate.applicationDidFinishLaunching(Notification(name: NSApplication.didFinishLaunchingNotification))
     }
 
     /// The kernel's start time comes first: Launch Services has no `launchDate` for a copy started from a terminal,
