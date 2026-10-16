@@ -51,6 +51,12 @@ Lead report 2026-10-16: in dark snapshots the sidebar labels and the pill's glas
 - Setting the glass content's appearance to darkAqua, or the sidebar effect view to inactive or within-window blending, does not change the image. CARenderer cannot draw the window's layers in process.
 Conclusion: an offscreen limit of the glass treatment, not an app bug; the harness cannot fix it with public API. The app code sets no colors on these labels. Check once on screen in dark mode (sidebar labels, pill Undo and Retry).
 
+On-screen check of the pill button, 2026-10-16 (macOS 27.0.1, `screencapture` of spike panels over window-color, white and black backdrops, app inactive as kotoba always is):
+- The near-black title is offscreen only. On screen the AppKit `.glass` `NSButton` title draws dimmed, like a disabled button, in light and dark: AppKit draws a glass button title that way in a window that is not key, and the pill's non-activating panel is never key. Made key, the same button draws at full contrast. An explicit `contentTintColor` or attributed title stays dimmed; overriding `isKeyWindow` on the panel does not help.
+- A SwiftUI `Button` with `.buttonStyle(.glass)` and `.environment(\.controlActiveState, .key)` in an `NSHostingView` draws at full contrast on screen in every case, and still takes the first click without activating the app. An explicit `labelColor` foreground on it draws dimmed in light on screen, so the pill keeps the system color.
+- Offscreen, that SwiftUI title still draws near black in dark (the limit above), and `labelColor` draws it light. The pill's dark snapshot takes `labelColor` (`PillButton` in `App/IndicatorPillView.swift`).
+- Cost: a test process with one pill panel measured 17.3-17.5 MB (`NSButton`) and 18.4-18.5 MB (`NSHostingView` button) phys_footprint, about +1 MB for the first SwiftUI hosting view in a process that had none.
+
 ## Cost
 
 The rebuilt windows use the same frameworks (SwiftUI, AppKit) and are still built on open and released on close. The Microphone pane went from one `List` to a `Form` with one `List`; the Dictionary pane gained two `GroupBox`es; each pane gained a header with one gradient-filled tile; Fix Last Dictation and the onboarding Done step gained a `Form`. Each adds one hosting scroll view while its window is open, and nothing at idle. No framework loads at launch, and the hot path is untouched. I did not run `footprint`: the change is a few views inside windows that are already measured (+19-21 MB after close, docs/progress.md).

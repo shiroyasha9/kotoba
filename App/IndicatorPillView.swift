@@ -1,5 +1,6 @@
 import AppKit
 import KotobaCore
+import SwiftUI
 
 /// The one button a pill can carry. AppDelegate maps each action to its handler.
 enum PillAction: Sendable, Equatable {
@@ -92,7 +93,7 @@ final class IndicatorPillView: NSView {
         didSet {
             label.stringValue = content.text
             toolTip = content.toolTip
-            actionButton.title = content.action?.title ?? ""
+            actionButton.rootView.title = content.action?.title ?? ""
             symbolView.image = content.symbol.flatMap {
                 NSImage(systemSymbolName: $0, accessibilityDescription: nil)
             }
@@ -127,7 +128,7 @@ final class IndicatorPillView: NSView {
         image: NSImage(systemSymbolName: "circle.fill", accessibilityDescription: nil) ?? NSImage())
     private let symbolView = NSImageView()
     private let label = NSTextField(labelWithString: "")
-    private let actionButton = FirstClickButton()
+    private let actionButton = FirstClickHostingView(rootView: PillButton())
     private let spinner = NSProgressIndicator()
     private let roundIcon = NSImageView()
     private var pressStart: NSPoint?
@@ -145,9 +146,8 @@ final class IndicatorPillView: NSView {
         spinner.style = .spinning
         spinner.controlSize = .small
         spinner.isDisplayedWhenStopped = false
-        actionButton.bezelStyle = .glass
-        actionButton.controlSize = .small
-        actionButton.onClick = { [weak self] in
+        actionButton.sizingOptions = .intrinsicContentSize
+        actionButton.rootView.onClick = { [weak self] in
             guard let action = self?.content.action else { return }
             self?.onAction?(action)
         }
@@ -295,22 +295,32 @@ final class IndicatorPillView: NSView {
     }
 }
 
-/// A button that acts on the first click in a window that is not key, so a pill action works
-/// without activating kotoba.
-private final class FirstClickButton: NSButton {
-    var onClick: (() -> Void)?
+/// The pill's action button. The pill's panel never becomes key, and AppKit draws a `.glass` button's title
+/// dimmed in a window that is not key, too faint to read on the dark pill; SwiftUI's `controlActiveState`
+/// draws it as in the key window.
+private struct PillButton: View {
+    var title = ""
+    var onClick: () -> Void = {}
+    @Environment(\.colorScheme) private var colorScheme
 
-    convenience init() {
-        self.init(frame: .zero)
-        target = self
-        action = #selector(clicked)
+    var body: some View {
+        let button = Button(title, action: onClick)
+            .buttonStyle(.glass)
+            .controlSize(.small)
+            .environment(\.controlActiveState, .key)
+        // Offscreen the window server's glass treatment is missing, so in dark the title draws near black; on
+        // screen it draws in the label color, which the dark snapshot takes instead. Light draws right as is.
+        if Snapshots.isRunning, colorScheme == .dark {
+            button.foregroundStyle(Color(nsColor: .labelColor))
+        } else {
+            button
+        }
     }
+}
 
+/// Acts on the first click in a window that is not key, so a pill action works without activating kotoba.
+private final class FirstClickHostingView: NSHostingView<PillButton> {
     override func acceptsFirstMouse(for event: NSEvent?) -> Bool {
         true
-    }
-
-    @objc private func clicked() {
-        onClick?()
     }
 }
