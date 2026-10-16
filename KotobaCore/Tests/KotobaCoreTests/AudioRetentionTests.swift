@@ -233,7 +233,7 @@ struct AudioRetentionTests {
         #expect(await world.store.audioCutoffs.last == .distantFuture)
     }
 
-    /// The History window reads its rows again only when audio went, not after every dictation.
+    /// The History pane reads its rows again only when audio went, not after every dictation.
     @Test func onlyARunThatDeletedAudioIsAnnounced() async throws {
         let world = FakeWorld(transcript: "ship it")
         let pipeline = world.makePipeline()

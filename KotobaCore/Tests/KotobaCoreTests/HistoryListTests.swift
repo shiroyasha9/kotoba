@@ -3,7 +3,7 @@ import Testing
 
 @testable import KotobaCore
 
-/// How the History window's rows follow the store's changes.
+/// How the History pane's rows follow the store's changes.
 struct HistoryListTests {
     func row(_ time: TimeInterval, _ status: DictationRecord.Status = .pasted) -> DictationRecord {
         DictationRecord(

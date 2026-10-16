@@ -180,7 +180,7 @@ extension DictationPipeline {
     }
 }
 
-/// What is live in the pipeline, for the History window.
+/// What is live in the pipeline, for the History pane.
 public struct PipelineActivity: Sendable, Equatable {
     /// No recording, no Undo window and no dictation in flight: "Paste Again" can paste.
     public var isQuiet: Bool
@@ -232,7 +232,7 @@ public struct RetrySelection: Sendable, Equatable {
     /// The owner saved a key: only the dictations that waited for one, once each.
     public static let onlyNeedsSetup = Self(rule: .onlyNeedsSetup)
 
-    /// The History window's Retry: the chosen queued dictations.
+    /// The History pane's Retry: the chosen queued dictations.
     public static func only(_ ids: Set<DictationID>) -> Self {
         Self(rule: nil, ids: ids)
     }

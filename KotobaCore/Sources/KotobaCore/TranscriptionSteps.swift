@@ -66,9 +66,9 @@ struct TranscriptionSteps: Sendable {
     /// the record, empty or not, dated with the transcript's answer: its word change counts on the same day as the
     /// words it changes, even when it comes after midnight. The replacements run once, on the cleaner's output, so a
     /// rule such as "kotoba" -> "kotoba.app" does not grow twice.
-    @discardableResult
     /// `deadline` bounds a live cleanup, whose paste waits on it; a retry passes nil, so its cleanup waits for the
     /// cleaner's own timeout.
+    @discardableResult
     func clean(
         _ transcribed: Transcribed, in mode: AppMode, into record: inout DictationRecord,
         settings: DictationPipeline.Settings, deadline: Duration?

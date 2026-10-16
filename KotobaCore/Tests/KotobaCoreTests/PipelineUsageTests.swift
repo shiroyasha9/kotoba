@@ -23,7 +23,7 @@ struct PipelineUsageTests {
                     app: DictationApp(bundleID: "test.app100", name: "App 100")))
     }
 
-    /// Words are runs of non-space characters, as the History window counts them.
+    /// Words are runs of non-space characters, as the History pane counts them.
     @Test func wordsAreRunsOfNonSpace() {
         #expect(DictationRecord.wordCount(of: " ship\tit\nnow\u{00A0}ok, auth.ts — done ") == 7)
         #expect(DictationRecord.wordCount(of: " \n ") == 0)

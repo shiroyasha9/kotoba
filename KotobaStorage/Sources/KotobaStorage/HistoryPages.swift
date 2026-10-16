@@ -1,9 +1,9 @@
 import Foundation
 import KotobaCore
 
-/// The History window's reads: pages newest first, a search, and one changed row.
+/// The History pane's reads: pages newest first, a search, and one changed row.
 extension HistoryStore {
-    /// One page of the History window, newest first: the rows after `last` (the previous page's last row) whose text
+    /// One page of the History pane, newest first: the rows after `last` (the previous page's last row) whose text
     /// or app name contains `search` (case-insensitive for ASCII letters); an empty `search` matches every row.
     /// A search that matches nothing scans every row: about 3 ms on 10,000 rows (debug build, `HistoryStoreTests`), so
     /// the history needs no FTS index. A page is about 1 ms.
@@ -25,7 +25,7 @@ extension HistoryStore {
             where: "\(filter) ORDER BY created_at DESC, id DESC LIMIT ?1", values, withLatency: false)
     }
 
-    /// One row, without latency marks, when it exists and matches `search` as in `page`: an open History window reads
+    /// One row, without latency marks, when it exists and matches `search` as in `page`: an open History pane reads
     /// the dictation a change names.
     public func record(_ id: DictationID, matching search: String = "") throws -> DictationRecord? {
         var condition = "id = ?1"

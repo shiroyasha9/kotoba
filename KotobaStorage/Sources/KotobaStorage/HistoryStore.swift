@@ -64,7 +64,7 @@ public actor HistoryStore: Store {
     /// owner.
     private static let retryable = sqlList([.pending, .failed])
     private static let delivered = sqlList([.pasted, .copied])
-    /// The kept rows the History window's Retry puts back in the queue.
+    /// The kept rows the History pane's Retry puts back in the queue.
     private static let requeued = sqlList([.cancelled, .rejected])
     let database: SQLiteDatabase
     /// Where the audio files are (`DictationPipeline.Settings.audioDirectory`). Every use of a row's audio finds the
@@ -128,7 +128,7 @@ public actor HistoryStore: Store {
                 """)
     }
 
-    /// The same columns as `save`, in one statement that finds no row once the History window deleted it.
+    /// The same columns as `save`, in one statement that finds no row once the History pane deleted it.
     public func update(_ record: DictationRecord) throws -> Bool {
         try write(
             record,

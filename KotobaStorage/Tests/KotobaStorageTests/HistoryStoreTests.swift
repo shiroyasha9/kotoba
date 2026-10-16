@@ -110,7 +110,7 @@ struct HistoryStoreTests {
             try await store.deleteAudio(transcribedBefore: .distantFuture, after: nil).deleted.isEmpty)
     }
 
-    // MARK: History window
+    // MARK: History pane
 
     func spoken(_ text: String, at time: TimeInterval, app: DictationApp? = nil) -> DictationRecord {
         var spoken = record(.pasted, at: time)
@@ -219,7 +219,7 @@ struct HistoryStoreTests {
         #expect(try await store.knownIDs(among: []).isEmpty)
     }
 
-    /// The cost the History window pays: a page, a deep page, a search and one changed row on 10,000 rows of about 30
+    /// The cost the History pane pays: a page, a deep page, a search and one changed row on 10,000 rows of about 30
     /// words, and the menu's reads. Measured 2026-10-16 (debug build): about 0.8 ms a page, 3.3 ms for a search that
     /// matches nothing, 0.06 ms for one row, 2.8 ms for the menu, 17.5 ms for the launch's id check of 10,001 files.
     /// The bound is loose for other agents' builds on the same machine.

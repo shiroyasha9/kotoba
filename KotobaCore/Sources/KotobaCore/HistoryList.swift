@@ -1,6 +1,6 @@
 import Foundation
 
-/// The History window's loaded rows, newest first in the store's order (`createdAt`, then the id's text, both
+/// The History pane's loaded rows, newest first in the store's order (`createdAt`, then the id's text, both
 /// descending), and how each history change moves them. The window loads pages of it; a change reads one row.
 public struct HistoryList: Sendable, Equatable {
     public private(set) var rows: [DictationRecord] = []

@@ -208,7 +208,7 @@ extension HistoryStore {
     }
 }
 
-/// The History window's Delete, and the launch's check for audio with no row (`OrphanAudio`).
+/// The History pane's Delete, and the launch's check for audio with no row (`OrphanAudio`).
 extension HistoryStore {
     /// Removes the audio files first, off this actor as retention does, then deletes only the rows whose file is gone:
     /// a row whose file cannot be removed stays with its file, so no deleted dictation leaves audio with no row for a
