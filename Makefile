@@ -70,7 +70,7 @@ snapshots: build-check
 
 # System checks (docs/spec.md, "Testing Decisions"): run by hand against the running app, not part of `check`.
 memory:
-	scripts/memory.sh
+	PID="$(PID)" APP="$(if $(DEV),$(abspath $(call DEBUG_APP,$(DERIVED))),$(APP))" scripts/memory.sh
 
 latency:
 	RUN=$(RUN) DEV=$(DEV) scripts/latency.sh

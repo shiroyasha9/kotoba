@@ -99,54 +99,6 @@ final class IndicatorPanel {
         built?.pill.level = CGFloat(level)
     }
 
-    /// In place of the state dot while a dictation will be cleaned up and while it is: the one fact the owner acts on
-    /// (a short wait, and words that may change). Not the learned word's "sparkles".
-    static let cleanupSymbol = "wand.and.sparkles"
-
-    /// What the pill shows for `state`; nil hides it.
-    static func content(
-        for state: DictationState, context: StatusContext, visibility: IndicatorVisibility
-    ) -> IndicatorPillView.Content? {
-        let text = state.statusText(context) ?? ""
-        let action = state.pillAction(context)
-        let isAlways = visibility == .always
-        let isClickable = IndicatorPlacement.isClickATap(in: state, showsIdlePill: isAlways)
-        switch state {
-        case .idle:
-            return isAlways ? .idle : nil
-        case .recording(let isLong, let isSilent, let isCleaned):
-            // Only a plain "Listening" pill stands vertical at an edge; the others carry more words.
-            let isPlain = !isLong && !isSilent && !context.isSecureInputOn
-            let toolTip: String? =
-                if isSilent {
-                    StatusText.noSoundHelp(context.microphoneName)
-                } else if context.isSecureInputOn {
-                    DictationState.secureInputHelp
-                } else if isCleaned {
-                    StatusText.cleanupHelp
-                } else {
-                    nil
-                }
-            // No sound is a warning with its fix on the button; it clears when sound arrives, so no timer.
-            return .init(
-                text: text, color: isSilent ? .systemOrange : .systemRed, symbol: isCleaned ? cleanupSymbol : nil,
-                toolTip: toolTip, showsMeter: true, isCompact: isPlain, isClickable: isClickable, action: action)
-        case .transcribing:
-            return .init(text: text, color: .systemBlue, showsSpinner: true, isCompact: true)
-        case .cleaning:
-            return .init(text: text, color: .systemBlue, symbol: cleanupSymbol, showsSpinner: true, isCompact: true)
-        case .undoable:
-            // The pipeline ends the Undo window itself; the bar follows it.
-            return .init(
-                text: text, color: .secondaryLabelColor, action: action,
-                timer: .init(duration: context.undoWindow, kind: .followsUndoWindow))
-        case .failed, .needsSetup, .rejected, .cleanupFailed, .cleanupTooSlow, .returnSkipped, .recovered, .copied,
-            .captureFailed:
-            return .init(
-                PillNotice(text: text, action: action), color: state.isGoodOutcome ? .systemGreen : .systemOrange)
-        }
-    }
-
     /// Shows `content` (nil hides the pill) and starts its timer.
     private func present(_ content: IndicatorPillView.Content?, followsFocus: Bool) {
         cancelTimer()
@@ -173,9 +125,11 @@ final class IndicatorPanel {
     }
 
     /// The pill is done with its message: the idle pill with "Always", else nothing.
-    private func showQuiet() {
+    func showQuiet() {
         isNoticeShown = false
-        present(visibility == .always ? .idle : nil, followsFocus: false)
+        present(
+            shown.flatMap { Self.content(for: .idle, context: $0.context, visibility: visibility) }, followsFocus: false
+        )
     }
 
     private func perform(_ action: PillAction) {

@@ -6,7 +6,7 @@ UI text in this list is the text in the code at the phase 2 gate (2026-10-15). I
 
 ## Setup (once per machine; repeat step 3 if a new build loses Accessibility)
 
-1. Build: `make build`. Quit the release kotoba first: with the same modifier chord, both apps dictate. Open: `open build/DerivedData/Build/Products/Debug/kotoba.app`. This is **kotoba Dev**, a separate install with its own settings, history (`~/Library/Application Support/kotoba-dev/`) and API keys.
+1. Build: `make build`. Open: `open build/DerivedData/Build/Products/Debug/kotoba.app`. This is **kotoba Dev**, a separate install with its own settings, history (`~/Library/Application Support/kotoba-dev/`) and API keys. While the release kotoba runs, kotoba Dev leaves the chord to it (rows 360-364): quit the release kotoba to test.
 2. Click **Allow** on the Microphone prompt.
 3. System Settings > Privacy & Security > Accessibility: turn **kotoba Dev** on. If it is already on, turn it off and on again.
 4. kotoba menu > **Model: …** > **MAI-Transcribe-2 (OpenRouter)**. Then kotoba menu > **Set API Key…**: Settings opens on **Providers**. **API keys** > OpenRouter: paste the key > **Save**.
@@ -495,5 +495,15 @@ The offscreen snapshots (`make snapshots`) show two things that may not happen i
 
 ## Gates (after a day of use; each needs the owner's go because it reads the app database)
 
-- `make latency RUN=1`: p50 <= 1.0 s and p90 <= 1.5 s from stop to Cmd-V, for 10-20 s dictations, per model. Cleanup-chord dictations are left out.
-- `make memory`: idle footprint, compared with the floor in `docs/research/memory-spike.md`. Measure once with the Settings window never opened, and once after it was opened and closed.
+- `make latency RUN=1` (the release app's database; `DEV=1` for kotoba Dev's): p50 <= 1.0 s and p90 <= 1.5 s from stop to Cmd-V, for 10-20 s dictations, per model. Cleanup-chord dictations are left out.
+- `make memory` (the release app in /Applications; `DEV=1` for kotoba Dev from `make build`, or `PID=<pid>`): idle footprint, compared with the floor in `docs/research/memory-spike.md`. Measure once with the Settings window never opened, and once after it was opened and closed.
+
+## Dev install (kotoba Dev only)
+
+| # | Do this | Expect | Result |
+|---|---|---|---|
+| 360 | With kotoba Dev open, open the release kotoba from /Applications | kotoba Dev’s pill shows “Quit kotoba to dictate with kotoba Dev” for 4 s, and its menu’s first line says the same. Tap ⌃⌥⌘, speak, tap: only the release kotoba records, and the text pastes once | |
+| 361 | With “Show indicator: Always” in kotoba Dev, while the release runs, point at and click kotoba Dev’s idle pill | The help tag says “Quit kotoba to dictate with kotoba Dev”; the click starts no dictation | |
+| 362 | Quit the release kotoba; dictate | kotoba Dev records and pastes again; its menu says “Tap ⌃⌥⌘ to dictate” | |
+| 363 | Tap ⌃⌥⌘ in kotoba Dev to start a dictation, then open the release kotoba before you stop | kotoba Dev keeps recording; a click on its pill stops it and pastes. The chord now goes to the release kotoba only | |
+| 364 | Fresh kotoba Dev setup (`defaults delete tech.teensy.kotoba.dev onboarding.completed`), go to the last step | “Open kotoba when you log in” is off | |

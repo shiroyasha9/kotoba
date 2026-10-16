@@ -16,6 +16,8 @@ final class HotkeyTap: Sendable {
         var tap: InstalledTap?
         /// The tap thread's run loop, once it runs; a chord change that adds or drops key-up remakes the tap there.
         var runLoop: TapRunLoop?
+        /// Off while a development build gives way to the release app (`setEnabled`).
+        var isEnabled = true
     }
 
     /// Each event with the time the tap saw it, so a busy consumer does not shift tap vs hold.
@@ -53,10 +55,44 @@ final class HotkeyTap: Sendable {
         state.withLock { $0.classifier.isRecordingShown = isShown }
     }
 
+    /// Off while a development build gives way to the release app (`InstallYield`): the tap stays in place, disabled,
+    /// so no key event reaches kotoba and the release app alone hears the chord. The tap thread applies it, as it does
+    /// a chord change, so only that thread touches the port and the events stay in order.
+    func setEnabled(_ isOn: Bool) {
+        let runLoop = state.withLock { state -> TapRunLoop? in
+            guard state.isEnabled != isOn else { return nil }
+            state.isEnabled = isOn
+            return state.runLoop
+        }
+        guard let runLoop else { return }
+        CFRunLoopPerformBlock(runLoop.loop, CFRunLoopMode.commonModes.rawValue) { [self] in applyEnabled() }
+        CFRunLoopWakeUp(runLoop.loop)
+    }
+
+    /// Runs on the tap thread. Off ends a press in progress as if every key went up, so a held chord's recording stops
+    /// and nothing waits for a release the tap cannot see. On, the classifier reads the keys held now, as after a
+    /// timeout.
+    private func applyEnabled() {
+        let events = state.withLock { state in
+            if let tap = state.tap {
+                CGEvent.tapEnable(tap: tap.port, enable: state.isEnabled)
+            }
+            let keys =
+                state.isEnabled
+                ? Self.reenabled(heldChordKey: state.classifier.heldChordKey)
+                : .tapReenabled(modifiers: [], isChordKeyDown: false)
+            return state.classifier.classify(keys).events
+        }
+        send(events)
+    }
+
     /// A click on the indicator pill: the events of a chord tap, in order with the real chord's.
     func sendTap() {
-        let events = state.withLock { $0.classifier.pillClick() }
-        let now = ContinuousClock.now
+        send(state.withLock { $0.classifier.pillClick() })
+    }
+
+    /// Each event with the time the tap saw it; events seen together share one instant.
+    private func send(_ events: HotkeyEvents, at now: ContinuousClock.Instant = .now) {
         for event in events {
             continuation.yield((event, now))
         }
@@ -75,11 +111,13 @@ final class HotkeyTap: Sendable {
             let hasKey = state.withLock {
                 $0.classifier.dictationChord.keyCode != nil || $0.classifier.cleanupChord?.keyCode != nil
             }
+            // Before the tap exists, so a `setEnabled` or chord change that comes during `install` is applied after it.
+            state.withLock { $0.runLoop = TapRunLoop(loop: CFRunLoopGetCurrent()) }
             guard install(keyUp: hasKey) else {
+                state.withLock { $0.runLoop = nil }
                 started(false)
                 return
             }
-            state.withLock { $0.runLoop = TapRunLoop(loop: CFRunLoopGetCurrent()) }
             started(true)
             CFRunLoopRun()
         }
@@ -108,12 +146,12 @@ final class HotkeyTap: Sendable {
             let source = CFMachPortCreateRunLoopSource(nil, port, 0)
         else { return false }
         let new = InstalledTap(port: port, source: source, hasKeyUp: keyUp)
+        CFRunLoopAddSource(CFRunLoopGetCurrent(), source, .commonModes)
         let old = state.withLock { state in
             defer { state.tap = new }
+            CGEvent.tapEnable(tap: port, enable: state.isEnabled)
             return state.tap
         }
-        CFRunLoopAddSource(CFRunLoopGetCurrent(), source, .commonModes)
-        CGEvent.tapEnable(tap: port, enable: true)
         if let old {
             CGEvent.tapEnable(tap: old.port, enable: false)
             CFRunLoopRemoveSource(CFRunLoopGetCurrent(), old.source, .commonModes)
@@ -128,13 +166,8 @@ final class HotkeyTap: Sendable {
         let input: KeyInput
         switch type {
         case .tapDisabledByTimeout, .tapDisabledByUserInput:
-            let (tap, chordKey) = state.withLock { ($0.tap, $0.classifier.heldChordKey) }
-            if let tap {
-                CGEvent.tapEnable(tap: tap.port, enable: true)
-            }
-            input = .tapReenabled(
-                modifiers: ModifierKeys(eventFlags: CGEventSource.flagsState(.combinedSessionState).rawValue),
-                isChordKeyDown: chordKey.map { CGEventSource.keyState(.combinedSessionState, key: $0) } ?? false)
+            guard let reenabled = reenableAfterTimeout() else { return Unmanaged.passUnretained(event) }
+            input = reenabled
         case _ where event.getIntegerValueField(.eventSourceUserData) == CGEventPaster.postedEventTag:
             input = .posted
         case .flagsChanged:
@@ -149,6 +182,8 @@ final class HotkeyTap: Sendable {
             return Unmanaged.passUnretained(event)
         }
         let (released, decision) = state.withLock { state in
+            // An event already queued when `setEnabled` turned the tap off counts for nothing.
+            guard state.isEnabled else { return (HotkeyDecision.pass, HotkeyDecision.pass) }
             // A key chord's key-up can be lost (Secure Input takes the keyboard). While one is held, each event
             // checks its key, so the press ends at the next event, not at the next press of the key.
             var released = HotkeyDecision.pass
@@ -160,12 +195,8 @@ final class HotkeyTap: Sendable {
             return (released, state.classifier.classify(input))
         }
         let now = ContinuousClock.now
-        for hotkey in released.events {
-            continuation.yield((hotkey, now))
-        }
-        for hotkey in decision.events {
-            continuation.yield((hotkey, now))
-        }
+        send(released.events, at: now)
+        send(decision.events, at: now)
         return decision.isSwallowed ? nil : Unmanaged.passUnretained(event)
     }
 
@@ -176,6 +207,25 @@ final class HotkeyTap: Sendable {
         case .keyUp(let keyCode, _): keyCode != key
         case .tapReenabled, .chordKeyReleased, .posted: false
         }
+    }
+
+    /// The system disabled the tap (a slow callback, or user input). Turns it on again unless `setEnabled` turned it
+    /// off, and returns the keys held now; nil while it stays off.
+    private func reenableAfterTimeout() -> KeyInput? {
+        state.withLock { state in
+            guard state.isEnabled else { return nil }
+            if let tap = state.tap {
+                CGEvent.tapEnable(tap: tap.port, enable: true)
+            }
+            return Self.reenabled(heldChordKey: state.classifier.heldChordKey)
+        }
+    }
+
+    /// The keys held now, for a tap that missed events while it was disabled.
+    private static func reenabled(heldChordKey: UInt16?) -> KeyInput {
+        .tapReenabled(
+            modifiers: ModifierKeys(eventFlags: CGEventSource.flagsState(.combinedSessionState).rawValue),
+            isChordKeyDown: heldChordKey.map { CGEventSource.keyState(.combinedSessionState, key: $0) } ?? false)
     }
 
     private static func keyCode(_ event: CGEvent) -> UInt16 {
@@ -219,8 +269,8 @@ extension ModifierKeys {
     }
 }
 
-/// CFMachPort and CFRunLoopSource are thread-safe CF objects; Swift does not mark them Sendable. Off the tap thread
-/// only `tapEnable` uses the port; the source is added and removed on the tap thread.
+/// CFMachPort and CFRunLoopSource are thread-safe CF objects; Swift does not mark them Sendable. Only the tap thread
+/// uses the port and adds and removes the source; other threads only pass the value through the state lock.
 private struct InstalledTap: @unchecked Sendable {
     let port: CFMachPort
     let source: CFRunLoopSource

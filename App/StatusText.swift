@@ -13,6 +13,8 @@ enum StatusText {
         return chord.hasSymbols ? "\(chord.title) (\(chord.spokenTitle))" : chord.title
     }
     static let historyUnavailable = "History unavailable. Quit and reopen kotoba."
+    /// A development build while the release app runs (`InstallYield`): the menu status line and the pill.
+    static let yieldsToRelease = "Quit kotoba to dictate with \(Install.displayName)"
     /// The idle pill's help tag ("Show indicator: Always").
     static let idlePillHelp = "Click to start dictating"
     /// The help tag of a recording pill whose dictation will be cleaned up (the cleanup chord, or the app's mode).
@@ -81,6 +83,8 @@ struct StatusContext {
     var longRecordingMinutes = 10
     /// How long Undo can resume after Esc; the Undo pill's bar runs over it.
     var undoWindow = Duration.seconds(5)
+    /// A development build gives way to the release app (`InstallYield`): its idle pill starts nothing.
+    var isYielding = false
 }
 
 /// The words for each `DictationState`, shared by the menu and the indicator pill, so the two

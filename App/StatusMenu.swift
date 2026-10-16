@@ -211,6 +211,8 @@ struct MenuModel {
         ready.hasLastDictation = true
         ready.hasRawLastDictation = true
         ready.suggestionCount = 2
+        var yielding = ready
+        yielding.status = .text(StatusText.yieldsToRelease)
         var failed = ready
         failed.status = .text(DictationState.failed(DictationID()).statusText(context) ?? "")
         failed.pendingCount = 2
@@ -224,6 +226,7 @@ struct MenuModel {
         bluetooth.microphoneWarning = .bluetoothMic(interruptsPlayback: true)
         return [
             ("ready", ready), ("setup", setup), ("listening", listening), ("failed", failed), ("bluetooth", bluetooth),
+            ("yielding", yielding),
         ]
     }
 

@@ -27,13 +27,17 @@ extension IndicatorPanel {
         ]
         var snapshots = [
             Snapshot(name: "indicator-drag") { PillStandIn(content: .init(), anchor: nil) },
-            Snapshot(name: "indicator-idle-bottomCenter") { PillStandIn(content: .idle, anchor: .bottomCenter) },
+            Snapshot(name: "indicator-idle-bottomCenter") {
+                PillStandIn(content: .idle(isClickable: true), anchor: .bottomCenter)
+            },
         ]
         var contents = samples.flatMap(snapshotRows).compactMap { row in
             content(for: row.state, context: row.context, visibility: .whileDictating).map { (row.name, $0, row.level) }
         }
         // Auto-learn's notice; the longest word that fits.
         contents.append(("learned", .init(.learned("Kubernetes", id: UUID())), 0.6))
+        // A development build beside the release app.
+        contents.append(("yielding", .init(.yieldsToRelease), 0.6))
         for (name, content, level) in contents {
             let anchors: [IndicatorAnchor] = content.isCompact ? [.bottomCenter, .left] : [.bottomCenter]
             for anchor in anchors {

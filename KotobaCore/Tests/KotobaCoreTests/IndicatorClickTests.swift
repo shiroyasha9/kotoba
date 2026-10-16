@@ -32,6 +32,13 @@ struct IndicatorClickTests {
         #expect(IndicatorPlacement.isClickATap(in: row.state, showsIdlePill: row.showsIdlePill) == row.isTap)
     }
 
+    /// A development build that gives way to the release app starts nothing from its idle pill, but a click still stops
+    /// its own recording.
+    @Test func whileYieldingOnlyARecordingPillIsATap() {
+        #expect(!IndicatorPlacement.isClickATap(in: .idle, showsIdlePill: true, isYielding: true))
+        #expect(IndicatorPlacement.isClickATap(in: .recording(isLong: false), showsIdlePill: true, isYielding: true))
+    }
+
     /// The click's events are the chord tap's: down and up at one instant. The first starts a dictation, the second
     /// stops it and the text pastes.
     @Test func twoClicksStartAndStopADictation() async {

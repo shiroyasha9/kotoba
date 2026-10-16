@@ -11,7 +11,7 @@ import os
 /// Wires the ports to the pipeline and owns the menu bar item. Windows are built on demand.
 @MainActor
 final class AppDelegate: NSObject, NSApplicationDelegate {
-    private let hotkeys = HotkeyTap(chords: .shared)
+    let hotkeys = HotkeyTap(chords: .shared)
     let microphones = MicrophonePreferences()
     lazy var audio = AudioCapture(preferences: microphones)
     /// Read by the provider on every request, so a menu change applies to the next dictation.
@@ -29,7 +29,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         isSubmitPhraseOn: AppDefaults.isSubmitPhraseOn,
         modes: AppDefaults.modeRules
     )
-    private lazy var indicator = IndicatorPanel()
+    lazy var indicator = IndicatorPanel()
     lazy var fixWindow = FixLastDictationController(
         lastText: { [weak self] in await self?.lastDictation?.record()?.deliveredText },
         dictionary: { [weak self] in self?.settingsController.dictionary })
@@ -59,6 +59,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     /// Set when the history database does not open; the menu shows it instead of the status.
     var launchIssue: String?
     let updater = Updater.forThisBuild()
+    /// A development build gives way while the release app runs (`InstallYield`).
+    let releaseWatcher = ReleaseAppWatcher()
     lazy var settingsController = SettingsController(
         routeSettings: routeSettings, vault: vault, router: router, microphones: microphones, audio: audio
     ) { [routeSettings, indicator, updater, weak self] in
@@ -104,6 +106,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         observeReadiness()
         setup.showOnboardingIfNew()
         setup.watchGrants()
+        watchReleaseApp()
         Task {
             await settingsController.loadDictionary(into: pipeline)
             await pipeline.retryPending()
@@ -233,7 +236,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             provider: routeSettings.route.account, microphone: readiness.microphone,
             isPasteAllowed: readiness.isAccessibilityAllowed, isSecureInputOn: isSecureInputOn,
             microphoneName: audio.inputInUse?.name,
-            longRecordingMinutes: Int(settings.longRecordingWarning / .seconds(60)), undoWindow: settings.undoWindow)
+            longRecordingMinutes: Int(settings.longRecordingWarning / .seconds(60)), undoWindow: settings.undoWindow,
+            isYielding: releaseWatcher.isYielding)
     }
 
     private func render(_ newState: DictationState) {

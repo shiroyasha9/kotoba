@@ -46,8 +46,9 @@ final class OnboardingModel {
         static func live(routeSettings: TranscriptionSettings) -> Self {
             Self(
                 route: { routeSettings.route },
-                // Default on (docs/spec.md, phase 2.5) until setup is complete; then the real state.
-                opensAtLogin: { OnboardingController.isComplete ? LaunchAtLogin.isOn : true },
+                // Default on (docs/spec.md, phase 2.5) until setup is complete; then the real state. A development
+                // build defaults to off, so it does not open at login beside the release app (`InstallYield`).
+                opensAtLogin: { OnboardingController.isComplete ? LaunchAtLogin.isOn : Install.isRelease },
                 setLaunchAtLogin: { LaunchAtLogin.change(to: $0) },
                 playsSounds: { AppDefaults.areSoundCuesOn },
                 setPlaysSounds: { AppDefaults.areSoundCuesOn = $0 },
