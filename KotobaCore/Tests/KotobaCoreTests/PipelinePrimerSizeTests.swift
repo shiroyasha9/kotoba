@@ -123,4 +123,44 @@ struct PipelinePrimerSizeTests {
 
         #expect(await world.provider.primeSizes == [.silent, .large, .silent, .silent])
     }
+
+    /// The large primer follows only the silent one sent at the announcement: when that one fails, a later re-prime
+    /// that answers sends no large one.
+    @Test func aFailedFirstPrimerCancelsTheLargeOneForGood() async {
+        let world = FakeWorld(transcript: "unreachable first")
+        let primer = Gate()
+        await world.provider.answerPrimes(with: nil, after: primer)
+        let pipeline = world.makePipeline()
+        let interval = DictationPipeline.Settings(audioDirectory: URL(filePath: "/tmp")).primerInterval
+
+        await pipeline.tap(world)
+        await primer.open()
+        await pipeline.settle()
+        await world.provider.answerPrimes(with: Self.answer)
+        world.clock.advance(by: interval + .seconds(1))
+        await pipeline.settle()
+
+        #expect(await world.provider.primeSizes == [.silent, .silent])
+    }
+
+    /// Esc while the silent primer is on its way: the dictation is no longer live when it answers, so no large one
+    /// follows, also not after an Undo and a re-prime.
+    @Test func anEscapeBeforeTheSilentAnswerCancelsTheLargeOne() async {
+        let world = FakeWorld(transcript: "paused")
+        let primer = Gate()
+        await world.provider.answerPrimes(with: Self.answer, after: primer)
+        let pipeline = world.makePipeline()
+        let interval = DictationPipeline.Settings(audioDirectory: URL(filePath: "/tmp")).primerInterval
+
+        await pipeline.tap(world)
+        await pipeline.handle(.escape)
+        await primer.open()
+        await pipeline.settle()
+        world.clock.advance(by: .seconds(2))
+        await pipeline.undo()
+        world.clock.advance(by: interval + .seconds(1))
+        await pipeline.settle()
+
+        #expect(await world.provider.primeSizes == [.silent, .silent])
+    }
 }

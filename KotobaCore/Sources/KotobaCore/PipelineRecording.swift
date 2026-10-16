@@ -145,9 +145,11 @@ extension DictationPipeline {
     /// recording's timer skipped that one; the next is armed here, unless the route changed to one with no primer.
     private func primerFinished(isAnswered: Bool) {
         isPrimerInFlight = false
+        // Only the primer that ends first after the announcement decides, answer or not.
+        let due = largePrimerDue
+        largePrimerDue = nil
         guard let id = recording?.id, ports.provider.hasPrimer else { return }
-        if isAnswered, largePrimerDue == id {
-            largePrimerDue = nil
+        if isAnswered, due == id {
             primeRoute(for: id, size: .large)
         }
         armPrimer(for: id)
@@ -240,6 +242,7 @@ extension DictationPipeline {
         current.soundDeadline?.cancel()
         current.primerTimer?.cancel()
         current.primerTimer = nil
+        largePrimerDue = nil
         latencies.mark(.cancel, of: current.id, at: now)
         paused = UndoWindow(item: current, duration: settings.undoWindow, at: now) { [id = current.id] in
             work.schedule(at: $0) { await self.closeUndoWindow(of: id) }
