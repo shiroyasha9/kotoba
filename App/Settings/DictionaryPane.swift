@@ -33,6 +33,7 @@ private struct DictionaryPane: View {
             GroupBox {
                 LearnFromEditsToggle()
                     .frame(maxWidth: .infinity, alignment: .leading)
+                    .padding(.horizontal, Self.groupBoxToFormInset)
             }
             words
         }
@@ -57,8 +58,15 @@ private struct DictionaryPane: View {
                 editButtons
             }
             footer
+                .padding(.horizontal, Self.formFooterInset)
         }
     }
+
+    /// A grouped Form draws its row text 10 pt in from the box and its footer 10 pt in from the box's edge; a group box
+    /// insets its content 5 pt. These line the pane's switch and footer up with every other pane's (measured offscreen,
+    /// 2026-10-17).
+    private static let groupBoxToFormInset: CGFloat = 5
+    private static let formFooterInset: CGFloat = 10
 
     private var list: some View {
         let rows = visibleRows
