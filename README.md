@@ -8,7 +8,7 @@
 <h1 align="center">kotoba</h1>
 
 <p align="center">
-  Menu-bar dictation for macOS. Tap a shortcut, speak, tap again, and your words are pasted into the app you are using.
+  Menu-bar dictation for macOS. Tap a shortcut, speak, tap again, and kotoba pastes your words into the app you are using.
 </p>
 
 <p align="center">
@@ -20,7 +20,7 @@
   <a href="#build-from-source">Build from source</a>
 </p>
 
-kotoba is a native, open-source alternative to Wispr Flow. It was built for developers who dictate prompts for coding agents: text full of file names, flags and identifiers, typed into terminals, editors and browsers. The microphone opens when you press the shortcut, the audio goes to a cloud speech model with your own OpenRouter key, and the text is pasted where your cursor is. There is no account and no subscription: you pay OpenRouter about $0.10 per hour of audio.
+kotoba is a native, open-source alternative to Wispr Flow, built for developers who dictate prompts for coding agents: text full of file names, flags and identifiers, typed into terminals, editors and browsers. The microphone opens when you press the shortcut, the audio goes to a cloud speech model with your own OpenRouter key, and kotoba pastes the text where your cursor is. There is no account and no subscription: you pay OpenRouter about $0.10 per hour of audio.
 
 <p align="center">
   <picture>
@@ -62,7 +62,7 @@ Two more numbers from the capture path (built-in mic, from the commit that moved
 - Tap ⌃⌥⌘ to start and tap again to stop, or hold it while you speak. Pick your own shortcut in Settings, including a modifier-only one such as fn.
 - Esc cancels. For 5 seconds, Undo resumes the same recording.
 - Press Return while you dictate to stop, paste and press Return in one step. Or end with "press enter": kotoba pastes the text without the phrase, then presses Return.
-- Text goes into the focused app (terminals, editors, browsers, chat), and your clipboard comes back after the paste. The paste is marked as transient, so clipboard managers skip it.
+- Text goes into the focused app (terminals, editors, browsers, chat), and your clipboard comes back after the paste. kotoba marks the paste as transient, so clipboard managers skip it.
 - A small indicator shows what kotoba is doing and the mic level. It warns when the mic hears nothing, and when secure input is on. Show it only while you dictate or all the time (then a click starts and stops a dictation). Drag it to the bottom center or to the left or right edge.
 - Choose your microphone and the order in which kotoba prefers them. When AirPods are your output, kotoba records from the built-in mic, so your music does not drop to call quality.
 
@@ -75,14 +75,14 @@ Two more numbers from the capture path (built-in mic, from the commit that moved
 **Cleanup and per-app modes**
 
 - A second shortcut (⌃⌥⇧⌘ by default) sends the transcript through an LLM that removes filler words and fixes punctuation. Choose Gemini 3.5 Flash-Lite (default), Qwen 3.8 27B on Cerebras or Claude Haiku 5.5. Normal dictations skip this step.
-- Two modes, Code and Writing, picked by the app in front when you stop. Code (terminals, editors, coding agents) keeps commands, paths and flags as you said them. Writing (messages, mail, notes) writes clear sentences in your words. Each mode can clean up every dictation; both are off by default. Edit which app uses which mode.
+- Two modes, Code and Writing. kotoba picks the mode from the app in front when you stop. Code (terminals, editors, coding agents) keeps commands, paths and flags as you said them. Writing (messages, mail, notes) writes clear sentences in your words. Each mode can clean up every dictation; both are off by default. Edit which app uses which mode.
 - When a cleanup takes longer than 5 seconds, kotoba pastes the raw text and says so. "Paste Last Without Cleanup" in the menu gives you the raw text of a cleaned dictation.
 
 **Never lose a dictation**
 
 - A failed dictation keeps its audio and retries by itself when the network returns. Results land in "Recovered Dictations" in the menu.
 - History: every dictation by day, with search, Copy, Paste Again, Retry and Delete.
-- Audio is kept 1, 7 or 30 days or forever (7 by default for new installs); the text stays. Audio that was never transcribed is never deleted automatically.
+- kotoba keeps audio for 1, 7 or 30 days or forever (7 by default for new installs); the text stays. Audio that was never transcribed is never deleted automatically.
 - "Paste Last Dictation" and "Copy Last Dictation" in the menu.
 
 **See what you dictate**
@@ -162,7 +162,7 @@ kotoba updates itself with [Sparkle](https://sparkle-project.org). It checks onc
 
 - **Your key, your provider.** Audio goes only to the speech service you choose, with your own key. There is no kotoba server and no account.
 - **Zero data retention.** On OpenRouter, kotoba asks for endpoints that keep no data (`provider.zdr`) for MAI-Transcribe-2 and for every cleanup model. Grok has no such endpoint on OpenRouter, and kotoba says so when you pick it.
-- **Keys in the Keychain.** API keys are stored in the macOS Keychain, not in files.
+- **Keys in the Keychain.** kotoba stores API keys in the macOS Keychain, not in files.
 - **No telemetry.** No analytics and no crash reporting. The only other network request is Sparkle's update check, which you can turn off.
 - **Local history.** Transcripts, audio and the dictionary stay on your Mac in `~/Library/Application Support/kotoba/`, with the audio retention you choose.
 - **Learning stays local.** To learn from your edits, kotoba reads the text field you pasted into, for a short time after the paste, through Accessibility. It never reads password fields, and it keeps only the words it learns, not the text it read.
@@ -192,4 +192,4 @@ You need Xcode 26 or later and [XcodeGen](https://github.com/yonaskolb/XcodeGen)
 
 Apache License 2.0, see [LICENSE](LICENSE). Third-party code and its licences are listed in [NOTICE](NOTICE); today that is [Sparkle](https://github.com/sparkle-project/Sparkle) (MIT).
 
-kotoba's design learned from [Jot](https://github.com/google-gemini/jot-gemini-transcribe-macOS), [Hex](https://github.com/kitlangton/Hex) and [FreeFlow](https://github.com/zachlatta/freeflow).
+kotoba's design takes ideas from [Jot](https://github.com/google-gemini/jot-gemini-transcribe-macOS), [Hex](https://github.com/kitlangton/Hex) and [FreeFlow](https://github.com/zachlatta/freeflow).
