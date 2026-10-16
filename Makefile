@@ -12,7 +12,7 @@ SWIFT_SRC   := App KotobaCore/Sources KotobaCore/Tests KotobaCore/Package.swift 
                KotobaStorage/Sources KotobaStorage/Tests KotobaStorage/Package.swift
 SWIFTFORMAT := xcrun swift-format
 
-.PHONY: gen build build-check test lint lint-files format format-lint privacy check pill-checks snapshots readme-images memory latency \
+.PHONY: gen build build-check test lint lint-files format format-lint privacy check view-checks snapshots readme-images memory latency \
 	release dmg appcast
 
 gen:
@@ -61,10 +61,11 @@ format-lint:
 privacy:
 	scripts/privacy.sh
 
-check: privacy format-lint lint build-check pill-checks test
+check: privacy format-lint lint build-check view-checks test
 
-# The indicator pills' layout and VoiceOver checks (App/Snapshots.swift `--snapshot-checks`), with no image written.
-pill-checks: build-check
+# Every registered view's layout checks and the pills' VoiceOver checks (App/Snapshots.swift `--snapshot-checks`), with
+# no image written.
+view-checks: build-check
 	$(call DEBUG_APP,$(CHECK_DERIVED))/Contents/MacOS/kotoba --snapshot-checks
 
 # Renders the registered views (App/Snapshots.swift) to PNGs, light and dark, offscreen: no screen capture, no TCC.

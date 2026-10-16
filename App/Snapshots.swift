@@ -174,12 +174,13 @@ enum Snapshots {
         exit(0)
     }
 
-    /// `make check` launches the app binary with `--snapshot-checks`: the pills' layout and VoiceOver checks, in light,
-    /// with no image written, so the bar catches a broken pill without a full snapshot run (about 18 s).
+    /// `make check` launches the app binary with `--snapshot-checks`: every registered view's checks (window fit, cut-off
+    /// pill text, the pills' VoiceOver buttons) in light, with no image written, in about 6 s instead of a full snapshot
+    /// run (about 18 s). A window-fit bug reached the owner on 2026-10-15.
     private static func runChecks() {
         isRunning = true
         NSApplication.shared.setActivationPolicy(.prohibited)
-        let snapshots = IndicatorPanel.snapshots()
+        let snapshots = registry.flatMap { $0() }
         do {
             for snapshot in snapshots {
                 _ = try layOut(snapshot, in: NSAppearance(named: .aqua) ?? NSAppearance.currentDrawing())
@@ -188,7 +189,7 @@ enum Snapshots {
             FileHandle.standardError.write(Data("Snapshot checks failed: \(error)\n".utf8))
             exit(1)
         }
-        FileHandle.standardError.write(Data("Checked \(snapshots.count) pills\n".utf8))
+        FileHandle.standardError.write(Data("Checked \(snapshots.count) views\n".utf8))
         exit(0)
     }
 
