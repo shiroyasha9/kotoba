@@ -48,9 +48,9 @@ final class CaptureWriter: @unchecked Sendable {
     private var conversion: Conversion
     private var readPosition: Int
     private var framesWritten: AVAudioFramePosition = 0
-    /// A chunk was lost: the file did not take it (a full disk) or the converter failed. Logged once; the stop
-    /// reports it (`RecordedAudio.isIncomplete`).
-    private var hasLostAudio = false
+    /// The first chunk lost, and why: the file did not take it or the converter failed. Logged once; the stop
+    /// reports it (`RecordedAudio.loss`).
+    private var loss: AudioLoss?
     private var hasReportedFirstBuffer = false
     private var levelSum: Float = 0
     private var levelFrames = 0
@@ -217,7 +217,7 @@ final class CaptureWriter: @unchecked Sendable {
             return buffer
         }
         guard status != .error else {
-            lostAudio("The converter dropped a chunk", error)
+            lostAudio(.other, "The converter dropped a chunk", error)
             return
         }
         write(conversion.output)
@@ -239,15 +239,18 @@ final class CaptureWriter: @unchecked Sendable {
             try file.write(from: output)
             framesWritten += AVAudioFramePosition(output.frameLength)
         } catch {
-            lostAudio("FLAC write failed", error)
+            // AVAudioFile reports a full disk as code -40 (`writErr`) with no underlying error; the failed write leaves
+            // ENOSPC in errno (probe on a full 5 MB disk image, 2026-10-17). Read first, before another call sets it.
+            let code = errno
+            lostAudio(code == ENOSPC ? .diskFull : .other, "FLAC write failed (errno \(code))", error)
         }
     }
 
     /// Once per capture: a full disk fails every chunk after the first failure, ten a second.
-    private func lostAudio(_ what: StaticString, _ error: (any Error)?) {
-        guard !hasLostAudio else { return }
-        hasLostAudio = true
-        Log.audio.error("\(String(describing: what), privacy: .public): \(String(describing: error))")
+    private func lostAudio(_ cause: AudioLoss, _ what: String, _ error: (any Error)?) {
+        guard loss == nil else { return }
+        loss = cause
+        Log.audio.error("\(what, privacy: .public): \(String(describing: error))")
     }
 
     private func switchConversion(to sampleRate: Double) {
@@ -274,7 +277,7 @@ final class CaptureWriter: @unchecked Sendable {
         events.finish()
         rateSwitched?.resume()
         return RecordedAudio(
-            file: fileURL, duration: Self.duration(ofFrames: framesWritten), isIncomplete: hasLostAudio)
+            file: fileURL, duration: Self.duration(ofFrames: framesWritten), loss: loss)
     }
 
     /// RMS over 4,800 input frames (100 ms at 48 kHz), scaled so speech fills most of the range. The

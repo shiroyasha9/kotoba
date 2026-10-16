@@ -17,8 +17,8 @@ actor FakeAudioSource: AudioSource {
     private var isCaptureLost = false
     /// The length `endCapture` reports; zero is a stop before the first buffer.
     private var recordedLength: Duration = .seconds(1)
-    /// `endCapture` reports that some audio could not be written (`RecordedAudio.isIncomplete`).
-    private var isWriteFailing = false
+    /// `endCapture` reports that some audio could not be written (`RecordedAudio.loss`).
+    private var writeLoss: AudioLoss?
     /// When set, `beginCapture` waits for this gate.
     var beginGate: Gate?
     var beginError: (any Error)?
@@ -44,10 +44,10 @@ actor FakeAudioSource: AudioSource {
         recordedLength = length
     }
 
-    /// From now on the file takes no more audio, as on a full disk: `endCapture` reports `length` written, incomplete.
-    func failWrites(after length: Duration) {
+    /// From now on the file takes no more audio, for `loss`: `endCapture` reports `length` written, and the loss.
+    func failWrites(after length: Duration, with loss: AudioLoss = .diskFull) {
         recordedLength = length
-        isWriteFailing = true
+        writeLoss = loss
     }
 
     func failBegin(with error: any Error) {
@@ -84,7 +84,7 @@ actor FakeAudioSource: AudioSource {
         continuation?.finish()
         guard !isCaptureLost else { return nil }
         return RecordedAudio(
-            file: files.last ?? URL(filePath: "/dev/null"), duration: recordedLength, isIncomplete: isWriteFailing)
+            file: files.last ?? URL(filePath: "/dev/null"), duration: recordedLength, loss: writeLoss)
     }
 
     func cancelCapture() async -> RecordedAudio? {

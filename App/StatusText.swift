@@ -165,7 +165,8 @@ extension DictationState {
         case .rejected(_, let reason): reason.text(provider: provider)
         case .captureFailed: context.microphone == .denied ? "Microphone access is off" : "No microphone found"
         case .nothingRecorded: "Nothing was recorded. Try again."
-        case .audioNotSaved: "Couldn’t save audio. Disk full?"
+        case .audioNotSaved(.diskFull): "Couldn’t save audio. Disk full?"
+        case .audioNotSaved(.other): "Couldn’t save audio. Try again."
         default: deliveredText
         }
     }
@@ -178,7 +179,8 @@ extension DictationState {
         case .returnSkipped: "Return not pressed: app changed"
         case .recovered: "Saved dictation recovered"
         case .copied: "Copied. Press ⌘V to paste."
-        case .audioCut: "Pasted what was saved. Disk full?"
+        case .audioCut(_, .diskFull): "Pasted what was saved. Disk full?"
+        case .audioCut(_, .other): "Pasted what was saved. Some audio was lost."
         case .clipboardNotKept: "Pasted. Old clipboard too large to keep."
         case .idle, .recording, .transcribing, .cleaning, .undoable, .failed, .needsSetup, .rejected, .captureFailed,
             .nothingRecorded, .audioNotSaved:

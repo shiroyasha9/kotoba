@@ -23,7 +23,7 @@ extension IndicatorPanel {
         let samples: [DictationState] = [
             .idle, .recording(isLong: false), .transcribing, .cleaning, .undoable, .failed(id), .rejected(id, .other),
             .needsSetup(id, .key), .cleanupFailed(id), .cleanupTooSlow(id), .returnSkipped(id), .copied(id),
-            .recovered(id), .captureFailed, .nothingRecorded, .audioNotSaved, .audioCut(id),
+            .recovered(id), .captureFailed, .nothingRecorded, .audioNotSaved(.diskFull), .audioCut(id, .diskFull),
             .clipboardNotKept(id),
         ]
         var snapshots = [
@@ -147,12 +147,23 @@ extension IndicatorPanel {
                     context: StatusContext(provider: .azure, microphone: .denied)),
             ]
         case .transcribing, .cleaning, .undoable, .failed, .cleanupFailed, .cleanupTooSlow, .returnSkipped, .recovered,
-            .nothingRecorded, .audioNotSaved:
+            .nothingRecorded:
             [SnapshotRow(name: snapshotName(of: state), state: state)]
-        case .audioCut:
-            [SnapshotRow(name: "audioCut", state: state)]
+        case .audioNotSaved, .audioCut:
+            lossRows(of: state)
         case .clipboardNotKept:
             [SnapshotRow(name: "clipboardNotKept", state: state)]
+        }
+    }
+
+    /// A lost-audio state once for each cause: only a full disk says "Disk full?".
+    private static func lossRows(of state: DictationState) -> [SnapshotRow] {
+        [AudioLoss.diskFull, .other].compactMap { loss in
+            switch state {
+            case .audioNotSaved: SnapshotRow(name: "audioNotSaved-\(loss)", state: .audioNotSaved(loss))
+            case .audioCut(let id, _): SnapshotRow(name: "audioCut-\(loss)", state: .audioCut(id, loss))
+            default: nil
+            }
         }
     }
 

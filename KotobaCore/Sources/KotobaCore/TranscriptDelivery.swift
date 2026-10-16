@@ -102,8 +102,8 @@ struct TranscriptDelivery: Sendable {
     }
 
     /// A copied transcript needs the owner's Cmd-V, so "Copied" wins over the cleanup note. A Return the owner asked
-    /// for and did not get wins over the cleanup note too, and the cleanup note over the clipboard's and a cut
-    /// recording's. A paste with no `restore` did not keep the earlier clipboard.
+    /// for and did not get wins over the cleanup note too, and the cleanup note over a cut recording's. Lost audio
+    /// matters more than a lost clipboard (a paste with no `restore` did not keep the earlier clipboard).
     private static func notice(
         for record: DictationRecord, of job: Job, _ restore: ClipboardGuard.Write?,
         cleanupMiss: TranscriptionSteps.CleanupMiss?, submitted: Submitted?
@@ -115,8 +115,8 @@ struct TranscriptDelivery: Sendable {
         case .tooSlow: return .cleanupTooSlow(record.id)
         case nil: break
         }
-        if restore == nil { return .clipboardNotKept(record.id) }
-        return job.audio.isIncomplete ? .audioCut(record.id) : nil
+        if let loss = job.audio.loss { return .audioCut(record.id, loss) }
+        return restore == nil ? .clipboardNotKept(record.id) : nil
     }
 
     /// Return right after the Cmd-V, into the same event stream; the chord is already released. True when sent.

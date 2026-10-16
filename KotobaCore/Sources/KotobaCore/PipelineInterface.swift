@@ -71,11 +71,10 @@ public enum DictationState: Sendable, Equatable {
     case captureFailed
     /// The stop found no capture running (the audio source had lost it): nothing was recorded, kept or sent.
     case nothingRecorded
-    /// The recording file took too little audio to send (`RecordedAudio.isIncomplete`, a full disk): nothing was kept
-    /// or sent.
-    case audioNotSaved
-    /// Pasted, but the file stopped taking audio during the recording (a full disk): the text has only the part saved.
-    case audioCut(DictationID)
+    /// The recording file took too little audio to send (`RecordedAudio.loss`): nothing was kept or sent.
+    case audioNotSaved(AudioLoss)
+    /// Pasted, but the file stopped taking audio during the recording: the text has only the part saved.
+    case audioCut(DictationID, AudioLoss)
     /// Pasted, but the clipboard before it was too large to keep (`PasteboardSnapshot.byteLimit`): it is not restored.
     case clipboardNotKept(DictationID)
 

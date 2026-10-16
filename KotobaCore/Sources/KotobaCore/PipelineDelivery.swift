@@ -5,7 +5,7 @@ import Foundation
 extension DictationPipeline {
     /// `audio` is nil when the audio source ran no capture: the stop says nothing was recorded and keeps nothing.
     /// Audio shorter than `Settings.minimumRecording` (an accidental double tap) is discarded with no word, unless the
-    /// file stopped taking audio (`RecordedAudio.isIncomplete`): then the pill says the audio was not saved. A longer
+    /// file stopped taking audio (`RecordedAudio.loss`): then the pill says the audio was not saved. A longer
     /// incomplete file is sent; its paste says the text has only the part saved (`TranscriptDelivery`).
     func finish(_ current: Recording, audio: RecordedAudio?, clipboard: ClipboardGuard.Pending) async {
         let (keyDown, latency) = latencies.take(current.id)
@@ -15,7 +15,7 @@ extension DictationPipeline {
         }
         guard audio.duration >= settings.minimumRecording else {
             await remember(current.id, unless: await ports.audio.discard(audio))
-            finishDictation(current.id, showing: audio.isIncomplete ? .audioNotSaved : .idle)
+            finishDictation(current.id, showing: audio.loss.map(DictationState.audioNotSaved) ?? .idle)
             return
         }
         let job = TranscriptDelivery.Job(

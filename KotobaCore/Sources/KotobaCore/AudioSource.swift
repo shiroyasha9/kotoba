@@ -40,16 +40,24 @@ public struct RecordedAudio: Sendable, Equatable {
     public var file: URL
     /// The length written; zero when no frame was (a stop before the first buffer, an orphan with no readable audio).
     public var duration: Duration
-    /// Some captured audio could not be written (a full disk): the file holds only `duration`, and the pipeline says
-    /// so. Known only at the stop; the history does not keep it.
-    public var isIncomplete: Bool
+    /// Some captured audio could not be written, and why: the file holds only `duration`, and the pipeline says so.
+    /// Known only at the stop; the history does not keep it.
+    public var loss: AudioLoss?
 
-    public init(file: URL, duration: Duration, isIncomplete: Bool = false) {
+    public init(file: URL, duration: Duration, loss: AudioLoss? = nil) {
         self.file = file
         self.duration = duration
-        self.isIncomplete = isIncomplete
+        self.loss = loss
     }
 
     /// Something to send: a recording with no frames is never sent, and never offered for a retry.
     public var hasAudio: Bool { duration > .zero }
+}
+
+/// Why a recording file stopped taking audio.
+public enum AudioLoss: Sendable, Equatable {
+    /// The write failed with ENOSPC: the volume is full.
+    case diskFull
+    /// Another write or conversion error.
+    case other
 }
