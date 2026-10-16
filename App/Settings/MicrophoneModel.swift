@@ -53,7 +53,7 @@ final class MicrophoneModel {
                             forName: AudioCapture.inputDidChange, object: nil, queue: .main
                         ) { _ in MainActor.assumeIsolated(onChange) })
                 },
-                test: { await audio.test(for: .seconds(5)) },
+                test: { await audio.test(for: .seconds(MicrophoneModel.testSeconds)) },
                 openPrivacy: { readiness.openSettings(.microphone) }
             )
         }
@@ -104,6 +104,8 @@ final class MicrophoneModel {
     }
 
     private(set) var testState = TestState.idle
+    /// How long Test Microphone records; the pane's footer says it.
+    static let testSeconds = 5
     @ObservationIgnored private var test: Task<Void, Never>?
     /// Held while the pane shows, so a closed pane observes nothing.
     @ObservationIgnored private var observation: AnyObject?

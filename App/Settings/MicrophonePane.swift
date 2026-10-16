@@ -74,9 +74,12 @@ private struct MicrophonePane: View {
                     TestProblemRow(problem: problem, openPrivacy: model.openMicrophonePrivacy)
                 }
             } footer: {
-                // A quiet room moves the bar little, so the running test says so.
+                // Before a test the footer says what the click does, so the bar at rest is not read as broken; a quiet
+                // room moves the bar little, so the running test says so.
                 if model.testLevel != nil {
-                    Text("Listening for 5 seconds. Speak to see the level.")
+                    Text("Listening for \(MicrophoneModel.testSeconds) seconds. Speak to see the level.")
+                } else {
+                    Text("Records \(MicrophoneModel.testSeconds) seconds from the mic in use and keeps nothing.")
                 }
             }
         }
