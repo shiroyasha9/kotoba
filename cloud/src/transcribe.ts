@@ -18,9 +18,9 @@ export const transcribeRoutes = new Hono<AppEnv>();
  * The hot path. The body is the FLAC file; it streams to the upstream as it arrives. The stated length (STREAMINFO,
  * else X-Kotoba-Audio-Seconds) only decides whether the dictation may start; what it can cost is the byte bound (the
  * byte count at MIN_AUDIO_BYTES_PER_SECOND, capped at MAX_AUDIO_SECONDS), held up to the free balance, and the user
- * pays the upstream's duration, at most the hold. A client that understates the length gets at most the rest of its
- * balance, once. Three gates run in parallel with the upstream request: the user's Balance (the session is not
- * revoked, the stated length is covered), the global daily cap (reserves the byte bound), and the per-user rate limit.
+ * pays the upstream's duration, at most the hold. A client that understates the length pays and gets no text. Three
+ * gates run in parallel with the upstream request: the user's Balance (the session is not revoked, the stated length
+ * is covered), the global daily cap (reserves the byte bound), and the per-user rate limit.
  * When a gate refuses, the upstream request is aborted and the meter gets its seconds back. Payment happens after the
  * response (`waitUntil`).
  */
@@ -126,9 +126,10 @@ transcribeRoutes.post("/transcribe", requireSession, async (c) => {
 
   // The upstream's own duration, rounded up, is what the audio cost; the user pays it, at most the hold. Without it
   // the meter keeps the byte bound, as no one knows what the upstream transcribed.
-  const heard = transcript.durationMs === undefined ? hold : Math.max(1, Math.ceil(transcript.durationMs / 1000));
+  const { durationMs } = transcript;
+  const heard = durationMs === undefined ? hold : Math.max(1, Math.ceil(durationMs / 1000));
   const billed = Math.min(heard, hold);
-  const correction = transcript.durationMs === undefined ? 0 : heard - byteBound;
+  const correction = durationMs === undefined ? 0 : heard - byteBound;
   c.executionCtx.waitUntil(
     Promise.all([balance.settle(requestId, billed, now), correction && meter.adjust(correction)]).then(([after]) => {
       // No audio and no text in logs: user, seconds and outcome only.
@@ -141,6 +142,13 @@ transcribeRoutes.post("/transcribe", requireSession, async (c) => {
   // pays the hold and gets no text, so a file built to dictate for less than it costs gains nothing.
   if (heard > byteBound) {
     throw new ApiError(400, "bad_audio", "This recording is too quiet or too compressed to transcribe.");
+  }
+  // More audio than the stated length, which let the dictation start: paid all the same, but no text, so understating
+  // the length to start past the balance gains nothing. The tolerance covers honest rounding between encoders. With
+  // no duration to check, a hold the balance cut gives no text either.
+  const understated = durationMs === undefined ? hold < byteBound : durationMs > (statedSeconds * 1.05 + 2) * 1000;
+  if (understated) {
+    throw new ApiError(400, "length_mismatch", "The recording is longer than it says. Update kotoba and try again.");
   }
   return c.json({
     text: transcript.text,

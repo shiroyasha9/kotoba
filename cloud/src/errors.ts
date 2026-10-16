@@ -13,6 +13,7 @@ export type ErrorCode =
   | "audio_too_large"
   | "audio_too_long"
   | "bad_audio"
+  | "length_mismatch"
   | "unsupported_media_type"
   | "rate_limited"
   | "service_paused"

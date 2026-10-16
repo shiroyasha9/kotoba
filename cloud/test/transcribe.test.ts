@@ -79,17 +79,39 @@ describe("POST /v1/transcribe", () => {
     expect(await account(h, token)).toMatchObject({ seconds_left: 300 });
   });
 
-  it("charges a lying length at most the balance, then answers out_of_hours", async () => {
+  it("gives no text for an understated length, charges it at most the balance, then answers out_of_hours", async () => {
     const upstream = new RecordingTranscriber({ durationMs: 25_000 });
     const h = harness(() => upstream);
     const { token } = await signIn(h, { trialSeconds: 20 });
     // About 25 s of audio, but STREAMINFO and the header both say 1 s.
     const audio = flac(1, 180_000);
     const response = await h.fetch("/v1/transcribe", dictation(token, audio, 1));
-    expect(await response.json()).toMatchObject({ billed_seconds: 20, seconds_left: 0 });
+    expect([response.status, await errorCode(response)]).toEqual([400, "length_mismatch"]);
     expect(await account(h, token)).toMatchObject({ seconds_left: 0 });
     const next = await h.fetch("/v1/transcribe", dictation(token, flac(1, 180_000), 1));
     expect([next.status, await errorCode(next)]).toEqual([402, "out_of_hours"]);
+  });
+
+  it("passes an honest length within the tolerance (5% + 2 s) and refuses one past it", async () => {
+    let reported = 0;
+    const h = harness(() => new RecordingTranscriber({ durationMs: reported }));
+    const { token } = await signIn(h);
+    reported = 12_500;
+    expect((await h.fetch("/v1/transcribe", dictation(token, flac(10, 200_000), 10))).status).toBe(200);
+    reported = 12_600;
+    const past = await h.fetch("/v1/transcribe", dictation(token, flac(10, 200_000), 10));
+    expect([past.status, await errorCode(past)]).toEqual([400, "length_mismatch"]);
+    // Charged all the same: 13 s for each.
+    expect(await account(h, token)).toMatchObject({ seconds_left: 3600 - 26 });
+  });
+
+  it("gives no text past the balance when the upstream reports no duration to check the length with", async () => {
+    const h = harness(() => new RecordingTranscriber({ durationMs: undefined }));
+    const { token } = await signIn(h, { trialSeconds: 20 });
+    // The byte bound is 30 s; the 20 s balance cut the hold, and nothing shows the real length.
+    const response = await h.fetch("/v1/transcribe", dictation(token, flac(1, 180_000), 1));
+    expect([response.status, await errorCode(response)]).toEqual([400, "length_mismatch"]);
+    expect(await account(h, token)).toMatchObject({ seconds_left: 0 });
   });
 
   it("refuses a recording longer than the free seconds before the upload ends", async () => {
@@ -129,10 +151,10 @@ describe("POST /v1/transcribe", () => {
   it("pays the hold, and keeps the byte bound on the meter, when the upstream gives no duration", async () => {
     const h = harness(() => new RecordingTranscriber({ durationMs: undefined }));
     h.clock.now += 50 * DAY;
-    const { token } = await signIn(h, { trialSeconds: 5 });
+    const { token } = await signIn(h);
     const audio = speech(4);
     const response = await h.fetch("/v1/transcribe", dictation(token, audio, 4));
-    expect(await response.json()).toMatchObject({ billed_seconds: 5 });
+    expect(await response.json()).toMatchObject({ billed_seconds: holdOf(audio) });
     expect(await meterSeconds(h.clock.now)).toBe(holdOf(audio));
   });
 
@@ -255,7 +277,9 @@ describe("POST /v1/transcribe", () => {
     const { token } = await signIn(h);
     // STREAMINFO and the header claim 1 s; the bytes can hold 30 s.
     const audio = flac(1, 180_000);
-    expect((await h.fetch("/v1/transcribe", dictation(token, audio, 1))).status).toBe(200);
+    // An understated length: no text, but the meter still counts what the upstream did.
+    const response = await h.fetch("/v1/transcribe", dictation(token, audio, 1));
+    expect(await errorCode(response)).toBe("length_mismatch");
     expect(meterDuringCall).toBe(holdOf(audio));
     expect(await meterSeconds(h.clock.now)).toBe(12);
   });

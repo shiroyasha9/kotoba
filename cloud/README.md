@@ -62,6 +62,7 @@ the `code`, not the message.
 | 400 | `code_invalid` | Wrong or malformed sign-in code | Let the person try again |
 | 400 | `code_expired` | Code too old, used up (5 wrong tries) or never sent | Ask for a new code |
 | 400 | `bad_audio` | Not 16 kHz mono 16-bit FLAC (checked from STREAMINFO before any upstream call), the upstream cannot read it, or the upstream heard more audio than the bytes can hold at the lowest allowed bitrate (a muted microphone or a crafted file; the hold is paid, no text) | Do not retry this recording |
+| 400 | `length_mismatch` | Azure heard more audio than the recording's STREAMINFO (or `X-Kotoba-Audio-Seconds`) says, past 5% + 2 s. Paid, no text | Re-encode the recording; if it persists, the app's FLAC writer is wrong: upgrade the app |
 | 401 | `signed_out` | No token, bad or expired token, or "Sign out everywhere" ended it | Delete the token, show sign-in; keep the recording queued |
 | 401 | `bad_signature` | Paddle webhook signature check failed | (Paddle only) |
 | 402 | `out_of_hours` | No hours left | Keep the recording queued; show Buy Hours and Use My Own Key |
@@ -154,13 +155,16 @@ Metering:
    dictation is free only when its payment fails after the response (see "Stubbed").
 5. **More audio than the byte bound** (below the bitrate floor: a muted microphone or a crafted file): the user pays
    the hold and gets `bad_audio`, no text.
+6. **More audio than the stated length** (Azure's duration over `stated x 1.05 + 2 s`, with the stated length not
+   rounded; or, when Azure gives no duration, a hold the balance cut below the byte bound): the user pays as in step 4
+   and gets `length_mismatch`, no text.
 
-**Most a lying client can take:** it understates the length, so the dictation starts, and the byte bound is held up to
-its whole balance. It pays its whole balance and gets the text of at most one recording past it, at most
-`MAX_AUDIO_SECONDS` (1,200 s, about USD 0.033 at USD 0.10/h). Then it is at 0 and gets `out_of_hours`. So the loss is
-at most 1,200 s of audio per account per top-up (the free hour counts as one). A file below the bitrate floor gets no
-text, so there is nothing to gain from one; what Azure transcribes of it before it answers (Azure takes up to 2 h of
-audio a request) is bounded only by the rate limit and the global daily cap, which counts Azure's duration.
+**Most a lying client can take:** nothing but upstream cost. Understating the length lets a dictation start past
+the balance, but Azure's duration then shows the lie: the client pays (at most its whole balance) and gets
+`length_mismatch`, no text. A file below the bitrate floor gets `bad_audio`, no text. Our loss per lie is the Azure
+cost of what the balance did not cover, at most `MAX_AUDIO_SECONDS` (1,200 s, about USD 0.033 at USD 0.10/h), once per
+top-up (the free hour counts as one), as the client is then at 0. What Azure transcribes of a file below the floor (Azure takes up to 2 h of audio a
+request) is bounded only by the rate limit and the global daily cap, which counts Azure's duration.
 
 **Before upload:** the app compares the recording's length with `seconds_left` from the last response, while it
 records (to warn when the balance runs out mid-dictation) and before it uploads. When the recording is longer, it shows
