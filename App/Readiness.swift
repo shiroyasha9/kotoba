@@ -141,8 +141,7 @@ final class SetupFlow {
     /// The dictionary onboarding's Wispr Flow step imports into; nil until it is read at launch.
     private let dictionary: @MainActor () -> DictionaryModel?
     private var activations: Task<Void, Never>?
-    /// Reads Readiness every second while a kotoba window is open; ends when the last one closes.
-    private var windowPoll: Task<Void, Never>?
+    private var accessibilityChanges: Task<Void, Never>?
 
     /// `router` checks a key in onboarding.
     init(
@@ -187,35 +186,33 @@ final class SetupFlow {
     }
 
     /// A grant made in System Settings shows without a click: Readiness reads again when the menu opens (the menu
-    /// does that), when kotoba becomes active, and every second while a kotoba window is open (lead decision 4).
+    /// does that), when kotoba becomes active, and when macOS announces an Accessibility change, so onboarding sees
+    /// the grant while System Settings is in front. macOS announces no Microphone change; returning to kotoba (an
+    /// activation) reads it. Nothing runs at idle: this replaced a read every second while any window was open.
     func watchGrants() {
         activations = Task { [weak self] in
             for await _ in NotificationCenter.default.notifications(named: NSApplication.didBecomeActiveNotification) {
-                self?.pollWhileWindowsOpen()
+                self?.readiness.refresh()
             }
         }
-    }
-
-    private func pollWhileWindowsOpen() {
-        readiness.refresh()
-        guard windowPoll == nil else { return }
-        windowPoll = Task { [weak self] in
-            while Self.isWindowOpen {
+        accessibilityChanges = Task { [weak self] in
+            let changes = DistributedNotificationCenter.default().notifications(named: Self.accessibilityChanged)
+            for await _ in changes {
+                // macOS posts it before `AXIsProcessTrusted` returns the new value; Loop and Hammerspoon read again
+                // 150-250 ms later.
                 do {
-                    try await Task.sleep(for: .seconds(1))
+                    try await Task.sleep(for: .milliseconds(250))
                 } catch {
                     return
                 }
                 self?.readiness.refresh()
             }
-            self?.windowPoll = nil
         }
     }
 
-    /// Settings, onboarding or Fix Last Dictation; the pill panel and the menu have no title bar.
-    private static var isWindowOpen: Bool {
-        NSApp.windows.contains { $0.isVisible && $0.styleMask.contains(.titled) }
-    }
+    /// Posted to every app when the Accessibility list in System Settings changes (not documented; Hammerspoon, Loop
+    /// and AltTab observe it on current macOS).
+    private static let accessibilityChanged = Notification.Name("com.apple.accessibility.api")
 
     /// Returns once the hotkey tap runs. The tap and Cmd-V need Accessibility, so it starts when Readiness sees
     /// the grant. A grant can take a moment to reach the event system, so a failed start tries twice more.
