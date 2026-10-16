@@ -126,28 +126,34 @@ struct OnboardingView: View {
     }
 }
 
-/// One dot per step: done steps show a checkmark, the shown step is filled. Custom: macOS has no page indicator
-/// control (UIPageControl is iOS only).
+/// One dot per step: done steps show a checkmark, the shown step is in the accent color, done or not, so the owner
+/// always sees where they are. Custom: macOS has no page indicator control (UIPageControl is iOS only).
 private struct StepDots: View {
     let model: OnboardingModel
 
     var body: some View {
         HStack(spacing: 6) {
             ForEach(model.flow.steps) { step in
-                Group {
-                    if model.isDone(step) {
-                        Image(systemName: "checkmark.circle.fill").foregroundStyle(.green)
-                    } else {
-                        Image(systemName: step == model.step ? "circle.fill" : "circle")
-                            .foregroundStyle(step == model.step ? AnyShapeStyle(.tint) : AnyShapeStyle(.tertiary))
-                    }
-                }
-                .font(.caption2)
-                .imageScale(.small)
-                .opacity(step == model.step || model.isDone(step) ? 1 : 0.8)
+                let isShown = step == model.step
+                let isDone = model.isDone(step)
+                Image(systemName: Self.symbol(isShown: isShown, isDone: isDone))
+                    .foregroundStyle(Self.style(isShown: isShown, isDone: isDone))
+                    .font(.caption2)
+                    .imageScale(.small)
+                    .opacity(isShown || isDone ? 1 : 0.8)
             }
         }
         .accessibilityElement(children: .ignore)
         .accessibilityLabel("Step \(model.flow.index(of: model.step) + 1) of \(model.flow.steps.count)")
+    }
+
+    private static func symbol(isShown: Bool, isDone: Bool) -> String {
+        if isDone { return "checkmark.circle.fill" }
+        return isShown ? "circle.fill" : "circle"
+    }
+
+    private static func style(isShown: Bool, isDone: Bool) -> AnyShapeStyle {
+        if isShown { return AnyShapeStyle(.tint) }
+        return isDone ? AnyShapeStyle(.green) : AnyShapeStyle(.tertiary)
     }
 }
