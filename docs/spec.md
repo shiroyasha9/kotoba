@@ -185,6 +185,14 @@ Plans: `docs/research/ux-polish.md` (49 items, IDs used below) and `docs/researc
   - idea 1, context terms from the active repo and session (privacy decision open: on or off by default, story 34);
   - idea 5, rank and cap dictionary terms per request (risk: it can drop a needed term).
 
+### Wispr Flow gaps (lead, 2026-10-17)
+
+From the Wispr Flow survey (`<runbooks>/2026-10-17-wispr-flow-survey/kotoba-plan.md`, items 2, 4, 5, 7, 10):
+- Copy Last has its own chord, ⌃⌘C by default (Hotkey state machine above).
+- History: Transcribe Again sends a row's kept audio once more, with the current speech model or another one whose key is saved, and keeps the new text in place of the old; nothing is pasted, and a miss keeps the old text. The toolbar's Retry does it for a selected row with text. Play plays a row's kept audio (Space too) and stops when a dictation starts; Show Audio in Finder selects the file.
+- The Modes pane shows one example per mode: what the owner says and what that mode's cleanup pastes, from the first example in its prompt.
+- The menu bar menu has Add Word…, which opens Dictionary with the add sheet.
+
 ### Per-app modes (story 29; lead decisions 2026-10-16)
 
 Design and evidence: `docs/research/per-app-modes.md`.

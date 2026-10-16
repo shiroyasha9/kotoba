@@ -60,10 +60,11 @@ public actor HistoryStore: Store {
     /// What a read returns: the written columns, then the ones only `deleteAudio` writes.
     private static let readColumns = columns + ", audio_deleted"
 
-    /// SQL lists of statuses, from `DictationRecord.Status`: the retry queue, and the rows whose text reached the
-    /// owner.
+    /// SQL lists of statuses, from `DictationRecord.Status`: the retry queue, the rows whose text reached the owner,
+    /// and every row with text.
     private static let retryable = sqlList([.pending, .failed])
     private static let delivered = sqlList([.pasted, .copied])
+    private static let transcribed = sqlList(DictationRecord.Status.allCases.filter(\.isTranscribed))
     /// The kept rows the History pane's Retry puts back in the queue.
     private static let requeued = sqlList([.cancelled, .rejected])
     let database: SQLiteDatabase
@@ -193,6 +194,10 @@ public actor HistoryStore: Store {
 
     public func queuedRecord(_ id: DictationID) throws -> DictationRecord? {
         try records(where: "id = ?1 AND status IN \(Self.retryable)", [.text(id.rawValue.uuidString)]).first
+    }
+
+    public func transcribedRecord(_ id: DictationID) throws -> DictationRecord? {
+        try records(where: "id = ?1 AND status IN \(Self.transcribed)", [.text(id.rawValue.uuidString)]).first
     }
 
     public func status(of id: DictationID) throws -> DictationRecord.Status? {

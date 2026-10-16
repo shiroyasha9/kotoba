@@ -19,12 +19,18 @@ public struct TranscriptionRequest: Sendable, Equatable {
     public var language: Locale.Language
     /// Dictionary terms, sent where the route supports them.
     public var dictionaryTerms: [String]
+    /// A route's model (`Transcript.model`) to use in place of the owner's choice, for History's "Transcribe Again
+    /// With"; nil uses the owner's choice.
+    public var model: String?
 
-    public init(audio: URL, duration: Duration, language: Locale.Language, dictionaryTerms: [String]) {
+    public init(
+        audio: URL, duration: Duration, language: Locale.Language, dictionaryTerms: [String], model: String? = nil
+    ) {
         self.audio = audio
         self.duration = duration
         self.language = language
         self.dictionaryTerms = dictionaryTerms
+        self.model = model
     }
 }
 

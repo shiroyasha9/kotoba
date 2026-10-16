@@ -111,10 +111,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         self.pipeline = pipeline
         mainWindow.pipeline = pipeline
         lastDictation = LastDictation(store: store, pipeline: pipeline)
-        mainWindow.historyPane = HistoryController(store: store, pipeline: pipeline) { [weak self] in
-            self?.fixWindow.show($0)
-        }
-
+        mainWindow.historyPane = HistoryController(
+            store: store, pipeline: pipeline, routes: routeSettings, keys: vault
+        ) { [weak self] in self?.fixWindow.show($0) }
         observe(pipeline)
         observeReadiness()
         let dictionaryRead = Task { await mainWindow.loadDictionary(into: pipeline) }

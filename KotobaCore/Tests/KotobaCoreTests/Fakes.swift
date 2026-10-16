@@ -54,7 +54,7 @@ final class FakeSetup: Sendable {
 
 actor FakeTranscriptionProvider: TranscriptionProvider {
     private var error: (any Error)?
-    private let transcript: String
+    private var transcript: String
     private(set) var requests: [TranscriptionRequest] = []
     /// When set, `transcribe` waits for this gate.
     private var gate: Gate?
@@ -72,6 +72,11 @@ actor FakeTranscriptionProvider: TranscriptionProvider {
 
     func fail(with error: (any Error)?) {
         self.error = error
+    }
+
+    /// Each answer from now on hears `transcript`.
+    func hear(_ transcript: String) {
+        self.transcript = transcript
     }
 
     /// Each answer from now on reports `audio` and `cost`.

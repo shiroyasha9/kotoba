@@ -11,6 +11,9 @@ public protocol Store: Sendable {
     /// The stored record, latency marks included, while it is `.pending` or `.failed`; nil otherwise. A retry sends
     /// this fresh copy, so it keeps what a live try wrote after the queue was read.
     func queuedRecord(_ id: DictationID) async throws -> DictationRecord?
+    /// The stored record, latency marks included, while it has its text (`Status.isTranscribed`); nil otherwise.
+    /// History's "Transcribe Again" sends this fresh copy, so its write keeps the marks.
+    func transcribedRecord(_ id: DictationID) async throws -> DictationRecord?
     /// Records with status `.recovered` and `recoveredAt` at or after `cutoff`, newest first. For
     /// the menu, so their latency logs may be left empty.
     func recovered(since cutoff: Date) async throws -> [DictationRecord]
@@ -291,6 +294,10 @@ struct AnnouncingStore: Store {
 
     func queuedRecord(_ id: DictationID) async throws -> DictationRecord? {
         try await base.queuedRecord(id)
+    }
+
+    func transcribedRecord(_ id: DictationID) async throws -> DictationRecord? {
+        try await base.transcribedRecord(id)
     }
 
     func recovered(since cutoff: Date) async throws -> [DictationRecord] {

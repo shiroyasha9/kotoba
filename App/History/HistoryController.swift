@@ -1,9 +1,11 @@
 import AppKit
 import KotobaCore
+import KotobaProviders
 import KotobaStorage
 
-/// The History pane (story 30): past dictations with Copy, Paste Again, Retry and Delete. Its model is built with the
-/// main window and released when the window closes; while the window is closed, history writes cost it nothing.
+/// The History pane (story 30): past dictations with Copy, Paste Again, Retry, Transcribe Again, Play and Delete. Its
+/// model is built with the main window and released when the window closes; while the window is closed, history
+/// writes cost it nothing.
 @MainActor
 final class HistoryController {
     /// The longest Paste Again waits for the app the owner was in to come back to the front.
@@ -13,6 +15,9 @@ final class HistoryController {
     private let pipeline: DictationPipeline
     /// Opens the Fix window with a row's text.
     private let fix: @MainActor (DictationRecord) -> Void
+    /// The speech model choice and the saved keys, for "Transcribe Again With".
+    private let routes: TranscriptionSettings
+    private let keys: KeyVault
     private var model: HistoryModel?
     /// The pipeline's newest activity, kept while the window is closed so it opens with it.
     private var activity = PipelineActivity(isQuiet: true, inFlight: [])
@@ -21,10 +26,23 @@ final class HistoryController {
     private var changes: AsyncStream<HistoryChange>.Continuation?
     private var applying: Task<Void, Never>?
 
-    init(store: HistoryStore, pipeline: DictationPipeline, fix: @escaping @MainActor (DictationRecord) -> Void) {
+    init(
+        store: HistoryStore, pipeline: DictationPipeline, routes: TranscriptionSettings, keys: KeyVault,
+        fix: @escaping @MainActor (DictationRecord) -> Void
+    ) {
         self.store = store
         self.pipeline = pipeline
+        self.routes = routes
+        self.keys = keys
         self.fix = fix
+    }
+
+    /// Every route but the current one whose key (and, for Azure, endpoint) is saved, in the Speech pane's order.
+    private var otherSpeechModels: [MenuChoice] {
+        let current = routes.route
+        return TranscriptionRoute.allCases.filter {
+            $0 != current && routes.missingSetup(for: $0, hasKey: keys.hasKey(for:)) == nil
+        }.map { MenuChoice(title: $0.menuTitle, value: $0.rawValue) }
     }
 
     /// The pane, with a new model that follows history writes until `windowClosed()`.
@@ -80,6 +98,8 @@ final class HistoryController {
                 return true
             },
             copy: { await pipeline.copyAgain($0) },
+            transcribeAgain: { await pipeline.transcribeAgain($0, model: $1) },
+            otherSpeechModels: { [weak self] in self?.otherSpeechModels ?? [] },
             fix: fix
         )
     }

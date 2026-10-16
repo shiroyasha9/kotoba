@@ -50,6 +50,19 @@ struct XAIProviderTests {
     }
 
     /// The pipeline decides it heard no speech; the provider keeps the cost of the 1 s xAI counted.
+    @Test func aRequestThatNamesARouteGoesThereWhateverTheChoice() async throws {
+        let stub = StubHost(reply: .fixture("xai-success"))
+        stub.settings.route = .openRouterMAI
+        var request = try stub.request()
+        request.model = TranscriptionRoute.xaiGrok.rawValue
+
+        let transcript = try await stub.provider().transcribe(request)
+
+        #expect(try #require(stub.requests.only).url == stub.url("/v1/stt"))
+        #expect(transcript.model == "xai-direct/grok-stt")
+        #expect(stub.settings.route == .openRouterMAI)
+    }
+
     @Test func anEmptyAnswerKeepsItsUsage() async throws {
         let stub = StubHost(reply: .raw(status: 200, body: #"{"text":"  ","language":"en","duration":1.0}"#))
         stub.settings.route = .xaiGrok

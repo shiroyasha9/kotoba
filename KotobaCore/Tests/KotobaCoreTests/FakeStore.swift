@@ -66,6 +66,12 @@ actor FakeStore: Store {
         return record
     }
 
+    func transcribedRecord(_ id: DictationID) async throws -> DictationRecord? {
+        guard var record = records.first(where: { $0.id == id }), record.status.isTranscribed else { return nil }
+        record.usage = []
+        return record
+    }
+
     func markCopied(_ id: DictationID) async throws {
         guard let index = records.firstIndex(where: { $0.id == id }) else { return }
         records[index].status = .copied

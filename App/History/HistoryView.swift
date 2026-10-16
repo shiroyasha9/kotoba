@@ -29,6 +29,11 @@ struct HistoryView: View {
             } message: {
                 Text("kotoba couldn’t bring back the app you were in. The text is on the clipboard: press ⌘V there.")
             }
+            .alert("Couldn’t Transcribe Again", isPresented: $model.isTranscribeFailureShown) {
+                Button("OK") {}
+            } message: {
+                Text("The speech model didn’t answer, or heard no words. The text stays as it was.")
+            }
             .alert("Couldn’t Delete", isPresented: $model.isDeleteFailureShown) {
                 Button("OK") {}
             } message: {
@@ -65,7 +70,8 @@ struct HistoryView: View {
                         HistoryRow(
                             record: record, apps: model.apps,
                             isRetryable: model.retryable.contains(record.id),
-                            isSending: model.activity.inFlight.contains(record.id),
+                            isSending: model.activity.inFlight.contains(record.id)
+                                || model.transcribing.contains(record.id),
                             isPlaying: model.playback.playing == record.id)
                     }
                 }
@@ -105,7 +111,7 @@ struct HistoryView: View {
                 .disabled(!model.canPasteAgain(records))
             Button("Retry", systemImage: "arrow.clockwise") { model.retry(records) }
                 .help("Transcribe the saved audio again")
-                .disabled(!model.canRetry(records))
+                .disabled(!model.canRetry(records) && !model.canTranscribeAgain(records))
             if model.isPlaying(records) {
                 Button("Stop", systemImage: "stop.fill") { model.togglePlay(records) }
                     .help("Stop the audio")
@@ -134,6 +140,9 @@ struct HistoryView: View {
             if model.canRetry(records) {
                 Button("Retry") { model.retry(records) }
             }
+            if records.contains(where: { $0.hasText && HistoryModel.hasAudio($0) }) {
+                transcribeAgainItems(for: records)
+            }
             if model.isPlaying(records) {
                 Button("Stop Audio") { model.togglePlay(records) }
             } else if records.count == 1, records.contains(where: HistoryModel.hasAudio) {
@@ -150,6 +159,23 @@ struct HistoryView: View {
             Divider()
             Button("Delete…", role: .destructive) { model.askToDelete(records) }
                 .disabled(!model.canDelete(records))
+        }
+    }
+
+    /// Transcribe Again with the current speech model, and with each other one that can send now.
+    @ViewBuilder
+    private func transcribeAgainItems(for records: [DictationRecord]) -> some View {
+        let isEnabled = model.canTranscribeAgain(records)
+        Button("Transcribe Again") { model.transcribeAgain(records) }
+            .disabled(!isEnabled)
+        let others = model.otherSpeechModels
+        if !others.isEmpty {
+            Menu("Transcribe Again With") {
+                ForEach(others, id: \.value) { choice in
+                    Button(choice.title) { model.transcribeAgain(records, model: choice.value) }
+                }
+            }
+            .disabled(!isEnabled)
         }
     }
 
@@ -250,6 +276,11 @@ struct HistoryStatus {
     let isProblem: Bool
 
     init?(_ record: DictationRecord, isSending: Bool) {
+        // A row with text is being transcribed again.
+        if isSending, record.status.isTranscribed {
+            (title, systemImage, isProblem) = ("Transcribing", "ellipsis.circle", false)
+            return
+        }
         switch record.status {
         case .pasted, .copied:
             return nil

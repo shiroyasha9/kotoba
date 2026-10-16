@@ -24,6 +24,10 @@ final class HistoryModel {
         /// False when the app the owner was in did not come back, so nothing was pasted; the text is on the clipboard.
         var paste: @MainActor (String, DictationID) async -> Bool
         var copy: @MainActor (String) async -> Void
+        /// Sends a row with text again, with a route's model or the current one (nil); false when it keeps its text.
+        var transcribeAgain: @MainActor (DictationID, _ model: String?) async -> Bool
+        /// "Transcribe Again With": the other speech models that can send now.
+        var otherSpeechModels: @MainActor () -> [MenuChoice]
         /// Opens the Fix window with the row's text.
         var fix: @MainActor (DictationRecord) -> Void
     }
@@ -75,6 +79,10 @@ final class HistoryModel {
     var pendingDelete: [DictationID]?
     /// A Delete kept some dictations: the window says so.
     var isDeleteFailureShown = false
+    /// Rows with text being transcribed again; they read "Transcribing" until the answer.
+    private(set) var transcribing: Set<DictationID> = []
+    /// A Transcribe Again kept the old text of some rows: the window says so.
+    var isTranscribeFailureShown = false
 
     @ObservationIgnored private let source: Source?
     /// Each read takes the next number; a result that comes back after a newer read started is dropped.
@@ -88,10 +96,11 @@ final class HistoryModel {
         self.source = source
     }
 
-    /// For snapshots: fixed rows and no store.
-    init(rows: [DictationRecord], search: String = "") {
+    /// For snapshots: fixed rows and no store; `transcribing` rows show as being transcribed again.
+    init(rows: [DictationRecord], search: String = "", transcribing: Set<DictationID> = []) {
         source = nil
         self.search = search
+        self.transcribing = transcribing
         list.replace(with: rows, limit: rows.count + 1)
         days = Self.days(of: list.rows)
         retryable = Self.kept(rows)
@@ -257,11 +266,44 @@ final class HistoryModel {
         records.contains { retryable.contains($0.id) }
     }
 
+    /// The toolbar's Retry: rows with no text join the retry queue, and rows with text are transcribed again with
+    /// the current speech model.
     func retry(_ records: [DictationRecord]) {
         guard let source else { return }
+        transcribeAgain(records)
         let ids = Set(records.map(\.id)).intersection(retryable)
         guard !ids.isEmpty else { return }
         Task { await source.retry(ids) }
+    }
+
+    /// Rows with text whose audio is kept, while no dictation records or is sent: the request would slow a live one.
+    func canTranscribeAgain(_ records: [DictationRecord]) -> Bool {
+        activity.isQuiet && !againRows(records).isEmpty
+    }
+
+    /// Sends each row with text again, one at a time, with `model` (a route's) or the current speech model (nil).
+    func transcribeAgain(_ records: [DictationRecord], model: String? = nil) {
+        guard let source, canTranscribeAgain(records) else { return }
+        let ids = againRows(records).map(\.id)
+        transcribing.formUnion(ids)
+        Task {
+            var isEveryOneDone = true
+            for id in ids {
+                let isDone = await source.transcribeAgain(id, model)
+                isEveryOneDone = isEveryOneDone && isDone
+                transcribing.remove(id)
+            }
+            if !isEveryOneDone { isTranscribeFailureShown = true }
+        }
+    }
+
+    /// The other speech models that can send now, for "Transcribe Again With".
+    var otherSpeechModels: [MenuChoice] {
+        source?.otherSpeechModels() ?? []
+    }
+
+    private func againRows(_ records: [DictationRecord]) -> [DictationRecord] {
+        records.filter { $0.hasText && Self.hasAudio($0) && !transcribing.contains($0.id) }
     }
 
     /// A dictation in flight is not deleted: its own save would bring the row back (the pipeline keeps it too).
@@ -281,30 +323,5 @@ final class HistoryModel {
                 isDeleteFailureShown = true
             }
         }
-    }
-
-    // MARK: Display
-
-    private static func days(of rows: [DictationRecord]) -> [Day] {
-        let calendar = Calendar.current
-        var days: [Day] = []
-        for row in rows {
-            let start = calendar.startOfDay(for: row.createdAt)
-            if days.last?.id == start {
-                days[days.count - 1].rows.append(row)
-            } else {
-                days.append(Day(id: start, title: title(of: start, calendar: calendar), rows: [row]))
-            }
-        }
-        return days
-    }
-
-    /// "Today", "Yesterday", "Monday, 12 October", with the year when it is not this year.
-    private static func title(of day: Date, calendar: Calendar) -> String {
-        if calendar.isDateInToday(day) { return "Today" }
-        if calendar.isDateInYesterday(day) { return "Yesterday" }
-        let style = Date.FormatStyle().weekday(.wide).day().month(.wide)
-        return calendar.isDate(day, equalTo: .now, toGranularity: .year)
-            ? day.formatted(style) : day.formatted(style.year())
     }
 }

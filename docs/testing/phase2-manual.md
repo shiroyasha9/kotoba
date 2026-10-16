@@ -416,6 +416,10 @@ Rows from each agent's phase 2.5 work. The numbers continue the list above.
 | 721 | Play a row, then select another row and press Space; then start a dictation with the chord | The first audio stops and the second plays; the chord stops it before capture, so the speakers are not in the dictation | |
 | 722 | Right-click a row with audio > **Show Audio in Finder** | A Finder window opens with the row’s .flac file selected. Rows that read “audio deleted” have no Play and no Show Audio in Finder | |
 | 723 | Play a row, then close the main window | The audio stops | |
+| 724 | History: right-click a pasted row > **Transcribe Again** | The row reads “Transcribing”, then shows the new text; nothing pastes and the clipboard keeps what it held. Settings > Usage counts one more request | |
+| 725 | With keys for two speech models saved, right-click a pasted row > **Transcribe Again With** > the other model | The submenu lists only models other than the current one whose key is saved; the row gets that model’s text; the menu bar’s Speech Model does not change | |
+| 726 | Turn Wi-Fi off; right-click a pasted row > **Transcribe Again** | “Couldn’t Transcribe Again” with **OK**; the row keeps its text and shows no error status | |
+| 727 | Select a pasted row and a “Not transcribed” row; click **Retry** in the toolbar | The failed row is sent as before; the pasted row is transcribed again | |
 
 ### Usage pane (phase 3)
 

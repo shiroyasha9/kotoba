@@ -34,8 +34,13 @@ public final class TranscriptionRouter: TranscriptionProvider {
         await client(for: options.route.account).warmUp(options)
     }
 
+    /// A request that names a route's model (History's "Transcribe Again With") goes down that route once; the
+    /// owner's choice stays.
     public func transcribe(_ request: TranscriptionRequest) async throws -> Transcript {
-        let options = settings.routeOptions
+        var options = settings.routeOptions
+        if let route = request.model.flatMap(TranscriptionRoute.init(rawValue:)) {
+            options.route = route
+        }
         return try await client(for: options.route.account).transcribe(request, options)
     }
 

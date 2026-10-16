@@ -228,7 +228,11 @@ public final class TranscriptionSettings: Sendable {
     /// What the current route still needs before it can send, or nil when it is ready: its provider's key first,
     /// then (Azure direct only) the endpoint. `hasKey` answers for one provider account (the app's `KeyVault`).
     public func missingSetup(hasKey: (ProviderAccount) -> Bool) -> SetupItem? {
-        let route = route
+        missingSetup(for: route, hasKey: hasKey)
+    }
+
+    /// What `route` still needs before it can send, as `missingSetup(hasKey:)` says for the current route.
+    public func missingSetup(for route: TranscriptionRoute, hasKey: (ProviderAccount) -> Bool) -> SetupItem? {
         if !hasKey(route.account) { return .key }
         if route == .azureMAI, Self.azureEndpointURL(azureEndpoint) == nil { return .endpoint }
         return nil
