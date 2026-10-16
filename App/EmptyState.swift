@@ -39,8 +39,8 @@ extension EmptyState where Actions == Button<Text> {
     /// A pane whose read failed, with the button that reads again.
     static func loadFailed(retry: @escaping @MainActor () -> Void) -> Self {
         EmptyState(
-            title: "Couldn’t Read Your History", systemImage: "exclamationmark.triangle",
-            description: "kotoba couldn’t read your dictation history."
+            title: StatusText.historyReadFailedTitle, systemImage: "exclamationmark.triangle",
+            description: StatusText.historyReadFailedMessage
         ) {
             Button("Try Again", action: retry)
         }

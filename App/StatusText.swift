@@ -12,7 +12,10 @@ enum StatusText {
         let chord = HotkeyChords.shared.dictation
         return chord.hasSymbols ? "\(chord.title) (\(chord.spokenTitle))" : chord.title
     }
-    static let historyUnavailable = "History unavailable. Quit and reopen kotoba."
+    /// The history database cannot be read: the panes' failure state (title and message) and the menu status line.
+    static let historyReadFailedTitle = "Couldn’t Read History"
+    static let historyReadFailedMessage = "Quit and reopen kotoba."
+    static let historyUnavailable = "Couldn’t read history. \(historyReadFailedMessage)"
     /// A development build while the release app runs (`InstallYield`): the menu status line and the pill.
     static let yieldsToRelease = "Quit kotoba to dictate with \(Install.displayName)"
     /// The idle pill's help tag ("Show indicator: Always").
