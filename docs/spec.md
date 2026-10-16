@@ -130,6 +130,7 @@ The app is open-source (Apache-2.0) and distributed as a notarized DMG on GitHub
 
 ### Transcription providers
 - One `TranscriptionProvider` protocol: input is an audio file plus options (language, vocabulary terms); output is text plus usage (audio seconds, cost when known) and timing. Each provider owns one long-lived URLSession, warmed at key-down.
+- Route primer (latency agent, 2026-10-17, measured in `docs/research/latency-pass.md`; owner may override): the warm-up opens TCP and TLS only, and OpenRouter MAI answers about 1.6 s slower after a quiet minute. So at the announcement of a dictation (never for a dropped shortcut press) the OpenRouter routes send half a second of silence as a billed transcription, and nothing waits for it. Its cost (one billed second, $0.000028) goes to the usage ledger with the dictation, with no audio and no words.
 - Routes, in order: OpenRouter (owner already has a key; one key for both models; adds one hop), then xAI direct (`POST /v1/stt`, multipart, up to 100 keyterms of 50 chars) and Azure MAI-Transcribe-2 direct (fast transcription REST, `phraseList`, Central India region available). Order of the direct routes follows the benchmark.
 - MAI-Transcribe-2 is public preview; its $0.10/h price is a promotion until 2026-12-31.
 

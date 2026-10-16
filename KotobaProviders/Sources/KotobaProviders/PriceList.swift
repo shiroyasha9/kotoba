@@ -50,12 +50,12 @@ enum PriceList {
 }
 
 extension TranscriptionUsage {
-    /// What a route's answer reported, with the recording's length for a missing audio count and the list price for a
+    /// What a route's answer reported, with the `recorded` length for a missing audio count and the list price for a
     /// missing cost.
     static func priced(
-        audio: Duration?, cost: Decimal?, for request: TranscriptionRequest, on route: TranscriptionRoute
+        audio: Duration?, cost: Decimal?, recorded: Duration, on route: TranscriptionRoute
     ) -> Self {
-        let audio = audio ?? request.duration
+        let audio = audio ?? recorded
         return Self(audio: audio, cost: cost.map(Cost.reported) ?? PriceList.estimate(route, audio: audio))
     }
 }

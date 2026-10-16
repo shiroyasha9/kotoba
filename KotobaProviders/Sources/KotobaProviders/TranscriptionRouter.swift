@@ -34,6 +34,11 @@ public final class TranscriptionRouter: TranscriptionProvider {
         await client(for: options.route.account).warmUp(options)
     }
 
+    public func prime(language: Locale.Language) async -> Transcript? {
+        let options = settings.routeOptions
+        return await client(for: options.route.account).prime(options, language: language)
+    }
+
     /// A request that names a route's model (History's "Transcribe Again With") goes down that route once; the
     /// owner's choice stays.
     public func transcribe(_ request: TranscriptionRequest) async throws -> Transcript {
@@ -70,6 +75,8 @@ protocol RouteClient: Sendable {
         _ request: TranscriptionRequest,
         _ options: TranscriptionSettings.RouteOptions
     ) async throws -> Transcript
+    /// `TranscriptionProvider.prime` on this route.
+    func prime(_ options: TranscriptionSettings.RouteOptions, language: Locale.Language) async -> Transcript?
 }
 
 /// What a key check found.

@@ -46,6 +46,9 @@ final class XAIProvider: RouteClient {
         return info.teamBlocked ? .noCredit : .valid
     }
 
+    /// No primer: this route's cold start is not measured (docs/research/latency-pass.md).
+    func prime(_ options: TranscriptionSettings.RouteOptions, language: Locale.Language) async -> Transcript? { nil }
+
     func transcribe(_ request: TranscriptionRequest, _ options: TranscriptionSettings.RouteOptions) async throws
         -> Transcript
     {
@@ -57,7 +60,7 @@ final class XAIProvider: RouteClient {
         let body = try ProviderHTTP.decode(SuccessBody.self, from: reply, label: label)
         // xAI reports no cost in the response.
         let usage = TranscriptionUsage.priced(
-            audio: body.duration.map { .seconds($0) }, cost: nil, for: request, on: options.route)
+            audio: body.duration.map { .seconds($0) }, cost: nil, recorded: request.duration, on: options.route)
         return Transcript(text: body.text ?? "", usage: usage, model: label, network: reply.network)
     }
 

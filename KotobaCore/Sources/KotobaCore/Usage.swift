@@ -39,7 +39,8 @@ public struct UsageEntry: Sendable, Equatable, Identifiable {
     public var kind: Kind
     /// The route or cleanup model identifier; `unknownModel` for a cleanup kept before kotoba recorded its model.
     public var model: String
-    /// Speech: the audio the route counted (MAI-Transcribe-2 bills whole seconds). Cleanup: zero.
+    /// Speech: the audio the route counted (MAI-Transcribe-2 bills whole seconds). Cleanup and a route primer
+    /// (`TranscriptionProvider.prime`): zero, so minutes stay what the owner dictated.
     public var audio: Duration
     /// The change this answer made to the words of the delivered text, so the entries of a dictation add up to the
     /// words it delivered (as History counts them): a speech answer's words, and for a used cleanup its words minus the

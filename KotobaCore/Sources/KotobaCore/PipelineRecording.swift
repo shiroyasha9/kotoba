@@ -97,8 +97,27 @@ extension DictationPipeline {
         recording?.clipboard = takeClipboard()
         current.announcement.cancel()
         latencies.mark(.cue, of: id, at: instant)
+        primeRoute(for: id)
         emit(.recording(isLong: false, isSilent: current.sound.isWarning, isCleaned: current.isCleaned))
         await ports.readback?.dictationStarted()
+    }
+
+    /// Sends the route's primer as tracked work; nothing waits for it. Its cost goes to the ledger with this
+    /// dictation, with no audio and no words, so minutes and words per minute stay what the owner dictated.
+    private func primeRoute(for id: DictationID) {
+        let language = settings.language
+        work.track { [provider = ports.provider, store = ports.store, clock = ports.clock] in
+            guard let primer = await provider.prime(language: language) else { return }
+            do {
+                try await store.addUsage([
+                    UsageEntry(
+                        time: clock.date, dictation: id, kind: .speech, model: primer.model, deliveredWords: 0,
+                        cost: primer.usage.cost)
+                ])
+            } catch {
+                Log.pipeline.error("Primer \(id.rawValue): cannot bill it: \(error)")
+            }
+        }
     }
 
     private func takeClipboard() -> ClipboardGuard.Pending {

@@ -42,6 +42,9 @@ final class AzureProvider: RouteClient {
         }
     }
 
+    /// No primer: this route's cold start is not measured (docs/research/latency-pass.md).
+    func prime(_ options: TranscriptionSettings.RouteOptions, language: Locale.Language) async -> Transcript? { nil }
+
     func transcribe(_ request: TranscriptionRequest, _ options: TranscriptionSettings.RouteOptions) async throws
         -> Transcript
     {
@@ -64,7 +67,8 @@ final class AzureProvider: RouteClient {
         // One channel: the first combined phrase is the whole transcript. Azure reports no cost in the response.
         let text = body.combinedPhrases.first?.text ?? ""
         let usage = TranscriptionUsage.priced(
-            audio: body.durationMilliseconds.map { .milliseconds($0) }, cost: nil, for: request, on: options.route)
+            audio: body.durationMilliseconds.map { .milliseconds($0) }, cost: nil, recorded: request.duration,
+            on: options.route)
         return Transcript(text: text, usage: usage, model: label, network: reply.network)
     }
 

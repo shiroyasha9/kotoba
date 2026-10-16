@@ -43,30 +43,61 @@ final class OpenRouterProvider: RouteClient {
         -> Transcript
     {
         let label = options.route.rawValue
-        let rest = try ProviderHTTP.encode(Self.fields(request, options: options))
+        let fields = Self.fields(terms: request.dictionaryTerms, language: request.language, options: options)
+        let (answer, reply) = try await post(fields, label: label) {
+            try $0.write(contentsOf: request.audio, base64: true)
+        }
+        let usage = TranscriptionUsage.priced(
+            audio: answer.usage?.seconds.map { .seconds($0) }, cost: answer.usage?.charged, recorded: request.duration,
+            on: options.route)
+        return Transcript(text: answer.text ?? "", usage: usage, model: label, network: reply.network)
+    }
+
+    /// Half a second of 16 kHz mono silence as FLAC (110 bytes), in base64: `flac --best --no-padding --no-seektable`
+    /// on the output of `ffmpeg -f lavfi -i anullsrc=r=16000:cl=mono -t 0.5 -c:a pcm_s16le`. MAI bills it as one
+    /// second.
+    static let primerAudio =
+        "ZkxhQwAAACIQABAAAAALAAANA+gA8AAAH0Ae4Bk2cWCcfWPP6JuSCtMThAAAKCAAAAByZWZlcmVuY2UgbGliRkxBQyAxLjUuMCAyMDI1"
+        + "MDIxMQAAAAD/+MUIAG8AAABlVf/4dQgBDz/iAAAAZoI="
+
+    /// After a quiet minute OpenRouter MAI answered about 1.6 s slower, and the key-down `HEAD` did not change that;
+    /// a billed transcription did (docs/research/latency-pass.md). The primer is one, with the route's model, language
+    /// and data policy and no dictionary terms. A failure only means the next answer pays the cold start.
+    func prime(_ options: TranscriptionSettings.RouteOptions, language: Locale.Language) async -> Transcript? {
+        let label = "primer \(options.route.rawValue)"
+        let fields = Self.fields(terms: [], language: language, options: options)
+        guard let (answer, _) = try? await post(fields, label: label, audio: { try $0.write(Self.primerAudio) }) else {
+            return nil
+        }
+        let usage = TranscriptionUsage.priced(
+            audio: answer.usage?.seconds.map { .seconds($0) }, cost: answer.usage?.charged,
+            recorded: .milliseconds(500), on: options.route)
+        return Transcript(text: answer.text ?? "", usage: usage, model: options.route.rawValue)
+    }
+
+    /// POSTs `input_audio` first, its base64 from `audio`, then the other fields, and decodes the answer.
+    private func post(
+        _ fields: RequestFields, label: String, audio: @escaping (BodyWriter) throws -> Void
+    ) async throws -> (SuccessBody, ProviderConnection.Reply) {
+        let rest = try ProviderHTTP.encode(fields)
         let reply = try await connection.send(
             baseURL.appending(path: "audio/transcriptions"), contentType: "application/json", label: label,
             body: .streamed { writer in
-                // `input_audio` first, its base64 streamed from the FLAC, then the other fields from `rest`.
                 try writer.write(#"{"input_audio":{"format":"flac","data":""#)
-                try writer.write(contentsOf: request.audio, base64: true)
+                try audio(writer)
                 try writer.write(#""},"#)
                 try writer.write(rest.dropFirst())  // `rest` is a non-empty object: drop its "{".
             })
-        let body = try ProviderHTTP.decode(SuccessBody.self, from: reply, label: label)
-        let usage = TranscriptionUsage.priced(
-            audio: body.usage?.seconds.map { .seconds($0) }, cost: body.usage?.charged, for: request, on: options.route)
-        return Transcript(text: body.text ?? "", usage: usage, model: label, network: reply.network)
+        return (try ProviderHTTP.decode(SuccessBody.self, from: reply, label: label), reply)
     }
 
     /// Every body field except `input_audio`. The dictionary terms come within the route limits
     /// (`PersonalDictionary.keyterms`).
-    private static func fields(_ request: TranscriptionRequest, options: TranscriptionSettings.RouteOptions)
-        -> RequestFields
-    {
+    private static func fields(
+        terms: [String], language: Locale.Language, options: TranscriptionSettings.RouteOptions
+    ) -> RequestFields {
         let route = options.route
-        let terms = request.dictionaryTerms
-        let language = request.language.languageCode?.identifier
+        let language = language.languageCode?.identifier
         let upstream: ProviderOptions? =
             if route.isGrok {
                 .init(

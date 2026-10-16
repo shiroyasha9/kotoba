@@ -101,6 +101,23 @@ actor FakeTranscriptionProvider: TranscriptionProvider {
 
     func warmUp() async {}
 
+    /// How many primers the pipeline sent, and what each answers: nil (a route with no primer) by default.
+    private(set) var primes = 0
+    private var primer: Transcript?
+    private var primerGate: Gate?
+
+    /// Each primer from now on answers `primer`, after `gate` opens when one is given.
+    func answerPrimes(with primer: Transcript?, after gate: Gate? = nil) {
+        self.primer = primer
+        primerGate = gate
+    }
+
+    func prime(language: Locale.Language) async -> Transcript? {
+        primes += 1
+        await primerGate?.pass()
+        return primer
+    }
+
     func transcribe(_ request: TranscriptionRequest) async throws -> Transcript {
         requests.append(request)
         await gate?.pass()

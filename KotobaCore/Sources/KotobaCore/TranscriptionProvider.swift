@@ -6,6 +6,10 @@ import Foundation
 public protocol TranscriptionProvider: Sendable {
     /// Opens or refreshes the connection. The pipeline calls it at key-down.
     func warmUp() async
+    /// Sends the route's smallest billed request through its whole path, so the answer at the stop does not pay the
+    /// route's cold start. The pipeline calls it when a dictation is announced, never for a dropped shortcut press, and
+    /// never waits for it. Returns the primer's answer for its cost, or nil when the route has no primer or it failed.
+    func prime(language: Locale.Language) async -> Transcript?
     /// Returns every answer, with its usage, even one with no words (it is billed); the pipeline decides that such
     /// an answer heard no speech.
     func transcribe(_ request: TranscriptionRequest) async throws -> Transcript
