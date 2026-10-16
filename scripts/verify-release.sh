@@ -49,7 +49,7 @@ fi
 # builds use their own (scripts/check-dev-install.sh).
 release=tech.teensy.kotoba
 id=$(plist CFBundleIdentifier) name=$(plist CFBundleDisplayName)
-if [[ $id == "$release" && $name == kotoba ]]; then
+if [[ $id == "$release" && $name == kotoba && $(plist CFBundleName) == kotoba ]]; then
   ok "release identity: $name ($id)"
 else
   bad "identity $name ($id) is not the release's: kotoba ($release)"

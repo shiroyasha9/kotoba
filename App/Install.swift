@@ -21,8 +21,12 @@ enum Install {
 
     /// In Application Support: `kotoba` for the release (where 0.1.0 keeps its data), `kotoba-dev` for a development
     /// build. Any other bundle id gets its own folder too, never the release's.
-    static let dataFolderName =
-        isRelease ? "kotoba" : "kotoba-" + (bundleID.split(separator: ".").last.map(String.init) ?? bundleID)
+    static let dataFolderName: String = {
+        let prefix = releaseBundleID + "."
+        if isRelease { return "kotoba" }
+        guard bundleID.hasPrefix(prefix) else { return bundleID }
+        return "kotoba-" + bundleID.dropFirst(prefix.count).replacing(".", with: "-")
+    }()
 
     /// The API keys' generic-password service: `tech.teensy.kotoba` for the release, as 0.1.0 saved them.
     static var keychainService: String { bundleID }

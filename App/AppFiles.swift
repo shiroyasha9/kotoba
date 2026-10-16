@@ -10,7 +10,8 @@ enum AppFiles {
         return URL.applicationSupportDirectory.appending(path: Install.dataFolderName, directoryHint: .isDirectory)
     }
 
-    /// The history, the retry queue and the usage ledger. `scripts/latency.sh` reads this path too (`DEV=1` for kotoba-dev).
+    /// The history, the retry queue and the usage ledger. `scripts/latency.sh` reads this path too (`DEV=1` for the
+    /// development build's).
     static var history: URL { directory.appending(path: "kotoba.sqlite") }
     /// Its own file, so a dictionary write never blocks a dictation save.
     static var dictionary: URL { directory.appending(path: "dictionary.sqlite") }

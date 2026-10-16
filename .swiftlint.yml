@@ -126,9 +126,9 @@ custom_rules:
     excluded:
       - "App/AppFiles\\.swift"
       - "App/KeychainStore\\.swift"
-      # Reads Wispr Flow's folder, not kotoba's.
+      # Reads Wispr Flow's folders, not kotoba's.
       - "KotobaStorage/Sources/KotobaStorage/WisprFlowImport\\.swift"
-    regex: "\\b(?:applicationSupportDirectory|kSecAttrService|suiteName)\\b"
+    regex: "\\b(?:applicationSupportDirectory|libraryDirectory|homeDirectoryForCurrentUser|NSHomeDirectory|kSecAttrService|suiteName)\\b"
     excluded_match_kinds: [comment, doccomment, string]
     message: "Name kotoba's files through `AppFiles` and its keys through `KeychainStore`, so a development build keeps its own data folder and Keychain item (App/Install.swift). No UserDefaults suite: the standard domain follows the bundle id."
     severity: error

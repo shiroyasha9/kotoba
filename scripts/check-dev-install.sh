@@ -6,7 +6,8 @@ set -euo pipefail
 
 app=${1:?usage: check-dev-install.sh <kotoba.app>}
 release=tech.teensy.kotoba
-plist() { /usr/libexec/PlistBuddy -c "Print :$1" "$app/Contents/Info.plist" 2>/dev/null || true }
+# Empty when the key or the app is missing (PlistBuddy prints a message and succeeds on a missing file).
+plist() { plutil -extract "$1" raw -o - "$app/Contents/Info.plist" 2>/dev/null || true }
 
 id=$(plist CFBundleIdentifier)
 name=$(plist CFBundleDisplayName)

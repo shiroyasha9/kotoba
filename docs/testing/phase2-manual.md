@@ -151,7 +151,7 @@ UI text in this list is the text in the code at the phase 2 gate (2026-10-15). I
 |---|---|---|---|
 | 90 | Turn Wi-Fi off, dictate, turn Wi-Fi on | Indicator "Failed - retry from the menu"; no text lost; **Retry Failed Dictations (1)** sends it; it appears under **Recovered (1)**; a click copies it; the clipboard was not changed automatically | |
 | 91 | Quit kotoba during an upload, open it again | The dictation appears under **Recovered** | |
-| 92 | Quit kotoba (**Quit kotoba** or Cmd-Q) during a recording, open it again | Nothing is lost: the dictation is transcribed at launch and appears under **Recovered** | |
+| 92 | Quit kotoba Dev (**Quit kotoba Dev** or Cmd-Q) during a recording, open it again | Nothing is lost: the dictation is transcribed at launch and appears under **Recovered** | |
 | 93 | Tap twice fast (empty recording) | No paste; "Failed - retry from the menu" | |
 | 94 | **Retry Failed Dictations** for that empty recording | It is tried one more time; empty again, it shows "Refused - check the key or credits" and is not retried after that | |
 | 95 | Use a key with no credits (or a refused request) | "Refused - check the key or credits"; the audio is kept; it is not retried | |
@@ -194,13 +194,13 @@ Rows from each agent's phase 2.5 work. The numbers continue the list above.
 
 | # | Do this | Expect | Result |
 |---|---|---|---|
-| 111 | Fresh setup: run `defaults delete tech.teensy.kotoba.dev onboarding.completed`, remove kotoba Dev's Microphone and Accessibility grants, open kotoba | "Welcome to kotoba" opens, centred, on Welcome; no Microphone or Accessibility prompt shows before its step | |
+| 111 | Fresh setup: run `defaults delete tech.teensy.kotoba.dev onboarding.completed`, remove kotoba Dev's Microphone and Accessibility grants, open kotoba Dev | "Welcome to kotoba" opens, centred, on Welcome; no Microphone or Accessibility prompt shows before its step | |
 | 112 | Microphone step: click **Allow Microphone**, then **Allow** in the prompt | "Microphone allowed" with a checkmark; the window moves to Accessibility by itself in about 1 s | |
 | 113 | Microphone step, deny instead | "Microphone access is off."; **Open System Settings** opens Privacy & Security > Microphone | |
-| 114 | Turn kotoba on there | The step turns green and moves on without a click | |
+| 114 | Turn kotoba Dev on there | The step turns green and moves on without a click | |
 | 115 | Accessibility step: click **Open Accessibility Settings** | The system prompt shows (kotoba joins the list) | |
 | 116 | Click it again | Privacy & Security > Accessibility opens | |
-| 117 | Turn kotoba on there | The step turns green within 1 s and moves on | |
+| 117 | Turn kotoba Dev on there | The step turns green within 1 s and moves on | |
 | 118 | Key step: press ⌘V in the key field, then ⌘A | The key pastes, then all of it is selected; no beep | |
 | 119 | Press Return | Same as **Save**: the field clears; the result line shows the key check ("Key works" for a good key) | |
 | 120 | Click **Get a Key at OpenRouter…** | openrouter.ai/settings/keys opens | |
@@ -213,7 +213,7 @@ Rows from each agent's phase 2.5 work. The numbers continue the list above.
 | 127 | Hold ⌃⌥⌘ while you speak, let go | Same as the tap | |
 | 128 | In the Try It field, press ⌘A, then ⌘V | Select all and paste work; no beep | |
 | 129 | Done step | "Open kotoba when you log in" is on | |
-| 130 | Click **Done** | kotoba is in System Settings > General > Login Items; if macOS asks for approval, the note and **Open Login Items Settings** show | |
+| 130 | Click **Done** | kotoba Dev is in System Settings > General > Login Items; if macOS asks for approval, the note and **Open Login Items Settings** show | |
 | 131 | Close the window on the key step; menu > **Finish Setting Up kotoba…** | The window opens again on the key step | |
 | 132 | Use **Back** and **Continue** on each step | Each moves one step | |
 | 133 | Press Return on Welcome, Microphone, Accessibility and Done | Return clicks **Get Started**, **Continue** or **Done**; on the key and Try It steps Return belongs to the field | |
