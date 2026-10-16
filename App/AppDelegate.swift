@@ -81,7 +81,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         })
 
     func applicationDidFinishLaunching(_ notification: Notification) {
-        // First, so the Dock icon comes before any window (story 35).
+        // A second copy of this install never records, pastes or bills beside the first.
+        guard !handOverToRunningCopy() else { return }
+        // Then, so the Dock icon comes before any window (story 35).
         DockAndMenuBar.shared.start()
         let launch = DockAndMenuBar.launch()
         // A recording file made after this is never taken for an orphan (`OrphanAudio`).
@@ -131,7 +133,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         // With "Show indicator: Always" the idle pill appears after the launch work, so building it (about 50 ms)
         // never delays the hotkey tap.
         Task { indicator.show(state, context: statusContext) }
-        // Story 22: the pipeline sends failed dictations again when the network returns.
+        watchNetwork(for: pipeline)
+    }
+
+    /// Story 22: the pipeline sends failed dictations again when the network returns.
+    private func watchNetwork(for pipeline: DictationPipeline) {
         Task.detached {
             for await path in NWPathMonitor() {
                 await pipeline.networkChanged(isOnline: path.status == .satisfied)

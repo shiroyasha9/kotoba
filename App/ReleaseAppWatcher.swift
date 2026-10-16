@@ -59,3 +59,42 @@ extension AppDelegate {
         }
     }
 }
+
+// MARK: - A second copy of this install
+
+extension AppDelegate {
+    /// True when another copy of this install runs and this one hands over to it (`SingleInstance`): it asks that copy
+    /// to show its main window, as a second open from Finder or the Dock does, and quits. Call it first at launch,
+    /// before the Dock icon, the history and the hotkey tap. Costs one Launch Services query at launch (about 1 ms, `swiftc -O` probe 2026-10-17); nothing observes later.
+    func handOverToRunningCopy() -> Bool {
+        let current = NSRunningApplication.current
+        let others = NSRunningApplication.runningApplications(withBundleIdentifier: Install.bundleID)
+            .filter {
+                $0.processIdentifier != current.processIdentifier && $0.processIdentifier > 0 && !$0.isTerminated
+            }
+        guard
+            let first = SingleInstance.handOver(from: Self.copy(current), others: others.map(Self.copy)),
+            let running = others.first(where: { $0.processIdentifier == first.processID })
+        else { return false }
+        Log.app.notice("Another copy of this install runs (pid \(running.processIdentifier)); this copy quits")
+        // The owner's open gave this copy the activation; the running copy takes it to show its window.
+        NSApp.yieldActivation(to: running)
+        guard let url = running.bundleURL else {
+            running.activate()
+            NSApp.terminate(nil)
+            return true
+        }
+        // Opening the running copy's own bundle reaches that process with a reopen (`applicationShouldHandleReopen`).
+        NSWorkspace.shared.openApplication(at: url, configuration: NSWorkspace.OpenConfiguration()) { _, error in
+            if let error {
+                Log.app.error("Cannot bring the running copy to the front: \(error)")
+            }
+            Task { @MainActor in NSApp.terminate(nil) }
+        }
+        return true
+    }
+
+    private static func copy(_ app: NSRunningApplication) -> SingleInstance.Copy {
+        SingleInstance.Copy(processID: app.processIdentifier, launchedAt: app.launchDate)
+    }
+}
