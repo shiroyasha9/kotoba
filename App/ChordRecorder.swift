@@ -21,7 +21,7 @@ struct ChordRecorder: View {
         VStack(alignment: .trailing) {
             // Turn Off and Reset come before the recorder, so every recorder in a column keeps the same trailing edge.
             HStack {
-                if role == .cleanup || role == .pasteLast, chord != nil {
+                if role == .cleanup || role == .pasteLast || role == .copyLast, chord != nil {
                     Button("Turn Off", systemImage: "xmark.circle") { save(nil) }
                         .labelStyle(.iconOnly)
                         .buttonStyle(.borderless)
@@ -64,6 +64,7 @@ struct ChordRecorder: View {
         case .pushToTalk: chords.handsFree
         case .cleanup: .defaultCleanup
         case .pasteLast: nil
+        case .copyLast: .defaultCopyLast
         }
     }
 
@@ -212,7 +213,8 @@ extension ChordProblem {
             let held = role == dictation ? chord : (chords.chord(dictation) ?? chord)
             let cleanup = role == .cleanup ? chord : (chords.cleanup ?? chord)
             return "\(held.title) includes \(cleanup.title), so every dictation would clean up."
-        case .needsKey, .pasteLastSameAs, .pasteLastIncludes: return pasteLastText(chord, role: role, chords: chords)
+        case .needsKey, .pasteLastSameAs, .pasteLastIncludes, .copyLastSameAs, .copyLastIncludes:
+            return lastText(chord, role: role, chords: chords)
         }
     }
 
@@ -223,29 +225,52 @@ extension ChordProblem {
         case .pushToTalk: "push-to-talk"
         case .cleanup: "cleanup"
         case .pasteLast: "Paste Last"
+        case .copyLast: "Copy Last"
         }
     }
 
-    /// The Paste Last problems: `chord` was recorded for `role`, Paste Last or the chord it clashes with.
+    /// The Paste Last and Copy Last problems: `chord` was recorded for `role`, the last-dictation chord or the chord it
+    /// clashes with.
     @MainActor
-    private func pasteLastText(_ chord: Chord, role: HotkeyChords.Role, chords: HotkeyChords) -> String {
+    private func lastText(_ chord: Chord, role: HotkeyChords.Role, chords: HotkeyChords) -> String {
         switch self {
-        case .pasteLastSameAs(let other):
-            guard role == .pasteLast else { return "This is the shortcut to paste the last dictation." }
-            return "This is the \(Self.name(other)) shortcut."
+        case .pasteLastSameAs(let other): Self.sameAsText(other, last: .pasteLast, role: role)
+        case .copyLastSameAs(let other): Self.sameAsText(other, last: .copyLast, role: role)
         case .pasteLastIncludes(let other):
-            let pasteLast = role == .pasteLast ? chord : (chords.pasteLast ?? chord)
-            let held = role == .pasteLast ? (chords.chord(other) ?? chord) : chord
-            return "\(pasteLast.title) includes \(held.title), so it would start a dictation."
-        default: return "Add a key to \(chord.title), for example ⌃⌘V."
+            Self.includesText(chord, other, last: .pasteLast, role: role, chords: chords)
+        case .copyLastIncludes(let other):
+            Self.includesText(chord, other, last: .copyLast, role: role, chords: chords)
+        default: "Add a key to \(chord.title), for example \(role == .copyLast ? "⌃⌘C" : "⌃⌘V")."
         }
+    }
+
+    /// The `last` chord (Paste Last or Copy Last) is the chord of `other`.
+    private static func sameAsText(_ other: HotkeyChords.Role, last: HotkeyChords.Role, role: HotkeyChords.Role)
+        -> String
+    {
+        guard role == last else {
+            let action = last == .pasteLast ? "paste" : "copy"
+            return "This is the shortcut to \(action) the last dictation."
+        }
+        return "This is the \(name(other)) shortcut."
+    }
+
+    /// The `last` chord (Paste Last or Copy Last) holds the modifier-only chord of `other` on the way to its key.
+    @MainActor
+    private static func includesText(
+        _ chord: Chord, _ other: HotkeyChords.Role, last: HotkeyChords.Role, role: HotkeyChords.Role,
+        chords: HotkeyChords
+    ) -> String {
+        let lastChord = role == last ? chord : (chords.chord(last) ?? chord)
+        let held = role == last ? (chords.chord(other) ?? chord) : chord
+        return "\(lastChord.title) includes \(held.title), so it would start a dictation."
     }
 }
 
 // MARK: - Snapshots
 
 extension ChordRecorder {
-    /// The recorder at rest, off, with the fn hint, listening, after a refused chord, and for Paste Last, in a grouped
+    /// The recorder at rest, off, with the fn hint, listening, after a refused chord, and for Paste Last and Copy Last, in a grouped
     /// form as in General.
     @MainActor
     static func snapshots() -> [Snapshot] {
@@ -256,9 +281,6 @@ extension ChordRecorder {
         let clash = HotkeyChords(
             defaults: nil, handsFree: Chord(modifiers: .function), cleanup: Chord(modifiers: [.control, .option]))
         let spotlight = Chord(modifiers: .command, keyCode: KeyCode.space)
-        let pasteLast = HotkeyChords(
-            defaults: nil, pasteLast: Chord(modifiers: [.control, .command], keyCode: KeyCode.ansiV))
-        let pasteLastClash = Chord(modifiers: [.control, .option, .command], keyCode: KeyCode.ansiV)
         let form = Form {
             row("At rest", ChordRecorder(chords: chords, role: .handsFree))
             pushToTalkRows(handsFree: pairChords)
@@ -279,18 +301,7 @@ extension ChordRecorder {
                 ChordRecorder(
                     chords: clash, role: .handsFree,
                     listener: ChordListener(refused: (.defaultHandsFree, .dictationIncludesCleanup(.handsFree)))))
-            row("Paste last off", ChordRecorder(chords: chords, role: .pasteLast))
-            row("Paste last set", ChordRecorder(chords: pasteLast, role: .pasteLast))
-            row(
-                "Paste last clash",
-                ChordRecorder(
-                    chords: chords, role: .pasteLast,
-                    listener: ChordListener(refused: (pasteLastClash, .pasteLastIncludes(.handsFree)))))
-            row(
-                "Paste last without a key",
-                ChordRecorder(
-                    chords: chords, role: .pasteLast,
-                    listener: ChordListener(refused: (Chord(modifiers: [.control, .command]), .needsKey))))
+            lastRows(chords: chords)
         }
         .formStyle(.grouped)
         .frame(width: 520)
@@ -316,6 +327,37 @@ extension ChordRecorder {
             ChordRecorder(
                 chords: HotkeyChords(defaults: nil), role: .pushToTalk,
                 listener: ChordListener(refused: (Chord(modifiers: .command), .commonModifierAlone))))
+    }
+
+    /// Paste Last off, set, refused for a clash and for no key; Copy Last at its default and refused for a clash.
+    @MainActor
+    @ViewBuilder
+    private static func lastRows(chords: HotkeyChords) -> some View {
+        let controlCommandV = Chord(modifiers: [.control, .command], keyCode: KeyCode.ansiV)
+        let pasteLast = HotkeyChords(defaults: nil, pasteLast: controlCommandV)
+        let pasteLastClash = Chord(modifiers: [.control, .option, .command], keyCode: KeyCode.ansiV)
+        row("Paste last off", ChordRecorder(chords: chords, role: .pasteLast))
+        row("Paste last set", ChordRecorder(chords: pasteLast, role: .pasteLast))
+        row(
+            "Paste last clash",
+            ChordRecorder(
+                chords: chords, role: .pasteLast,
+                listener: ChordListener(refused: (pasteLastClash, .pasteLastIncludes(.handsFree)))))
+        row(
+            "Paste last without a key",
+            ChordRecorder(
+                chords: chords, role: .pasteLast,
+                listener: ChordListener(refused: (Chord(modifiers: [.control, .command]), .needsKey))))
+        row("Copy last at its default", ChordRecorder(chords: chords, role: .copyLast))
+        row(
+            "Copy last clash",
+            ChordRecorder(
+                chords: pasteLast, role: .copyLast,
+                listener: ChordListener(
+                    refused: (
+                        Chord(modifiers: [.control, .command], keyCode: KeyCode.ansiV),
+                        .copyLastSameAs(.pasteLast)
+                    ))))
     }
 
     @MainActor

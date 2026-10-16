@@ -13,6 +13,7 @@ struct HotkeyClassifierTests {
         var pushToTalkChord: Chord?
         var cleanupChord: Chord? = .defaultCleanup
         var pasteLastChord: Chord?
+        var copyLastChord: Chord?
         var isReturnGestureOn = true
         let steps: [(KeyInput, HotkeyDecision)]
 
@@ -235,13 +236,15 @@ struct HotkeyClassifierTests {
         ),
     ]
 
-    @Test(arguments: rows + missedReleaseRows + returnRows + pasteLastRows + splitRows)
+    // One array of arrays: a chain of `+` takes the type checker too long.
+    @Test(arguments: [rows, missedReleaseRows, returnRows, pasteLastRows, copyLastRows, splitRows].flatMap { $0 })
     func classify(_ row: Row) {
         var keyboard = Keyboard(
             classifier: HotkeyClassifier(
                 handsFreeChord: row.handsFreeChord, pushToTalkChord: row.pushToTalkChord,
                 cleanupChord: row.cleanupChord,
-                pasteLastChord: row.pasteLastChord, isReturnGestureOn: row.isReturnGestureOn))
+                pasteLastChord: row.pasteLastChord, copyLastChord: row.copyLastChord,
+                isReturnGestureOn: row.isReturnGestureOn))
         keyboard.classifier.isRecordingShown = row.recording
         keyboard.classifier.isPaused = row.paused
         for (index, (input, expected)) in row.steps.enumerated() {

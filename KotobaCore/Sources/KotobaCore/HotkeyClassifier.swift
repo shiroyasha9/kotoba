@@ -106,7 +106,7 @@ public struct HotkeyDecision: Sendable, Equatable {
 /// `.gestureChanged(.toggle)`. A press never goes back to a chord with fewer keys.
 ///
 /// The Paste Last chord (a key with modifiers) reports `.pasteLast` once every modifier is up again: a Cmd-V posted
-/// while ⌃ is held reaches the app as ⌃⌘V.
+/// while ⌃ is held reaches the app as ⌃⌘V. The Copy Last chord posts no key, so it reports `.copyLast` at its press.
 public struct HotkeyClassifier: Sendable {
     /// On while the indicator shows recording. Esc then cancels, and with `isReturnGestureOn` a plain Return
     /// stops with a submit; neither key reaches the app.
@@ -123,6 +123,8 @@ public struct HotkeyClassifier: Sendable {
     public var cleanupChord: Chord?
     /// nil, the default, leaves Paste Last to the menu.
     public var pasteLastChord: Chord?
+    /// nil leaves Copy Last to the menu.
+    public var copyLastChord: Chord?
     /// Set from a submit Return's key-down to its key-up: its repeats and key-up are swallowed too, also after
     /// recording ended in between.
     private var isSubmitKeyDown = false
@@ -135,17 +137,19 @@ public struct HotkeyClassifier: Sendable {
     private var isInterrupted = false
     /// Set when the cleanup chord was held at some moment of this press.
     private var isCleanupSeen = false
-    /// The Paste Last key, from its press to its key-up: its repeats and key-up are swallowed, as its press was.
-    private var pasteLastKey: UInt16?
+    /// The Paste Last or Copy Last key, from its press to its key-up: its repeats and key-up are swallowed, as its
+    /// press was.
+    private var lastKey: UInt16?
     /// Set at the Paste Last press until every modifier is up (`.pasteLast`) or another key or a chord press cancels it.
     private var isPasteLastDue = false
 
     /// The chords are the owner's saved ones.
     public init(
         handsFreeChord: Chord = .defaultHandsFree, pushToTalkChord: Chord? = nil, cleanupChord: Chord?,
-        pasteLastChord: Chord? = nil, isReturnGestureOn: Bool = false
+        pasteLastChord: Chord? = nil, copyLastChord: Chord? = nil, isReturnGestureOn: Bool = false
     ) {
         self.isReturnGestureOn = isReturnGestureOn
+        self.copyLastChord = copyLastChord
         self.handsFreeChord = handsFreeChord
         self.pushToTalkChord = pushToTalkChord
         self.cleanupChord = cleanupChord
@@ -161,7 +165,7 @@ public struct HotkeyClassifier: Sendable {
     /// A saved chord has a key, so the tap needs key-up events.
     public var hasKeyChord: Bool {
         handsFreeChord.keyCode != nil || pushToTalkChord?.keyCode != nil || cleanupChord?.keyCode != nil
-            || pasteLastChord != nil
+            || pasteLastChord != nil || copyLastChord != nil
     }
 
     /// A click on the indicator pill acts as a hands-free tap. While a chord is held it sends only the chord-down,
@@ -208,12 +212,12 @@ public struct HotkeyClassifier: Sendable {
         }
     }
 
-    /// The key-up of a submit Return, the Paste Last key or a held chord key is swallowed, as its press was.
+    /// The key-up of a submit Return, the Paste Last or Copy Last key or a held chord key is swallowed, as its press was.
     private mutating func keyUp(_ keyCode: UInt16, _ events: inout HotkeyEvents) -> HotkeyDecision {
         if isSubmitKeyDown, keyCode == KeyCode.return {
             isSubmitKeyDown = false
-        } else if keyCode == pasteLastKey {
-            pasteLastKey = nil
+        } else if keyCode == lastKey {
+            lastKey = nil
         } else if keyCode == heldChordKey {
             heldKeyChord = nil
             update(&events)
@@ -265,28 +269,33 @@ public struct HotkeyClassifier: Sendable {
     /// Whether `keyCode`, the key of a chord held, repeats: its repeats are swallowed, as its press was. A new press
     /// of it means its key-up was missed (sleep, secure input), so that press ended.
     private mutating func isHeldKeyRepeat(_ keyCode: UInt16, isRepeat: Bool, _ events: inout HotkeyEvents) -> Bool {
-        guard keyCode == heldChordKey || keyCode == pasteLastKey else { return false }
+        guard keyCode == heldChordKey || keyCode == lastKey else { return false }
         if isRepeat { return true }
         if keyCode == heldChordKey {
             heldKeyChord = nil
             update(&events)
         }
-        if keyCode == pasteLastKey {
-            pasteLastKey = nil
+        if keyCode == lastKey {
+            lastKey = nil
         }
         return false
     }
 
-    /// Holds the hands-free, push-to-talk or cleanup key chord, or makes Paste Last due; false when `keyCode` with the
-    /// modifiers held is none of them.
+    /// Holds the hands-free, push-to-talk or cleanup key chord, makes Paste Last due, or copies the last dictation;
+    /// false when `keyCode` with the modifiers held is none of them.
     private mutating func pressKeyChord(_ keyCode: UInt16, _ events: inout HotkeyEvents) -> Bool {
         if let chord = keyChord(pressedBy: keyCode) {
             heldKeyChord = chord
             update(&events)
             return true
         }
+        if copyLastChord?.isPressed(by: keyCode, with: modifiers) == true {
+            lastKey = keyCode
+            events.append(.copyLast)
+            return true
+        }
         guard pasteLastChord?.isPressed(by: keyCode, with: modifiers) == true else { return false }
-        pasteLastKey = keyCode
+        lastKey = keyCode
         isPasteLastDue = true
         return true
     }

@@ -1,6 +1,6 @@
 import Foundation
 
-/// A key event from the owner's hands-free, push-to-talk, cleanup or Paste Last chord, Esc or Return, as
+/// A key event from the owner's hands-free, push-to-talk, cleanup, Paste Last or Copy Last chord, Esc or Return, as
 /// `HotkeyClassifier` reports it.
 public enum HotkeyEvent: Sendable, Equatable {
     /// A press began; `ChordGesture` says what its release does.
@@ -21,6 +21,9 @@ public enum HotkeyEvent: Sendable, Equatable {
     /// The Paste Last chord was pressed and every modifier is up again: paste the last dictation again, as the menu's
     /// "Paste Last Dictation" does.
     case pasteLast
+    /// The Copy Last chord was pressed: put the last dictation on the clipboard, as the menu's "Copy Last Dictation"
+    /// does.
+    case copyLast
 }
 
 /// What the release of the press that starts a dictation does (spec "Hotkey state machine").

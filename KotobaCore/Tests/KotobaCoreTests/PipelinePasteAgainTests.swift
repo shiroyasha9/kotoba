@@ -126,6 +126,48 @@ struct PipelinePasteAgainTests {
             transcript: text, status: status, latency: LatencyLog())
     }
 
+    @Test func copyLastChordCopiesTheLastDictationAndSaysSo() async throws {
+        let world = FakeWorld(transcript: "unused")
+        let pipeline = world.makePipeline()
+        let last = Self.record("Copied text.", at: 2_000, .copied)
+        try await world.store.save(Self.record("Older text.", at: 1_000, .pasted))
+        try await world.store.save(last)
+
+        await pipeline.handle(.copyLast)
+        await pipeline.settle()
+        world.clock.advance(by: .seconds(5))
+        await pipeline.settle()
+
+        #expect(await world.pasteboard.text == "Copied text.")
+        #expect(await world.pasteboard.isTransient == false)
+        #expect(await world.paster.keystrokes.isEmpty)
+        #expect(await pipeline.state == .copied(last.id))
+    }
+
+    @Test func copyLastChordWithNoDictationCopiesNothing() async {
+        let world = FakeWorld(transcript: "unused")
+        let pipeline = world.makePipeline()
+
+        await pipeline.handle(.copyLast)
+        await pipeline.settle()
+
+        #expect(await world.pasteboard.text == "user's clipboard")
+        #expect(await pipeline.state == .idle)
+    }
+
+    @Test func copyLastChordWhileRecordingCopiesAndKeepsTheRecordingShown() async throws {
+        let world = FakeWorld(transcript: "unused")
+        let pipeline = world.makePipeline()
+        try await world.store.save(Self.record("Older text.", at: 1_000, .pasted))
+        await pipeline.tap(world)
+
+        await pipeline.handle(.copyLast)
+        await pipeline.settle()
+
+        #expect(await world.pasteboard.text == "Older text.")
+        #expect(await pipeline.state == .recording(isLong: false))
+    }
+
     @Test func copyAgainLeavesTheTextWithNoRestore() async {
         let world = FakeWorld(transcript: "unused")
         let pipeline = world.makePipeline()

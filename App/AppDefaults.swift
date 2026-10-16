@@ -13,6 +13,7 @@ enum AppDefaults {
         case pushToTalkChord = "hotkey.pushToTalkChord"
         case cleanupChord = "hotkey.cleanupChord"
         case pasteLastChord = "hotkey.pasteLastChord"
+        case copyLastChord = "hotkey.copyLastChord"
         case microphoneOrder = "microphone.order"
         case submitPhrase = "paste.submitPhrase"
         case learnsFromEdits = "dictionary.learnsFromEdits"

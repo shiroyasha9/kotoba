@@ -122,6 +122,14 @@ private struct HomePane: View {
                     Text(StatusText.shortcutHelp(.pasteLast))
                 }
             }
+            if let copyLast = model.chords.copyLast {
+                LabeledContent {
+                    Text(copyLast.title)
+                } label: {
+                    Text(StatusText.shortcutTitle(.copyLast))
+                    Text(StatusText.shortcutHelp(.copyLast))
+                }
+            }
             LabeledContent {
                 Text("Esc")
             } label: {

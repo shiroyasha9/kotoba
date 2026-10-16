@@ -598,11 +598,22 @@ The offscreen snapshots (`make snapshots`) show two things that may not happen i
 | 440 | Settings > General, fresh install | “Paste last dictation” shows **Off**; ⌃⌘V in TextEdit does what TextEdit does, kotoba does nothing | |
 | 441 | Record ⌃⌘V for “Paste last dictation”. Dictate into TextEdit, click into another TextEdit window, press ⌃⌘V and let go | The same text pastes once into the second window, after you let go of ⌃ and ⌘ (no “⌃⌘V” beep or menu action). After 2 s, ⌘V pastes what the clipboard held before | |
 | 442 | Hold ⌃⌘, press V three times (and hold V once so it repeats), then let go | The last dictation pastes once; no “v” is typed | |
-| 443 | Hold ⌃⌘, press V, then press C before you let go | Nothing pastes; ⌃⌘C reaches the app as usual | |
+| 443 | Turn off “Copy last dictation”. Hold ⌃⌘, press V, then press C before you let go | Nothing pastes; ⌃⌘C reaches the app as usual. Click Reset next to “Copy last dictation” | |
 | 444 | Start a dictation, press ⌃⌘V while it records, then stop it | Nothing extra pastes; only the new dictation pastes | |
 | 445 | Try to record ⌃⌥⌘V, then ⌃⌘ alone, then ⌘V | Each is refused with a red note: “⌃⌥⌘V includes ⌃⌥⌘, so it would start a dictation.”, “Add a key to ⌃⌘, for example ⌃⌘V.”, “macOS uses ⌘V. Choose another shortcut.” The shortcut stays ⌃⌘V | |
 | 446 | With Paste Last on ⌃⌘V, record right ⌘ for “Dictate” | Refused: “⌃⌘V includes right ⌘, so it would start a dictation.” Dictate keeps its shortcut | |
 | 447 | Click the ⓧ next to ⌃⌘V; quit and reopen kotoba Dev | It shows **Off** after the restart; ⌃⌘V reaches the app again | |
+
+## Copy Last shortcut (kotoba Dev)
+
+| # | Do this | Expect | Result |
+|---|---|---|---|
+| 448 | Settings > General, fresh install | “Copy last dictation” shows ⌃⌘C; Home > How to Dictate lists it | |
+| 449 | Dictate into TextEdit. Copy other text with ⌘C. Press ⌃⌘C, then ⌘V in TextEdit | The pill says “Copied. Press ⌘V to paste.”; ⌘V pastes the dictation; no “c” is typed and no menu action runs | |
+| 450 | Hold ⌃⌘ and hold C so it repeats, then let go | One copy; no “c” is typed | |
+| 451 | Start a dictation, press ⌃⌘C while it records, then stop it | The pill keeps showing the recording; the new dictation pastes; after it, ⌘V pastes the earlier dictation | |
+| 452 | Record ⌃⌘V for “Paste last dictation”, then try to record ⌃⌘V for “Copy last dictation” | Refused: “This is the Paste Last shortcut.” Copy Last keeps ⌃⌘C | |
+| 453 | Click the ⓧ next to ⌃⌘C; quit and reopen kotoba Dev | It shows **Off** after the restart; ⌃⌘C reaches the app again | |
 
 ## Main window (0.3.0)
 

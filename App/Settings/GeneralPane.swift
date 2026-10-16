@@ -228,6 +228,12 @@ private struct GeneralPane: View {
                     Text(StatusText.shortcutTitle(.pasteLast))
                     Text(StatusText.shortcutHelp(.pasteLast) + " Off until you record a shortcut.")
                 }
+                LabeledContent {
+                    ChordRecorder(chords: model.chords, role: .copyLast)
+                } label: {
+                    Text(StatusText.shortcutTitle(.copyLast))
+                    Text(StatusText.shortcutHelp(.copyLast))
+                }
             }
             Section {
                 Toggle(isOn: $model.isSubmitPhraseOn) {

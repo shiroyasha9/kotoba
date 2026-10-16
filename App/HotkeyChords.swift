@@ -3,7 +3,7 @@ import Foundation
 import KotobaCore
 import Observation
 
-/// The owner's hands-free, push-to-talk, cleanup and Paste Last chords, saved in UserDefaults. Every text that names a
+/// The owner's hands-free, push-to-talk, cleanup, Paste Last and Copy Last chords, saved in UserDefaults. Every text that names a
 /// chord reads it here, so views redraw when the owner records a new one, and the hotkey tap follows each change at once.
 @MainActor
 @Observable
@@ -20,6 +20,9 @@ final class HotkeyChords {
     private(set) var cleanup: Chord?
     /// Unset (nil) by default: a default chord could take a shortcut another app uses. The menu item works without it.
     private(set) var pasteLast: Chord?
+    /// ⌃⌘C by default (`Chord.defaultCopyLast`), unless that clashes with the saved chords; then off until the owner
+    /// records one. nil turns it off.
+    private(set) var copyLast: Chord?
     /// On while a shortcut recorder listens: the tap ignores every chord, so the press reaches the recorder.
     var isRecording = false {
         didSet { apply() }
@@ -34,13 +37,20 @@ final class HotkeyChords {
 
     init(
         defaults: UserDefaults?, handsFree: Chord = .defaultHandsFree, pushToTalk: Chord? = nil,
-        cleanup: Chord? = .defaultCleanup, pasteLast: Chord? = nil
+        cleanup: Chord? = .defaultCleanup, pasteLast: Chord? = nil, copyLast: Chord? = .defaultCopyLast
     ) {
         self.defaults = defaults
         self.handsFree = defaults.flatMap { Self.load(Key.handsFreeChord, from: $0) }.flatMap { $0 } ?? handsFree
         savedPushToTalk = defaults.flatMap { Self.load(Key.pushToTalkChord, from: $0) }.flatMap { $0 } ?? pushToTalk
         self.cleanup = defaults.flatMap { Self.load(Key.cleanupChord, from: $0) } ?? cleanup
         self.pasteLast = defaults.flatMap { Self.load(Key.pasteLastChord, from: $0) } ?? pasteLast
+        // The default must not break chords saved before Copy Last had one, such as a right ⌘ hands-free chord.
+        let defaultCopyLast =
+            Chord.problem(
+                handsFree: self.handsFree, pushToTalk: savedPushToTalk, cleanup: self.cleanup,
+                pasteLast: self.pasteLast,
+                copyLast: copyLast) == nil ? copyLast : nil
+        self.copyLast = defaults.flatMap { Self.load(Key.copyLastChord, from: $0) } ?? defaultCopyLast
     }
 
     var pushToTalk: Chord { savedPushToTalk ?? handsFree }
@@ -55,24 +65,29 @@ final class HotkeyChords {
         case .pushToTalk: pushToTalk
         case .cleanup: cleanup
         case .pasteLast: pasteLast
+        case .copyLast: copyLast
         }
     }
 
-    /// Saves `chord` (nil turns cleanup or Paste Last off, and gives push to talk the hands-free chord) unless the
-    /// chords cannot work together; then returns why and keeps the old one.
+    /// Saves `chord` (nil turns cleanup, Paste Last or Copy Last off, and gives push to talk the hands-free chord)
+    /// unless the chords cannot work together; then returns why and keeps the old one.
     func save(_ chord: Chord?, as role: Role) -> ChordProblem? {
-        var new = (handsFree: handsFree, pushToTalk: savedPushToTalk, cleanup: cleanup, pasteLast: pasteLast)
+        var new = saved
         switch role {
         case .handsFree: new.handsFree = chord ?? .defaultHandsFree
         case .pushToTalk: break
         case .cleanup: new.cleanup = chord
         case .pasteLast: new.pasteLast = chord
+        case .copyLast: new.copyLast = chord
         }
         new.pushToTalk = Chord.pushToTalk(afterSaving: chord, as: role, handsFree: new.handsFree, kept: savedPushToTalk)
         let problem = Chord.problem(
-            handsFree: new.handsFree, pushToTalk: new.pushToTalk, cleanup: new.cleanup, pasteLast: new.pasteLast)
+            handsFree: new.handsFree, pushToTalk: new.pushToTalk, cleanup: new.cleanup, pasteLast: new.pasteLast,
+            copyLast: new.copyLast)
         if let problem { return problem }
-        (handsFree, savedPushToTalk, cleanup, pasteLast) = new
+        (handsFree, savedPushToTalk, cleanup, pasteLast, copyLast) = (
+            new.handsFree, new.pushToTalk, new.cleanup, new.pasteLast, new.copyLast
+        )
         defaults?.set(handsFree.storedValue, forKey: Key.handsFreeChord.rawValue)
         if let savedPushToTalk {
             defaults?.set(savedPushToTalk.storedValue, forKey: Key.pushToTalkChord.rawValue)
@@ -81,14 +96,29 @@ final class HotkeyChords {
         }
         defaults?.set(cleanup?.storedValue ?? Self.off, forKey: Key.cleanupChord.rawValue)
         defaults?.set(pasteLast?.storedValue ?? Self.off, forKey: Key.pasteLastChord.rawValue)
+        defaults?.set(copyLast?.storedValue ?? Self.off, forKey: Key.copyLastChord.rawValue)
         apply()
         return nil
     }
 
-    private func apply() {
-        tap?.setChords(
+    /// Every saved chord, as `save` checks them and the tap takes them.
+    var saved: Saved {
+        Saved(
             handsFree: handsFree, pushToTalk: savedPushToTalk, cleanup: cleanup, pasteLast: pasteLast,
-            isPaused: isRecording)
+            copyLast: copyLast)
+    }
+
+    struct Saved: Sendable {
+        var handsFree: Chord
+        /// nil is the hands-free chord.
+        var pushToTalk: Chord?
+        var cleanup: Chord?
+        var pasteLast: Chord?
+        var copyLast: Chord?
+    }
+
+    private func apply() {
+        tap?.setChords(saved, isPaused: isRecording)
     }
 
     private typealias Key = AppDefaults.Key

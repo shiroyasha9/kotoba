@@ -91,6 +91,7 @@ public actor DictationPipeline {
         case .submit: requestSubmit(at: now)
         // Tracked, so the next key event does not wait for the history read.
         case .pasteLast: work.track { await self.pasteLast() }
+        case .copyLast: work.track { await self.copyLast() }
         }
     }
 
@@ -206,6 +207,18 @@ public actor DictationPipeline {
             Log.pipeline.error("Paste not allowed, the last dictation is left on the clipboard: \(error)")
             await clipboard.copy(text)
             emit(.copied(id))
+        }
+    }
+
+    /// "Copy Last Dictation", from the menu or its chord: leaves the newest delivered dictation on the clipboard, with
+    /// no restore, and the indicator says so. During a dictation it copies too, and the indicator keeps its state.
+    public func copyLast() async {
+        do {
+            guard let last = try await ports.store.lastDelivered(), let text = last.deliveredText else { return }
+            await clipboard.copy(text)
+            if isQuiet { emit(.copied(last.id)) }
+        } catch {
+            Log.pipeline.error("Cannot read the last dictation: \(error)")
         }
     }
 

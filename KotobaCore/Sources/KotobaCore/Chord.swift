@@ -14,6 +14,8 @@ public struct Chord: Sendable, Hashable {
     public static let defaultHandsFree = Self(modifiers: [.control, .option, .command])
     /// A Caps Lock "Hyper" key also presses all four, in any order.
     public static let defaultCleanup = Self(modifiers: [.control, .option, .shift, .command])
+    /// ⌃⌘C, as the owner had "Copy last transcript" in Wispr Flow.
+    public static let defaultCopyLast = Self(modifiers: [.control, .command], keyCode: KeyCode.ansiC)
 
     /// A modifier-only chord is down while all of its modifiers are; other modifiers held with it do not matter.
     func isHeld(by held: ModifierKeys) -> Bool {
@@ -31,13 +33,14 @@ public struct Chord: Sendable, Hashable {
     }
 }
 
-/// What a chord does: start a dictation hands-free or push to talk, start a cleanup dictation, or paste the last
-/// dictation again.
+/// What a chord does: start a dictation hands-free or push to talk, start a cleanup dictation, or paste or copy the
+/// last dictation again.
 public enum ChordRole: Sendable, Hashable {
     case handsFree
     case pushToTalk
     case cleanup
     case pasteLast
+    case copyLast
 }
 
 /// Why a recorded chord is refused.
@@ -61,13 +64,18 @@ public enum ChordProblem: Sendable, Equatable {
     /// Each press of the dictation chord of `role` also completes the cleanup chord, so no dictation could skip
     /// cleanup.
     case dictationIncludesCleanup(ChordRole)
-    /// The Paste Last chord has no key: modifiers alone would paste each time they are pressed for another shortcut.
+    /// The Paste Last or Copy Last chord has no key: modifiers alone would act each time they are pressed for another
+    /// shortcut.
     case needsKey
     /// The Paste Last chord is the chord of `role` (hands-free, push to talk or cleanup).
     case pasteLastSameAs(ChordRole)
     /// The Paste Last chord holds the modifier-only chord of `role` on the way to its key, so it would start a
     /// dictation first. Its key is not another key typed during that press, so nothing drops the dictation.
     case pasteLastIncludes(ChordRole)
+    /// The Copy Last chord is the chord of `role` (hands-free, push to talk, cleanup or Paste Last).
+    case copyLastSameAs(ChordRole)
+    /// The Copy Last chord holds the modifier-only chord of `role` on the way to its key, as `pasteLastIncludes`.
+    case copyLastIncludes(ChordRole)
 }
 
 extension Chord {
@@ -83,7 +91,7 @@ extension Chord {
     /// A cleanup or hands-free chord may hold the push-to-talk chord on the way (⌃⌥⇧⌘ holds ⌥): the press follows the
     /// chord with more keys before the dictation shows (`HotkeyClassifier`), as cleanup follows ⇧ today.
     public static func problem(
-        handsFree: Chord, pushToTalk: Chord? = nil, cleanup: Chord?, pasteLast: Chord? = nil
+        handsFree: Chord, pushToTalk: Chord? = nil, cleanup: Chord?, pasteLast: Chord? = nil, copyLast: Chord? = nil
     ) -> ChordProblem? {
         if let problem = handsFree.ownProblem(as: .handsFree) { return problem }
         if let problem = pushToTalk?.ownProblem(as: .pushToTalk) { return problem }
@@ -97,9 +105,9 @@ extension Chord {
                 }
             }
         }
-        guard let pasteLast else { return nil }
-        guard pasteLast.keyCode != nil else { return .needsKey }
-        return pasteLast.ownProblem(as: .pasteLast) ?? pasteLast.clash(with: dictation + [(cleanup, .cleanup)])
+        let chords: [(Chord?, ChordRole)] = dictation.map { ($0, $1) } + [(cleanup, .cleanup)]
+        if let problem = pasteLast?.lastProblem(clashingWith: chords) { return problem.named(.pasteLast) }
+        return copyLast?.lastProblem(clashingWith: chords + [(pasteLast, .pasteLast)])?.named(.copyLast)
     }
 
     /// The push-to-talk chord to keep after the owner saves `chord` (nil: Reset) as `role`; nil is the hands-free
@@ -112,13 +120,33 @@ extension Chord {
         return chord == handsFree ? nil : chord
     }
 
-    /// How this Paste Last chord clashes with a dictation or cleanup chord. The classifier tries those first, so a key
-    /// press that matches one, or that holds one of them on the way, never reaches Paste Last.
-    private func clash(with others: [(Chord?, ChordRole)]) -> ChordProblem? {
+    /// Why a Paste Last or Copy Last chord cannot be saved; `named` says which of the two.
+    private enum LastProblem {
+        case own(ChordProblem)
+        case sameAs(ChordRole)
+        case includes(ChordRole)
+
+        func named(_ last: ChordRole) -> ChordProblem {
+            switch (self, last == .copyLast) {
+            case (.own(let problem), _): problem
+            case (.sameAs(let role), true): .copyLastSameAs(role)
+            case (.sameAs(let role), false): .pasteLastSameAs(role)
+            case (.includes(let role), true): .copyLastIncludes(role)
+            case (.includes(let role), false): .pasteLastIncludes(role)
+            }
+        }
+    }
+
+    /// The Paste Last or Copy Last chord's own problem, or how it clashes with one of `others`. The classifier tries
+    /// the dictation and cleanup chords first, so a key press that matches one, or that holds one of them on the way,
+    /// never reaches Paste Last or Copy Last.
+    private func lastProblem(clashingWith others: [(Chord?, ChordRole)]) -> LastProblem? {
+        guard keyCode != nil else { return .own(.needsKey) }
+        if let problem = ownProblem(as: .pasteLast) { return .own(problem) }
         for (other, role) in others {
             guard let other else { continue }
-            if other.keyCode == nil, other.modifiers.isSatisfied(by: modifiers) { return .pasteLastIncludes(role) }
-            if other.keyCode == keyCode, other.modifiers.kinds == modifiers.kinds { return .pasteLastSameAs(role) }
+            if other.keyCode == nil, other.modifiers.isSatisfied(by: modifiers) { return .includes(role) }
+            if other.keyCode == keyCode, other.modifiers.kinds == modifiers.kinds { return .sameAs(role) }
         }
         return nil
     }

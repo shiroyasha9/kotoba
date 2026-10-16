@@ -6,7 +6,7 @@ import IOKit
 import KotobaCore
 import Synchronization
 
-/// Reports the owner's hands-free, push-to-talk, cleanup and Paste Last chords, Esc and Return from a CGEventTap that
+/// Reports the owner's hands-free, push-to-talk, cleanup, Paste Last and Copy Last chords, Esc and Return from a CGEventTap that
 /// runs on its own thread.
 ///
 /// A modifier-only chord works while secure input is on. The tap is active, so it can swallow Esc and Return while
@@ -33,23 +33,25 @@ final class HotkeyTap: Sendable {
     /// Starts with the saved chords and follows every later change to them.
     @MainActor
     init(chords: HotkeyChords) {
+        let saved = chords.saved
         state = Mutex(
             State(
                 classifier: HotkeyClassifier(
-                    handsFreeChord: chords.handsFree, pushToTalkChord: chords.savedPushToTalk,
-                    cleanupChord: chords.cleanup, pasteLastChord: chords.pasteLast, isReturnGestureOn: true)))
+                    handsFreeChord: saved.handsFree, pushToTalkChord: saved.pushToTalk, cleanupChord: saved.cleanup,
+                    pasteLastChord: saved.pasteLast, copyLastChord: saved.copyLast, isReturnGestureOn: true)))
         (events, continuation) = AsyncStream.makeStream(of: (event: HotkeyEvent, at: ContinuousClock.Instant).self)
         chords.tap = self
         mouse.onMouseDown = { [weak self] in self?.sendMouseDown() }
     }
 
-    /// `isPaused` is on while a shortcut recorder listens: no chord counts. A nil `pushToTalk` is the hands-free chord.
-    func setChords(handsFree: Chord, pushToTalk: Chord?, cleanup: Chord?, pasteLast: Chord?, isPaused: Bool) {
+    /// `isPaused` is on while a shortcut recorder listens: no chord counts.
+    func setChords(_ chords: HotkeyChords.Saved, isPaused: Bool) {
         let (runLoop, hasKey) = state.withLock { state -> (TapRunLoop?, Bool) in
-            state.classifier.handsFreeChord = handsFree
-            state.classifier.pushToTalkChord = pushToTalk
-            state.classifier.cleanupChord = cleanup
-            state.classifier.pasteLastChord = pasteLast
+            state.classifier.handsFreeChord = chords.handsFree
+            state.classifier.pushToTalkChord = chords.pushToTalk
+            state.classifier.cleanupChord = chords.cleanup
+            state.classifier.pasteLastChord = chords.pasteLast
+            state.classifier.copyLastChord = chords.copyLast
             state.classifier.isPaused = isPaused
             let hasKey = state.classifier.hasKeyChord
             return (state.tap?.hasKeyUp == hasKey ? nil : state.runLoop, hasKey)

@@ -2,7 +2,7 @@ import Testing
 
 @testable import KotobaCore
 
-/// Each row: a hands-free, a push-to-talk, a cleanup and a Paste Last chord the owner records, and the reason they are refused, if any.
+/// Each row: a hands-free, a push-to-talk, a cleanup, a Paste Last and a Copy Last chord the owner records, and the reason they are refused, if any.
 struct ChordTests {
     struct Row: Sendable, CustomTestStringConvertible {
         let name: String
@@ -10,6 +10,7 @@ struct ChordTests {
         var pushToTalk: Chord?
         var cleanup: Chord? = .defaultCleanup
         var pasteLast: Chord?
+        var copyLast: Chord?
         let problem: ChordProblem?
 
         var testDescription: String { name }
@@ -171,12 +172,12 @@ struct ChordTests {
         #expect(Chord.pushToTalk(afterSaving: saved, as: role, handsFree: handsFree, kept: set) == kept)
     }
 
-    @Test(arguments: rows + pasteLastRows + pushToTalkRows)
+    @Test(arguments: rows + pasteLastRows + copyLastRows + pushToTalkRows)
     func problem(_ row: Row) {
         #expect(
             Chord.problem(
-                handsFree: row.handsFree, pushToTalk: row.pushToTalk, cleanup: row.cleanup, pasteLast: row.pasteLast)
-                == row.problem)
+                handsFree: row.handsFree, pushToTalk: row.pushToTalk, cleanup: row.cleanup, pasteLast: row.pasteLast,
+                copyLast: row.copyLast) == row.problem)
     }
 }
 

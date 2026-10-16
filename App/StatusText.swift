@@ -92,6 +92,7 @@ enum StatusText {
         case .pushToTalk: "Push to talk"
         case .cleanup: "Clean up"
         case .pasteLast: "Paste last dictation"
+        case .copyLast: "Copy last dictation"
         }
     }
 
@@ -102,6 +103,7 @@ enum StatusText {
         case .pushToTalk: "Hold while you speak. Let go to paste."
         case .cleanup: "Removes filler words and fixes punctuation. Takes a second or two longer."
         case .pasteLast: "Pastes your last dictation again."
+        case .copyLast: "Puts your last dictation on the clipboard."
         }
     }
 
