@@ -30,8 +30,9 @@
     // "fake" answers from the Worker itself (dev and tests); "azure" calls AZURE_ENDPOINT with AZURE_KEY.
     "UPSTREAM": "fake",
     "AZURE_ENDPOINT": "http://127.0.0.1:8788",
-    // "console" prints sign-in codes to the wrangler dev log. No real mailer exists yet.
-    "MAILER": "console",
+    // "dev" (set in .dev.vars) prints sign-in codes to the wrangler dev log. Any other value has
+    // no mailer yet, so sign-in answers 500 mailer_not_configured until a real one is wired.
+    "ENVIRONMENT": "production",
     "MAX_AUDIO_BYTES": "33554432",
     // The lowest FLAC bitrate billed in full. A dictation holds its bytes / this many seconds, so a client cannot claim a
     // shorter length than it sends. The owner's 16 kHz speech recordings run 13-17 KB/s (n = 24, 2026-10-17).

@@ -22,6 +22,7 @@ export type ErrorCode =
   | "upstream_timeout"
   | "bad_signature"
   | "not_implemented"
+  | "mailer_not_configured"
   | "internal";
 
 /** An error the client sees as `{"error": {"code", "message"}}` with `status`. Anything else is a 500. */

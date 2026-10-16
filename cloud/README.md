@@ -38,7 +38,8 @@ bun run db:migrate               # local D1 only
 bun run dev                      # http://localhost:8787, fake upstream
 ```
 
-Sign-in codes print in the `wrangler dev` log (`MAILER=console`). To run the real `AzureTranscriber` against a local
+Sign-in codes print in the `wrangler dev` log, with the email masked, because `.dev.vars` sets `ENVIRONMENT=dev`.
+Without it there is no mailer and `/auth/start` answers `500 mailer_not_configured`. To run the real `AzureTranscriber` against a local
 Azure stand-in: `bun run fake-azure` in one terminal, then
 `bun run dev -- --var UPSTREAM:azure --var AZURE_ENDPOINT:http://127.0.0.1:8788`.
 
@@ -77,6 +78,7 @@ the `code`, not the message.
 | 503 | `upstream_busy` | Azure answered 429 or 503 | Retry after `Retry-After` |
 | 503 | `service_paused` | The global daily cap is reached | Retry later; show "kotoba Cloud is paused" |
 | 504 | `upstream_timeout` | No answer in `UPSTREAM_TIMEOUT_MS` (120 s, upload included) | Retry |
+| 500 | `mailer_not_configured` | `/auth/start` on a Worker with no real mailer (anything but dev today) | Show "Sign-in is not available yet"; BYOK still works |
 | 500 | `internal` | A bug in the relay | Retry with backoff |
 
 A failed dictation costs nothing: the hold is released and the global meter gets its seconds back. Only a 200 (and
@@ -278,7 +280,8 @@ Do before launch (billing and abuse):
 
 ## Stubbed or not built
 
-- The email sender: `ConsoleMailer` prints the code. A real mailer (Resend in the proposal) is not written.
+- The email sender: only the dev `ConsoleMailer` (prints the code, masked email, `ENVIRONMENT=dev` only). A real
+  mailer (Resend in the proposal) is not written; until it is, a deployed Worker answers `500 mailer_not_configured`.
 - The Paddle checkout page and the customer portal link; the `customData` contract is above.
 - `/v1/cleanup` (Gemini through the relay).
 - Real Azure: `AzureTranscriber` is written to Microsoft's REST reference and tested against a fake fetch and the local

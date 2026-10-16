@@ -35,8 +35,9 @@ export const defaultDeps: Deps = {
     return azure.client;
   },
   mailer(env) {
-    if (env.MAILER === "console") return new ConsoleMailer();
-    throw new Error(`No mailer "${env.MAILER}": only "console" exists in this prototype`);
+    // The console mailer prints codes: dev only. No real mailer exists yet, so anywhere else sign-in cannot start.
+    if (env.ENVIRONMENT === "dev") return new ConsoleMailer();
+    throw new ApiError(500, "mailer_not_configured", "Sign-in is not available yet.");
   },
 };
 

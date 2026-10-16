@@ -3,15 +3,22 @@ import type { AppEnv } from "./app";
 import { ApiError, numberVar } from "./errors";
 import { hashCode, hex, issueSession } from "./session";
 
-/** Sends the six-digit sign-in code. The prototype prints it; a real mailer (Resend in the proposal) comes later. */
+/** Sends the six-digit sign-in code. Only a dev mailer exists; a real one (Resend in the proposal) comes later. */
 export interface Mailer {
   sendCode(email: string, code: string): Promise<void>;
 }
 
+/** Dev only (`ENVIRONMENT=dev`): prints the code to the wrangler dev log, where the latency bench reads it. */
 export class ConsoleMailer implements Mailer {
   async sendCode(email: string, code: string): Promise<void> {
-    console.log(`sign-in code for ${email}: ${code}`);
+    console.log(`sign-in code for ${maskEmail(email)}: ${code}`);
   }
+}
+
+/** `devuser@example.com` -> `d******@example.com`: enough to tell sign-ins apart in a log, not to read the address. */
+export function maskEmail(email: string): string {
+  const at = email.lastIndexOf("@");
+  return `${email.slice(0, 1)}${"*".repeat(Math.max(1, at - 1))}${email.slice(at)}`;
 }
 
 export const CODE_TTL_MS = 10 * 60 * 1000;
@@ -30,6 +37,8 @@ export const authRoutes = new Hono<AppEnv>();
 authRoutes.post("/start", async (c) => {
   await limitByClient(c.env, c.req.raw);
   const email = await readEmail(c.req.raw);
+  // Before any write: with no mailer, no code is made.
+  const mailer = c.var.deps.mailer(c.env);
   const now = c.var.deps.now();
   const db = c.env.DB;
   const code = randomCode();
@@ -53,7 +62,7 @@ authRoutes.post("/start", async (c) => {
       ),
   ]);
   if (sent?.results.length === 0) throw await refusal(db, email, now);
-  await c.var.deps.mailer(c.env).sendCode(email, code);
+  await mailer.sendCode(email, code);
   return c.json({ ok: true }, 202);
 });
 

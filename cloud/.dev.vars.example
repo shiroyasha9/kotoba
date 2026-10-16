@@ -1,4 +1,6 @@
 # Copy to .dev.vars for `bun run dev`. Values here are test placeholders, not secrets.
+# Dev only: sign-in codes go to the wrangler dev log (masked email). Never set this in a deployed Worker.
+ENVIRONMENT=dev
 # 32 random bytes, base64 (openssl rand -base64 32). Seals session tokens and hashes sign-in codes.
 SESSION_KEY=AAECAwQFBgcICQoLDA0ODxAREhMUFRYXGBkaGxwdHh8=
 # The Paddle notification destination's secret key (Paddle dashboard > Developer tools > Notifications).

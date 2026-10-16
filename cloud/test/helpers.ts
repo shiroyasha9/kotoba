@@ -25,10 +25,14 @@ export interface Harness {
   clock: { now: number };
 }
 
-export function harness(transcriber: (env: Env) => Transcriber = () => new FakeTranscriber()): Harness {
+/** The app with a test clock and a capturing mailer; `mailerFor` swaps in another mailer (the deployed one, say). */
+export function harness(
+  transcriber: (env: Env) => Transcriber = () => new FakeTranscriber(),
+  mailerFor?: Deps["mailer"],
+): Harness {
   const mailer = new CapturingMailer();
   const clock = { now: T0 };
-  const deps: Deps = { now: () => clock.now, transcriber, mailer: () => mailer };
+  const deps: Deps = { now: () => clock.now, transcriber, mailer: mailerFor ?? (() => mailer) };
   const app = makeApp(deps);
   return {
     mailer,
