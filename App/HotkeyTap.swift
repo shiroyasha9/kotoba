@@ -137,11 +137,20 @@ final class HotkeyTap: Sendable {
         }
     }
 
-    /// Creates the tap on its own thread. Returns false when the app has no Accessibility
-    /// permission yet. The caller waits without blocking its thread.
+    /// Creates the tap on its own thread, or makes it again there once the thread runs: after an Accessibility revoke
+    /// and a new grant, macOS may send nothing more to the old tap. Returns false when the app has no Accessibility
+    /// permission; a tap made again then keeps the old one. The caller waits without blocking its thread.
     func start() async -> Bool {
-        await withCheckedContinuation { started in
-            startThread { started.resume(returning: $0) }
+        guard let runLoop = state.withLock({ $0.runLoop }) else {
+            return await withCheckedContinuation { started in
+                startThread { started.resume(returning: $0) }
+            }
+        }
+        return await withCheckedContinuation { remade in
+            CFRunLoopPerformBlock(runLoop.loop, CFRunLoopMode.commonModes.rawValue) { [self] in
+                remade.resume(returning: install(keyUp: state.withLock { $0.classifier.hasKeyChord }))
+            }
+            CFRunLoopWakeUp(runLoop.loop)
         }
     }
 

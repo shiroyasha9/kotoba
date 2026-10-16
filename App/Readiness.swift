@@ -142,6 +142,8 @@ final class SetupFlow {
     private let dictionary: @MainActor () -> DictionaryModel?
     private var activations: Task<Void, Never>?
     private var accessibilityChanges: Task<Void, Never>?
+    /// Makes the hotkey tap again after Accessibility comes back (`startHotkeys`).
+    private var regrants: Task<Void, Never>?
 
     /// `router` checks a key in onboarding.
     init(
@@ -227,19 +229,42 @@ final class SetupFlow {
 
     /// Returns once the hotkey tap runs. The tap and Cmd-V need Accessibility, so it starts when Readiness sees
     /// the grant. A grant can take a moment to reach the event system, so a failed start tries twice more.
+    /// Then it keeps the tap working: after a revoke and a new grant (Readiness goes from not allowed to allowed, by
+    /// event, `watchGrants`), the tap is made again, since macOS may send nothing more to the old one.
     func startHotkeys(_ hotkeys: HotkeyTap) async {
         let readiness = readiness
         for await isAllowed in Observations({ readiness.isAccessibilityAllowed }) where isAllowed {
-            for _ in 0..<3 {
-                if await hotkeys.start() { return }
+            guard await Self.start(hotkeys) else { continue }
+            regrants = Task { [weak self] in await self?.remakeHotkeysAfterRegrant(hotkeys) }
+            return
+        }
+    }
+
+    private func remakeHotkeysAfterRegrant(_ hotkeys: HotkeyTap) async {
+        let readiness = readiness
+        var wasAllowed = true
+        for await isAllowed in Observations({ readiness.isAccessibilityAllowed }) {
+            defer { wasAllowed = isAllowed }
+            guard isAllowed, !wasAllowed else { continue }
+            if await Self.start(hotkeys) {
+                Log.app.notice("Hotkey tap made again after Accessibility came back")
+            }
+        }
+    }
+
+    private static func start(_ hotkeys: HotkeyTap) async -> Bool {
+        for attempt in 0..<3 {
+            if attempt > 0 {
                 do {
                     try await Task.sleep(for: .seconds(1))
                 } catch {
-                    return
+                    return false
                 }
             }
-            Log.app.error("The hotkey tap did not start although Accessibility is allowed")
+            if await hotkeys.start() { return true }
         }
+        Log.app.error("The hotkey tap did not start although Accessibility is allowed")
+        return false
     }
 }
 
