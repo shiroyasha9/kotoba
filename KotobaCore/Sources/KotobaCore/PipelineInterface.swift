@@ -141,6 +141,9 @@ extension DictationPipeline {
         /// A chord released sooner is a tap (`ChordGesture`); a longer hold is push to talk. Push to talk drops a
         /// shorter press, and the indicator and cue of every press wait for the tap's release or for this threshold.
         public var tapThreshold: Duration
+        /// A push-to-talk press that starts this soon after the release of a dropped push-to-talk tap records
+        /// hands-free: a double tap locks push to talk on, as in Wispr Flow.
+        public var doubleTapGap: Duration
         public var longRecordingWarning: Duration
         /// The mic gave no sound this long: the indicator warns (`NoSoundPolicy`).
         public var noSoundWarning: Duration
@@ -179,6 +182,7 @@ extension DictationPipeline {
             language: Locale.Language = Locale.Language(identifier: "en"),
             dictionary: PersonalDictionary = PersonalDictionary(),
             tapThreshold: Duration = .milliseconds(400),
+            doubleTapGap: Duration = .milliseconds(300),
             longRecordingWarning: Duration = .seconds(600),
             noSoundWarning: Duration = .seconds(2),
             minimumRecording: Duration = .milliseconds(500),
@@ -194,6 +198,7 @@ extension DictationPipeline {
             self.language = language
             self.dictionary = dictionary
             self.tapThreshold = tapThreshold
+            self.doubleTapGap = doubleTapGap
             self.longRecordingWarning = longRecordingWarning
             self.noSoundWarning = noSoundWarning
             self.minimumRecording = minimumRecording

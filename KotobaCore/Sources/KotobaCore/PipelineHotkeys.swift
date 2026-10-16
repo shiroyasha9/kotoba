@@ -7,10 +7,14 @@ extension DictationPipeline {
     /// mic on. In the Undo window a press waits for its release (`UndoWindow`).
     func chordDown(_ gesture: ChordGesture, at now: Instant) async {
         isChordDown = true
+        let tapEnd = droppedTapEnd
+        droppedTapEnd = nil
         if paused != nil {
             paused?.pressBegan(at: now, gesture: gesture)
         } else if let recording {
             stop(recording, at: now)
+        } else if gesture == .hold, let tapEnd, now - tapEnd <= settings.doubleTapGap {
+            await start(.toggle, at: now)
         } else {
             await start(gesture, at: now)
         }
@@ -45,7 +49,9 @@ extension DictationPipeline {
         case (.tapOrHold, false), (.hold, false):
             stop(current, at: now)
         case (.hold, true):
-            // Too short for push to talk: dropped as a shortcut press is, with no cue and nothing kept.
+            // Too short for push to talk: dropped as a shortcut press is, with no cue and nothing kept. A push-to-talk
+            // press soon after it makes a double tap.
+            droppedTapEnd = now
             await discard(current)
         }
     }

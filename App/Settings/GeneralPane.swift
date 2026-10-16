@@ -182,10 +182,11 @@ final class GeneralModel {
     /// Fixed values for snapshots: no UserDefaults, Login Items, indicator or updater is read. `loginItem` stands
     /// in for the system.
     static func sample(
-        loginItem: LoginItem = .init(isOn: { true }, problem: { nil }, change: { _ in nil }), showsInDock: Bool = true
+        loginItem: LoginItem = .init(isOn: { true }, problem: { nil }, change: { _ in nil }), showsInDock: Bool = true,
+        chords: HotkeyChords = HotkeyChords(defaults: nil)
     ) -> GeneralModel {
         GeneralModel(
-            settings: .inMemory(), chords: HotkeyChords(defaults: nil), audio: .sample(),
+            settings: .inMemory(), chords: chords, audio: .sample(),
             backing: Backing(
                 loginItem: loginItem, showsInDock: .fixed(showsInDock), showsMenuBarIcon: .fixed(true),
                 soundCues: .fixed(true), cueVoice: .fixed(.nylon), indicatorAnchor: .fixed(.bottomCenter),
@@ -210,7 +211,7 @@ private struct GeneralPane: View {
                     ChordRecorder(chords: model.chords, role: .pushToTalk)
                 } label: {
                     Text(StatusText.shortcutTitle(.pushToTalk))
-                    Text(StatusText.shortcutHelp(.pushToTalk))
+                    Text(StatusText.pushToTalkHelp(model.chords))
                 }
                 LabeledContent {
                     ChordRecorder(chords: model.chords, role: .cleanup)
@@ -306,6 +307,10 @@ extension Pane {
             MainWindow.snapshot(
                 of: .general(.sample(showsInDock: false)), named: "settings-general-dock-off", height: 1_240),
             loginFailureSnapshot(),
+            // Push to talk on its own chord: its line adds the double tap.
+            MainWindow.snapshot(
+                of: .general(.sample(chords: HotkeyChords(defaults: nil, pushToTalk: Chord(modifiers: .option)))),
+                named: "settings-general-push-to-talk", height: 1_200),
         ]
     }
 

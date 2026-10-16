@@ -104,7 +104,7 @@ private struct HomePane: View {
                 Text(model.chords.pushToTalk.title)
             } label: {
                 Text(StatusText.shortcutTitle(.pushToTalk))
-                Text(StatusText.shortcutHelp(.pushToTalk))
+                Text(StatusText.pushToTalkHelp(model.chords))
             }
             if let cleanup = model.chords.cleanup {
                 LabeledContent {

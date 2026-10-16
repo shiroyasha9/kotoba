@@ -626,6 +626,20 @@ The offscreen snapshots (`make snapshots`) show two things that may not happen i
 | 714 | Record ⌃⌘V for “Paste last dictation”, then try to record ⌃⌘V for “Copy last dictation” | Refused: “This is the Paste Last shortcut.” Copy Last keeps ⌃⌘C | |
 | 715 | Click the ⓧ next to ⌃⌘C; quit and reopen kotoba Dev | It shows **Off** after the restart; ⌃⌘C reaches the app again | |
 
+## Push to talk double tap (kotoba Dev)
+
+Record ⌥ for **Push to talk** first; Hands-free stays ⌃⌥⌘.
+
+| # | Do this | Expect | Result |
+|---|---|---|---|
+| 770 | Settings > General and Home | The Push to talk line reads “Hold while you speak. Let go to paste. Double-tap for hands-free.” Reset Push to talk: the line has no double tap | |
+| 771 | In TextEdit tap ⌥ twice quickly, let go, speak 10 s, tap ⌥ once | The start sound and the pill come at the second tap and stay after you let go; the text pastes after the last tap. Only the second tap starts the audio | |
+| 772 | Double-tap ⌥, speak, then tap ⌃⌥⌘; double-tap ⌥ again, speak, press Esc | ⌃⌥⌘ stops and pastes; Esc shows Undo, as for every dictation | |
+| 773 | Tap ⌥ once; then tap ⌥ twice slowly (about half a second apart) | No sound, no pill, nothing kept (each tap is dropped). If a slow double tap that felt natural did not start, write the gap you used | |
+| 774 | Tap ⌥, then quickly press ⌥⌫ (delete a word) in TextEdit | The word is deleted; no sound, no pill, no recording | |
+| 775 | Tap ⌥ three times quickly | The pill shows for a moment, then goes back; no text pastes, no error | |
+| 776 | Reset Push to talk (one chord for both); double-tap ⌃⌥⌘ quickly | No text pastes, no error, as before; the next tap of ⌃⌥⌘ starts a dictation | |
+
 ## Add Word from the menu (kotoba Dev)
 
 | # | Do this | Expect | Result |

@@ -107,6 +107,13 @@ enum StatusText {
         }
     }
 
+    /// Push to talk's line. A double tap records hands-free only while push to talk is its own chord: with one chord for
+    /// both, a tap already does.
+    @MainActor static func pushToTalkHelp(_ chords: HotkeyChords) -> String {
+        let help = shortcutHelp(.pushToTalk)
+        return chords.separatePushToTalk == nil ? help : help + " Double-tap for hands-free."
+    }
+
     /// "1 Saved Dictation", "2 Saved Dictations": Foundation's grammar agreement picks the plural.
     static func counted(_ count: Int, _ noun: String) -> String {
         String(AttributedString(localized: "^[\(count) \(noun)](inflect: true)").characters)

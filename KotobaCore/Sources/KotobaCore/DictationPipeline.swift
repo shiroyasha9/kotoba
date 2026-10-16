@@ -31,6 +31,9 @@ public actor DictationPipeline {
     /// Set while Esc's Undo window is open.
     var paused: UndoWindow<Recording>?
     var isChordDown = false
+    /// The release of the last push-to-talk tap, if it was dropped and no chord was pressed since: a push-to-talk press
+    /// soon after it is a double tap (`Settings.doubleTapGap`).
+    var droppedTapEnd: Instant?
     /// Pastes waiting for the chord to be released.
     var releaseWaiters = Waiters()
     var latencies = LatencyRecorder()
