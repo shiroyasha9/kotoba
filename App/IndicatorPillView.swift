@@ -73,8 +73,10 @@ final class IndicatorPillView: NSView {
             }
             updateColors()
             applyLayout()
-            // The click button comes and goes with the state; VoiceOver reads the pill's children again.
+            // The click button comes and goes with the state; VoiceOver reads the pill's children again. Not gated on
+            // VoiceOver: with it off the post costs about 80 ns, and reading `isVoiceOverEnabled` about 660 ns.
             if content.click != oldValue.click {
+                tapElement.setAccessibilityLabel(content.click.map(StatusText.pillClickLabel))
                 NSAccessibility.post(element: self, notification: .layoutChanged)
             }
         }
@@ -221,9 +223,20 @@ final class IndicatorPillView: NSView {
     /// button says what it does.
     override func accessibilityChildren() -> [Any]? {
         let children = super.accessibilityChildren() ?? []
-        guard let click = content.click else { return children }
-        tapElement.setAccessibilityLabel(StatusText.pillClickLabel(click))
+        guard content.click != nil else { return children }
         return [tapElement] + children.filter { $0 as AnyObject !== roundIcon && $0 as AnyObject !== roundIcon.cell }
+    }
+
+    /// VoiceOver's pointer: the action button where it is, the click button over the rest of the pill, so exploring
+    /// the pill reaches Stop Dictating and not only its text. `point` is in screen coordinates.
+    override func accessibilityHitTest(_ point: NSPoint) -> Any? {
+        if !actionButton.isHidden,
+            NSAccessibility.screenRect(fromView: actionButton, rect: actionButton.bounds)
+                .contains(point)
+        {
+            return actionButton
+        }
+        return content.click == nil ? super.accessibilityHitTest(point) : tapElement
     }
 
     // MARK: Mouse

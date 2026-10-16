@@ -74,9 +74,21 @@ extension IndicatorPanel {
         if let tap = taps.first, !tap.accessibilityPerformPress() || clicks != 1 {
             return "a VoiceOver press on \"\(label ?? "")\" does not click the pill"
         }
+        // VoiceOver's pointer at the pill's leading end, over the dot and the text.
+        let frame = NSAccessibility.screenRect(fromView: pill, rect: pill.bounds)
+        let leading = NSPoint(x: frame.minX + frame.height / 2, y: frame.midY)
+        if let tap = taps.first, pill.accessibilityHitTest(leading) as AnyObject !== tap as AnyObject {
+            return "VoiceOver's pointer on the pill does not reach \"\(label ?? "")\""
+        }
         guard let action = content.action, pill.layout == .horizontal else { return nil }
-        guard let button = buttons.first(where: { $0 is NSView && $0.accessibilityLabel() == action.title }) else {
+        guard let button = buttons.first(where: { $0 is NSView && $0.accessibilityLabel() == action.title }),
+            let view = button as? NSView
+        else {
             return "VoiceOver gets no \"\(action.title)\" button beside the pill's click"
+        }
+        let buttonFrame = NSAccessibility.screenRect(fromView: view, rect: view.bounds)
+        if pill.accessibilityHitTest(NSPoint(x: buttonFrame.midX, y: buttonFrame.midY)) as AnyObject !== view {
+            return "VoiceOver's pointer on \"\(action.title)\" does not reach it"
         }
         var pressed: PillAction?
         pill.onAction = { pressed = $0 }

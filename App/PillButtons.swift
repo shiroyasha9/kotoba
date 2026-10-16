@@ -50,6 +50,11 @@ final class FirstClickHostingView: NSHostingView<PillButton> {
         []
     }
 
+    /// The button itself, not SwiftUI's views inside it.
+    override func accessibilityHitTest(_ point: NSPoint) -> Any? {
+        self
+    }
+
     override func accessibilityPerformPress() -> Bool {
         rootView.onClick()
         return true
