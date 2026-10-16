@@ -281,7 +281,7 @@ private struct ModesPane: View {
                 Text("Clean Up Every Dictation")
             } footer: {
                 Text(
-                    "When off, only the dictations you start with the cleanup shortcut are cleaned up. "
+                    "When off, kotoba cleans up only the dictations you start with the cleanup shortcut. "
                         + "Each cleanup takes a second or two longer.")
             }
             Section {
@@ -324,7 +324,7 @@ private struct ModesPane: View {
             } header: {
                 Text("Apps")
             } footer: {
-                Text("The app in front when you stop a dictation picks its mode.")
+                Text("kotoba uses the mode of the app in front when you stop a dictation.")
             }
             Section {
                 Picker("Other apps", selection: $model.otherApps) {

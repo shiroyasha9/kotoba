@@ -216,7 +216,7 @@ struct AudioSection: View {
             VStack(alignment: .leading) {
                 Text("History keeps the text of every dictation.")
                 if let waiting = model.size?.waiting, waiting > 0 {
-                    Text("\(waiting.formatted(.byteCount(style: .file))) of audio for Retry is kept until sent.")
+                    Text("\(waiting.formatted(.byteCount(style: .file))) of audio waits for Retry.")
                 }
             }
         }

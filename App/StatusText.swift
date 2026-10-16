@@ -44,9 +44,9 @@ enum StatusText {
     static func detail(_ warning: MicrophoneWarning) -> String {
         switch warning {
         case .bluetoothMic(interruptsPlayback: true):
-            "Playback drops to call quality. Start and stop are slower, and the first word can be lost."
+            "Playback drops to call quality. Start and stop are slower, and kotoba can miss the first word."
         case .bluetoothMic(interruptsPlayback: false):
-            "Start and stop are slower, and the first word can be lost."
+            "Start and stop are slower, and kotoba can miss the first word."
         }
     }
 

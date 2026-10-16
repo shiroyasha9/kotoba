@@ -196,8 +196,8 @@ private struct UsagePane: View {
             }
         } footer: {
             Text(
-                "Spend is the cost your provider reported, kept when you delete dictations. When it reports none, "
-                    + "kotoba estimates it from list prices.")
+                "Spend is the cost your provider reported. It stays when you delete dictations. When the provider "
+                    + "reports none, kotoba estimates it from list prices.")
         }
     }
 

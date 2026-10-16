@@ -179,7 +179,7 @@ private struct DictionaryPane: View {
         let hints =
             dictionary.keyterms.count < PersonalDictionary.maxKeyterms
             ? "The speech model gets up to \(PersonalDictionary.maxKeyterms) words as hints."
-            : "Only the first \(PersonalDictionary.maxKeyterms) words are sent as hints."
+            : "The speech model gets only the first \(PersonalDictionary.maxKeyterms) words as hints."
         let words = StatusText.counted(dictionary.terms.count, "word")
         let replacements = StatusText.counted(dictionary.rules.count, "replacement")
         return "\(words), \(replacements). " + hints
@@ -215,8 +215,8 @@ private struct DictionaryPane: View {
             ]
             if contents.learnedCorrections > 0 {
                 lines.append(
-                    "Includes \(StatusText.counted(contents.learnedCorrections, "learned correction")): "
-                        + "what Wispr heard is replaced with the word you corrected it to.")
+                    "Includes \(StatusText.counted(contents.learnedCorrections, "learned correction")). "
+                        + "Each one replaces what Wispr heard with the word you corrected it to.")
             }
             if preview.duplicateCount > 0 {
                 lines.append(
@@ -264,8 +264,8 @@ private struct DictionaryRowView: View {
                 Image(systemName: "exclamationmark.triangle.fill")
                     .symbolRenderingMode(.multicolor)
                     .help(
-                        "Longer than \(PersonalDictionary.maxKeytermLength) characters, so it is not sent to the "
-                            + "speech model."
+                        "Longer than \(PersonalDictionary.maxKeytermLength) characters, so kotoba does not send it to "
+                            + "the speech model."
                     )
             }
         }

@@ -25,7 +25,7 @@ struct HistoryView: View {
             ) { ids in
                 Button("Delete", role: .destructive) { model.delete(ids) }
             } message: { _ in
-                Text("The audio is deleted too. You can’t undo this.")
+                Text("This also deletes the audio. You can’t undo this.")
             }
     }
 

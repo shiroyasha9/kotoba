@@ -47,7 +47,7 @@ UI text in this list is the text in the code at the phase 2 gate (2026-10-15). I
 | 20 | **Add** a word with **Replace it with** set (for example "pie torch" -> "PyTorch"); say the word | The replacement is in the pasted text | |
 | 21 | Add a replacement with **Replacement** empty; say the word | The word is removed from the pasted text | |
 | 22 | Add the same word twice | "This word is already in the dictionary." | |
-| 23 | Add a term longer than 50 characters | The row says "Longer than 50 characters, so it is not sent to the model." | |
+| 23 | Add a term longer than 50 characters | The row says "Longer than 50 characters, so kotoba does not send it to the speech model." | |
 | 24 | Look under the list | "Keyterms sent: N of 100." | |
 | 25 | Type in **Search words** | The list shows only matching rows | |
 | 26 | Select a row, press Delete (or **Delete**) | The row is gone; the next dictation does not use it | |
@@ -380,7 +380,7 @@ Rows from each agent's phase 2.5 work. The numbers continue the list above.
 | 260 | Choose AirPods as the mic (menu), then open Settings > Microphone | “Bluetooth mic: call-quality audio” with its detail at the top of **Your Order**; the AirPods row says only “In use” | |
 | 261 | Settings > Microphone open: plug in a USB mic, then unplug it | It shows in the **+** menu (or as connected in **Your Order**) at once, and goes away again; no reopen needed | |
 | 262 | Settings > Microphone open: pick another mic in the menu bar **Microphone** submenu | “In use” moves to that mic in the pane at once; with AirPods, the Bluetooth warning appears | |
-| 273 | AirPods as output, choose **AirPods Pro** in **Microphone** | At the foot of the submenu: a dimmed warning “Bluetooth mic: call-quality audio” with “Playback drops to call quality. Start and stop are slower, and the first word can be lost.” | |
+| 273 | AirPods as output, choose **AirPods Pro** in **Microphone** | At the foot of the submenu: a dimmed warning “Bluetooth mic: call-quality audio” with “Playback drops to call quality. Start and stop are slower, and kotoba can miss the first word.” | |
 | 274 | AirPods as output, the built-in mic or a USB mic in use; play a video, then dictate | No warning in the menu; the video audio does not drop to call quality; System Settings > Sound > Input keeps its default | |
 | 275 | AirPods as the system default input, no mic in your order; play a video, then dictate | kotoba records from the built-in mic; the video audio does not drop to call quality | |
 | 276 | Unplug or turn off the mic in use during a recording | The recording goes on with the next mic (your order, then the system default); no crash | |
@@ -440,7 +440,7 @@ Rows from each agent's phase 2.5 work. The numbers continue the list above.
 | 329 | Click **Delete Audio Now…**, then **Cancel**; click it again, then **Delete Audio** | The dialog says how much it deletes. Cancel deletes nothing. **Delete Audio** deletes the audio of every transcribed dictation, today’s too: **Saved audio** goes to “Zero KB” and the button dims; failed, cancelled and refused rows keep theirs; every row stays in History | |
 | 330 | Set **Keep audio** to “Forever”, quit kotoba, reopen it | The setting is still “Forever” and no question is asked (a longer period applies at once); no audio is deleted at launch | |
 | 331 | Set **Keep audio** to “7 Days”, leave kotoba closed for more than 7 days after a dictation, then open it | Once dictation works, that dictation shows “audio deleted” in History, with no dictation needed | |
-| 332 | With Wi-Fi off, dictate once (“Not transcribed”); look at the **History** section | Under the section: “… of audio for Retry is kept until sent” with a size; it goes away once Retry sends the dictation | |
+| 332 | With Wi-Fi off, dictate once (“Not transcribed”); look at the **History** section | Under the section: “… of audio waits for Retry” with a size; it goes away once Retry sends the dictation | |
 | 333 | Update from a build without audio retention (dictations older than 7 days in History), open kotoba, then Settings > **General** | **Keep audio** is “Forever”; no audio was deleted; History shows no “audio deleted” | |
 | 334 | With only today’s dictations, set **Keep audio** from “30 Days” to “1 Day” | No question: nothing is old enough to delete, so the period applies at once | |
 | 335 | Set **Keep audio** to “1 Day” (confirm if asked) and keep kotoba running. Today, dictate once with Wi-Fi on and once with Wi-Fi off (“Not transcribed”). Tomorrow, without dictating or quitting, turn Wi-Fi on and **Retry** that row | Once Retry recovers it, retention runs: yesterday’s pasted dictation shows “audio deleted” (a recovered dictation is delivered too) | |

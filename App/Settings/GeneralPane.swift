@@ -157,7 +157,7 @@ private struct GeneralPane: View {
                     ChordRecorder(chords: model.chords, role: .cleanup)
                 } label: {
                     Text("Clean up")
-                    Text("Removes filler words and fixes punctuation. Takes a moment longer.")
+                    Text("Removes filler words and fixes punctuation. Takes a second or two longer.")
                 }
                 Picker("Cleanup model", selection: $model.cleanupModel) {
                     ForEach(CleanupModel.allCases, id: \.self) { Text($0.title).tag($0) }

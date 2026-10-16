@@ -14,7 +14,7 @@ enum LaunchAtLogin {
         var text: String {
             switch self {
             case .needsApproval: "Allow kotoba in System Settings > General > Login Items."
-            case .failed: "Could not change this setting. Try again in System Settings > General > Login Items."
+            case .failed: "Couldn’t change this setting. Try again in System Settings > General > Login Items."
             }
         }
     }
