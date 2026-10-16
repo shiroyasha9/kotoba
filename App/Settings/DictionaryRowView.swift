@@ -33,8 +33,8 @@ struct DictionaryRowView: View {
                     .font(.callout)
                     .foregroundStyle(.secondary)
                     .help(
-                        "Not sent with the last dictation: the list is over \(PersonalDictionary.maxKeyterms) words. "
-                            + "Star it to always send it.")
+                        "Not sent with the last dictation, because the list has more than "
+                            + "\(PersonalDictionary.maxKeyterms) words. Star it to always send it.")
             }
             if sendsKeyterm {
                 star
