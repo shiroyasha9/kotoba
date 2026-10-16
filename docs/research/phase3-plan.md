@@ -174,3 +174,4 @@ Owner decisions, each with a recommendation.
 - List-size bench (section 3): go given; it runs now.
 - Context awareness (section 4, 11:59 IST): parked. The research stays in `context-awareness.md`; "text near the cursor" (v1 there) is the candidate for a later, in-depth discussion. If built, dictionary terms keep their places and context terms take only free slots.
 - Marketing video (12:40 IST): build a short product video for the README, shown there as a GIF (or a looping video). Phase 3, after 0.2.0.
+- Onboarding feedback (13:05 IST, after the 0.2.0 install): welcome page pitch and icon, no Skip on permission steps, no auto-advance, saved-key field, Test Microphone does nothing, larger default Settings window, Wispr import in onboarding. Notes and screenshots: `<runbooks>/2026-10-16-kotoba-onboarding-feedback/`. Not started.
