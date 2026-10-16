@@ -10,11 +10,14 @@ extension MainWindow {
     /// 760 x 600 is about the detail column at the default window size; a taller `height` shows a pane that scrolls in
     /// the window in full.
     static func snapshot(of pane: Pane, named name: String, height: CGFloat = 600) -> Snapshot {
-        Snapshot(name: name) {
+        var snapshot = Snapshot(name: name) {
             let view = Snapshots.hostingView(pane.content().frame(width: 760, height: height))
             view.setFrameSize(NSSize(width: 760, height: height))
             return view
         }
+        // A pane's list rows (History, Dictionary) take their measured heights in the window.
+        snapshot.settlesInWindow = true
+        return snapshot
     }
 
     /// The whole window content (sidebar and pane) at the default size, for `make snapshots`. It stops the run when

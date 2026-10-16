@@ -9,6 +9,9 @@ struct Snapshot {
     let make: @MainActor () -> NSView
     /// Runs after layout; a message fails the run (content that does not fit, cut-off text).
     var check: (@MainActor (NSView) -> String?)?
+    /// Lets the run loop turn once the view is in its window, then lays it out again: a `List` sets each row's
+    /// measured height in that turn, so without it a row of two lines draws as one, cut off.
+    var settlesInWindow = false
 }
 
 /// `make snapshots` launches the app binary with `--snapshots <folder>`. Before the app starts,
@@ -227,6 +230,10 @@ enum Snapshots {
         view.setFrameOrigin(NSPoint(x: padding, y: padding))
         backdrop.addSubview(view)
         backdrop.layoutSubtreeIfNeeded()
+        if snapshot.settlesInWindow {
+            settle()
+            backdrop.layoutSubtreeIfNeeded()
+        }
         if let problem = snapshot.check?(view) {
             throw SnapshotError.layout(snapshot.name, problem)
         }
