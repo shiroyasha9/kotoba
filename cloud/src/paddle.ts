@@ -8,7 +8,8 @@ import { decodeHex } from "./session";
  * `custom_data: {"kotoba_user_id": "<id>"}`; Paddle copies it to the transaction and to the subscription.
  * - `transaction.completed`: a pack adds pack hours; a Pro price starts the paid period (`billing_period`), every
  *   renewal too, so renewals need no other event.
- * - `subscription.created|updated|canceled`: kept in D1; `canceled` or `paused` ends the plan hours now.
+ * - `subscription.*` (created, updated, paused, resumed, canceled): kept in D1; status `canceled` or `paused` ends the
+ *   plan hours now.
  * Paddle retries a notification until it gets a 200 and does not keep the order. The `paddle_events` check only saves
  * work: the writes themselves are idempotent (the Balance ledger by transaction and price, `purchases` by key,
  * `subscriptions` by event time), so two deliveries that race both land once.
@@ -77,6 +78,8 @@ async function handle(env: Env, event: PaddleEvent, now: number): Promise<string
       return completeTransaction(env, userId, event, now);
     case "subscription.created":
     case "subscription.updated":
+    case "subscription.paused":
+    case "subscription.resumed":
     case "subscription.canceled":
       return updateSubscription(env, userId, event, now);
     default:
