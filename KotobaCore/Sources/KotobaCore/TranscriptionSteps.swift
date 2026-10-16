@@ -10,6 +10,8 @@ struct TranscriptionSteps: Sendable {
         let text: String
         /// It ended with a submit phrase: a live dictation sends Return after the paste; a retry never does.
         var submits = false
+        /// The upload's moments, when the route measured them.
+        var network: NetworkTiming?
     }
 
     /// Why a cleanup gave no text; the raw transcript is used then.
@@ -38,7 +40,9 @@ struct TranscriptionSteps: Sendable {
         let heard = transcript.text.trimmingCharacters(in: .whitespacesAndNewlines)
         // Matched on what the owner said, before the replacements, so a rule can neither make nor break the phrase.
         let (raw, submits) = settings.isSubmitPhraseOn ? SubmitPhrase.split(heard) : (heard, false)
-        let transcribed = Transcribed(raw: raw, text: settings.dictionary.applyReplacements(to: raw), submits: submits)
+        let transcribed = Transcribed(
+            raw: raw, text: settings.dictionary.applyReplacements(to: raw), submits: submits,
+            network: transcript.network)
         let words = DictationRecord.wordCount(of: transcribed.text)
         record.usage.append(
             UsageEntry(

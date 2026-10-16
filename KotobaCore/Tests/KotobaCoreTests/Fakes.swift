@@ -140,6 +140,8 @@ actor FakeTranscriptionProvider: TranscriptionProvider {
     /// The usage each answer reports.
     private var usageAudio: Duration = .seconds(1)
     private var cost: Cost?
+    /// The network metrics each answer carries; nil, as on a route without metrics, by default.
+    private var network: NetworkTiming?
 
     init(transcript: String) {
         self.transcript = transcript
@@ -153,6 +155,11 @@ actor FakeTranscriptionProvider: TranscriptionProvider {
     func charge(_ cost: Cost?, audio: Duration) {
         self.cost = cost
         usageAudio = audio
+    }
+
+    /// Each answer from now on carries `network`.
+    func time(_ network: NetworkTiming?) {
+        self.network = network
     }
 
     func hold(at gate: Gate) {
@@ -172,7 +179,8 @@ actor FakeTranscriptionProvider: TranscriptionProvider {
         await gates[request.audio]?.pass()
         if let error { throw error }
         return Transcript(
-            text: transcript, usage: TranscriptionUsage(audio: usageAudio, cost: cost), model: "fake/model-1")
+            text: transcript, usage: TranscriptionUsage(audio: usageAudio, cost: cost), model: "fake/model-1",
+            network: network)
     }
 }
 

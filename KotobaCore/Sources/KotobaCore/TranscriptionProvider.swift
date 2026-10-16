@@ -34,11 +34,36 @@ public struct Transcript: Sendable, Equatable {
     /// The route's model identifier this request used, stored with the dictation so the latency report can split
     /// by model. It comes from the provider's answer, so a model switch during the request cannot mislabel it.
     public var model: String
+    /// When the request left and the answer started, from the system's network metrics; nil when the route has none.
+    public var network: NetworkTiming?
 
-    public init(text: String, usage: TranscriptionUsage, model: String) {
+    public init(text: String, usage: TranscriptionUsage, model: String, network: NetworkTiming? = nil) {
         self.text = text
         self.usage = usage
         self.model = model
+        self.network = network
+    }
+}
+
+/// The moments of one upload, on the pipeline clock, so `make latency` can split the network wait into upload and
+/// server time. The system measures them and hands them over after the answer; the pipeline records them as marks.
+public struct NetworkTiming: Sendable, Equatable {
+    /// The upload opened its own connection, which was ready (TLS done) here; nil when it reused the warmed one.
+    public var connected: ContinuousClock.Instant?
+    /// The last body byte went to the network stack (URLSession's `requestEndDate`). The kernel can still hold the
+    /// tail of the body: a reused HTTP/2 connection took 300 KB in 13-16 ms, faster than the uplink, so this to
+    /// `firstByte` includes some upload too.
+    public var uploadSent: ContinuousClock.Instant
+    /// The first byte of the answer arrived (`responseStartDate`).
+    public var firstByte: ContinuousClock.Instant
+
+    public init(
+        connected: ContinuousClock.Instant? = nil, uploadSent: ContinuousClock.Instant,
+        firstByte: ContinuousClock.Instant
+    ) {
+        self.connected = connected
+        self.uploadSent = uploadSent
+        self.firstByte = firstByte
     }
 }
 

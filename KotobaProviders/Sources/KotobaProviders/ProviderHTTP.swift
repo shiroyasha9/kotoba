@@ -24,6 +24,7 @@ final class ProviderConnection: Sendable {
     private let apiKey: any APIKeySource
     private let keyHeader: KeyHeader
     private let session: URLSession
+    private let interfaces = InterfaceMemo()
 
     init(
         account: ProviderAccount,
@@ -49,14 +50,22 @@ final class ProviderConnection: Sendable {
         _ = try? await key
     }
 
+    /// One answer to `send`.
+    struct Reply {
+        let data: Data
+        let response: HTTPURLResponse
+        /// The upload's moments, when the system's metrics came before the answer.
+        let network: NetworkTiming?
+    }
+
     /// POSTs `body` to `url` with the key, mapping transport failures to `ProviderError.offline`.
-    func send(_ url: URL, contentType: String, label: String, body: Body) async throws -> (Data, HTTPURLResponse) {
+    func send(_ url: URL, contentType: String, label: String, body: Body) async throws -> Reply {
         let key = try await key()
         var request = URLRequest(url: url)
         request.httpMethod = "POST"
         authorize(&request, with: key)
         request.setValue(contentType, forHTTPHeaderField: "Content-Type")
-        let metrics = UploadMetrics(label)
+        let metrics = UploadMetrics(label, interfaces: interfaces)
         do {
             let (data, response): (Data, URLResponse)
             switch body {
@@ -72,7 +81,7 @@ final class ProviderConnection: Sendable {
                 (data, response) = try await session.upload(for: request, fromFile: file, delegate: metrics)
             }
             guard let http = response as? HTTPURLResponse else { throw ProviderError.server(status: 0) }
-            return (data, http)
+            return Reply(data: data, response: http, network: metrics.timing)
         } catch let error as URLError where error.code == .cancelled {
             throw CancellationError()
         } catch is URLError {
@@ -134,14 +143,14 @@ enum ProviderHTTP {
         return try encoder.encode(value)
     }
 
-    /// The success body of `response`, or the `ProviderError` for its status (or for a body that does not parse).
+    /// The success body of `reply`, or the `ProviderError` for its status (or for a body that does not parse).
     /// Failures are logged under `label`.
     static func decode<Body: Decodable>(
         _ type: Body.Type,
-        from data: Data,
-        response: HTTPURLResponse,
+        from reply: ProviderConnection.Reply,
         label: String
     ) throws(ProviderError) -> Body {
+        let (data, response) = (reply.data, reply.response)
         let status = response.statusCode
         guard (200..<300).contains(status) else {
             let retryAfter = response.value(forHTTPHeaderField: "Retry-After")
@@ -257,33 +266,6 @@ struct Multipart {
     var end: String { "\r\n--\(boundary)--\r\n" }
 
     static func randomBoundary() -> String { "kotoba-\(UUID().uuidString)" }
-}
-
-/// Logs how the upload connected, next to the pipeline's latency line: a reused connection means the key-down
-/// warm-up worked; a new one shows its connect and TLS cost.
-private final class UploadMetrics: NSObject, URLSessionTaskDelegate, Sendable {
-    private let label: String
-
-    init(_ label: String) {
-        self.label = label
-    }
-
-    func urlSession(_ session: URLSession, task: URLSessionTask, didFinishCollecting metrics: URLSessionTaskMetrics) {
-        guard let last = metrics.transactionMetrics.last else { return }
-        Log.latency.info(
-            """
-            upload \(self.label, privacy: .public): reused \(last.isReusedConnection, privacy: .public), \
-            protocol \(last.networkProtocolName ?? "unknown", privacy: .public), \
-            connect \(Self.milliseconds(last.connectStartDate, last.connectEndDate), privacy: .public), \
-            tls \(Self.milliseconds(last.secureConnectionStartDate, last.secureConnectionEndDate), privacy: .public)
-            """
-        )
-    }
-
-    private static func milliseconds(_ start: Date?, _ end: Date?) -> String {
-        guard let start, let end else { return "none" }
-        return "\(Int((end.timeIntervalSince(start) * 1000).rounded())) ms"
-    }
 }
 
 private struct ErrorBody: Decodable {

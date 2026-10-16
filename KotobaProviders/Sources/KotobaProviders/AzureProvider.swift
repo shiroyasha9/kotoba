@@ -52,7 +52,7 @@ final class AzureProvider: RouteClient {
         let label = options.route.rawValue
         let multipart = Multipart(boundary: makeBoundary())
         let definition = try Self.definition(request)
-        let (data, response) = try await connection.send(
+        let reply = try await connection.send(
             endpoint, contentType: multipart.contentType, label: label,
             body: .streamed { writer in
                 try writer.write(multipart.field("definition", definition, contentType: "application/json"))
@@ -60,12 +60,12 @@ final class AzureProvider: RouteClient {
                 try writer.write(contentsOf: request.audio)
                 try writer.write(multipart.end)
             })
-        let body = try ProviderHTTP.decode(SuccessBody.self, from: data, response: response, label: label)
+        let body = try ProviderHTTP.decode(SuccessBody.self, from: reply, label: label)
         // One channel: the first combined phrase is the whole transcript. Azure reports no cost in the response.
         let text = body.combinedPhrases.first?.text ?? ""
         let usage = TranscriptionUsage.priced(
             audio: body.durationMilliseconds.map { .milliseconds($0) }, cost: nil, for: request, on: options.route)
-        return Transcript(text: text, usage: usage, model: label)
+        return Transcript(text: text, usage: usage, model: label, network: reply.network)
     }
 
     private static func transcribeURL(_ endpoint: URL?) -> URL? {

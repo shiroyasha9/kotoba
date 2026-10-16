@@ -55,10 +55,10 @@ public final class OpenRouterCleaner: TextCleaner {
         let label = "cleanup \(model.rawValue) \(mode.rawValue)"
         // A few KB of JSON: sent from memory, no temp file.
         let request = try Self.requestBody(transcript, vocabulary: vocabulary, mode: mode, model: model)
-        let (data, response) = try await connection.send(
+        let reply = try await connection.send(
             baseURL.appending(path: "chat/completions"), contentType: "application/json", label: label,
             body: .data(request))
-        let body = try ProviderHTTP.decode(SuccessBody.self, from: data, response: response, label: label)
+        let body = try ProviderHTTP.decode(SuccessBody.self, from: reply, label: label)
         let text = body.choices.first?.message.content ?? ""
         return CleanedText(text: text, model: model.rawValue, cost: body.usage?.cost(of: model))
     }

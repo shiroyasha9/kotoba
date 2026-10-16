@@ -44,7 +44,7 @@ final class OpenRouterProvider: RouteClient {
     {
         let label = options.route.rawValue
         let rest = try ProviderHTTP.encode(Self.fields(request, options: options))
-        let (data, response) = try await connection.send(
+        let reply = try await connection.send(
             baseURL.appending(path: "audio/transcriptions"), contentType: "application/json", label: label,
             body: .streamed { writer in
                 // `input_audio` first, its base64 streamed from the FLAC, then the other fields from `rest`.
@@ -53,10 +53,10 @@ final class OpenRouterProvider: RouteClient {
                 try writer.write(#""},"#)
                 try writer.write(rest.dropFirst())  // `rest` is a non-empty object: drop its "{".
             })
-        let body = try ProviderHTTP.decode(SuccessBody.self, from: data, response: response, label: label)
+        let body = try ProviderHTTP.decode(SuccessBody.self, from: reply, label: label)
         let usage = TranscriptionUsage.priced(
             audio: body.usage?.seconds.map { .seconds($0) }, cost: body.usage?.charged, for: request, on: options.route)
-        return Transcript(text: body.text ?? "", usage: usage, model: label)
+        return Transcript(text: body.text ?? "", usage: usage, model: label, network: reply.network)
     }
 
     /// Every body field except `input_audio`. The dictionary terms come within the route limits

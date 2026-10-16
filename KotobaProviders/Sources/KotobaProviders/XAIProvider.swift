@@ -51,14 +51,14 @@ final class XAIProvider: RouteClient {
     {
         let label = options.route.rawValue
         let multipart = Multipart(boundary: makeBoundary())
-        let (data, response) = try await connection.send(
+        let reply = try await connection.send(
             endpoint, contentType: multipart.contentType, label: label,
             body: .streamed { writer in try Self.write(request, options: options, multipart: multipart, to: writer) })
-        let body = try ProviderHTTP.decode(SuccessBody.self, from: data, response: response, label: label)
+        let body = try ProviderHTTP.decode(SuccessBody.self, from: reply, label: label)
         // xAI reports no cost in the response.
         let usage = TranscriptionUsage.priced(
             audio: body.duration.map { .seconds($0) }, cost: nil, for: request, on: options.route)
-        return Transcript(text: body.text ?? "", usage: usage, model: label)
+        return Transcript(text: body.text ?? "", usage: usage, model: label, network: reply.network)
     }
 
     /// Form fields in xAI's documented names and "true" / "false" values, then the FLAC as the last part. The

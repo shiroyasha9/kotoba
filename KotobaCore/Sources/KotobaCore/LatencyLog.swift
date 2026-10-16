@@ -11,6 +11,11 @@ public enum LatencyMark: String, Sendable, CaseIterable {
     /// (not its key-up), in hold mode the chord-up.
     case stop
     case uploadStart
+    /// From the provider's network metrics (`NetworkTiming`), recorded after the answer: a new connection ready
+    /// (only when the warmed one was not reused), the body handed to the network stack, the answer's first byte.
+    case connected
+    case uploadSent
+    case firstByte
     case response
     case pasteSent
     /// Submit phrase only: Return posted after the paste.
@@ -29,7 +34,7 @@ public enum LatencyMark: String, Sendable, CaseIterable {
     }
 }
 
-/// One dictation's latency marks, as offsets from key-down. The pipeline also emits each mark
+/// One dictation's latency marks, as offsets from key-down. The pipeline also emits each hot-path mark
 /// as a signpost on `Log.signposter`, so Instruments and the latency report see the same moments.
 public struct LatencyLog: Sendable, Equatable {
     public private(set) var offsets: [LatencyMark: Duration] = [:]

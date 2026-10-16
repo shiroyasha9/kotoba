@@ -28,6 +28,55 @@ struct PipelineLatencyTests {
         #expect(latency.duration(from: .stop, to: .pasteSent) == .zero)
     }
 
+    @Test func theProvidersNetworkTimingSplitsTheWaitIntoUploadAndServer() async throws {
+        let world = FakeWorld(transcript: "split")
+        let pipeline = world.makePipeline()
+        let keyDown = world.clock.now
+        await world.provider.time(
+            NetworkTiming(
+                connected: keyDown + .milliseconds(12_040), uploadSent: keyDown + .milliseconds(12_100),
+                firstByte: keyDown + .milliseconds(12_700)))
+
+        await pipeline.handle(.chordDown)
+        await pipeline.handle(.chordUp)
+        world.clock.advance(by: .seconds(12))
+        await pipeline.tap(world)
+        await pipeline.settle()
+
+        let latency = try #require(await world.store.records.first).latency
+        #expect(latency.offsets[.connected] == .milliseconds(12_040))
+        #expect(latency.offsets[.uploadSent] == .milliseconds(12_100))
+        #expect(latency.offsets[.firstByte] == .milliseconds(12_700))
+    }
+
+    @Test func aReusedConnectionRecordsNoConnectedMark() async throws {
+        let world = FakeWorld(transcript: "warm")
+        let pipeline = world.makePipeline()
+        let keyDown = world.clock.now
+        await world.provider.time(
+            NetworkTiming(uploadSent: keyDown + .milliseconds(30), firstByte: keyDown + .milliseconds(500)))
+
+        await pipeline.dictate(world)
+
+        let latency = try #require(await world.store.records.first).latency
+        #expect(latency.offsets[.connected] == nil)
+        #expect(latency.offsets[.uploadSent] == .milliseconds(30))
+        #expect(latency.offsets[.firstByte] == .milliseconds(500))
+    }
+
+    @Test func aRouteWithoutNetworkMetricsRecordsNoNetworkMarks() async throws {
+        let world = FakeWorld(transcript: "no metrics")
+        let pipeline = world.makePipeline()
+
+        await pipeline.dictate(world)
+
+        let latency = try #require(await world.store.records.first).latency
+        #expect(latency.offsets[.pasteSent] != nil)
+        #expect(latency.offsets[.connected] == nil)
+        #expect(latency.offsets[.uploadSent] == nil)
+        #expect(latency.offsets[.firstByte] == nil)
+    }
+
     @Test func inTapModeTheStopMarkIsTheSecondChordDownNotItsRelease() async throws {
         let world = FakeWorld(transcript: "tap")
         let pipeline = world.makePipeline()
