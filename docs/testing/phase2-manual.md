@@ -485,6 +485,17 @@ The Writing prompt waits for its benchmark (docs/research/per-app-modes.md, ques
 | 358 | Note the figures; in History delete all of today’s dictations; reopen **Insights** | No figure changes (Insights counts from the usage record, which deleting history keeps) | |
 | 359 | Say nothing for 3 s as a dictation (“No speech heard”), then reopen **Insights** | No figure changes: a dictation with no words counts for no streak, word or speed | |
 
+### Dictionary search (phase 3)
+
+| # | Do this | Expect | Result |
+|---|---|---|---|
+| 400 | In Settings > **Dictionary**, click a word in the list, press ⌘F, type a word | The cursor goes to **Search words** and the list filters | |
+| 401 | Click in **Search words**, type a word, press ⌘F | The cursor stays in the field and the text does not change | |
+| 402 | Click a toolbar item or the window title, then press ⌘F | The cursor goes to **Search words** | |
+| 403 | Click **+**; in the Add sheet click **Replace it with**, press ⌘F; click **Cancel** | Nothing happens while the sheet is open; after Cancel the cursor is not in **Search words** | |
+| 404 | Open **General**, press ⌘F; do the same in each other pane; then click **Dictionary** | Nothing happens in the other panes; **Dictionary** opens with the cursor not in **Search words** | |
+| 405 | Press ⌘F in **Dictionary**, close Settings with ⌘W, reopen it on **Dictionary**, press ⌘F | The cursor goes to **Search words** each time | |
+
 ## Known offscreen-only doubts
 
 The offscreen snapshots (`make snapshots`) show two things that may not happen in the real app. Check them on screen:

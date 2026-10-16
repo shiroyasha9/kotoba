@@ -71,6 +71,16 @@ enum SettingsPaneID: String, Hashable, CaseIterable {
         case .usage: "How much you dictate, and what it costs."
         }
     }
+
+    /// The panes with a toolbar search field: Edit > Find… (⌘F) puts the cursor in it. In the other panes Find stays
+    /// off.
+    var hasSearch: Bool { self == .dictionary }
+}
+
+extension EnvironmentValues {
+    /// Goes up by one each time the owner chooses Edit > Find… in the Settings window. A pane with a search field
+    /// focuses it on each change.
+    @Entry var settingsFindRequests = 0
 }
 
 /// A pane's symbol, white on a rounded square of the pane's color, as in the System Settings sidebar. Custom: SwiftUI
@@ -110,7 +120,7 @@ struct PaneHeader: View {
 /// The Settings window, built when the owner opens it and released when they close it. SwiftUI is used only for
 /// on-demand windows (docs/spec.md, Platform and UI).
 @MainActor
-final class SettingsWindow: NSObject, NSWindowDelegate {
+final class SettingsWindow: NSObject, NSWindowDelegate, NSMenuItemValidation {
     static let defaultSize = NSSize(width: 720, height: 480)
 
     private var window: NSWindow?
@@ -126,6 +136,19 @@ final class SettingsWindow: NSObject, NSWindowDelegate {
         }
         NSApp.activate()
         window.makeKeyAndOrderFront(nil)
+    }
+
+    /// Edit > Find… (⌘F): no view in the window answers it, so AppKit sends it to the window's delegate. SwiftUI's
+    /// toolbar search field does not take it on its own.
+    @objc func performTextFinderAction(_ sender: Any?) {
+        selection.findRequests += 1
+    }
+
+    /// Find is on only in a pane with a search field, and off while a sheet is open: AppKit also sends the sheet's
+    /// actions to this window when no view in the sheet answers them, and the field is behind the sheet.
+    func validateMenuItem(_ menuItem: NSMenuItem) -> Bool {
+        guard menuItem.action == #selector(performTextFinderAction(_:)) else { return true }
+        return selection.id?.hasSearch == true && window?.attachedSheet == nil
     }
 
     func windowWillClose(_ notification: Notification) {
@@ -156,6 +179,8 @@ final class SettingsWindow: NSObject, NSWindowDelegate {
 @Observable
 private final class Selection {
     var id: SettingsPane.ID?
+    /// Edit > Find… requests; the shown pane gets them as `settingsFindRequests`.
+    var findRequests = 0
 }
 
 private struct SettingsView: View {
@@ -190,6 +215,7 @@ private struct SettingsView: View {
             if let pane = shown {
                 pane.content()
                     .navigationTitle(pane.title)
+                    .environment(\.settingsFindRequests, selection.findRequests)
             }
         }
         .frame(minWidth: 600, minHeight: 380)
