@@ -14,24 +14,6 @@ extension Pane {
     }
 }
 
-extension AppMode {
-    /// The mode's name in the pane's pickers.
-    var title: String {
-        switch self {
-        case .code: "Code"
-        case .writing: "Writing"
-        }
-    }
-
-    /// What the mode's apps are and what its cleanup does, under its toggle.
-    var summary: String {
-        switch self {
-        case .code: "Terminals, editors and coding agents. Cleanup keeps commands, paths and flags as you said them."
-        case .writing: "Messages, mail and notes. Cleanup writes clear sentences in your words."
-        }
-    }
-}
-
 /// The per-app modes as the Modes pane shows them (story 29): which modes clean every dictation, the installed apps
 /// that have a mode, and the mode of every other app. Each change saves the rules and sends them to the pipeline, so the
 /// next dictation uses them. A rule for an app that is not installed (a seed app) stays, with no row.
@@ -281,6 +263,9 @@ private struct ModesPane: View {
                     "When off, kotoba cleans up only the dictations you start with the cleanup shortcut. "
                         + "Each cleanup takes a second or two longer.")
             }
+            Section("Examples") {
+                ForEach(AppMode.allCases, id: \.self) { CleanupSample(mode: $0) }
+            }
             Section {
                 EditableList(
                     rows: model.rows, emptyText: "No apps in the list: every app uses the mode below.",
@@ -373,11 +358,11 @@ extension Pane {
 
     static func modesSnapshots() -> [Snapshot] {
         [
-            MainWindow.snapshot(of: .modes(ModesModel(source: .sample())), named: "settings-modes", height: 700),
+            MainWindow.snapshot(of: .modes(ModesModel(source: .sample())), named: "settings-modes", height: 960),
             MainWindow.snapshot(
                 of: .modes(ModesModel(source: .sample(rules: ModeRules()))), named: "settings-modes-empty",
-                height: 600),
-            MainWindow.snapshot(of: .modes(noKeyModel), named: "settings-modes-no-key", height: 760),
+                height: 860),
+            MainWindow.snapshot(of: .modes(noKeyModel), named: "settings-modes-no-key", height: 1020),
         ]
     }
 }
