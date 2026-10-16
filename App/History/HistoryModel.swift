@@ -23,6 +23,8 @@ final class HistoryModel {
         /// False when the app the owner was in did not come back, so nothing was pasted; the text is on the clipboard.
         var paste: @MainActor (String, DictationID) async -> Bool
         var copy: @MainActor (String) async -> Void
+        /// Opens the Fix window with the row's text.
+        var fix: @MainActor (DictationRecord) -> Void
     }
 
     /// The rows of one calendar day, for a list section.
@@ -183,6 +185,16 @@ final class HistoryModel {
     func copy(_ records: [DictationRecord], raw: Bool = false) {
         guard let source, let text = Self.text(of: records, raw: raw) else { return }
         Task { await source.copy(text) }
+    }
+
+    /// One row with text: the Fix window learns from one dictation's edit.
+    func canFix(_ records: [DictationRecord]) -> Bool {
+        records.count == 1 && records.first?.deliveredText?.isEmpty == false
+    }
+
+    func fix(_ records: [DictationRecord]) {
+        guard let source, canFix(records), let record = records.first else { return }
+        source.fix(record)
     }
 
     /// One row only: two texts pasted in one go would read as one dictation.

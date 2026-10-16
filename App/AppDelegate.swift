@@ -31,7 +31,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     )
     lazy var indicator = IndicatorPanel()
     lazy var fixWindow = FixLastDictationController(
-        lastText: { [weak self] in await self?.lastDictation?.record()?.deliveredText },
+        last: { [weak self] in await self?.lastDictation?.record() },
         dictionary: { [weak self] in self?.settingsController.dictionary })
     lazy var learner = EditLearner(
         dictionary: { [weak self] in self?.settingsController.dictionary }, indicator: indicator)
@@ -100,7 +100,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         self.pipeline = pipeline
         settingsController.pipeline = pipeline
         lastDictation = LastDictation(store: store, pipeline: pipeline)
-        history = HistoryController(store: store, pipeline: pipeline)
+        history = HistoryController(store: store, pipeline: pipeline) { [weak self] in self?.fixWindow.show($0) }
 
         observe(pipeline)
         observeReadiness()

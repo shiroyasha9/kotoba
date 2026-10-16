@@ -185,3 +185,45 @@ struct FixChoiceTests {
         #expect(choice.dismiss == [embra.candidate])
     }
 }
+
+/// The Fix window's "Add Selected Word": a word the transcript got right, added with no edit (phase 3 plan, 5.3).
+struct SelectedWordTests {
+    static let text = "Deploy the embra branch to Vercel, then audit `order_id` at https://vercel.com today."
+
+    /// The word that a selection of `part` adds, in `text`.
+    static func word(selecting part: String, in text: String = text) throws -> String? {
+        CorrectionDetector.selectedWord(in: text, range: try #require(text.range(of: part)))?.corrected
+    }
+
+    @Test func aSelectionInsideOneWordAddsThatWord() throws {
+        let range = try #require(Self.text.range(of: "erce"))
+        let candidate = CorrectionDetector.selectedWord(in: Self.text, range: range)
+        #expect(candidate == SuggestionCandidate(heard: "Vercel", corrected: "Vercel", proposes: .term, origin: .fix))
+    }
+
+    @Test func punctuationAndBackticksAroundTheWordAreLeftOut() throws {
+        #expect(try Self.word(selecting: "Vercel,") == "Vercel")
+        #expect(try Self.word(selecting: "`order_id`") == "order_id")
+    }
+
+    @Test func aSelectionOverTwoWordsAddsThemAsOneWord() throws {
+        #expect(try Self.word(selecting: "aude\nCo", in: "Ask Claude\nCode to review it.") == "Claude Code")
+    }
+
+    @Test func anEmptySelectionAddsNothing() throws {
+        let caret = try #require(Self.text.range(of: "embra")).lowerBound
+        #expect(CorrectionDetector.selectedWord(in: Self.text, range: caret..<caret) == nil)
+    }
+
+    @Test func aSentenceAnAddressOrPunctuationAddsNothing() throws {
+        #expect(try Self.word(selecting: "the embra branch to Vercel") == nil)
+        #expect(try Self.word(selecting: "vercel.com") == nil)
+        #expect(try Self.word(selecting: "…", in: "Done. … OK") == nil)
+    }
+
+    @Test func aSelectionFromAnOlderTextAddsNothing() throws {
+        let long = "A much longer text than the one in the editor now"
+        let stale = try #require(long.range(of: "editor"))
+        #expect(CorrectionDetector.selectedWord(in: "Short", range: stale) == nil)
+    }
+}

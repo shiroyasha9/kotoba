@@ -520,3 +520,16 @@ The offscreen snapshots (`make snapshots`) show two things that may not happen i
 | 364 | Fresh kotoba Dev setup (`defaults delete tech.teensy.kotoba.dev onboarding.completed`), go to the last step | “Open kotoba when you log in” is off | |
 | 365 | Open the release kotoba first, then open kotoba Dev | kotoba Dev shows the notice of row 360 and does not dictate; quit the release kotoba, and kotoba Dev dictates | |
 | 366 | While the release kotoba runs, change kotoba Dev’s chord in Settings > General; quit the release kotoba; use the new chord | kotoba Dev dictates with the new chord | |
+
+## Fix Dictation from History
+
+| # | Do this | Expect | Result |
+|---|---|---|---|
+| 410 | In History, right-click a row with text | The menu has **Fix Dictation…**. It is not there for a row with no text, or with two rows selected | |
+| 411 | Click **Fix Dictation…** on an older row | The window “Fix Dictation” opens with that row’s text; **Learn** is dimmed until you change the text | |
+| 412 | Change a word, click **Learn**, then **Add and Copy** | The word is in Settings > Dictionary; the fixed text is on the clipboard | |
+| 413 | In the Fix window, select part of one word that the dictation got right, click **Add Selected Word** | The whole word is added (Settings > Dictionary); the footer says “Added “<word>” to your dictionary.”; the button dims while that word stays selected | |
+| 414 | Put the caret in a word with no selection; then select a sentence of five words or more | **Add Selected Word** is dimmed both times | |
+| 415 | In the Fix window, click into the text, press ⌘A, then ⌘C; click at the end, press ⌘V | ⌘A selects the whole text, ⌘V pastes it; no beep | |
+| 416 | With **Fix Dictation…** open for one row, choose it again for the same row | The window comes to the front and keeps your edit | |
+| 417 | With **Fix Dictation…** open, choose it on another row, then open menu > **Fix Last Dictation…** | The window shows the other row’s text, then the last dictation, titled “Fix Last Dictation” | |

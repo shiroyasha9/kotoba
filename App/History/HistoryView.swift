@@ -108,6 +108,10 @@ struct HistoryView: View {
             if model.canRetry(records) {
                 Button("Retry") { model.retry(records) }
             }
+            if model.canFix(records) {
+                Divider()
+                Button("Fix Dictation…") { model.fix(records) }
+            }
             Divider()
             Button("Delete…", role: .destructive) { model.askToDelete(records) }
                 .disabled(!model.canDelete(records))

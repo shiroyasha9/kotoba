@@ -3,66 +3,114 @@ import KotobaCore
 import Observation
 import SwiftUI
 
-/// "Fix Last Dictation…": the owner corrects the last dictation's text, kotoba finds the words worth learning in the
-/// edit, and the owner picks which to add (story 32, docs/research/auto-learning.md 3d). The fixed text goes to the
-/// clipboard; it is not pasted again, since the focus has moved. Built when it opens and released when it closes.
-/// Readback (`EditReadback`) learns from edits in apps whose text Accessibility can read; this window is the way for
-/// the others, such as terminals.
+/// "Fix Last Dictation…" and a History row's "Fix Dictation…": the owner corrects a dictation's text, kotoba finds the
+/// words worth learning in the edit, and the owner picks which to add (story 32, docs/research/auto-learning.md 3d).
+/// "Add Selected Word" adds a word the dictation got right. The fixed text goes to the clipboard; it is not pasted
+/// again, since the focus has moved. Built when it opens and released when it closes. Readback (`EditReadback`)
+/// learns from edits in apps whose text Accessibility can read; this window is the way for the others, such as
+/// terminals.
 @MainActor
 final class FixLastDictationController: NSObject, NSWindowDelegate {
     static let size = NSSize(width: 480, height: 400)
 
-    /// The text kotoba delivered last (the cleaned text for a cleanup dictation), or nil when there is none.
-    private let lastText: @MainActor () async -> String?
+    /// Which dictation the open window fixes.
+    private enum Fixing {
+        /// The menu's last dictation, read when the window opened; nil when there was none.
+        case last(DictationID?)
+        case row(DictationID)
+
+        var id: DictationID? {
+            switch self {
+            case .last(let id): id
+            case .row(let id): id
+            }
+        }
+
+        var title: String {
+            switch self {
+            case .last: "Fix Last Dictation"
+            case .row: "Fix Dictation"
+            }
+        }
+    }
+
+    /// The dictation kotoba delivered last, or nil when there is none.
+    private let last: @MainActor () async -> DictationRecord?
     /// Nil until the dictionary is read at launch; the window then learns nothing but still copies.
     private let dictionary: @MainActor () -> DictionaryModel?
     private let pasteboard = SystemPasteboard()
     private var window: NSWindow?
-    /// Set while the last text loads, so a second click does not build a second window.
+    private var fixing: Fixing?
+    /// Set while the last dictation loads, so a second click does not build a second window.
     private var opening: Task<Void, Never>?
 
     init(
-        lastText: @escaping @MainActor () async -> String?,
+        last: @escaping @MainActor () async -> DictationRecord?,
         dictionary: @escaping @MainActor () -> DictionaryModel?
     ) {
-        self.lastText = lastText
+        self.last = last
         self.dictionary = dictionary
     }
 
     /// Shows the window with the last dictation. An open window keeps the owner's edit.
     func show() {
-        if let window {
-            NSApp.activate()
-            window.makeKeyAndOrderFront(nil)
+        if window != nil, case .last = fixing {
+            present()
             return
         }
         guard opening == nil else { return }
         opening = Task {
-            let text = await lastText()
-            let model = FixLastDictationModel(
-                pasted: text, learner: dictionary().map(FixLastDictationModel.Learner.live)
-            ) { [pasteboard] in _ = await pasteboard.write($0, isTransient: false) }
-            let window = makeWindow(model: model)
-            self.window = window
+            let record = await last()
+            // A History row opened the window while the last dictation loaded.
+            guard !Task.isCancelled else { return }
             opening = nil
-            NSApp.activate()
-            window.makeKeyAndOrderFront(nil)
+            open(.last(record?.id), text: record?.deliveredText)
         }
+    }
+
+    /// Shows the window with one History row's text. An open window for the same dictation keeps the owner's edit;
+    /// another dictation takes its place.
+    func show(_ record: DictationRecord) {
+        opening?.cancel()
+        opening = nil
+        if window != nil, fixing?.id == record.id {
+            present()
+            return
+        }
+        open(.row(record.id), text: record.deliveredText)
     }
 
     func windowWillClose(_ notification: Notification) {
         window = nil
+        fixing = nil
     }
 
-    private func makeWindow(model: FixLastDictationModel) -> NSWindow {
-        let view = FixLastDictationView(model: model) { [weak self] in self?.window?.close() }
-        let window = NSWindow(contentViewController: NSHostingController(rootView: view))
-        window.title = "Fix Last Dictation"
-        window.styleMask = [.titled, .closable]
-        window.isReleasedWhenClosed = false
-        window.setContentSize(Self.size)
+    private func open(_ fixing: Fixing, text: String?) {
+        window?.close()
+        let model = FixLastDictationModel(
+            pasted: text, learner: dictionary().map(FixLastDictationModel.Learner.live)
+        ) { [pasteboard] in _ = await pasteboard.write($0, isTransient: false) }
+        let window = Self.window(showing: model, title: fixing.title) { [weak self] in self?.window?.close() }
         window.delegate = self
         window.center()
+        self.window = window
+        self.fixing = fixing
+        present()
+    }
+
+    private func present() {
+        NSApp.activate()
+        window?.makeKeyAndOrderFront(nil)
+    }
+
+    /// The window and its content; the snapshot run draws the same window.
+    static func window(showing model: FixLastDictationModel, title: String, close: @escaping () -> Void) -> NSWindow {
+        let view = FixLastDictationView(model: model, close: close)
+        let window = NSWindow(contentViewController: NSHostingController(rootView: view))
+        window.title = title
+        window.styleMask = [.titled, .closable]
+        window.isReleasedWhenClosed = false
+        window.setContentSize(size)
         return window
     }
 }
@@ -73,7 +121,8 @@ final class FixLastDictationController: NSObject, NSWindowDelegate {
 final class FixLastDictationModel {
     /// What the window needs from the dictionary.
     struct Learner {
-        var dictionary: PersonalDictionary
+        /// Read at each use, so a word added while the window is open counts.
+        var dictionary: @MainActor () -> PersonalDictionary
         var dismissed: Set<SuggestionPair>
         var isKnownWord: @MainActor (String) -> Bool
         var add: @MainActor ([SuggestionCandidate]) -> Void
@@ -85,7 +134,8 @@ final class FixLastDictationModel {
         @MainActor
         static func live(_ model: DictionaryModel) -> Self {
             Self(
-                dictionary: model.dictionary, dismissed: model.dismissedPairs, isKnownWord: DictionaryModel.isKnownWord,
+                dictionary: { model.dictionary }, dismissed: model.dismissedPairs,
+                isKnownWord: DictionaryModel.isKnownWord,
                 add: { model.add($0) }, record: { model.record($0) }, dismiss: { model.dismiss($0) })
         }
     }
@@ -100,6 +150,10 @@ final class FixLastDictationModel {
     /// Nil until Learn; an edit after Learn clears it, so the list always matches the text.
     private(set) var corrections: [DetectedCorrection]?
     var checked: Set<SuggestionPair> = []
+    /// The editor's selection, for "Add Selected Word".
+    var selection: TextSelection?
+    /// The words "Add Selected Word" added, in click order, for the footer.
+    private(set) var addedWords: [String] = []
     /// Nil while the dictionary is not loaded: the window then only copies the fixed text.
     @ObservationIgnored private let learner: Learner?
     @ObservationIgnored private let copy: @MainActor (String) async -> Void
@@ -119,11 +173,27 @@ final class FixLastDictationModel {
         pasted != nil && text != pasted
     }
 
+    /// The selection widened to whole words, when that is a word the dictionary does not have yet.
+    var selectedWord: SuggestionCandidate? {
+        guard let learner, case .selection(let range) = selection?.indices,
+            let candidate = CorrectionDetector.selectedWord(in: text, range: range),
+            !learner.dictionary().contains(candidate)
+        else { return nil }
+        return candidate
+    }
+
+    /// Adds the selected word as it is: the dictation got it right, and the next one should too.
+    func addSelectedWord() {
+        guard let candidate = selectedWord, let learner else { return }
+        learner.add([candidate])
+        addedWords.append(candidate.corrected)
+    }
+
     /// Strong corrections start checked; weak ones (known words on both sides) wait for the owner's click.
     func learn() {
         guard let pasted, let learner else { return }
         let found = CorrectionDetector.corrections(
-            pasted: pasted, observed: text, dictionary: learner.dictionary, dismissed: learner.dismissed,
+            pasted: pasted, observed: text, dictionary: learner.dictionary(), dismissed: learner.dismissed,
             origin: .fix, isKnownWord: { learner.isKnownWord($0) })
         corrections = found
         checked = Set(found.filter(\.isStrong).map(\.candidate.pair))
@@ -152,12 +222,12 @@ struct FixLastDictationView: View {
             } else {
                 Form {
                     Section {
-                        TextEditor(text: $model.text)
+                        TextEditor(text: $model.text, selection: $model.selection)
                             .font(.body)
                             .scrollContentBackground(.hidden)
                             .frame(minHeight: 100)
                     } footer: {
-                        Text("Correct the words kotoba got wrong, then click \(model.canLearn ? "Learn" : "Copy").")
+                        footer
                     }
                     if let corrections = model.corrections {
                         found(corrections)
@@ -169,6 +239,23 @@ struct FixLastDictationView: View {
             }
         }
         .frame(width: FixLastDictationController.size.width, height: FixLastDictationController.size.height)
+    }
+
+    private var footer: some View {
+        VStack(alignment: .leading, spacing: 4) {
+            if model.canLearn {
+                Text(
+                    "Correct the words kotoba got wrong, then click Learn. To add a word it got right, select it and "
+                        + "click Add Selected Word.")
+            } else {
+                Text("Correct the words kotoba got wrong, then click Copy.")
+            }
+            if !model.addedWords.isEmpty {
+                Label(
+                    "Added \(model.addedWords.map { "“\($0)”" }.formatted(.list(type: .and))) to your dictionary.",
+                    systemImage: "checkmark.circle")
+            }
+        }
     }
 
     private var empty: some View {
@@ -204,6 +291,9 @@ struct FixLastDictationView: View {
 
     private var buttons: some View {
         HStack {
+            if model.canLearn {
+                AddSelectedWordButton(model: model)
+            }
             Spacer()
             Button("Cancel", action: close).keyboardShortcut(.cancelAction)
             if model.canLearn && model.corrections == nil {
@@ -231,55 +321,12 @@ struct FixLastDictationView: View {
     }
 }
 
-// MARK: - Snapshots
+/// Its own view: it reads the selection, which changes at each caret move, so only the button draws again.
+private struct AddSelectedWordButton: View {
+    let model: FixLastDictationModel
 
-extension FixLastDictationController {
-    /// The window before Learn, after Learn with a strong and a weak word, with nothing found, with no dictation, and
-    /// before the dictionary is loaded.
-    static func snapshots() -> [Snapshot] {
-        let pasted = "Deploy the ember branch to versel, then add it the change and tell the team."
-        let fixed = "Deploy the embra branch to Vercel, then audit the change and tell the team."
-        return [
-            windowSnapshot(named: "fix-last-dictation") {
-                let model = FixLastDictationModel(pasted: pasted, learner: sampleLearner) { _ in }
-                model.text = fixed
-                return model
-            },
-            windowSnapshot(named: "fix-last-dictation-learned") {
-                let model = FixLastDictationModel(pasted: pasted, learner: sampleLearner) { _ in }
-                model.text = fixed
-                model.learn()
-                return model
-            },
-            windowSnapshot(named: "fix-last-dictation-none-found") {
-                let model = FixLastDictationModel(pasted: pasted, learner: sampleLearner) { _ in }
-                model.text = pasted.replacingOccurrences(of: "then", with: "and then")
-                model.learn()
-                return model
-            },
-            windowSnapshot(named: "fix-last-dictation-empty") {
-                FixLastDictationModel(pasted: nil, learner: sampleLearner) { _ in }
-            },
-            windowSnapshot(named: "fix-last-dictation-no-dictionary") {
-                let model = FixLastDictationModel(pasted: pasted, learner: nil) { _ in }
-                model.text = fixed
-                return model
-            },
-        ]
-    }
-
-    /// A fixed word list instead of the spell checker, so the images do not depend on this Mac's learned words.
-    private static var sampleLearner: FixLastDictationModel.Learner {
-        let known: Set<String> = ["ember", "add", "it", "audit"]
-        return FixLastDictationModel.Learner(
-            dictionary: PersonalDictionary(), dismissed: [], isKnownWord: { known.contains($0.lowercased()) },
-            add: { _ in }, record: { _ in }, dismiss: { _ in })
-    }
-
-    /// The window at its fixed size, with the shared fit check.
-    private static func windowSnapshot(named name: String, model: @escaping @MainActor () -> FixLastDictationModel)
-        -> Snapshot
-    {
-        Snapshots.fixedWindow(named: name, size: size) { FixLastDictationView(model: model()) {} }
+    var body: some View {
+        Button("Add Selected Word", action: model.addSelectedWord)
+            .disabled(model.selectedWord == nil)
     }
 }

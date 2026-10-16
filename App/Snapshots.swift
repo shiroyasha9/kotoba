@@ -59,12 +59,27 @@ enum Snapshots {
             view.setFrameSize(size)
             return view
         } check: { view in
-            let fitting = view.fittingSize
-            if fitting.width > size.width + 0.5 || fitting.height > size.height + 0.5 {
-                return "the content needs \(fitting), the window is \(size)"
-            }
-            return check?(view)
+            fitProblem(of: view, in: size) ?? check?(view)
         }
+    }
+
+    /// A real window, title bar and toolbar included, with its content at `contentSize`. The run fails when the
+    /// content needs more room than the window.
+    static func window(named name: String, contentSize: NSSize, _ make: @escaping @MainActor () -> NSWindow)
+        -> Snapshot
+    {
+        Snapshot(name: name) {
+            WindowImage(window: make(), contentSize: contentSize)
+        } check: { view in
+            (view as? WindowImage)?.shown.contentView.flatMap { fitProblem(of: $0, in: contentSize) }
+        }
+    }
+
+    /// Content that needs more room than its fixed window.
+    private static func fitProblem(of content: NSView, in size: NSSize) -> String? {
+        let fitting = content.fittingSize
+        return fitting.width > size.width + 0.5 || fitting.height > size.height + 0.5
+            ? "the content needs \(fitting), the window is \(size)" : nil
     }
 
     /// Set for the whole of a snapshot run: `AppFiles` refuses to name the owner's files then.
@@ -147,5 +162,31 @@ enum Snapshots {
             NSColor.windowBackgroundColor.setFill()
             dirtyRect.fill()
         }
+    }
+}
+
+/// Draws a real window, frame and toolbar included, which `Snapshots` cannot host as a subview. The window is never
+/// ordered on screen; it takes the snapshot's appearance when drawn. Custom: AppKit has no offscreen window image.
+private final class WindowImage: NSView {
+    let shown: NSWindow
+
+    init(window: NSWindow, contentSize: NSSize) {
+        shown = window
+        shown.setContentSize(contentSize)
+        super.init(frame: NSRect(origin: .zero, size: shown.frame.size))
+    }
+
+    @available(*, unavailable)
+    required init?(coder: NSCoder) {
+        fatalError("not used")
+    }
+
+    override func draw(_ dirtyRect: NSRect) {
+        shown.appearance = effectiveAppearance
+        guard let frameView = shown.contentView?.superview else { return }
+        frameView.layoutSubtreeIfNeeded()
+        guard let bitmap = frameView.bitmapImageRepForCachingDisplay(in: frameView.bounds) else { return }
+        frameView.cacheDisplay(in: frameView.bounds, to: bitmap)
+        bitmap.draw(in: bounds)
     }
 }

@@ -26,16 +26,11 @@ extension HistoryController {
     }
 
     private static func windowSnapshot(named name: String, selecting selected: Int) -> Snapshot {
-        Snapshot(name: name) {
+        Snapshots.window(named: name, contentSize: defaultSize) {
             let rows = sampleRows()
             let model = HistoryModel(rows: rows)
             model.selection = [rows[selected].id]
-            return WindowImage(window: window(showing: model), contentSize: defaultSize)
-        } check: { view in
-            guard let content = (view as? WindowImage)?.shown.contentView else { return nil }
-            let fitting = content.fittingSize
-            return fitting.width > defaultSize.width + 0.5 || fitting.height > defaultSize.height + 0.5
-                ? "the content needs \(fitting), the window is \(defaultSize)" : nil
+            return window(showing: model)
         }
     }
 
@@ -76,31 +71,5 @@ extension HistoryController {
                 minutesAgo: 60 * 26, seconds: 21, app: ("com.apple.MobileSMS", "Messages"), isAudioDeleted: true),
             row("See you at six.", minutesAgo: 60 * 27, seconds: 2, app: nil, isAudioDeleted: true),
         ]
-    }
-}
-
-/// Draws a real window, frame and toolbar included, which `Snapshots` cannot host as a subview. The window is never
-/// ordered on screen; it takes the snapshot's appearance when drawn. Custom: AppKit has no offscreen window image.
-private final class WindowImage: NSView {
-    let shown: NSWindow
-
-    init(window: NSWindow, contentSize: NSSize) {
-        shown = window
-        shown.setContentSize(contentSize)
-        super.init(frame: NSRect(origin: .zero, size: shown.frame.size))
-    }
-
-    @available(*, unavailable)
-    required init?(coder: NSCoder) {
-        fatalError("not used")
-    }
-
-    override func draw(_ dirtyRect: NSRect) {
-        shown.appearance = effectiveAppearance
-        guard let frameView = shown.contentView?.superview else { return }
-        frameView.layoutSubtreeIfNeeded()
-        guard let bitmap = frameView.bitmapImageRepForCachingDisplay(in: frameView.bounds) else { return }
-        frameView.cacheDisplay(in: frameView.bounds, to: bitmap)
-        bitmap.draw(in: bounds)
     }
 }

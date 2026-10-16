@@ -58,6 +58,26 @@ public enum CorrectionDetector {
         }
     }
 
+    /// "Add Selected Word" in the Fix window: the owner's selection, widened to whole words, as a word to add with no
+    /// edit. Nil for an empty selection, more than `maxSpanWords` words, an address or markup, or no letters.
+    public static func selectedWord(in text: String, range: Range<String.Index>) -> SuggestionCandidate? {
+        // The editor's selection can lag its text by one update: a range past the text's end selects nothing.
+        guard !range.isEmpty, range.upperBound <= text.endIndex else { return nil }
+        var start = range.lowerBound
+        while start > text.startIndex, !text[text.index(before: start)].isWhitespace {
+            start = text.index(before: start)
+        }
+        var end = range.upperBound
+        while end < text.endIndex, !text[end].isWhitespace {
+            end = text.index(after: end)
+        }
+        let selected = words(String(text[start..<end]))
+        guard selected.count <= maxSpanWords else { return nil }
+        let word = trimmingPunctuation(selected.joined(separator: " "))
+        guard hasLetters(word), !isAddressOrMarkup(word) else { return nil }
+        return SuggestionCandidate(heard: word, corrected: word, proposes: .term, origin: .fix)
+    }
+
     private struct Span {
         var heard: [String]
         var corrected: [String]

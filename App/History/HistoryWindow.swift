@@ -13,6 +13,8 @@ final class HistoryController: NSObject, NSWindowDelegate {
 
     private let store: HistoryStore
     private let pipeline: DictationPipeline
+    /// Opens the Fix window with a row's text.
+    private let fix: @MainActor (DictationRecord) -> Void
     private var window: NSWindow?
     private var model: HistoryModel?
     /// The pipeline's newest activity, kept while the window is closed so it opens with it.
@@ -22,9 +24,10 @@ final class HistoryController: NSObject, NSWindowDelegate {
     private var changes: AsyncStream<HistoryChange>.Continuation?
     private var applying: Task<Void, Never>?
 
-    init(store: HistoryStore, pipeline: DictationPipeline) {
+    init(store: HistoryStore, pipeline: DictationPipeline, fix: @escaping @MainActor (DictationRecord) -> Void) {
         self.store = store
         self.pipeline = pipeline
+        self.fix = fix
     }
 
     func show() {
@@ -114,7 +117,8 @@ final class HistoryController: NSObject, NSWindowDelegate {
                 await pipeline.pasteAgain(text, of: id)
                 return true
             },
-            copy: { await pipeline.copyAgain($0) }
+            copy: { await pipeline.copyAgain($0) },
+            fix: fix
         )
     }
 
