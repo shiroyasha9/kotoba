@@ -2,9 +2,9 @@ import KotobaProviders
 import Observation
 import SwiftUI
 
-extension SettingsPane {
+extension Pane {
     static func speech(_ model: SpeechSettingsModel) -> Self {
-        SettingsPane(id: .speech) {
+        Pane(id: .speech) {
             AnyView(SpeechPane(model: model))
         }
     }
@@ -269,20 +269,20 @@ private struct KeyRow: View {
 }
 
 @MainActor
-extension SettingsPane {
+extension Pane {
     static func speechSnapshots() -> [Snapshot] {
         [
-            SettingsWindow.snapshot(
+            MainWindow.snapshot(
                 of: .speech(
                     .sample(route: .openRouterMAI, azureEndpoint: "", keyStatus: [.openRouter: .checked(.valid)])),
                 named: "settings-speech"),
-            SettingsWindow.snapshot(
+            MainWindow.snapshot(
                 of: .speech(
                     .sample(
                         route: .openRouterGrok, azureEndpoint: "", savedKeys: [.openRouter, .xai],
                         keyStatus: [.openRouter: .checked(.noCredit)])),
                 named: "settings-speech-grok"),
-            SettingsWindow.snapshot(
+            MainWindow.snapshot(
                 of: .speech(
                     .sample(
                         route: .azureMAI, azureEndpoint: "", savedKeys: [.azure],

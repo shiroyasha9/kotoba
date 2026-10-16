@@ -6,9 +6,9 @@ import Observation
 import SwiftUI
 import UniformTypeIdentifiers
 
-extension SettingsPane {
+extension Pane {
     static func modes(_ model: ModesModel) -> Self {
-        SettingsPane(id: .modes) {
+        Pane(id: .modes) {
             AnyView(ModesPane(model: model))
         }
     }
@@ -366,7 +366,7 @@ private struct ModesPane: View {
 }
 
 @MainActor
-extension SettingsPane {
+extension Pane {
     /// No OpenRouter key: the cleanup section says so, with the fix on a button.
     private static var noKeyModel: ModesModel {
         var source = ModesModel.Source.sample()
@@ -376,11 +376,11 @@ extension SettingsPane {
 
     static func modesSnapshots() -> [Snapshot] {
         [
-            SettingsWindow.snapshot(of: .modes(ModesModel(source: .sample())), named: "settings-modes", height: 700),
-            SettingsWindow.snapshot(
+            MainWindow.snapshot(of: .modes(ModesModel(source: .sample())), named: "settings-modes", height: 700),
+            MainWindow.snapshot(
                 of: .modes(ModesModel(source: .sample(rules: ModeRules()))), named: "settings-modes-empty",
                 height: 600),
-            SettingsWindow.snapshot(of: .modes(noKeyModel), named: "settings-modes-no-key", height: 760),
+            MainWindow.snapshot(of: .modes(noKeyModel), named: "settings-modes-no-key", height: 760),
         ]
     }
 }

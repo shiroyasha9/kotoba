@@ -2,23 +2,29 @@ import AppKit
 import KotobaCore
 import KotobaStorage
 
-/// Sample data for the Settings snapshots, and the whole window on each pane (`make snapshots`). Samples never touch
+/// Sample data for the Settings snapshots, and the whole main window on each pane (`make snapshots`). Samples never touch
 /// the owner's files, Keychain or devices.
 @MainActor
-extension SettingsPane {
-    /// The whole window, once per pane and for the Dictionary pane's suggestions state.
+extension Pane {
+    /// The whole main window: Home, History, and each settings pane, the Dictionary pane also with suggestions. History
+    /// also in the framed window, for its toolbar with a selected row: one with text (Copy, Paste Again and Delete on),
+    /// a failed one (Retry and Delete on) and one with no audio (Delete on only).
     static func windowSnapshots() -> [Snapshot] {
         [
-            windowSnapshot(sampleDictionary, selecting: .dictionary, named: "settings-window"),
+            windowSnapshot(selecting: .home, named: "window-home"),
+            windowSnapshot(selecting: .history, named: "window-history"),
+            windowSnapshot(selecting: .history, named: "window-history-toolbar", isFramed: true),
+            windowSnapshot(selecting: .history, history: 2, named: "window-history-failed", isFramed: true),
+            windowSnapshot(selecting: .history, history: 5, named: "window-history-no-audio", isFramed: true),
+            windowSnapshot(selecting: .insights, named: "window-insights"),
+            windowSnapshot(selecting: .usage, named: "window-usage"),
+            windowSnapshot(selecting: .general, named: "window-general"),
+            windowSnapshot(selecting: .speech, named: "window-speech"),
+            windowSnapshot(selecting: .dictionary, named: "window-dictionary"),
             windowSnapshot(
-                sampleDictionary, suggestions: sampleSuggestions, selecting: .dictionary,
-                named: "settings-window-suggestions"),
-            windowSnapshot(sampleDictionary, selecting: .speech, named: "settings-window-speech"),
-            windowSnapshot(sampleDictionary, selecting: .microphones, named: "settings-window-microphone"),
-            windowSnapshot(sampleDictionary, selecting: .general, named: "settings-window-general"),
-            windowSnapshot(sampleDictionary, selecting: .usage, named: "settings-window-usage"),
-            windowSnapshot(sampleDictionary, selecting: .insights, named: "settings-window-insights"),
-            windowSnapshot(sampleDictionary, selecting: .modes, named: "settings-window-modes"),
+                suggestions: sampleSuggestions, selecting: .dictionary, named: "window-dictionary-suggestions"),
+            windowSnapshot(selecting: .modes, named: "window-modes"),
+            windowSnapshot(selecting: .microphones, named: "window-microphone"),
         ]
     }
 
@@ -84,22 +90,28 @@ extension SettingsPane {
         return model
     }
 
-    /// The whole window with every pane, showing `id`.
+    /// The whole window with every pane, showing `id`; `history` selects that History sample row.
     private static func windowSnapshot(
-        _ dictionary: PersonalDictionary,
         suggestions: [DictionarySuggestion] = [],
-        selecting id: SettingsPaneID,
-        named name: String
+        selecting id: PaneID,
+        history selected: Int = 0,
+        named name: String,
+        isFramed: Bool = false
     ) -> Snapshot {
-        let panes: [SettingsPane] = [
+        let rows = HistoryController.sampleRows()
+        let history = HistoryModel(rows: rows)
+        history.selection = [rows[selected].id]
+        let panes: [Pane] = [
+            .home(.sample),
+            .history(history),
             .general(.sample()),
-            .dictionary(sampleModel(dictionary, suggestions: suggestions)),
+            .dictionary(sampleModel(sampleDictionary, suggestions: suggestions)),
             .modes(ModesModel(source: .sample())),
             .microphones(MicrophoneModel(source: .sample()) {}),
             .speech(.sample(route: .openRouterMAI, azureEndpoint: "")),
             .usage(.sample),
             .insights(.sample),
         ]
-        return SettingsWindow.windowSnapshot(of: panes, selecting: id, named: name)
+        return MainWindow.windowSnapshot(of: panes, selecting: id, named: name, isFramed: isFramed)
     }
 }

@@ -46,7 +46,7 @@ extension AppDelegate: StatusMenuActions {
                 : nil,
             hasLastDictation: hasLastDictation,
             hasRawLastDictation: hasRawLastDictation,
-            suggestionCount: settingsController.dictionary?.suggestions.count ?? 0,
+            suggestionCount: mainWindow.dictionary?.suggestions.count ?? 0,
             updates: updater.map { MenuModel.Updates(canCheck: $0.canCheck, hasWaitingUpdate: $0.hasWaitingUpdate) }
         )
     }
@@ -111,15 +111,15 @@ extension AppDelegate: StatusMenuActions {
     }
 
     func openSuggestions() {
-        settingsController.show(selecting: .dictionary)
+        mainWindow.show(selecting: .dictionary)
     }
 
     func openHistory() {
-        history?.show()
+        mainWindow.show(selecting: .history)
     }
 
     func openSettings() {
-        settingsController.show()
+        mainWindow.show(selecting: .general)
     }
 
     func showAbout() {

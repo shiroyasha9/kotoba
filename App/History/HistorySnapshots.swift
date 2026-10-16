@@ -1,40 +1,25 @@
 import AppKit
 import KotobaCore
 
-extension HistoryController {
-    /// The window's content at its default size: rows of each status over two days (yesterday's audio deleted), the
-    /// empty history, and a search with no results. Synthetic text only. The toolbar and search field belong to the
-    /// real window and are not in the images.
-    static func snapshots() -> [Snapshot] {
-        let panes = [
-            ("history-rows", HistoryModel(rows: sampleRows())),
+@MainActor
+extension Pane {
+    /// The pane at the window's detail size: rows of each status over two days (yesterday's audio deleted), the empty
+    /// history, and a search with no results. Synthetic text only. The toolbar and search field belong to the real
+    /// window; `windowSnapshots()` in App/Settings/SettingsSnapshots.swift draws them.
+    static func historySnapshots() -> [Snapshot] {
+        [
+            ("history-rows", HistoryModel(rows: HistoryController.sampleRows())),
             ("history-empty", HistoryModel(rows: [])),
             ("history-no-results", HistoryModel(rows: [], search: "invoice")),
         ].map { name, model in
-            Snapshots.fixedWindow(named: name, size: defaultSize) { HistoryView(model: model) }
-        }
-        return panes + windowSnapshots()
-    }
-
-    /// The whole window as the owner sees it: title bar, toolbar with its buttons and the search field, and a selected
-    /// row: one with text (Copy, Paste Again and Delete on), a failed one (Retry and Delete on) and one with no audio
-    /// (Delete on only). The run fails when the content needs more room than the window.
-    private static func windowSnapshots() -> [Snapshot] {
-        [("history-window", 0), ("history-window-failed", 2), ("history-window-no-audio", 5)].map { name, selected in
-            windowSnapshot(named: name, selecting: selected)
+            MainWindow.snapshot(of: .history(model), named: name)
         }
     }
+}
 
-    private static func windowSnapshot(named name: String, selecting selected: Int) -> Snapshot {
-        Snapshots.window(named: name, contentSize: defaultSize) {
-            let rows = sampleRows()
-            let model = HistoryModel(rows: rows)
-            model.selection = [rows[selected].id]
-            return window(showing: model)
-        }
-    }
-
-    private static func sampleRows() -> [DictationRecord] {
+extension HistoryController {
+    /// Rows of each status over two days, for the History and Home snapshots.
+    static func sampleRows() -> [DictationRecord] {
         let now = Date.now
         // A file every Mac has stands in for kept audio, so the failed and cancelled rows read "audio saved"; the row of 0
         // seconds is an orphan with no readable audio, which reads "No text" with no Retry.

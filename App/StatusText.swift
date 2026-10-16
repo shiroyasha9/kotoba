@@ -175,4 +175,15 @@ extension Readiness.Missing {
         case .setup(let item, let account): StatusText.add(item, for: account)
         }
     }
+
+    /// Home's line under “Not ready to dictate”: what the missing item leaves undone.
+    var problemText: String {
+        switch self {
+        case .microphone: "kotoba can’t use the microphone yet."
+        case .accessibility: "kotoba can’t hear your shortcut or paste yet."
+        case .setup(.key, let account): "kotoba has no \(account.title) key yet."
+        case .setup(.endpoint, let account): "kotoba has no \(account.title) endpoint yet."
+        case .setup(.credit, let account): "\(account.title) is out of credit."
+        }
+    }
 }

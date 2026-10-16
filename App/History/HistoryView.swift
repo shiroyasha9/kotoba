@@ -2,19 +2,28 @@ import AppKit
 import KotobaCore
 import SwiftUI
 
-/// The History window's content: dictations by day, newest first, with search, a toolbar and a context menu.
+extension Pane {
+    static func history(_ model: HistoryModel) -> Self {
+        Pane(id: .history) {
+            AnyView(HistoryView(model: model))
+        }
+    }
+}
+
+/// The History pane: dictations by day, newest first, with search, a toolbar and a context menu.
 struct HistoryView: View {
     @Bindable var model: HistoryModel
     @FocusState private var isSearchFocused: Bool
+    @Environment(\.findRequests) private var findRequests
 
     var body: some View {
         content
             .frame(minWidth: 480, minHeight: 360)
             .searchable(text: $model.search, placement: .toolbar, prompt: "Search")
             .searchFocused($isSearchFocused)
-            .onChange(of: model.findRequests) { isSearchFocused = true }
+            .onChange(of: findRequests) { isSearchFocused = true }
             .toolbar { toolbar(for: model.selected) }
-            .task(id: model.search) { await model.reload() }
+            .task(id: model.search) { await model.show() }
             .alert("Couldn’t Paste", isPresented: $model.isPasteFailureShown) {
                 Button("OK") {}
             } message: {

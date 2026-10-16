@@ -12,7 +12,7 @@ extension AppDelegate {
         case .retry:
             retryFailed()
         case .addKey, .openSpeechSettings, .chooseMicrophone:
-            settingsController.show(selecting: action.settingsPane)
+            mainWindow.show(selecting: action.settingsPane)
         case .addCredit:
             NSWorkspace.shared.open(routeSettings.route.account.creditsPage)
         case .copy:
@@ -38,7 +38,7 @@ extension AppDelegate {
 
 extension PillAction {
     /// The Settings pane the button opens; nil for a button that opens none.
-    var settingsPane: SettingsPaneID? {
+    var settingsPane: PaneID? {
         switch self {
         case .addKey, .openSpeechSettings: .speech
         case .chooseMicrophone: .microphones

@@ -2,8 +2,8 @@ import AppKit
 import KotobaCore
 import Observation
 
-/// The History window's rows (story 30): pages read from the store newest first, the search, the selection and the
-/// actions on it. Built when the window opens and released when it closes, so nothing runs while it is closed.
+/// The History pane's rows (story 30): pages read from the store newest first, the search, the selection and the
+/// actions on it. Built when the main window opens and released when it closes, so nothing runs while it is closed.
 @MainActor
 @Observable
 final class HistoryModel {
@@ -59,8 +59,6 @@ final class HistoryModel {
     /// While a dictation records or is sent, Paste Again would race its paste; the rows being sent say so and cannot be
     /// deleted.
     var activity = PipelineActivity(isQuiet: true, inFlight: [])
-    /// Each Edit > Find… adds one; the view focuses its search field.
-    var findRequests = 0
     /// Paste Again could not bring back the app the owner was in: the window says so.
     var isPasteFailureShown = false
     /// The rows the Delete confirmation asks about; nil when it is not shown.
@@ -72,6 +70,8 @@ final class HistoryModel {
     /// Each read takes the next number; a result that comes back after a newer read started is dropped.
     @ObservationIgnored private var generation = 0
     @ObservationIgnored private var isLoadingMore = false
+    /// The search the loaded rows match; nil until a read succeeds.
+    @ObservationIgnored private var loadedSearch: String?
     @ObservationIgnored private var icons: [String: NSImage?] = [:]
 
     init(source: Source?) {
@@ -93,6 +93,13 @@ final class HistoryModel {
 
     // MARK: Reading
 
+    /// The pane appeared, or the search changed. The model follows each history write while the window is open
+    /// (`apply`), so a pane shown again with the same search keeps its rows and pages and reads nothing.
+    func show() async {
+        guard !isLoaded || search != loadedSearch else { return }
+        await reload()
+    }
+
     /// Reads the first page again for a new search.
     func reload() async {
         guard let source else { return }
@@ -104,6 +111,7 @@ final class HistoryModel {
             guard current == generation else { return }
             list.replace(with: page, limit: limit)
             retryable = Self.kept(list.rows)
+            loadedSearch = search
             loadError = nil
         } catch {
             guard current == generation else { return }

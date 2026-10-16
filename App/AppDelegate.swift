@@ -22,7 +22,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private lazy var router = TranscriptionRouter(settings: routeSettings, keys: vault.source(for:))
     lazy var setup = SetupFlow(
         readiness: readiness, routeSettings: routeSettings, vault: vault, router: router,
-        openSpeechSettings: { [weak self] in self?.settingsController.show(selecting: .speech) })
+        openSpeechSettings: { [weak self] in self?.mainWindow.show(selecting: .speech) })
     /// Its audio retention is set once the history opens (`AppDefaults.chooseAudioRetention`).
     private var settings = DictationPipeline.Settings(
         audioDirectory: AppFiles.audio,
@@ -32,9 +32,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     lazy var indicator = IndicatorPanel()
     lazy var fixWindow = FixLastDictationController(
         last: { [weak self] in await self?.lastDictation?.record() },
-        dictionary: { [weak self] in self?.settingsController.dictionary })
+        dictionary: { [weak self] in self?.mainWindow.dictionary })
     lazy var learner = EditLearner(
-        dictionary: { [weak self] in self?.settingsController.dictionary }, indicator: indicator)
+        dictionary: { [weak self] in self?.mainWindow.dictionary }, indicator: indicator)
     var statusItem: StatusBarItem?
     var pipeline: DictationPipeline?
     var store: HistoryStore?
@@ -45,8 +45,6 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     /// The last dictation was cleaned up, so "Paste Last Without Cleanup" has the raw transcript.
     var hasRawLastDictation = false
     var lastDictation: LastDictation?
-    /// The History window; built with the store, its window only when it opens.
-    var history: HistoryController?
     private var queueRefresh: Task<Void, Never>?
     private var isQueueRefreshDue = false
     /// The submit phrase toggle, in click order, to the pipeline (one consumer, as for the Undo holds).
@@ -61,18 +59,20 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     let updater = Updater.forThisBuild()
     /// A development build gives way while the release app runs (`InstallYield`).
     let releaseWatcher = ReleaseAppWatcher()
-    lazy var settingsController = SettingsController(
-        routeSettings: routeSettings, vault: vault, router: router, microphones: microphones, audio: audio
-    ) { [routeSettings, indicator, updater, weak self] in
-        GeneralModel(
-            settings: routeSettings, indicator: indicator, updater: updater,
-            audio: self.flatMap { app in
-                app.store.map { .live(requests: app.audioRequests.continuation, store: $0) }
+    lazy var mainWindow: MainWindowController = MainWindowController(
+        routeSettings: routeSettings, vault: vault, router: router, microphones: microphones, audio: audio,
+        readiness: readiness, finishSetup: { [weak self] in self?.setup.finishSetup() },
+        fixLast: { [weak self] in self?.fixWindow.show() },
+        makeGeneral: { [routeSettings, indicator, updater, weak self] in
+            GeneralModel(
+                settings: routeSettings, indicator: indicator, updater: updater,
+                audio: self.flatMap { app in
+                    app.store.map { .live(requests: app.audioRequests.continuation, store: $0) }
+                }
+            ) {
+                self?.submitPhraseChanged(isOn: $0)
             }
-        ) {
-            self?.submitPhraseChanged(isOn: $0)
-        }
-    }
+        })
 
     func applicationDidFinishLaunching(_ notification: Notification) {
         // A recording file made after this is never taken for an orphan (`OrphanAudio`).
@@ -100,9 +100,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             settings: settings
         )
         self.pipeline = pipeline
-        settingsController.pipeline = pipeline
+        mainWindow.pipeline = pipeline
         lastDictation = LastDictation(store: store, pipeline: pipeline)
-        history = HistoryController(store: store, pipeline: pipeline) { [weak self] in self?.fixWindow.show($0) }
+        mainWindow.historyPane = HistoryController(store: store, pipeline: pipeline) { [weak self] in
+            self?.fixWindow.show($0)
+        }
 
         observe(pipeline)
         observeReadiness()
@@ -110,7 +112,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         setup.watchGrants()
         watchReleaseApp()
         Task {
-            await settingsController.loadDictionary(into: pipeline)
+            await mainWindow.loadDictionary(into: pipeline)
             // Audio left with no row (a crash during a recording) joins this launch's retry.
             await OrphanAudioRecovery.run(in: AppFiles.audio, store: store, launchedAt: launchedAt)
             await pipeline.retryPending()
@@ -141,14 +143,14 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         }
         self.store = store
         settings.audioRetention = AppDefaults.chooseAudioRetention(hadDictations: store.hadDictationsAtOpen)
-        settingsController.history = store
+        mainWindow.history = store
         return store
     }
 
-    /// Opening kotoba again while it runs (Spotlight, Raycast, Finder, `open -a`) shows Settings in front. macOS sends
+    /// Opening kotoba again while it runs (Spotlight, Raycast, Finder, `open -a`) shows the main window in front. macOS sends
     /// the reopen with an activation, and with no window kotoba would be active and show nothing.
     func applicationShouldHandleReopen(_ sender: NSApplication, hasVisibleWindows flag: Bool) -> Bool {
-        settingsController.show()
+        mainWindow.show()
         return false
     }
 
@@ -196,7 +198,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         }
         Task {
             for await activity in pipeline.activity {
-                history?.activityChanged(activity)
+                mainWindow.activityChanged(activity)
             }
         }
         Task { [audio, indicator] in
@@ -303,11 +305,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 // MARK: - History writes
 
 extension AppDelegate {
-    /// Each history write can change the Retry count, the Recovered list, "Fix Last Dictation…", an open History window
-    /// and a shown Usage pane.
+    /// Each history write can change the Retry count, the Recovered list, "Fix Last Dictation…" and the open main
+    /// window's panes.
     private func historyChanged(_ change: HistoryChange) {
-        history?.historyChanged(change)
-        settingsController.historyChanged(change)
+        mainWindow.historyChanged(change)
         scheduleQueueRefresh()
     }
 

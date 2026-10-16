@@ -25,18 +25,20 @@ enum Snapshots {
     /// Each feature adds one line with its own snapshot list.
     private static let registry: [@MainActor () -> [Snapshot]] = [
         IndicatorPanel.snapshots,
-        SettingsPane.dictionarySnapshots,
-        SettingsPane.speechSnapshots,
-        SettingsPane.microphoneSnapshots,
-        SettingsPane.generalSnapshots,
-        SettingsPane.usageSnapshots,
-        SettingsPane.insightsSnapshots,
-        SettingsPane.modesSnapshots,
+        Pane.dictionarySnapshots,
+        Pane.speechSnapshots,
+        Pane.microphoneSnapshots,
+        Pane.generalSnapshots,
+        Pane.usageSnapshots,
+        Pane.insightsSnapshots,
+        Pane.modesSnapshots,
         ChordRecorder.snapshots,
         StatusBarItem.snapshots,
         OnboardingController.snapshots,
         FixLastDictationController.snapshots,
-        HistoryController.snapshots,
+        Pane.homeSnapshots,
+        Pane.historySnapshots,
+        Pane.windowSnapshots,
     ]
 
     private static let padding: CGFloat = 16
@@ -64,14 +66,17 @@ enum Snapshots {
     }
 
     /// A real window, title bar and toolbar included, with its content at `contentSize`. The run fails when the
-    /// content needs more room than the window.
-    static func window(named name: String, contentSize: NSSize, _ make: @escaping @MainActor () -> NSWindow)
-        -> Snapshot
-    {
+    /// content needs more room than the window, or when `check` reports a problem in the content view after layout.
+    static func window(
+        named name: String, contentSize: NSSize, _ make: @escaping @MainActor () -> NSWindow,
+        check: (@MainActor (NSView) -> String?)? = nil
+    ) -> Snapshot {
         Snapshot(name: name) {
             WindowImage(window: make(), contentSize: contentSize)
         } check: { view in
-            (view as? WindowImage)?.shown.contentView.flatMap { fitProblem(of: $0, in: contentSize) }
+            guard let content = (view as? WindowImage)?.shown.contentView else { return nil }
+            content.layoutSubtreeIfNeeded()
+            return fitProblem(of: content, in: contentSize) ?? check?(content)
         }
     }
 

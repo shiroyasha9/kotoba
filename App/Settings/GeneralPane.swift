@@ -3,9 +3,9 @@ import KotobaProviders
 import Observation
 import SwiftUI
 
-extension SettingsPane {
+extension Pane {
     static func general(_ model: GeneralModel) -> Self {
-        SettingsPane(id: .general) {
+        Pane(id: .general) {
             AnyView(GeneralPane(model: model))
         }
     }
@@ -237,10 +237,10 @@ private struct GeneralPane: View {
 }
 
 @MainActor
-extension SettingsPane {
+extension Pane {
     static func generalSnapshots() -> [Snapshot] {
         [
-            SettingsWindow.snapshot(of: .general(.sample()), named: "settings-general", height: 1_080),
+            MainWindow.snapshot(of: .general(.sample()), named: "settings-general", height: 1_080),
             loginFailureSnapshot(),
         ]
     }
@@ -257,7 +257,7 @@ extension SettingsPane {
                     return .failed
                 }))
         model.setLaunchAtLogin(true)
-        var snapshot = SettingsWindow.snapshot(
+        var snapshot = MainWindow.snapshot(
             of: .general(model), named: "settings-general-login-failed", height: 1_140)
         snapshot.check = { _ in
             guard changes == 1, model.loginProblem == .failed, !model.isLaunchAtLoginOn else {

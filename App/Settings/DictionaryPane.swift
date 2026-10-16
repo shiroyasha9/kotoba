@@ -2,9 +2,9 @@ import KotobaCore
 import KotobaStorage
 import SwiftUI
 
-extension SettingsPane {
+extension Pane {
     static func dictionary(_ model: DictionaryModel) -> Self {
-        SettingsPane(id: .dictionary) {
+        Pane(id: .dictionary) {
             AnyView(DictionaryPane(model: model))
         }
     }
@@ -14,7 +14,7 @@ private struct DictionaryPane: View {
     @Bindable var model: DictionaryModel
     @State private var search = ""
     @FocusState private var isSearchFocused: Bool
-    @Environment(\.settingsFindRequests) private var findRequests
+    @Environment(\.findRequests) private var findRequests
     @State private var selection: Set<DictionaryModel.Row> = []
     /// The sheet: nil row adds a new entry.
     @State private var editing: Editing?
@@ -261,14 +261,14 @@ private struct DictionaryPane: View {
 // MARK: - Snapshots
 
 @MainActor
-extension SettingsPane {
+extension Pane {
     static func dictionarySnapshots() -> [Snapshot] {
         let sample = sampleDictionary
         let (incoming, contents) = sampleWisprImport
         return [
-            SettingsWindow.snapshot(of: .dictionary(sampleModel(sample)), named: "settings-dictionary"),
-            SettingsWindow.snapshot(of: .dictionary(sampleOverCapModel), named: "settings-dictionary-over-cap"),
-            SettingsWindow.snapshot(
+            MainWindow.snapshot(of: .dictionary(sampleModel(sample)), named: "settings-dictionary"),
+            MainWindow.snapshot(of: .dictionary(sampleOverCapModel), named: "settings-dictionary-over-cap"),
+            MainWindow.snapshot(
                 of: .dictionary(sampleModel(PersonalDictionary())), named: "settings-dictionary-empty"),
             importAlert(.preview(sample.importPreview(of: incoming), contents), named: "settings-dictionary-import"),
             importAlert(.notFound, named: "settings-dictionary-import-not-found"),
@@ -277,7 +277,7 @@ extension SettingsPane {
                 let editor = EntryEditor(draft: EntryDraft(rule: rule), isNew: false) { _ throws(DictionaryError) in }
                 return Snapshots.hostingView(editor)
             },
-        ] + windowSnapshots()
+        ]
     }
 
     /// The import alert as AppKit draws it, with the pane's words: SwiftUI's `.alert` is a sheet on the window, which

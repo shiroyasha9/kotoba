@@ -5,16 +5,16 @@ import KotobaStorage
 import Observation
 import SwiftUI
 
-extension SettingsPane {
+extension Pane {
     static func insights(_ model: InsightsModel) -> Self {
-        SettingsPane(id: .insights) {
+        Pane(id: .insights) {
             AnyView(InsightsPane(model: model))
         }
     }
 }
 
 /// How the owner dictates: speaking speed, streak, time saved, words, learned words and top apps. Built with each
-/// Settings window; it reads the usage ledger and the dictionary when the pane appears, and while it is shown after
+/// main window; it reads the usage ledger and the dictionary when the pane appears, and while it is shown after
 /// each write to either and when the day changes, so nothing runs at idle.
 @MainActor
 @Observable
@@ -169,7 +169,7 @@ private struct InsightsPane: View {
                 Divider()
                 Highlight(
                     title: "Streak", systemImage: "flame", value: StatusText.counted(insights.streak, "day"),
-                    detail: Self.streakDetail(insights))
+                    detail: insights.streakDetail)
                 Divider()
                 Highlight(
                     title: "Time saved", systemImage: "clock",
@@ -241,11 +241,6 @@ private struct InsightsPane: View {
         }
     }
 
-    private static func streakDetail(_ insights: DictationInsights) -> String {
-        if insights.isTodayInStreak { return "Today included" }
-        return insights.streak > 0 ? "Dictate today to keep it" : "Dictate today to start one"
-    }
-
     /// "42 sec" under a minute, else hours and minutes ("1 hr, 42 min").
     private static func duration(_ duration: Duration) -> String {
         duration < .seconds(60)
@@ -254,9 +249,17 @@ private struct InsightsPane: View {
     }
 }
 
-/// One figure of the top row, as the figures at the top of a Screen Time or Battery pane. Custom: `LabeledContent`
-/// has no large-value style.
-private struct Highlight: View {
+extension DictationInsights {
+    /// The line under the streak, here and on Home.
+    var streakDetail: String {
+        if isTodayInStreak { return "Today included" }
+        return streak > 0 ? "Dictate today to keep it" : "Dictate today to start one"
+    }
+}
+
+/// One figure of the top row, as the figures at the top of a Screen Time or Battery pane; Home shows three too.
+/// Custom: `LabeledContent` has no large-value style.
+struct Highlight: View {
     let title: String
     let systemImage: String
     let value: String
@@ -299,11 +302,11 @@ private struct WordsChart: View {
 // MARK: - Snapshots
 
 @MainActor
-extension SettingsPane {
+extension Pane {
     static func insightsSnapshots() -> [Snapshot] {
         [
-            SettingsWindow.snapshot(of: .insights(.sample), named: "settings-insights", height: 900),
-            SettingsWindow.snapshot(of: .insights(.empty), named: "settings-insights-empty"),
+            MainWindow.snapshot(of: .insights(.sample), named: "settings-insights", height: 900),
+            MainWindow.snapshot(of: .insights(.empty), named: "settings-insights-empty"),
         ]
     }
 }

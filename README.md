@@ -47,7 +47,7 @@ kotoba is a native, open-source alternative to Wispr Flow, built for developers 
 
 How these were measured:
 
-- **Memory.** Release build with Sparkle, idle 35 s after launch, no window opened: physical footprint from `vmmap --summary`, median of 5 launches (range 15.6-16.8 MB), on an M3 Pro with macOS 27. This was measured on the 0.1.0 shape of the app; see [`docs/research/memory-spike.md`](docs/research/memory-spike.md). Opening Settings or History loads SwiftUI, which adds about 18-24 MB that stays until you quit. The Wispr Flow figure is not ours: it is from [tl;dv's review](https://tldv.io/blog/wispr-flow-notetaker-review/) (Wispr Flow 1.6.937 at rest on an 8 GB iMac), quoted in [`docs/research/beyond-wispr.md`](docs/research/beyond-wispr.md).
+- **Memory.** Release build with Sparkle, idle 35 s after launch, no window opened: physical footprint from `vmmap --summary`, median of 5 launches (range 15.6-16.8 MB), on an M3 Pro with macOS 27. This was measured on the 0.1.0 shape of the app; see [`docs/research/memory-spike.md`](docs/research/memory-spike.md). Opening the kotoba window (Home, History, Insights, Usage and Settings) loads SwiftUI, which adds about 18-24 MB that stays until you quit. The Wispr Flow figure is not ours: it is from [tl;dv's review](https://tldv.io/blog/wispr-flow-notetaker-review/) (Wispr Flow 1.6.937 at rest on an 8 GB iMac), quoted in [`docs/research/beyond-wispr.md`](docs/research/beyond-wispr.md).
 - **Accuracy.** 62 real dictations from one developer, mostly coding prompts in a terminal, each with a hand-corrected reference. kotoba ran MAI-Transcribe-2 through OpenRouter with the personal dictionary sent as a phrase list. The Wispr Flow column is Wispr's own speech recognition on the same clips (its raw transcript, before its formatter). The 95% confidence interval for kotoba's word error rate is 1.6-5.8%; 62 clips is a small set. Details in [`docs/research/quality-perf-2.md`](docs/research/quality-perf-2.md); the harness is in [`bench/`](bench/). The audio is personal, so the clips and the full report are not in this repository.
 - **Round trip.** From the start of the upload to the full answer, for MAI-Transcribe-2 through OpenRouter with zero data retention on. 40 clips of 10-20 s, sent one at a time from a home network in India by the bench harness, not by the app. A second run without zero data retention gave p50 881 ms and p90 1,461 ms. The app's own target from stop tap to paste is p50 at most 1.0 s and p90 at most 1.5 s; `make latency` reports it from the app's latency log.
 - **Price.** The speech requests of that bench cost $0.17 for 99.2 minutes of audio, which matches OpenRouter's list price of $0.10 per hour. MAI-Transcribe-2 is in public preview, and this price is a promotion until 2026-12-31. Cleanup, which is optional, costs extra. Wispr Flow's price is from its Pro plan ($15 per month, or $12 per month billed yearly), as quoted in `docs/research/beyond-wispr.md`.
@@ -121,7 +121,7 @@ The screenshots show sample data.
     <td width="50%">
       <picture>
         <source media="(prefers-color-scheme: dark)" srcset="docs/images/history-dark.png">
-        <img src="docs/images/history-light.png" alt="History window: dictations by day, with search, copy, paste, retry and delete">
+        <img src="docs/images/history-light.png" alt="History pane: dictations by day, with search, copy, paste, retry and delete">
       </picture>
       <p align="center">History</p>
     </td>

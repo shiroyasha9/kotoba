@@ -5,9 +5,9 @@ import KotobaStorage
 import Observation
 import SwiftUI
 
-extension SettingsPane {
+extension Pane {
     static func usage(_ model: UsageModel) -> Self {
-        SettingsPane(id: .usage) {
+        Pane(id: .usage) {
             AnyView(UsagePane(model: model))
         }
     }
@@ -332,11 +332,11 @@ private struct DollarAmounts {
 // MARK: - Snapshots
 
 @MainActor
-extension SettingsPane {
+extension Pane {
     static func usageSnapshots() -> [Snapshot] {
         [
-            SettingsWindow.snapshot(of: .usage(.sample), named: "settings-usage", height: 820),
-            SettingsWindow.snapshot(of: .usage(.empty), named: "settings-usage-empty"),
+            MainWindow.snapshot(of: .usage(.sample), named: "settings-usage", height: 820),
+            MainWindow.snapshot(of: .usage(.empty), named: "settings-usage-empty"),
         ]
     }
 }

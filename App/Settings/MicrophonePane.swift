@@ -2,9 +2,9 @@ import KotobaCore
 import Observation
 import SwiftUI
 
-extension SettingsPane {
+extension Pane {
     static func microphones(_ model: MicrophoneModel) -> Self {
-        SettingsPane(id: .microphones) {
+        Pane(id: .microphones) {
             AnyView(MicrophonePane(model: model))
         }
     }
@@ -272,15 +272,15 @@ private struct MicrophonePane: View {
 }
 
 @MainActor
-extension SettingsPane {
+extension Pane {
     static func microphoneSnapshots() -> [Snapshot] {
         let source = MicrophoneModel.Source.sample()
         return [
-            SettingsWindow.snapshot(of: .microphones(MicrophoneModel(source: source) {}), named: "settings-microphone"),
-            SettingsWindow.snapshot(of: .microphones(.testing(source)), named: "settings-microphone-test"),
-            SettingsWindow.snapshot(
+            MainWindow.snapshot(of: .microphones(MicrophoneModel(source: source) {}), named: "settings-microphone"),
+            MainWindow.snapshot(of: .microphones(.testing(source)), named: "settings-microphone-test"),
+            MainWindow.snapshot(
                 of: .microphones(MicrophoneModel(source: .sample(order: [])) {}), named: "settings-microphone-empty"),
-            SettingsWindow.snapshot(
+            MainWindow.snapshot(
                 of: .microphones(
                     MicrophoneModel(
                         source: .sample(

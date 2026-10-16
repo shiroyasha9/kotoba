@@ -385,11 +385,11 @@ Rows from each agent's phase 2.5 work. The numbers continue the list above.
 | 275 | AirPods as the system default input, no mic in your order; play a video, then dictate | kotoba records from the built-in mic; the video audio does not drop to call quality | |
 | 276 | Unplug or turn off the mic in use during a recording | The recording goes on with the next mic (your order, then the system default); no crash | |
 
-### History window (phase 3)
+### History (phase 3; a pane of the main window since 0.2.2)
 
 | # | Do this | Expect | Result |
 |---|---|---|---|
-| 291 | Menu > **History…** with no dictations yet | The History window opens with “No Dictations Yet” and your chord | |
+| 291 | Menu > **History…** with no dictations yet | The main window opens at **History** with “No Dictations Yet” and your chord | |
 | 292 | Dictate in Notes, then in Terminal, with History open | Each dictation appears at the top under **Today** at once, with the app’s icon and name, its length and word count | |
 | 293 | Type a word from one dictation in the search field; then a word from none | Only matching rows show; then “No Results for …” | |
 | 294 | In the search field: type text, press ⌘A, then ⌘C, then paste in another app | ⌘A selects the search text, ⌘C copies it (not the selected row) | |
@@ -558,13 +558,13 @@ macOS can refuse kotoba's request to become the active app. kotoba then still sh
 The offscreen snapshots (`make snapshots`) show two things that may not happen in the real app. Check them on screen:
 - Row 54: the "Undo" title on the dark Cancelled pill renders black on dark offscreen.
 - Row 74: the empty Azure endpoint's example URL renders as bright as typed text offscreen.
-- History window (`history-window`): the search field's “Search” placeholder renders as dark as typed text, and the selected row grey. On screen the placeholder must be grey and the selection blue.
+- History (`window-history-toolbar`): the search field's “Search” placeholder renders as dark as typed text, and the selected row grey. On screen the placeholder must be grey and the selection blue.
 - Dark mode: the Settings sidebar labels and the pill's glass button titles (Undo, Retry) render near black offscreen (text on glass, docs/research/native-ui.md). On screen they must be light.
 
 ## Gates (after a day of use; each needs the owner's go because it reads the app database)
 
 - `make latency RUN=1` (the release app's database; `DEV=1` for kotoba Dev's): p50 <= 1.0 s and p90 <= 1.5 s from stop to Cmd-V, for 10-20 s dictations, per model. Cleanup-chord dictations are left out.
-- `make memory` (the release app in /Applications; `DEV=1` for kotoba Dev from `make build`, with the release app quit, or `PID=<pid>`): idle footprint, compared with the floor in `docs/research/memory-spike.md`. Measure once with the Settings window never opened, and once after it was opened and closed.
+- `make memory` (the release app in /Applications; `DEV=1` for kotoba Dev from `make build`, with the release app quit, or `PID=<pid>`): idle footprint, compared with the floor in `docs/research/memory-spike.md`. Measure once with the main window never opened, and once after it was opened and closed.
 
 ## Dev install (kotoba Dev only)
 
@@ -603,3 +603,20 @@ The offscreen snapshots (`make snapshots`) show two things that may not happen i
 | 445 | Try to record ⌃⌥⌘V, then ⌃⌘ alone, then ⌘V | Each is refused with a red note: “⌃⌥⌘V includes ⌃⌥⌘, so it would start a dictation.”, “Add a key to ⌃⌘, for example ⌃⌘V.”, “macOS uses ⌘V. Choose another shortcut.” The shortcut stays ⌃⌘V | |
 | 446 | With Paste Last on ⌃⌘V, record right ⌘ for “Dictate” | Refused: “⌃⌘V includes right ⌘, so it would start a dictation.” Dictate keeps its shortcut | |
 | 447 | Click the ⓧ next to ⌃⌘V; quit and reopen kotoba Dev | It shows **Off** after the restart; ⌃⌘V reaches the app again | |
+
+## Main window (0.2.2)
+
+One window for Home, History, Insights, Usage and the settings. Rows 470-479 use kotoba Dev with the release kotoba quit.
+
+| # | Do this | Expect | Result |
+|---|---|---|---|
+| 470 | Quit kotoba Dev; delete its saved frame (`defaults delete tech.teensy.kotoba.dev "NSWindow Frame Main"`); open kotoba Dev, then menu > **Settings…** | One window, about 960 × 640, opens at **General** in front of other apps. The sidebar has Home, History, Insights and Usage, then the header “Settings” over General, Speech, Dictionary, Modes and Microphone | |
+| 471 | Click **Home** | kotoba’s icon, name and version; “Ready to dictate” with a green check; **Activity** with Today, This week and Streak (hidden before your first dictation); **Recent Dictations** with up to 5 rows; **How to Dictate** with your chords as set in General | |
+| 472 | Settings > General: record another Dictate shortcut; click **Home** | **How to Dictate** and the empty state show the new chord. Record the old one again | |
+| 473 | On Home, click the copy icon of a row, then press ⌘V in TextEdit; click **Show All**; click **Home**, then **Show Insights**; click **Home**, then **Change Shortcuts** | The row’s text pastes; the window shows History, then Insights, then General | |
+| 474 | With Home shown, dictate in TextEdit | The new dictation is the top row of **Recent Dictations** at once; Today’s words go up | |
+| 475 | On Home, click **Fix Last Dictation…** | The Fix window opens with the last dictation | |
+| 476 | Turn kotoba Dev off in System Settings > Privacy & Security > Accessibility; look at Home; click **Allow Accessibility…**; turn it on again | Home says “Not ready to dictate” · “kotoba can’t hear your shortcut or paste yet.”; the button opens onboarding on the Accessibility step; after the grant, Home says “Ready to dictate” within about a second | |
+| 477 | Menu > **History…**, select a row, press ⌘F, type a word, then press ⌘A and ⌘V in the search field; right-click a row with text | ⌘F puts the cursor in the search field; ⌘A selects the search text and ⌘V pastes; the row menu has Copy, Paste Again, Retry (failed rows), **Fix Dictation…** and **Delete…** | |
+| 478 | Click **Home**, then **General**, and open the Edit menu each time | **Find…** is dimmed in both panes | |
+| 479 | Move and resize the window, close it with ⌘W, open it from **Settings…**; quit and open kotoba Dev, open it again | It opens where you left it, at the same size, both times | |

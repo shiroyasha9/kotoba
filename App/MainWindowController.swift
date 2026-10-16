@@ -2,10 +2,11 @@ import KotobaCore
 import KotobaProviders
 import KotobaStorage
 
-/// Opens the Settings window with its panes, and owns the dictionary the Dictionary pane edits.
+/// Opens the main window with its panes (Home, History, Insights, Usage and the settings), and owns the dictionary the
+/// Dictionary pane edits.
 @MainActor
-final class SettingsController {
-    private let window = SettingsWindow()
+final class MainWindowController {
+    private let window = MainWindow()
     private let routeSettings: TranscriptionSettings
     private let vault: KeyVault
     private let microphones: MicrophonePreferences
@@ -20,8 +21,14 @@ final class SettingsController {
     private var dictionaryStore: DictionaryStore?
     /// The history whose usage ledger the Usage pane sums; set once the database opens at launch.
     var history: HistoryStore?
-    /// Takes the Modes pane's changes; set once it is built at launch.
+    /// Takes the Modes pane's changes and Home's Copy; set once it is built at launch.
     var pipeline: DictationPipeline?
+    /// Builds the History pane; set once the history and the pipeline exist at launch.
+    var historyPane: HistoryController?
+    /// Home's status line and its fixes.
+    private let readiness: Readiness
+    private let finishSetup: @MainActor () -> Void
+    private let fixLast: @MainActor () -> Void
     /// The last change sent to the pipeline: each waits for the one before, so the pipeline gets them in order.
     private var modesUpdate: Task<Void, Never>?
     /// Counts each delivered dictation's dictionary words for the app's lifetime (`DictationPipeline.termReports`).
@@ -32,18 +39,27 @@ final class SettingsController {
     private weak var insights: InsightsModel?
     /// The open window's General pane model; its History section measures the saved audio again the same way.
     private weak var general: GeneralModel?
+    /// The open window's Home, which reads again after each history write while shown.
+    private weak var home: HomeModel?
 
-    /// `router` checks a saved key in the Speech pane.
+    /// `router` checks a saved key in the Speech pane. Home's buttons call `finishSetup` (onboarding on a missing
+    /// permission) and `fixLast` (the Fix window).
     init(
         routeSettings: TranscriptionSettings, vault: KeyVault, router: TranscriptionRouter,
-        microphones: MicrophonePreferences, audio: AudioCapture, makeGeneral: @escaping @MainActor () -> GeneralModel
+        microphones: MicrophonePreferences, audio: AudioCapture, readiness: Readiness,
+        finishSetup: @escaping @MainActor () -> Void, fixLast: @escaping @MainActor () -> Void,
+        makeGeneral: @escaping @MainActor () -> GeneralModel
     ) {
+        self.readiness = readiness
+        self.finishSetup = finishSetup
+        self.fixLast = fixLast
         self.routeSettings = routeSettings
         self.vault = vault
         self.router = router
         self.microphones = microphones
         self.audio = audio
         self.makeGeneral = makeGeneral
+        window.onClose = { [weak self] in self?.historyPane?.windowClosed() }
     }
 
     /// Reads the personal dictionary (its own file, so its writes never block a dictation save)
@@ -72,9 +88,12 @@ final class SettingsController {
         }
     }
 
-    /// A history write (from `DictationPipeline.historyChanges`): a shown Usage or Insights pane or History section
-    /// reads again. Deleted audio changes no usage; Insights reads only the ledger, which deleted dictations keep.
+    /// A history write (from `DictationPipeline.historyChanges`): an open History pane reads the row it names; a shown
+    /// Home, Usage or Insights pane or History section reads again. Deleted audio changes no usage; Insights reads only
+    /// the ledger, which deleted dictations keep.
     func historyChanged(_ change: HistoryChange) {
+        historyPane?.historyChanged(change)
+        home?.historyChanged()
         switch change {
         case .audioDeleted: break
         case .deleted: usage?.historyChanged()
@@ -85,15 +104,27 @@ final class SettingsController {
         general?.audio?.historyChanged()
     }
 
-    /// `pane` opens a given pane, e.g. Speech for the pill's "Add Key…"; nil keeps the pane shown.
-    func show(selecting pane: SettingsPaneID? = nil) {
+    /// From `DictationPipeline.activity`: which dictations are being sent, and whether Paste Again can paste.
+    func activityChanged(_ activity: PipelineActivity) {
+        historyPane?.activityChanged(activity)
+    }
+
+    /// `pane` opens a given pane, e.g. Speech for the pill's "Add Key…"; nil keeps the pane shown, or Home when the
+    /// window opens.
+    func show(selecting pane: PaneID? = nil) {
         window.show(panes(), selecting: pane)
     }
 
-    private func panes() -> [SettingsPane] {
+    private func panes() -> [Pane] {
+        let home = HomeModel(readiness: readiness, chords: .shared, source: homeSource)
+        self.home = home
+        var panes: [Pane] = [.home(home)]
+        if let historyPane {
+            panes.append(historyPane.pane())
+        }
         let general = makeGeneral()
         self.general = general
-        var panes: [SettingsPane] = [.general(general)]
+        panes.append(.general(general))
         if let dictionary {
             panes.append(.dictionary(dictionary))
         }
@@ -126,6 +157,23 @@ final class SettingsController {
         }
         return panes
     }
+
+    private var homeSource: HomeModel.Source {
+        HomeModel.Source(
+            read: { [weak self] now in
+                guard let history = self?.history else { throw NoHistory() }
+                async let insights = history.insights(at: now, in: .current)
+                async let recent = history.page(limit: HomeModel.recentCount)
+                async let last = history.lastDelivered()
+                return .init(
+                    insights: try await insights, recent: try await recent, hasLastDictation: try await last != nil)
+            },
+            copy: { [weak self] in await self?.pipeline?.copyAgain($0) },
+            fixLast: fixLast, finishSetup: finishSetup)
+    }
+
+    /// The history database did not open at launch: Home says it cannot read it.
+    private struct NoHistory: Error {}
 
     private func send(_ modes: ModeRules) {
         guard let pipeline else { return }
