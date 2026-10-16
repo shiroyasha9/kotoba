@@ -102,12 +102,19 @@ extension DictationPipeline {
         await ports.readback?.dictationStarted()
     }
 
-    /// Sends the route's primer as tracked work; nothing waits for it. Its cost goes to the ledger with this
-    /// dictation, with no audio and no words, so minutes and words per minute stay what the owner dictated.
-    private func primeRoute(for id: DictationID) {
+    /// Sends the route's primer (`TranscriptionProvider.prime`) unless one is on its way, and keeps the live recording
+    /// primed every `Settings.primerInterval`. Nothing waits for it. Its cost goes to the ledger with this dictation,
+    /// with no audio and no words, so minutes and words per minute stay what the owner dictated.
+    func primeRoute(for id: DictationID) {
+        guard !isPrimerInFlight else { return }
+        isPrimerInFlight = true
+        primedAt = ports.clock.now
+        armPrimer(for: id)
         let language = settings.language
         work.track { [provider = ports.provider, store = ports.store, clock = ports.clock] in
-            guard let primer = await provider.prime(language: language) else { return }
+            let primer = await provider.prime(language: language)
+            await self.primerFinished()
+            guard let primer else { return }
             do {
                 try await store.addUsage([
                     UsageEntry(
@@ -118,6 +125,27 @@ extension DictationPipeline {
                 Log.pipeline.error("Primer \(id.rawValue): cannot bill it: \(error)")
             }
         }
+    }
+
+    /// The next primer of the live recording `id`, `Settings.primerInterval` after the last one was sent (at once when
+    /// that is past, as after a long Undo window). The stop and Esc cancel it.
+    func armPrimer(for id: DictationID) {
+        guard recording?.id == id, recording?.primerTimer == nil, let primedAt else { return }
+        recording?.primerTimer = work.schedule(at: primedAt + settings.primerInterval) {
+            await self.primerTimerFired(id)
+        }
+    }
+
+    /// A primer that was still on its way at its recording's timer skipped that one; the next is armed here.
+    private func primerFinished() {
+        isPrimerInFlight = false
+        if let id = recording?.id { armPrimer(for: id) }
+    }
+
+    private func primerTimerFired(_ id: DictationID) {
+        guard recording?.id == id else { return }
+        recording?.primerTimer = nil
+        primeRoute(for: id)
     }
 
     private func takeClipboard() -> ClipboardGuard.Pending {
@@ -137,6 +165,7 @@ extension DictationPipeline {
         current.warning.cancel()
         current.announcement.cancel()
         current.soundDeadline?.cancel()
+        current.primerTimer?.cancel()
     }
 
     func stop(_ current: Recording, at now: Instant) {
@@ -198,6 +227,8 @@ extension DictationPipeline {
         recording = nil
         current.announcement.cancel()
         current.soundDeadline?.cancel()
+        current.primerTimer?.cancel()
+        current.primerTimer = nil
         latencies.mark(.cancel, of: current.id, at: now)
         paused = UndoWindow(item: current, duration: settings.undoWindow, at: now) { [id = current.id] in
             work.schedule(at: $0) { await self.closeUndoWindow(of: id) }
@@ -224,6 +255,7 @@ extension DictationPipeline {
         resumed.soundDeadline = nil
         recording = resumed
         armSoundDeadline(of: resumed.id)
+        armPrimer(for: resumed.id)
         latencies.mark(.resume, of: resumed.id, at: now)
         emit(.recording(isLong: now - resumed.startedAt >= settings.longRecordingWarning, isCleaned: resumed.isCleaned))
     }

@@ -175,6 +175,10 @@ extension DictationPipeline {
         public var audioRetention: AudioRetention
         /// The per-app modes: how the app in front at the stop has its dictations cleaned up.
         public var modes: ModeRules
+        /// A live recording sends the route's primer again this long after the last one, so the answer at the stop
+        /// still finds the route warm. Warm was measured 45 s after a primer (docs/research/latency-pass.md); 5 s less
+        /// is the margin. At most 90 primers per hour of continuous recording.
+        public var primerInterval: Duration
 
         /// The request for one recording, with the language and the keyterms ranked at `now` from these settings.
         func request(for audio: RecordedAudio, at now: Date) -> TranscriptionRequest {
@@ -198,7 +202,8 @@ extension DictationPipeline {
             cleanupDeadline: Duration = .seconds(5),
             isSubmitPhraseOn: Bool = true,
             audioRetention: AudioRetention = .standard,
-            modes: ModeRules = ModeRules()
+            modes: ModeRules = ModeRules(),
+            primerInterval: Duration = .seconds(40)
         ) {
             self.audioDirectory = audioDirectory
             self.language = language
@@ -215,6 +220,7 @@ extension DictationPipeline {
             self.isSubmitPhraseOn = isSubmitPhraseOn
             self.audioRetention = audioRetention
             self.modes = modes
+            self.primerInterval = primerInterval
         }
     }
 }

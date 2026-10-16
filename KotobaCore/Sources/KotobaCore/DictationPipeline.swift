@@ -47,6 +47,10 @@ public actor DictationPipeline {
     var submitRequests: Set<DictationID> = []
     /// The last dictation stopped, for a Return the tap swallowed just after the stop.
     var lastStopped: DictationID?
+    /// A route primer is on its way; a second one is never sent beside it.
+    var isPrimerInFlight = false
+    /// When the last route primer was sent: the route stays warm for about 45 s after it.
+    var primedAt: Instant?
     let work: PendingWork
     /// The last stop's capture end; a new capture starts only after it, so the two never overlap.
     var captureEnd: Task<RecordedAudio?, Never>?

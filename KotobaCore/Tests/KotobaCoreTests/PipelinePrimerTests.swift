@@ -71,4 +71,84 @@ struct PipelinePrimerTests {
         #expect(primerEntry.deliveredWords == 0)
         #expect(primerEntry.spokenWords == 0)
     }
+
+    // MARK: Long recordings
+
+    /// The route stays warm for about 45 s after a primer (docs/research/latency-pass.md), so a live recording sends
+    /// one more every `Settings.primerInterval`, and none after the stop.
+    @Test func aLongRecordingSendsAnotherPrimerEachIntervalUntilTheStop() async {
+        let world = FakeWorld(transcript: "a long prompt")
+        let pipeline = world.makePipeline()
+        let interval = DictationPipeline.Settings(audioDirectory: URL(filePath: "/tmp")).primerInterval
+
+        await pipeline.tap(world)
+        await pipeline.settle()
+        world.clock.advance(by: interval - .seconds(1))
+        await pipeline.settle()
+        #expect(await world.provider.primes == 1)
+        world.clock.advance(by: .seconds(1))
+        await pipeline.settle()
+        #expect(await world.provider.primes == 2)
+        world.clock.advance(by: interval)
+        await pipeline.settle()
+        #expect(await world.provider.primes == 3)
+
+        await pipeline.tap(world)
+        world.clock.advance(by: interval * 3)
+        await pipeline.settle()
+        #expect(await world.provider.primes == 3)
+        #expect(await world.paster.pasted == ["a long prompt"])
+    }
+
+    @Test func aPrimerStillInFlightIsNotSentAgain() async {
+        let world = FakeWorld(transcript: "slow route")
+        let primer = Gate()
+        await world.provider.answerPrimes(with: nil, after: primer)
+        let pipeline = world.makePipeline()
+        let interval = DictationPipeline.Settings(audioDirectory: URL(filePath: "/tmp")).primerInterval
+
+        await pipeline.tap(world)
+        world.clock.advance(by: interval)
+        let isSentBeside = await eventually { await world.provider.primes > 1 }
+        await primer.open()
+        await pipeline.settle()
+
+        #expect(isSentBeside == false)
+        #expect(await world.provider.maxPrimesInFlight == 1)
+        // The held primer's timer passed while it was on its way, so the next goes as soon as it is back.
+        #expect(await world.provider.primes == 2)
+    }
+
+    @Test func escapeStopsTheRepeatedPrimers() async {
+        let world = FakeWorld(transcript: "cancelled")
+        let pipeline = world.makePipeline()
+        let interval = DictationPipeline.Settings(audioDirectory: URL(filePath: "/tmp")).primerInterval
+
+        await pipeline.tap(world)
+        await pipeline.handle(.escape)
+        world.clock.advance(by: interval * 2)
+        await pipeline.settle()
+
+        #expect(await world.provider.primes == 1)
+    }
+
+    @Test func undoPrimesAtOnceWhenTheLastPrimerIsOlderThanTheInterval() async {
+        let world = FakeWorld(transcript: "resumed")
+        let pipeline = world.makePipeline()
+        let interval = DictationPipeline.Settings(audioDirectory: URL(filePath: "/tmp")).primerInterval
+
+        await pipeline.tap(world)
+        await pipeline.settle()
+        world.clock.advance(by: interval - .seconds(1))
+        await pipeline.handle(.escape)
+        world.clock.advance(by: .seconds(4))
+        await pipeline.undo()
+        await pipeline.settle()
+        // The last primer is older than the interval: the next goes at the Undo.
+        #expect(await world.provider.primes == 2)
+
+        world.clock.advance(by: interval)
+        await pipeline.settle()
+        #expect(await world.provider.primes == 3)
+    }
 }

@@ -112,9 +112,16 @@ actor FakeTranscriptionProvider: TranscriptionProvider {
         primerGate = gate
     }
 
+    /// The most primers that were in flight at once.
+    private(set) var maxPrimesInFlight = 0
+    private var primesInFlight = 0
+
     func prime(language: Locale.Language) async -> Transcript? {
         primes += 1
+        primesInFlight += 1
+        maxPrimesInFlight = max(maxPrimesInFlight, primesInFlight)
         await primerGate?.pass()
+        primesInFlight -= 1
         return primer
     }
 
