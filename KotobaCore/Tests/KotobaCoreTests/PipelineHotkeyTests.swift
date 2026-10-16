@@ -186,7 +186,8 @@ struct PipelineHotkeyTests {
         await pipeline.tap(world)
         await pipeline.settle()
 
-        #expect(await pipeline.state == .captureFailed)
+        // Not `.captureFailed`, which names a missing mic or mic access.
+        #expect(await pipeline.state == .nothingRecorded)
         #expect(await world.store.records.isEmpty)
         #expect(await world.provider.requests.isEmpty)
     }

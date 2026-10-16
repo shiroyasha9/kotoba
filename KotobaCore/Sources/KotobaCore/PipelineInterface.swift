@@ -50,6 +50,8 @@ public enum DictationState: Sendable, Equatable {
     case recovered(DictationID)
     /// Capture did not start: no microphone access or no input device.
     case captureFailed
+    /// The stop found no capture running (the audio source had lost it): nothing was recorded, kept or sent.
+    case nothingRecorded
 
     /// What the indicator shows once a dictation reaches `record.status`.
     static func outcome(of record: DictationRecord) -> Self {

@@ -88,22 +88,27 @@ final class MainWindowController {
         }
     }
 
-    /// A history write (from `DictationPipeline.historyChanges`): an open History pane reads the row it names; a shown
-    /// Home or History section reads again, and a shown Usage or Insights pane only when the usage ledger changed. Their
-    /// figures come from the ledger (Insights also takes each answered dictation's recorded length, which a later row
-    /// write keeps), so each dictation's pending save at upload start changes none of them. Deleted audio changes
-    /// nothing Home shows.
+    /// A history write (from `DictationPipeline.historyChanges`): an open History pane reads the row it names, and each
+    /// shown pane reads again only when the write changed what it shows. Home shows rows and ledger figures; Usage and
+    /// Insights only ledger figures, so each dictation's pending save at upload start changes none of theirs. Insights
+    /// also takes each answered dictation's recorded length, which a later row write keeps and a delete takes away (it
+    /// falls back to the billed length). The History section measures the kept audio, which a ledger write leaves
+    /// alone.
     func historyChanged(_ change: HistoryChange) {
         historyPane?.historyChanged(change)
-        switch change {
-        case .audioDeleted: break
-        case .saved, .deleted, .usageAdded: home?.historyChanged()
+        if change.isRowChanged || change.isUsageAdded {
+            home?.historyChanged()
         }
         if change.isUsageAdded {
             usage?.ledgerChanged()
+        }
+        let isDeleted = if case .deleted = change { true } else { false }
+        if change.isUsageAdded || isDeleted {
             insights?.storeChanged()
         }
-        general?.audio?.historyChanged()
+        if change.isKeptAudioChanged {
+            general?.audio?.keptAudioChanged()
+        }
     }
 
     /// From `DictationPipeline.activity`: which dictations are being sent, and whether Paste Again can paste.

@@ -216,10 +216,15 @@ public actor HistoryStore: Store {
         )
     }
 
-    public func queueForRetry(_ id: DictationID) throws {
-        try database.run(
-            "UPDATE dictations SET status = ?2, reject_reason = NULL WHERE id = ?1 AND status IN \(Self.requeued);",
-            [.text(id.rawValue.uuidString), .text(DictationRecord.Status.failed.rawValue)])
+    @discardableResult
+    public func queueForRetry(_ id: DictationID) throws -> Bool {
+        try !database.query(
+            """
+            UPDATE dictations SET status = ?2, reject_reason = NULL WHERE id = ?1 AND status IN \(Self.requeued)
+            RETURNING id;
+            """,
+            [.text(id.rawValue.uuidString), .text(DictationRecord.Status.failed.rawValue)]
+        ).isEmpty
     }
 
     /// Number of dictations waiting for a retry, for the menu.

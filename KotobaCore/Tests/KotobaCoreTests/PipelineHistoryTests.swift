@@ -241,11 +241,54 @@ struct PipelineHistoryChangeTests {
         await gate.open()
         await retry.value
 
-        // Retry puts it in the queue first.
-        #expect(await changes.next() == .saved(id, isUsageAdded: false))
         #expect(await changes.next() == .deleted([id]))
         #expect(await changes.next() == .usageAdded)
         #expect(await world.store.ledger.count == 1)
+    }
+
+    /// A failed dictation is in the queue already: Retry writes no queue change, so it announces none.
+    @Test func aRetryAnnouncesOnlyTheWritesItMade() async throws {
+        let world = FakeWorld(transcript: "second try")
+        let pipeline = world.makePipeline()
+        await world.provider.fail(with: FakeError())
+        await pipeline.dictate(world)
+        let id = try #require(await world.store.records.first?.id)
+        await world.provider.fail(with: nil)
+        var changes = pipeline.historyChanges.makeAsyncIterator()
+        _ = await changes.next()
+        _ = await changes.next()
+
+        await pipeline.retry([id])
+
+        #expect(await changes.next() == .saved(id, isUsageAdded: true))
+    }
+
+    @Test func aRetryOfACancelledDictationAnnouncesItsQueueWrite() async throws {
+        let world = FakeWorld(transcript: "after all")
+        let pipeline = world.makePipeline()
+        await pipeline.tap(world)
+        await pipeline.handle(.escape)
+        await pipeline.shutdown()
+        let id = try #require(await world.store.records.first?.id)
+        var changes = pipeline.historyChanges.makeAsyncIterator()
+        _ = await changes.next()
+
+        await pipeline.retry([id])
+
+        #expect(await changes.next() == .saved(id, isUsageAdded: false))
+        #expect(await changes.next() == .saved(id, isUsageAdded: true))
+    }
+
+    /// Home and the menu's counts read the rows; the History section of General measures the kept audio.
+    @Test func eachChangeSaysWhatItChanged() {
+        let id = DictationID()
+        let changes: [HistoryChange] = [
+            .saved(id, isUsageAdded: false), .saved(id, isUsageAdded: true), .deleted([id]), .audioDeleted([id]),
+            .usageAdded,
+        ]
+
+        #expect(changes.map(\.isRowChanged) == [true, true, true, false, false])
+        #expect(changes.map(\.isKeptAudioChanged) == [true, true, true, true, false])
     }
 
     @Test func onlyLedgerWritesAddUsage() {

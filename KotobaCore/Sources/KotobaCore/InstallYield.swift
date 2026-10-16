@@ -21,8 +21,7 @@ public struct InstallYield: Sendable, Equatable {
         case .recording, .transcribing, .cleaning, .undoable:
             return false
         case .idle, .failed, .needsSetup, .rejected, .cleanupFailed, .cleanupTooSlow, .returnSkipped, .copied,
-            .recovered,
-            .captureFailed:
+            .recovered, .captureFailed, .nothingRecorded:
             return true
         }
     }

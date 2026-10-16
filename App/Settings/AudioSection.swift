@@ -7,7 +7,7 @@ import SwiftUI
 /// Story 31 in Settings > General: how long a transcribed dictation keeps its audio, the disk space the saved audio
 /// takes, and "Delete Audio Now…". The pipeline decides what goes (`AudioRetention`); this model only passes the
 /// owner's choices on as `AudioRequest`s. It measures the kept audio when the pane appears and after each history
-/// write while it is shown, so nothing runs at idle.
+/// write that changes it while it is shown, so nothing runs at idle.
 @MainActor
 @Observable
 final class AudioRetentionModel {
@@ -118,8 +118,9 @@ final class AudioRetentionModel {
         measuring = nil
     }
 
-    /// A dictation was saved, or audio or a dictation was deleted: a shown pane measures again.
-    func historyChanged() {
+    /// A dictation was saved, or audio or a dictation was deleted (`HistoryChange.isKeptAudioChanged`): a shown pane
+    /// measures again.
+    func keptAudioChanged() {
         guard isShown else { return }
         measure()
     }

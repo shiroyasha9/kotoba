@@ -72,13 +72,14 @@ actor FakeStore: Store {
         history[id, default: []].append(.copied)
     }
 
-    func queueForRetry(_ id: DictationID) async throws {
+    func queueForRetry(_ id: DictationID) async throws -> Bool {
         guard let index = records.firstIndex(where: { $0.id == id }),
             [.cancelled, .rejected].contains(records[index].status)
-        else { return }
+        else { return false }
         records[index].status = .failed
         records[index].rejectReason = nil
         history[id, default: []].append(.failed)
+        return true
     }
 
     func delete(_ ids: Set<DictationID>) async throws -> Set<DictationID> {

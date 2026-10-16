@@ -117,6 +117,7 @@ extension DictationState {
         case .needsSetup(_, let item): StatusText.add(item, for: context.provider)
         case .rejected(_, let reason): reason.text(provider: provider)
         case .captureFailed: context.microphone == .denied ? "Microphone access is off" : "No microphone found"
+        case .nothingRecorded: "Nothing was recorded. Try again."
         default: deliveredText
         }
     }
@@ -129,7 +130,8 @@ extension DictationState {
         case .returnSkipped: "Didn’t press Return: app changed"
         case .recovered: "Saved dictation recovered"
         case .copied: "Copied. Press ⌘V to paste."
-        case .idle, .recording, .transcribing, .cleaning, .undoable, .failed, .needsSetup, .rejected, .captureFailed:
+        case .idle, .recording, .transcribing, .cleaning, .undoable, .failed, .needsSetup, .rejected, .captureFailed,
+            .nothingRecorded:
             nil
         }
     }
@@ -146,7 +148,8 @@ extension DictationState {
         case .recovered: .copy
         case .copied: context.isPasteAllowed ? nil : .allowPasting
         case .captureFailed: context.microphone == .denied ? .openMicrophoneSettings : nil
-        case .idle, .recording, .transcribing, .cleaning, .rejected, .cleanupFailed, .cleanupTooSlow, .returnSkipped:
+        case .idle, .recording, .transcribing, .cleaning, .rejected, .cleanupFailed, .cleanupTooSlow, .returnSkipped,
+            .nothingRecorded:
             nil
         }
     }

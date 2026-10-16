@@ -266,10 +266,12 @@ struct HistoryStoreTests {
             try await store.save(saved)
         }
 
-        for saved in [cancelled, rejected, pasted] {
-            try await store.queueForRetry(saved.id)
+        var isQueued: [Bool] = []
+        for id in [cancelled.id, rejected.id, pasted.id, DictationID()] {
+            isQueued.append(try await store.queueForRetry(id))
         }
 
+        #expect(isQueued == [true, true, false, false])
         let queued = try await store.pendingRetries()
         #expect(queued.map(\.id) == [cancelled.id, rejected.id])
         #expect(queued.allSatisfy { $0.status == .failed && $0.rejectReason == nil })

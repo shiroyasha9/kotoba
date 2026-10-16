@@ -140,7 +140,8 @@ final class HistoryModel {
             loadedSearch = nil
             isLoadFailed = true
         }
-        selection.formIntersection(rows.map(\.id))
+        // The failure state hides the rows, so the toolbar must not act on a selection the owner cannot see.
+        selection.formIntersection(isLoadFailed ? [] : rows.map(\.id))
         isLoaded = true
     }
 

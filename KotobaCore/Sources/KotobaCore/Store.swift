@@ -19,9 +19,10 @@ public protocol Store: Sendable {
     func lastDelivered() async throws -> DictationRecord?
     /// Sets one record's status to `.copied`, keeping everything else.
     func markCopied(_ id: DictationID) async throws
-    /// Puts a `.cancelled` or `.rejected` record in the retry queue as `.failed`; a record with any other status keeps
-    /// it.
-    func queueForRetry(_ id: DictationID) async throws
+    /// Puts a `.cancelled` or `.rejected` record in the retry queue as `.failed` and returns true; a record with any
+    /// other status keeps it, and a missing one stays missing: false, nothing written.
+    @discardableResult
+    func queueForRetry(_ id: DictationID) async throws -> Bool
     /// Deletes the records, their latency logs and their audio files (the History pane's Delete), each audio file
     /// first: a record whose file cannot be removed stays, with its file, so no deleted dictation leaves audio with no
     /// record (`OrphanAudio` would bring it back). Returns the ids that stay for that reason.
@@ -242,6 +243,22 @@ public enum HistoryChange: Sendable, Equatable {
         case .deleted, .audioDeleted: false
         }
     }
+
+    /// A row was written or deleted: a status, a count or a text that lists show can differ.
+    public var isRowChanged: Bool {
+        switch self {
+        case .saved, .deleted: true
+        case .audioDeleted, .usageAdded: false
+        }
+    }
+
+    /// The kept audio's size or its split between transcribed and waiting dictations can differ.
+    public var isKeptAudioChanged: Bool {
+        switch self {
+        case .saved, .deleted, .audioDeleted: true
+        case .usageAdded: false
+        }
+    }
 }
 
 /// Passes every call to `base` and announces each write, so the app reads its counts and lists again only then.
@@ -286,9 +303,11 @@ struct AnnouncingStore: Store {
         try await base.markCopied(id)
     }
 
-    func queueForRetry(_ id: DictationID) async throws {
-        defer { changes.yield(.saved(id, isUsageAdded: false)) }
-        try await base.queueForRetry(id)
+    /// Announced only when the record joined the queue: a Retry of a failed dictation writes nothing here.
+    func queueForRetry(_ id: DictationID) async throws -> Bool {
+        let isQueued = try await base.queueForRetry(id)
+        if isQueued { changes.yield(.saved(id, isUsageAdded: false)) }
+        return isQueued
     }
 
     /// Announced only once done, and only the rows that went: a window that hides rows the store still has would show
