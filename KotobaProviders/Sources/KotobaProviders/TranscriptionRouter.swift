@@ -34,6 +34,10 @@ public final class TranscriptionRouter: TranscriptionProvider {
         await client(for: options.route.account).warmUp(options)
     }
 
+    public var hasPrimer: Bool {
+        client(for: settings.routeOptions.route.account).hasPrimer
+    }
+
     public func prime(language: Locale.Language) async -> Transcript? {
         let options = settings.routeOptions
         return await client(for: options.route.account).prime(options, language: language)
@@ -75,6 +79,8 @@ protocol RouteClient: Sendable {
         _ request: TranscriptionRequest,
         _ options: TranscriptionSettings.RouteOptions
     ) async throws -> Transcript
+    /// `TranscriptionProvider.hasPrimer` for this provider's routes.
+    var hasPrimer: Bool { get }
     /// `TranscriptionProvider.prime` on this route.
     func prime(_ options: TranscriptionSettings.RouteOptions, language: Locale.Language) async -> Transcript?
 }

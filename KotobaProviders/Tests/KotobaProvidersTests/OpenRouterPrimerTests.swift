@@ -44,10 +44,13 @@ struct OpenRouterPrimerTests {
 
     @Test func directRoutesSendNoPrimer() async {
         let stub = StubHost(reply: .fixture("success"))
+        #expect(stub.provider().hasPrimer)
         stub.settings.route = .xaiGrok
 
+        #expect(stub.provider().hasPrimer == false)
         #expect(await stub.provider().prime(language: Locale.Language(identifier: "en")) == nil)
         stub.useAzure()
+        #expect(stub.provider().hasPrimer == false)
         #expect(await stub.provider().prime(language: Locale.Language(identifier: "en")) == nil)
         #expect(stub.requests.isEmpty)
     }

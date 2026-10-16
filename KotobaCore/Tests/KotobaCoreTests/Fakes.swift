@@ -13,8 +13,8 @@ struct FakeWorld {
     let store = FakeStore()
     let frontApp = FakeFrontApp()
 
-    init(transcript: String, clipboard: String? = "user's clipboard") {
-        provider = FakeTranscriptionProvider(transcript: transcript)
+    init(transcript: String, clipboard: String? = "user's clipboard", hasPrimer: Bool = true) {
+        provider = FakeTranscriptionProvider(transcript: transcript, hasPrimer: hasPrimer)
         pasteboard = FakePasteboard(text: clipboard)
         paster = FakePaster(pasteboard: pasteboard)
     }
@@ -66,8 +66,9 @@ actor FakeTranscriptionProvider: TranscriptionProvider {
     /// The network metrics each answer carries; nil, as on a route without metrics, by default.
     private var network: NetworkTiming?
 
-    init(transcript: String) {
+    init(transcript: String, hasPrimer: Bool = true) {
         self.transcript = transcript
+        self.hasPrimer = hasPrimer
     }
 
     func fail(with error: (any Error)?) {
@@ -101,7 +102,9 @@ actor FakeTranscriptionProvider: TranscriptionProvider {
 
     func warmUp() async {}
 
-    /// How many primers the pipeline sent, and what each answers: nil (a route with no primer) by default.
+    /// False, as on a direct route: the pipeline sends no primer and arms no primer timer.
+    nonisolated let hasPrimer: Bool
+    /// How many primers the pipeline sent, and what each answers: nil (an answer with no cost) by default.
     private(set) var primes = 0
     private var primer: Transcript?
     private var primerGate: Gate?
@@ -297,6 +300,11 @@ final class ManualClock: PipelineClock {
             sleeper?.continuation.resume(throwing: CancellationError())
         }
         try Task.checkCancellation()
+    }
+
+    /// The deadlines of the timers waiting on this clock.
+    var deadlines: [ContinuousClock.Instant] {
+        state.withLock { $0.sleepers.map(\.deadline) }
     }
 
     func advance(by duration: Duration) {

@@ -103,10 +103,10 @@ extension DictationPipeline {
     }
 
     /// Sends the route's primer (`TranscriptionProvider.prime`) unless one is on its way, and keeps the live recording
-    /// primed every `Settings.primerInterval`. Nothing waits for it. Its cost goes to the ledger with this dictation,
+    /// primed every `Settings.primerInterval`; a route with no primer gets neither. Nothing waits for it. Its cost goes to the ledger with this dictation,
     /// with no audio and no words, so minutes and words per minute stay what the owner dictated.
     func primeRoute(for id: DictationID) {
-        guard !isPrimerInFlight else { return }
+        guard ports.provider.hasPrimer, !isPrimerInFlight else { return }
         isPrimerInFlight = true
         primedAt = ports.clock.now
         armPrimer(for: id)
@@ -130,7 +130,7 @@ extension DictationPipeline {
     /// The next primer of the live recording `id`, `Settings.primerInterval` after the last one was sent (at once when
     /// that is past, as after a long Undo window). The stop and Esc cancel it.
     func armPrimer(for id: DictationID) {
-        guard recording?.id == id, recording?.primerTimer == nil, let primedAt else { return }
+        guard recording?.id == id, recording?.primerTimer == nil, let primedAt, ports.provider.hasPrimer else { return }
         recording?.primerTimer = work.schedule(at: primedAt + settings.primerInterval) {
             await self.primerTimerFired(id)
         }

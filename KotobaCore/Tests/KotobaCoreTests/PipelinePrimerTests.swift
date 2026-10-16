@@ -151,4 +151,35 @@ struct PipelinePrimerTests {
         await pipeline.settle()
         #expect(await world.provider.primes == 3)
     }
+
+    @Test func aLiveRecordingArmsThePrimerTimer() async {
+        let world = FakeWorld(transcript: "primed route")
+        let pipeline = world.makePipeline()
+        let interval = DictationPipeline.Settings(audioDirectory: URL(filePath: "/tmp")).primerInterval
+        let start = world.clock.now
+
+        await pipeline.tap(world)
+        await pipeline.settle()
+
+        #expect(world.clock.deadlines.contains(start + interval))
+    }
+
+    /// A direct route has no primer: nothing is sent and no timer wakes during the recording.
+    @Test func aRouteWithNoPrimerSendsNoneAndArmsNoTimer() async {
+        let world = FakeWorld(transcript: "direct route", hasPrimer: false)
+        let pipeline = world.makePipeline()
+        let interval = DictationPipeline.Settings(audioDirectory: URL(filePath: "/tmp")).primerInterval
+        let start = world.clock.now
+
+        await pipeline.tap(world)
+        await pipeline.settle()
+        #expect(!world.clock.deadlines.contains(start + interval))
+        world.clock.advance(by: interval * 3)
+        await pipeline.settle()
+        await pipeline.tap(world)
+        await pipeline.settle()
+
+        #expect(await world.provider.primes == 0)
+        #expect(await world.paster.pasted == ["direct route"])
+    }
 }
