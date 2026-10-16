@@ -733,7 +733,7 @@ Rows 500-514 use kotoba Dev with the release kotoba quit. A fresh setup: `defaul
 
 ## Audit fixes (kotoba Dev, 2026-10-17)
 
-Rows 740-748 need real hardware or a TCC change, which a snapshot or unit test cannot make. Use kotoba Dev with the release kotoba quit. Read the log with `log show --last 5m --predicate 'subsystem == "tech.teensy.kotoba.dev"'`.
+Rows 740-749 need real hardware or a TCC change, which a snapshot or unit test cannot make. Use kotoba Dev with the release kotoba quit. Read the log with `log show --last 5m --predicate 'subsystem == "tech.teensy.kotoba.dev"'`.
 
 | # | Do this | Expect | Result |
 |---|---|---|---|
@@ -746,3 +746,4 @@ Rows 740-748 need real hardware or a TCC change, which a snapshot or unit test c
 | 746 | Open the main window, switch to another app for 5 min. Then run `top -l 2 -s 30 -stats pid,command,idlew -pid <kotoba Dev pid>` | `idlew` (idle wake-ups) is near 0, not about 30 per 30 s | |
 | 747 | Disk full, short: quit kotoba Dev; `hdiutil create -size 30m -fs APFS -volname KotobaFull /tmp/kfull.dmg && hdiutil attach /tmp/kfull.dmg`; move `~/Library/Application Support/kotoba-dev/audio` aside and link it: `ln -s /Volumes/KotobaFull ~/Library/Application\ Support/kotoba-dev/audio`; fill it: `mkfile 29m /Volumes/KotobaFull/fill`. Open kotoba Dev and dictate 10 s | The pill says “Couldn’t save audio. Disk full?”; no request, no History row | |
 | 748 | Disk full, partway: as row 747, but `mkfile 28m` (about 1 MB free), then dictate for 2 min | The first part pastes and the pill says “Pasted what was saved. Disk full?”. Afterwards remove the link, move the old `audio` folder back and `hdiutil detach /Volumes/KotobaFull` | |
+| 749 | Add the input source “Dvorak - QWERTY ⌘” and select it; dictate into TextEdit. Switch back afterwards | The text pastes (no beep, no ⌘. cancel) | |
