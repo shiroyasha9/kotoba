@@ -154,6 +154,11 @@ public actor DictationPipeline {
         settings.dictionary = dictionary
     }
 
+    /// The owner changed the per-app modes: the next key-down and stop use them.
+    public func updateModes(_ modes: ModeRules) async {
+        settings.modes = modes
+    }
+
     /// The owner turned the submit phrase on or off: the next transcript uses it.
     public func updateSubmitPhrase(isOn: Bool) async {
         settings.isSubmitPhraseOn = isOn
@@ -229,8 +234,8 @@ public actor DictationPipeline {
     private func cleanupModifier() {
         guard let current = recording, !current.isAnnounced, !current.isCleanupSeen else { return }
         recording?.isCleanupSeen = true
-        if let cleaner = ports.cleaner {
-            work.track { await cleaner.warmUp() }
+        if !current.isCleanerWarm {
+            recording?.isCleanerWarm = warmCleaner()
         }
     }
 

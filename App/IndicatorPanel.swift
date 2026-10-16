@@ -99,6 +99,10 @@ final class IndicatorPanel {
         built?.pill.level = CGFloat(level)
     }
 
+    /// In place of the state dot while a dictation will be cleaned up and while it is: the one fact the owner acts on
+    /// (a short wait, and words that may change). Not the learned word's "sparkles".
+    static let cleanupSymbol = "wand.and.sparkles"
+
     /// What the pill shows for `state`; nil hides it.
     static func content(
         for state: DictationState, context: StatusContext, visibility: IndicatorVisibility
@@ -110,18 +114,27 @@ final class IndicatorPanel {
         switch state {
         case .idle:
             return isAlways ? .idle : nil
-        case .recording(let isLong, let isSilent):
+        case .recording(let isLong, let isSilent, let isCleaned):
             // Only a plain "Listening" pill stands vertical at an edge; the others carry more words.
             let isPlain = !isLong && !isSilent && !context.isSecureInputOn
+            let toolTip: String? =
+                if isSilent {
+                    StatusText.noSoundHelp(context.microphoneName)
+                } else if context.isSecureInputOn {
+                    DictationState.secureInputHelp
+                } else if isCleaned {
+                    StatusText.cleanupHelp
+                } else {
+                    nil
+                }
             // No sound is a warning with its fix on the button; it clears when sound arrives, so no timer.
             return .init(
-                text: text, color: isSilent ? .systemOrange : .systemRed,
-                toolTip: isSilent
-                    ? StatusText.noSoundHelp(context.microphoneName)
-                    : context.isSecureInputOn ? DictationState.secureInputHelp : nil, showsMeter: true,
-                isCompact: isPlain, isClickable: isClickable, action: action)
+                text: text, color: isSilent ? .systemOrange : .systemRed, symbol: isCleaned ? cleanupSymbol : nil,
+                toolTip: toolTip, showsMeter: true, isCompact: isPlain, isClickable: isClickable, action: action)
         case .transcribing:
             return .init(text: text, color: .systemBlue, showsSpinner: true, isCompact: true)
+        case .cleaning:
+            return .init(text: text, color: .systemBlue, symbol: cleanupSymbol, showsSpinner: true, isCompact: true)
         case .undoable:
             // The pipeline ends the Undo window itself; the bar follows it.
             return .init(

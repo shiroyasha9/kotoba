@@ -59,7 +59,7 @@ extension HistoryController {
             "um so the plan is we ship the beta on friday", minutesAgo: 12, seconds: 9,
             app: ("com.apple.mail", "Mail"))
         cleaned.cleanedText = "The plan: we ship the beta on Friday."
-        cleaned.mode = .cleanup
+        cleaned.output = .cleanup(.writing)
         return [
             row(
                 "Move the standup to Thursday and ask the team to review the pull request before lunch.",

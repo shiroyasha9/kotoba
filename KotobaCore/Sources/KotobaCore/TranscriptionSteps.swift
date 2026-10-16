@@ -40,12 +40,14 @@ struct TranscriptionSteps: Sendable {
     /// answered no words: the raw transcript is used then, and the cleanup is not retried. An answer's usage goes to
     /// the record, empty or not. The replacements run once, on the cleaner's output, so a rule such as
     /// "kotoba" -> "kotoba.app" does not grow twice.
-    func clean(_ raw: String, into record: inout DictationRecord, settings: DictationPipeline.Settings) async {
-        record.cleanedText = await cleaned(raw, record: &record, settings: settings)
+    func clean(
+        _ raw: String, in mode: AppMode, into record: inout DictationRecord, settings: DictationPipeline.Settings
+    ) async {
+        record.cleanedText = await cleaned(raw, in: mode, record: &record, settings: settings)
     }
 
     private func cleaned(
-        _ raw: String, record: inout DictationRecord, settings: DictationPipeline.Settings
+        _ raw: String, in mode: AppMode, record: inout DictationRecord, settings: DictationPipeline.Settings
     ) async -> String? {
         let id = record.id
         guard let cleaner else {
@@ -54,7 +56,7 @@ struct TranscriptionSteps: Sendable {
         }
         let cleaned: CleanedText
         do {
-            cleaned = try await cleaner.clean(raw, vocabulary: settings.dictionary.keyterms)
+            cleaned = try await cleaner.clean(raw, vocabulary: settings.dictionary.keyterms, mode: mode)
         } catch {
             Log.pipeline.error("Cleanup \(id.rawValue) failed, using the raw transcript: \(error)")
             return nil

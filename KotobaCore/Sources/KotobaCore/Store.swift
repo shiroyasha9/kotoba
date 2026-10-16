@@ -70,8 +70,8 @@ public struct DictationRecord: Sendable, Equatable, Identifiable {
     /// The provider's model for the last request; nil when no request was sent.
     public var model: String?
     public var status: Status
-    /// Cleanup dictations also run the cleaner when they are retried.
-    public var mode = DictationMode.transcript
+    /// Cleanup dictations also run the cleaner, in the same mode, when they are retried.
+    public var output = DictationOutput.transcript
     /// The cleaned text that was pasted, for a cleanup dictation; `transcript` stays the raw text.
     public var cleanedText: String?
     /// A `.failed` dictation that waits for the owner to set a key or an endpoint; retried then, not on its own.

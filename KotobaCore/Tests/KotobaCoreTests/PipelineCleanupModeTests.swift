@@ -83,7 +83,7 @@ struct PipelineCleanupModeTests {
         await pipeline.handle(.chordUp)
         await pipeline.tap(world)
         await pipeline.settle()
-        #expect(try #require(await world.store.records.first).mode == .cleanup)
+        #expect(try #require(await world.store.records.first).output == .cleanup(.code))
 
         await world.provider.fail(with: nil)
         await pipeline.retryPending()

@@ -204,6 +204,7 @@ actor FakeTextCleaner: TextCleaner {
     struct Request: Equatable {
         var transcript: String
         var vocabulary: [String]
+        var mode = AppMode.code
     }
 
     private let result: Result<String, any Error>
@@ -222,8 +223,8 @@ actor FakeTextCleaner: TextCleaner {
         warmUps += 1
     }
 
-    func clean(_ transcript: String, vocabulary: [String]) async throws -> CleanedText {
-        requests.append(Request(transcript: transcript, vocabulary: vocabulary))
+    func clean(_ transcript: String, vocabulary: [String], mode: AppMode) async throws -> CleanedText {
+        requests.append(Request(transcript: transcript, vocabulary: vocabulary, mode: mode))
         await gate?.pass()
         return CleanedText(text: try result.get(), model: "fake/cleaner", cost: cost)
     }

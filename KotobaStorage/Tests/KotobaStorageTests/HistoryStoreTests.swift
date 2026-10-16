@@ -23,7 +23,7 @@ struct HistoryStoreTests {
         let store = try HistoryStore(url: url, audio: audio)
         var saved = record(.failed)
         saved.needsSetup = .endpoint
-        saved.mode = .cleanup
+        saved.output = .cleanup(.writing)
         saved.model = "x-ai/grok-stt-1.0"
         try await store.save(saved)
 
@@ -103,7 +103,7 @@ struct HistoryStoreTests {
 
         let migrated = try #require(try await store.pendingRetries().first)
         #expect(migrated.needsSetup == .key)
-        #expect(migrated.mode == .transcript)
+        #expect(migrated.output == .transcript)
         #expect(migrated.app == nil)
         #expect(!migrated.isAudioDeleted)
         #expect(

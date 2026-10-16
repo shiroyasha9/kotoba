@@ -17,6 +17,7 @@ enum SettingsPaneID: String, Hashable, CaseIterable {
     case general
     case speech
     case dictionary
+    case modes
     case microphones
     case usage
 
@@ -25,6 +26,7 @@ enum SettingsPaneID: String, Hashable, CaseIterable {
         case .general: "General"
         case .speech: "Speech"
         case .dictionary: "Dictionary"
+        case .modes: "Modes"
         case .microphones: "Microphone"
         case .usage: "Usage"
         }
@@ -36,6 +38,7 @@ enum SettingsPaneID: String, Hashable, CaseIterable {
         case .general: "gearshape.fill"
         case .speech: "waveform"
         case .dictionary: "character.book.closed.fill"
+        case .modes: "square.grid.2x2.fill"
         case .microphones: "mic.fill"
         case .usage: "chart.bar.fill"
         }
@@ -46,6 +49,7 @@ enum SettingsPaneID: String, Hashable, CaseIterable {
         case .general: .gray
         case .speech: .blue
         case .dictionary: .orange
+        case .modes: .purple
         case .microphones: .red
         case .usage: .green
         }
@@ -57,6 +61,7 @@ enum SettingsPaneID: String, Hashable, CaseIterable {
         case .general: "Your shortcut, how kotoba starts, and what it shows while you dictate."
         case .speech: "The speech model that turns your voice into text, and its key."
         case .dictionary: "Names and terms kotoba should know, and words to replace."
+        case .modes: "How kotoba cleans up text in each app."
         case .microphones: "The mic kotoba records from, and how to test it."
         case .usage: "How much you dictate, and what it costs."
         }

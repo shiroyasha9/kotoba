@@ -102,8 +102,8 @@ public actor RetryQueue {
         var record = record
         do {
             let transcribed = try await steps.transcribe(&record, settings: settings)
-            if record.mode == .cleanup {
-                await steps.clean(transcribed.raw, into: &record, settings: settings)
+            if let mode = record.output.cleanupMode {
+                await steps.clean(transcribed.raw, in: mode, into: &record, settings: settings)
             }
             record.status = .recovered
             record.needsSetup = nil

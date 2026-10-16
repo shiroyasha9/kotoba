@@ -14,7 +14,7 @@ struct TranscriptDelivery: Sendable {
         /// The clipboard taken at chord-down, and when it was ready.
         let clipboard: ClipboardGuard.Pending
         let settings: DictationPipeline.Settings
-        let mode: DictationMode
+        let output: DictationOutput
         /// The front app at the stop; a submit Return goes only to it, and the record keeps it.
         var frontAppAtStop: FrontApp?
     }
@@ -30,7 +30,7 @@ struct TranscriptDelivery: Sendable {
     }
 
     let provider: any TranscriptionProvider
-    /// Used for `.cleanup` jobs; nil pastes the raw transcript.
+    /// Used for cleanup jobs; nil pastes the raw transcript.
     let cleaner: (any TextCleaner)?
     let paster: any Paster
     let store: any Store
@@ -41,10 +41,12 @@ struct TranscriptDelivery: Sendable {
     /// The transcribe and clean steps, shared with the retry queue.
     private var steps: TranscriptionSteps { TranscriptionSteps(provider: provider, cleaner: cleaner, clock: clock) }
 
-    /// `beforePaste` returns when it is safe to post Cmd-V (the chord is released).
-    /// `isSubmitRequested` tells, once pasted, whether the owner stopped with Return or pressed it just after.
+    /// `beforePaste` returns when it is safe to post Cmd-V (the chord is released). `beforeCleanup` runs as the
+    /// transcript goes to the cleaner, so the indicator can say so. `isSubmitRequested` tells, once pasted, whether the
+    /// owner stopped with Return or pressed it just after.
     func deliver(
-        _ job: Job, beforePaste: @Sendable () async -> Void, isSubmitRequested: @Sendable () async -> Bool = { false }
+        _ job: Job, beforePaste: @Sendable () async -> Void, beforeCleanup: @Sendable () async -> Void = {},
+        isSubmitRequested: @Sendable () async -> Bool = { false }
     ) async -> Outcome {
         var latency = job.latency
         func mark(_ mark: LatencyMark, at instant: ContinuousClock.Instant) {
@@ -53,7 +55,7 @@ struct TranscriptDelivery: Sendable {
 
         var record = DictationRecord(
             id: job.id, createdAt: job.createdAt, audio: job.audio, transcript: nil, status: .pending, latency: latency)
-        record.mode = job.mode
+        record.output = job.output
         record.app = job.frontAppAtStop?.app
         // Saved while the upload runs, so a crash keeps the audio queued.
         let pendingRecord = record
@@ -76,9 +78,10 @@ struct TranscriptDelivery: Sendable {
             Log.pipeline.error("Transcription \(job.id.rawValue) on \(record.model ?? "no answer") failed: \(error)")
             record.markFailed(by: error)
         case .success(let transcribed):
-            if job.mode == .cleanup {
+            if let mode = job.output.cleanupMode {
+                await beforeCleanup()
                 mark(.cleanStart, at: clock.now)
-                await steps.clean(transcribed.raw, into: &record, settings: job.settings)
+                await steps.clean(transcribed.raw, in: mode, into: &record, settings: job.settings)
                 mark(.cleanResponse, at: clock.now)
                 isCleanupFailed = record.cleanedText == nil
             }

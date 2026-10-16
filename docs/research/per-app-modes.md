@@ -1,6 +1,6 @@
 # Per-app modes (story 29)
 
-Status: design, phase A, 2026-10-16 05:45 IST. Agent `modes`. No code changed, no paid API called. Wispr Flow numbers come from read-only queries on an APFS clone of its database (runbooks folder `2026-10-16-kotoba-modes/`, counts in `category-counts.txt`); no private text is in this file.
+Status: design, phase A, 2026-10-16 05:45 IST; v1 built in phase B the same day (decisions under "Lead decisions"). Agent `modes`. No paid API called. Wispr Flow numbers come from read-only queries on an APFS clone of its database (runbooks folder `2026-10-16-kotoba-modes/`, counts in `category-counts.txt`); no private text is in this file.
 
 ## Summary
 
@@ -23,11 +23,12 @@ Lessons for kotoba: categories with editable app lists (Wispr's simplicity, Supe
 ## 2. What a mode holds
 
 ```
-AppMode
-  id: code | writing            built-in in v1; custom modes later
-  prompt: CleanupPrompt          .code (the kotoba-bench-v1 prompt) | .writing (new)
-  cleansEveryDictation: Bool     default false for both
-  // later: customInstructions, speech model, language
+AppMode: code | writing          built-in in v1; in v1 the mode is also the prompt
+ModeRules
+  apps: [bundle ID: AppMode]     seeded with ModeRules.standard
+  otherApps: AppMode             default .code
+  cleansEveryDictation: Set<AppMode>   default empty
+  // later: custom modes with instructions, speech model, language
 ```
 
 - **Code** uses today's prompt (`OpenRouterCleaner.systemPrompt`), word for word: it is written for prompts to a coding assistant and keeps paths, flags and identifiers.
@@ -106,11 +107,11 @@ Modes
 ## 7. Data model and where the decision lives
 
 - **KotobaCore** (pure, test-first), next to the pipeline settings:
-  - `AppMode` and `CleanupPrompt` as in section 2.
-  - `ModeRules { modes, appModes: [bundleID: AppMode.ID], defaultMode }` with `func mode(for app: DictationApp?) -> AppMode`. A value in `DictationPipeline.Settings`, replaced by a setter like `settings.dictionary` (`DictationPipeline.swift:154`).
+  - `AppMode` and `ModeRules` as in section 2 (`KotobaCore/Sources/KotobaCore/AppMode.swift`).
+  - `ModeRules` with `mode(for:)` and `output(for:isCleanupChord:)`: a value in `DictationPipeline.Settings`, replaced by `updateModes(_:)` like `updateDictionary(_:)`.
   - The pipeline resolves at key-down (warm-up, pill) and at stop (decides). A dictation cleans when `isCleanupSeen || mode.cleansEveryDictation`.
-  - `TextCleaner.clean(_:vocabulary:prompt:)` gets the prompt; `OpenRouterCleaner` picks the system prompt by it.
-  - The record keeps the prompt (`cleanup_prompt` column, nil for a raw dictation) so retries and History use it.
+  - `TextCleaner.clean(_:vocabulary:mode:)` gets the mode; `OpenRouterCleaner` picks the system prompt by it.
+  - The record keeps the mode (`DictationOutput.cleanup(AppMode)`; `cleanup_mode` column, nil for a raw dictation and for cleanup rows from before modes, which read as Code) so retries use it.
 - **Naming clash:** `DictationMode` (`.transcript`, `.cleanup`, `PipelineInterface.swift`) already uses the word "mode", and the history has a `mode` column. One word per concept (CODING_STANDARDS "Naming") needs a rename of the enum (for example `DictationOutput`); the column can keep its name. See question 4.
 - **App**: `ModeRules` saved in UserDefaults as JSON, the Modes pane model, the `+` menu.
 - **Tests** (`KotobaCore/Tests/KotobaCoreTests/PipelineModeTests.swift`, through the seam, hotkey events in and fakes out):
@@ -125,7 +126,7 @@ Modes
 ## 8. What the pill shows
 
 - Today the pill does not show cleanup at all (`App/StatusText.swift` has only "Pasted without cleanup").
-- v1: a `wand.and.sparkles` symbol on the recording and transcribing pill when this dictation will be cleaned (from key-down for a mode that cleans every dictation, from the chord moment otherwise). If the stop changes the mode, the transcribing pill shows the final choice.
+- v1 (built): a `wand.and.sparkles` symbol in place of the dot on the recording pill when this dictation will be cleaned (from key-down for a mode that cleans every dictation, from the chord moment otherwise), and a new `DictationState.cleaning` ("Cleaning up", the wand and a spinner) while the cleaner works. So the stop's final choice shows when the cleanup starts, and the owner sees where the extra second goes.
 - No mode name in the pill: a raw dictation looks as today, and the symbol tells the one fact the user acts on (expect a short wait, and words that may change). The menu's status line stays as today.
 
 ## 9. v1 scope
@@ -139,7 +140,16 @@ In:
 
 Later, in order of value: custom instructions per mode; Paste Raw (already in the build-now list); website rules for browsers; language per mode (after languages); speech model per mode; more than two modes.
 
-## Unresolved questions
+## Lead decisions (2026-10-16)
+
+1. Writing does not clean every dictation by default.
+2. The app in front at the stop decides the mode (the same rule as submit's Return).
+3. The Writing prompt benchmark is a paid run and waits for the owner's named go; Writing is built now (`bench/cleanup.ts` `writingSystemPrompt`, copied word for word into `OpenRouterCleaner.writingPrompt`), and the release waits for that benchmark.
+4. `DictationMode` is renamed `DictationOutput`, so "mode" means only the per-app mode.
+5. Website rules: later, not v1.
+6. `make latency` reads the kotoba DB: it needs the owner's go.
+
+## Unresolved questions (phase A)
 
 1. Should Writing clean every dictation by default? The spec says chat apps "get prose", but that costs about 1.6 s on each Slack message, and Slack had 15 dictations in 5 months. Recommendation: off; the chord does it.
 2. Is the stop the right moment, with key-down as preview only? The alternative (key-down decides, as in Superwhisper and VoiceInk) is simpler to explain but pastes into Slack with the terminal prompt when the owner clicks away after the tap.

@@ -20,8 +20,12 @@ public enum DictationState: Sendable, Equatable {
     case idle
     /// `isLong` turns on after `Settings.longRecordingWarning`; recording never stops on its own.
     /// `isSilent` is on while the mic gives no sound (`NoSoundPolicy`); it clears when sound arrives.
-    case recording(isLong: Bool, isSilent: Bool = false)
+    /// `isCleaned`: the dictation will be cleaned up, by the cleanup chord or by the mode of the app in front at
+    /// key-down; the app in front at the stop decides in the end.
+    case recording(isLong: Bool, isSilent: Bool = false, isCleaned: Bool = false)
     case transcribing
+    /// The transcript is with the cleaner (LLM cleanup, 1.6 s p50 in kotoba-bench-v1); the paste follows.
+    case cleaning
     /// Esc cancelled the recording and the mic is off. Undo (or a chord tap) resumes it until
     /// `Settings.undoWindow` passes; then the cancel is final.
     case undoable
@@ -122,6 +126,8 @@ extension DictationPipeline {
         public var isSubmitPhraseOn: Bool
         /// How long a transcribed dictation keeps its audio.
         public var audioRetention: AudioRetention
+        /// The per-app modes: how the app in front at the stop has its dictations cleaned up.
+        public var modes: ModeRules
 
         /// The request for one recording, with the language and dictionary from these settings.
         func request(for audio: RecordedAudio) -> TranscriptionRequest {
@@ -140,7 +146,8 @@ extension DictationPipeline {
             chordReleaseWait: Duration = .seconds(2),
             undoWindow: Duration = .seconds(5),
             isSubmitPhraseOn: Bool = true,
-            audioRetention: AudioRetention = .standard
+            audioRetention: AudioRetention = .standard,
+            modes: ModeRules = ModeRules()
         ) {
             self.audioDirectory = audioDirectory
             self.language = language
@@ -153,6 +160,7 @@ extension DictationPipeline {
             self.undoWindow = undoWindow
             self.isSubmitPhraseOn = isSubmitPhraseOn
             self.audioRetention = audioRetention
+            self.modes = modes
         }
     }
 }
@@ -229,11 +237,17 @@ public struct RetrySelection: Sendable, Equatable {
     }
 }
 
-/// What a dictation does with its transcript, decided when the dictation is announced (tap release
-/// or hold threshold): cleanup if the cleanup modifier was down at any moment before.
-public enum DictationMode: String, Sendable, Equatable {
+/// What a dictation does with its transcript, decided at the stop (`ModeRules.output(for:isCleanupChord:)`): cleanup in
+/// the mode of the app in front then, when the cleanup modifier was down before the announcement (tap release or hold
+/// threshold) or that mode cleans every dictation.
+public enum DictationOutput: Sendable, Equatable {
     /// Paste the transcript (after dictionary replacements).
     case transcript
-    /// Clean the transcript with `TextCleaner` first; paste the raw transcript if that fails.
-    case cleanup
+    /// Clean the transcript with `TextCleaner` in this mode first; paste the raw transcript if that fails.
+    case cleanup(AppMode)
+
+    /// The mode the cleaner writes in; nil for a plain transcript.
+    public var cleanupMode: AppMode? {
+        if case .cleanup(let mode) = self { mode } else { nil }
+    }
 }

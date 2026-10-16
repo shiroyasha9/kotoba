@@ -128,4 +128,22 @@ struct HistoryMigrationTests {
         #expect(FileManager.default.fileExists(atPath: files.failed.path))
         #expect(try await store.pendingRetries().map(\.audio.file) == [files.failed])
     }
+
+    /// Per-app modes add `cleanup_mode`: a cleanup dictation from before them was cleaned with the Code prompt, and a
+    /// retry cleans it the same way.
+    @Test(arguments: [("v0.1.0", v010), ("9d69db8", usageBuild)])
+    func aShippedCleanupDictationReadsAsACodeCleanup(build: String, shape: String) async throws {
+        let database = try SQLiteDatabase(url: url)
+        try database.execute(shape)
+        try database.run(
+            """
+            INSERT INTO dictations (id, created_at, audio_path, audio_duration_ms, transcript, status, mode)
+            VALUES (?1, ?2, '/tmp/a.flac', 1000, NULL, 'failed', 'cleanup');
+            """,
+            [.text(UUID().uuidString), .real(Self.now.timeIntervalSince1970)])
+
+        let store = try HistoryStore(url: url, audio: audio)
+
+        #expect(try await store.pendingRetries().map(\.output) == [.cleanup(.code)], "\(build)")
+    }
 }

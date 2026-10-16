@@ -14,6 +14,7 @@ enum AppDefaults {
         case indicatorAnchor = "indicator.anchor"
         case indicatorVisibility = "indicator.visibility"
         case audioRetention = "history.audioRetention"
+        case modes = "modes.rules"
     }
 
     /// The values a setting has until the owner changes it, registered once at launch (`main.swift`) before anything
@@ -53,6 +54,27 @@ enum AppDefaults {
     /// Not `integer(forKey:)`: its 0 for a missing value is `.forever`.
     private static var storedAudioRetention: AudioRetention? {
         (UserDefaults.standard.object(forKey: Key.audioRetention.rawValue) as? Int).flatMap(AudioRetention.init)
+    }
+
+    /// The per-app modes (story 29) as JSON. A new install gets `ModeRules.standard`; so does a value this build cannot
+    /// read, with a log line, so a bad value never stops a dictation.
+    static var modeRules: ModeRules {
+        get {
+            guard let data = UserDefaults.standard.data(forKey: Key.modes.rawValue) else { return .standard }
+            do {
+                return try JSONDecoder().decode(ModeRules.self, from: data)
+            } catch {
+                Log.app.error("Cannot read the modes, using the standard ones: \(error)")
+                return .standard
+            }
+        }
+        set {
+            do {
+                UserDefaults.standard.set(try JSONEncoder().encode(newValue), forKey: Key.modes.rawValue)
+            } catch {
+                Log.app.error("Cannot save the modes: \(error)")
+            }
+        }
     }
 
     /// Stores the period of an install that has none yet, before any retention runs: Forever when the history already

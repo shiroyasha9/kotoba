@@ -449,6 +449,25 @@ Follow-ups (audio retention):
 
 - Audio files with no row (a crash or force quit during a recording, a failed save at the stop, a failed delete) are never counted, kept by retention or removed by **Delete Audio Now…**. They are unsaved dictations, so the fix is crash recovery (adopt them as queued dictations), not deletion.
 
+### Per-app modes (phase 3)
+
+The Writing prompt waits for its benchmark (docs/research/per-app-modes.md, question 3); rows 340-341 check the wiring, not its quality.
+
+| # | Do this | Expect | Result |
+|---|---|---|---|
+| 336 | Open Settings > **Modes** on a fresh install | **Clean Up Every Dictation**: both toggles off. **Apps** lists the installed apps of the standard lists with their icons (for example Terminal in Code, Mail, Messages and Notes in Writing); **Other apps** is Code | |
+| 337 | Click **+** | **Recent Apps** lists apps you dictated into in the last 30 days that are not in the list (never kotoba), then **Choose App…** | |
+| 338 | **+** > **Choose App…**, pick an app in /Applications (for example TextEdit) | It joins the list as Writing (other apps are Code); quit and reopen kotoba: it is still there | |
+| 339 | Select a row, click **−** (also try right-click > **Remove from List** and the Delete key) | The row goes; that app now uses **Other apps** | |
+| 340 | Dictate in Terminal with the cleanup chord, then in Notes with the cleanup chord | Terminal gets a clean prompt with paths and flags kept; Notes gets prose. History shows the cleaned text for both | |
+| 341 | Turn on **Writing apps**; tap the plain chord in Notes and dictate | The recording pill shows the wand symbol in place of the dot (help tag: “kotoba cleans up this dictation before it pastes.”); after the stop the pill says “Transcribing”, then “Cleaning up” with the wand, then the cleaned text pastes | |
+| 342 | With **Writing apps** on, tap the chord in Terminal, click into Notes, speak, tap to stop | The pill shows no wand while recording (Terminal is Code), but the text pasted in Notes is cleaned: the app in front at the stop decides | |
+| 343 | With **Writing apps** on, tap the chord in Notes, click into Terminal, speak, tap to stop | The raw transcript pastes in Terminal, with no “Cleaning up” | |
+| 344 | With **Writing apps** on, turn Wi-Fi off, dictate in Notes; switch to Terminal; turn Wi-Fi on so the dictation is recovered | The recovered text is cleaned as prose (the mode of the stop, not of the app in front now) | |
+| 345 | Turn **Writing apps** off; dictate in Notes with a plain tap | Raw transcript, about as fast as before; no wand, no “Cleaning up” | |
+| 346 | Set **Other apps** to Writing; dictate with the cleanup chord in Ghostty or Terminal | Still a Code cleanup (terminals stay in Code); in an app not in the list (for example TextEdit removed in row 339) the cleanup is prose | |
+| 347 | Change a mode in Settings and at once dictate | The next dictation uses the new setting | |
+
 ## Known offscreen-only doubts
 
 The offscreen snapshots (`make snapshots`) show two things that may not happen in the real app. Check them on screen:

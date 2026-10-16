@@ -15,6 +15,8 @@ enum StatusText {
     static let historyUnavailable = "History unavailable. Quit and reopen kotoba."
     /// The idle pill's help tag ("Show indicator: Always").
     static let idlePillHelp = "Click to start dictating"
+    /// The help tag of a recording pill whose dictation will be cleaned up (the cleanup chord, or the app's mode).
+    static let cleanupHelp = "kotoba cleans up this dictation before it pastes."
 
     /// The recording pill while the mic gives no sound. It leaves out the mic's name to fit next to the button; the
     /// menu's Microphone item and the pill's help tag name it.
@@ -90,10 +92,11 @@ extension DictationState {
     func statusText(_ context: StatusContext) -> String? {
         switch self {
         case .idle: nil
-        case .recording(_, isSilent: true): StatusText.noSound
-        case .recording(isLong: true, _): "Still listening · \(context.longRecordingMinutes) min"
+        case .recording(_, isSilent: true, _): StatusText.noSound
+        case .recording(isLong: true, _, _): "Still listening · \(context.longRecordingMinutes) min"
         case .recording: context.isSecureInputOn ? "Listening · Secure Input on" : "Listening"
         case .transcribing: "Transcribing"
+        case .cleaning: "Cleaning up"
         case .undoable: "Cancelled"
         default: outcomeText(context)
         }
@@ -111,7 +114,7 @@ extension DictationState {
         case .recovered: "Saved dictation recovered"
         case .copied: "Copied. Press ⌘V to paste."
         case .captureFailed: context.microphone == .denied ? "Microphone access is off" : "No microphone found"
-        case .idle, .recording, .transcribing, .undoable: nil
+        case .idle, .recording, .transcribing, .cleaning, .undoable: nil
         }
     }
 
@@ -119,7 +122,7 @@ extension DictationState {
     func pillAction(_ context: StatusContext) -> PillAction? {
         switch self {
         case .undoable: .undo
-        case .recording(_, isSilent: true): .chooseMicrophone
+        case .recording(_, isSilent: true, _): .chooseMicrophone
         case .failed: .retry
         case .needsSetup(_, .key): .addKey
         case .needsSetup(_, .endpoint): .openSpeechSettings
@@ -127,7 +130,7 @@ extension DictationState {
         case .recovered: .copy
         case .copied: context.isPasteAllowed ? nil : .allowPasting
         case .captureFailed: context.microphone == .denied ? .openMicrophoneSettings : nil
-        case .idle, .recording, .transcribing, .rejected, .cleanupFailed, .returnSkipped: nil
+        case .idle, .recording, .transcribing, .cleaning, .rejected, .cleanupFailed, .returnSkipped: nil
         }
     }
 

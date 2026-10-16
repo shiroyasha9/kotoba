@@ -8,6 +8,9 @@ extension DictationPipeline {
         let file = settings.audioDirectory.appending(path: "\(id.rawValue.uuidString).flac")
         // The connection warms while the engine starts.
         work.track { [provider = ports.provider] in await provider.warmUp() }
+        let modes = settings.modes
+        let cleansAtKeyDown = modes.cleansEveryDictation.contains(modes.mode(for: ports.frontApp()?.app))
+        let isCleanerWarm = cleansAtKeyDown && warmCleaner()
         if let captureEnd {
             _ = await captureEnd.value
         }
@@ -38,6 +41,8 @@ extension DictationPipeline {
             file: file,
             startedAt: now,
             isUndecided: isChordDown,
+            cleansAtKeyDown: cleansAtKeyDown,
+            isCleanerWarm: isCleanerWarm,
             captureEvents: captureEvents,
             warning: work.schedule(at: now + settings.longRecordingWarning) { await self.warnLong(id) },
             announcement: work.schedule(at: now + settings.tapThreshold) { [threshold = settings.tapThreshold] in
@@ -70,14 +75,17 @@ extension DictationPipeline {
         let isSilent = update(&sound)
         recording?.sound = sound
         armSoundDeadline(of: id)
-        guard recording?.isAnnounced == true, case .recording(let isLong, _) = state else { return }
-        emit(.recording(isLong: isLong, isSilent: isSilent))
+        guard recording?.isAnnounced == true, case .recording(let isLong, _, let isCleaned) = state else { return }
+        emit(.recording(isLong: isLong, isSilent: isSilent, isCleaned: isCleaned))
     }
 
     /// The recording is still live after `Settings.longRecordingWarning`; it never stops on its own.
     private func warnLong(_ id: DictationID) {
         if recording?.id == id {
-            emit(.recording(isLong: true, isSilent: recording?.sound.isWarning ?? false))
+            emit(
+                .recording(
+                    isLong: true, isSilent: recording?.sound.isWarning ?? false,
+                    isCleaned: recording?.isCleaned ?? false))
         }
     }
 
@@ -88,11 +96,18 @@ extension DictationPipeline {
         recording?.clipboard = takeClipboard()
         current.announcement.cancel()
         latencies.mark(.cue, of: id, at: instant)
-        emit(.recording(isLong: false, isSilent: current.sound.isWarning))
+        emit(.recording(isLong: false, isSilent: current.sound.isWarning, isCleaned: current.isCleaned))
     }
 
     private func takeClipboard() -> ClipboardGuard.Pending {
         Task { [clipboard, clock = ports.clock] in (snapshot: await clipboard.snapshot(), readyAt: clock.now) }
+    }
+
+    /// Opens the cleaner's connection as tracked work; false when there is no cleaner.
+    func warmCleaner() -> Bool {
+        guard let cleaner = ports.cleaner else { return false }
+        work.track { await cleaner.warmUp() }
+        return true
     }
 
     /// Clears the live recording and its timers.
@@ -106,6 +121,11 @@ extension DictationPipeline {
     func stop(_ current: Recording, at now: Instant) {
         var current = current
         current.frontAppAtStop = ports.frontApp()
+        current.output = settings.modes.output(for: current.frontAppAtStop?.app, isCleanupChord: current.isCleanupSeen)
+        // Warmed while the audio is sent, so the cleanup request finds the connection open.
+        if current.output != .transcript, !current.isCleanerWarm {
+            _ = warmCleaner()
+        }
         endRecording(current)
         latencies.mark(.stop, of: current.id, at: now)
         inFlight.insert(current.id)
@@ -146,8 +166,10 @@ extension DictationPipeline {
         var record = DictationRecord(
             id: current.id, createdAt: ports.clock.date, audio: audio, transcript: nil, status: status, latency: latency
         )
-        // Esc and quit come before any stop: the app in front now is where the text would have gone.
+        // Esc and quit come before any stop: the app in front now is where the text would have gone, and its mode is
+        // what a later retry cleans in.
         record.app = (current.frontAppAtStop ?? ports.frontApp())?.app
+        record.output = settings.modes.output(for: record.app, isCleanupChord: current.isCleanupSeen)
         await ports.store.saveOrLog(record)
     }
 
@@ -183,7 +205,7 @@ extension DictationPipeline {
         recording = resumed
         armSoundDeadline(of: resumed.id)
         latencies.mark(.resume, of: resumed.id, at: now)
-        emit(.recording(isLong: now - resumed.startedAt >= settings.longRecordingWarning))
+        emit(.recording(isLong: now - resumed.startedAt >= settings.longRecordingWarning, isCleaned: resumed.isCleaned))
     }
 
     /// No Undo in time: the cancel is final and the audio stays in history.

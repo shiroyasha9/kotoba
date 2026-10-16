@@ -335,7 +335,7 @@ final class EditLearner {
     func dictationStateChanged(_ state: DictationState) {
         isDictating =
             switch state {
-            case .recording, .transcribing, .undoable: true
+            case .recording, .transcribing, .cleaning, .undoable: true
             default: false
             }
         guard !isDictating, !waiting.isEmpty else { return }

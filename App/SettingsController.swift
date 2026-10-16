@@ -18,6 +18,10 @@ final class SettingsController {
     private(set) var dictionary: DictionaryModel?
     /// The history whose usage ledger the Usage pane sums; set once the database opens at launch.
     var history: HistoryStore?
+    /// Takes the Modes pane's changes; set once it is built at launch.
+    var pipeline: DictationPipeline?
+    /// The last change sent to the pipeline: each waits for the one before, so the pipeline gets them in order.
+    private var modesUpdate: Task<Void, Never>?
     /// The open window's Usage pane model, which reads again after each history write while it is shown.
     private weak var usage: UsageModel?
     /// The open window's General pane model; its History section measures the saved audio again the same way.
@@ -69,6 +73,7 @@ final class SettingsController {
         if let dictionary {
             panes.append(.dictionary(dictionary))
         }
+        panes.append(.modes(ModesModel(source: .live(history: history) { [weak self] in self?.send($0) })))
         let audio = audio
         panes.append(
             .microphones(
@@ -82,5 +87,13 @@ final class SettingsController {
             panes.append(.usage(usage))
         }
         return panes
+    }
+
+    private func send(_ modes: ModeRules) {
+        guard let pipeline else { return }
+        modesUpdate = Task { [previous = modesUpdate] in
+            await previous?.value
+            await pipeline.updateModes(modes)
+        }
     }
 }

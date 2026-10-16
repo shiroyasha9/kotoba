@@ -21,7 +21,7 @@ extension IndicatorPanel {
     static func snapshots() -> [Snapshot] {
         let id = DictationID()
         let samples: [DictationState] = [
-            .idle, .recording(isLong: false), .transcribing, .undoable, .failed(id), .rejected(id, .other),
+            .idle, .recording(isLong: false), .transcribing, .cleaning, .undoable, .failed(id), .rejected(id, .other),
             .needsSetup(id, .key), .cleanupFailed(id), .returnSkipped(id), .copied(id), .recovered(id), .captureFailed,
         ]
         var snapshots = [
@@ -71,6 +71,7 @@ extension IndicatorPanel {
                 SnapshotRow(
                     name: "recording-silent", state: .recording(isLong: false, isSilent: true), context: silent,
                     level: 0),
+                SnapshotRow(name: "recording-cleaned", state: .recording(isLong: false, isCleaned: true)),
             ]
         case .needsSetup(let id, _):
             [
@@ -96,7 +97,7 @@ extension IndicatorPanel {
                     name: "captureFailed-denied", state: state,
                     context: StatusContext(provider: .azure, microphone: .denied)),
             ]
-        case .transcribing, .undoable, .failed, .cleanupFailed, .returnSkipped, .recovered:
+        case .transcribing, .cleaning, .undoable, .failed, .cleanupFailed, .returnSkipped, .recovered:
             [SnapshotRow(name: snapshotName(of: state), state: state)]
         }
     }
@@ -105,6 +106,7 @@ extension IndicatorPanel {
     private static func snapshotName(of state: DictationState) -> String {
         switch state {
         case .transcribing: "transcribing"
+        case .cleaning: "cleaning"
         case .undoable: "undoable"
         case .failed: "failed"
         case .cleanupFailed: "cleanupFailed"

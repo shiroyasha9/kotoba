@@ -26,7 +26,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     /// Its audio retention is set once the history opens (`AppDefaults.chooseAudioRetention`).
     private var settings = DictationPipeline.Settings(
         audioDirectory: AppFiles.audio,
-        isSubmitPhraseOn: AppDefaults.isSubmitPhraseOn
+        isSubmitPhraseOn: AppDefaults.isSubmitPhraseOn,
+        modes: AppDefaults.modeRules
     )
     private lazy var indicator = IndicatorPanel()
     lazy var fixWindow = FixLastDictationController(
@@ -95,6 +96,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             settings: settings
         )
         self.pipeline = pipeline
+        settingsController.pipeline = pipeline
         lastDictation = LastDictation(store: store, pipeline: pipeline)
         history = HistoryController(store: store, pipeline: pipeline)
 
