@@ -51,6 +51,8 @@ public actor DictationPipeline {
     var isPrimerInFlight = false
     /// When the last route primer was sent: the route stays warm for about 45 s after it.
     var primedAt: Instant?
+    /// The dictation whose cold route gets the large primer once its silent one answered.
+    var largePrimerDue: DictationID?
     /// When the route last answered: it wraps the provider port, so every request reports to it.
     let warmth: RouteWarmth
     let work: PendingWork

@@ -97,8 +97,10 @@ extension DictationPipeline {
         recording?.clipboard = takeClipboard()
         current.announcement.cancel()
         latencies.mark(.cue, of: id, at: instant)
-        // A route that answered nothing within the window is cold: only bytes warm the last part of it.
-        primeRoute(for: id, size: warmth.isWarm(within: settings.primerInterval) ? .silent : .large)
+        // A route that answered nothing within the window is cold: the silent primer goes first (it warms most of the
+        // route in about 2 s, so a short dictation gains), and the large one follows it, as only bytes warm the rest.
+        largePrimerDue = warmth.isWarm(within: settings.primerInterval) ? nil : id
+        primeRoute(for: id, size: .silent)
         emit(.recording(isLong: false, isSilent: current.sound.isWarning, isCleaned: current.isCleaned))
         await ports.readback?.dictationStarted()
     }
@@ -115,7 +117,7 @@ extension DictationPipeline {
         let language = settings.language
         work.track { [provider = ports.provider, store = ports.store, clock = ports.clock] in
             let primer = await provider.prime(language: language, size: size)
-            await self.primerFinished()
+            await self.primerFinished(isAnswered: primer != nil)
             guard let primer else { return }
             do {
                 try await store.addUsage([
@@ -138,11 +140,17 @@ extension DictationPipeline {
         }
     }
 
-    /// A primer that was still on its way at its recording's timer skipped that one; the next is armed here, unless
-    /// the route changed to one with no primer meanwhile.
-    private func primerFinished() {
+    /// On a cold route the large primer follows an answered silent one while its recording is live: a stop before
+    /// that (a short dictation) or a failed silent primer sends none. A primer that was still on its way at its
+    /// recording's timer skipped that one; the next is armed here, unless the route changed to one with no primer.
+    private func primerFinished(isAnswered: Bool) {
         isPrimerInFlight = false
-        if let id = recording?.id, ports.provider.hasPrimer { armPrimer(for: id) }
+        guard let id = recording?.id, ports.provider.hasPrimer else { return }
+        if isAnswered, largePrimerDue == id {
+            largePrimerDue = nil
+            primeRoute(for: id, size: .large)
+        }
+        armPrimer(for: id)
     }
 
     private func primerTimerFired(_ id: DictationID) {

@@ -85,6 +85,8 @@ type Job = {
 	pair?: string;
 	/** Seconds with no request before this one's round starts. */
 	idleBefore?: number;
+	/** Milliseconds after its round starts before this request goes, so two requests of a round overlap in time. */
+	delayMs?: number;
 };
 
 type Row = {
@@ -153,6 +155,7 @@ async function body(v: Variant, file: string): Promise<{ url: string; init: Requ
 
 /** One attempt, no retry: a retry would hide the latency the app sees. */
 async function send(job: Job): Promise<Row> {
+	if (job.delayMs) await Bun.sleep(job.delayMs);
 	const { url, init, bytes } = await body(job.variant, job.file);
 	const startedAt = new Date().toISOString();
 	const t0 = performance.now();
@@ -365,6 +368,36 @@ async function plan(): Promise<Job[][]> {
 					]),
 				),
 				// The clip itself as the primer: does a full-size body warm what the silent primer does not?
+				// A primer still on its way at the stop: a 3 s clip goes 2 s after the primer. Bun's fetch may open a second
+				// connection for it, where the app multiplexes both on one HTTP/2 connection: the app-like measure is the
+				// URLSession probe in `<runbooks>/2026-10-17-kotoba-latency/inflight/`.
+				...Object.fromEntries(
+					(
+						[
+							["inflight-large", join(out, "audio", "noise-1s-app.wav"), 1],
+							["inflight-silent", silence, 0.5],
+							["inflight-none", null, 0],
+						] as const
+					).map(([set, file, sec]) => [
+						set,
+						[
+							[
+								...(file
+									? [{ exp, variant: { ...APP, key: `${set}-primer`, phrases: false }, clipId: "primer", file, durationSec: sec, idleBefore: IDLE_SEC }]
+									: []),
+								{
+									exp,
+									variant: { ...APP, key: `${set}-clip` },
+									clipId: clip.clipId,
+									file: join(out, "audio", `${clip.clipId}.3s.flac`),
+									durationSec: 3,
+									idleBefore: IDLE_SEC,
+									delayMs: file ? 2000 : 0,
+								},
+							],
+						],
+					]),
+				),
 				clip10: [
 					[{ exp, variant: { ...APP, key: "clip10-primer", phrases: false }, clipId: clip.clipId, file: full, durationSec: clip.durationSec, idleBefore: IDLE_SEC }],
 					...clipRun("clip10", 10),
