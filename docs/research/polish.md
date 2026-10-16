@@ -1,6 +1,6 @@
 # Polish: model and prompt
 
-Status: bench, 2026-10-17 (03:24-04:30 IST). Agent `polish-bench`. Paid: USD 1.30 on OpenRouter (cap USD 1.50); 4 Codex pilot jobs (2.38 credits) before the judge moved to OpenRouter. Inputs: the owner's Wispr Flow Polish history (read-only copy of Wispr's database), the cleanup research (`cleanup-llms.md`, `cleanup-prompts.md`, `per-app-modes.md`) and the bench harness in `bench/`. Personal text, outputs and per-row scores stay in the runbooks folder `<runbooks>/2026-10-17-kotoba-polish/`; this file has the method, the prompt and aggregate numbers only.
+Status: bench, 2026-10-17 (03:24-04:30 IST). Agent `polish-bench`. Paid: USD 1.50 on OpenRouter (cap raised from USD 1.50 to 3.00 during the run); 4 Codex pilot jobs (2.38 credits) before the judge moved to OpenRouter. Inputs: the owner's Wispr Flow Polish history (read-only copy of Wispr's database), the cleanup research (`cleanup-llms.md`, `cleanup-prompts.md`, `per-app-modes.md`) and the bench harness in `bench/`. Personal text, outputs and per-row scores stay in the runbooks folder `<runbooks>/2026-10-17-kotoba-polish/`; this file has the method, the prompt and aggregate numbers only.
 
 ## Summary
 
@@ -8,8 +8,8 @@ Status: bench, 2026-10-17 (03:24-04:30 IST). Agent `polish-bench`. Paid: USD 1.3
 - **Fallback: Gemini 3.5 Flash-Lite with the same prompt** (Google, already kotoba's cleanup default): 87.6% kept, Wispr-level preservation, shorter output (0.68), p50 1.39 s, p90 1.91 s, USD 0.88 per 1,000.
 - The trade is length against loss. The fast models that cut most (gpt-oss-120b, Wispr's own model, at 0.49; Qwen 3.8 27B at 0.55) lose the most (75.6% and 81.7% kept). gpt-oss also writes non-ASCII hyphens (U+2011) in 62-84% of outputs, the same defect as 80% of Wispr's outputs, which breaks identifiers in a terminal.
 - DeepSeek without a host pin went to 11 hosts with total p50 from 1.0 s to 8.6 s per host (p90 8.6 s overall). Pin the host.
-- A length target in the prompt (v3) made every model lose more; two examples (v2) helped Gemini most (83.7% to 91.2% kept on the dev inputs).
-- Limits: one sample per (model, input); 40 test inputs and 12 judged dev inputs, not all 105; one judge model (GPT-6 Luna). See unresolved questions.
+- A length target in the prompt (v3) made 3 of 4 models lose more; two examples (v2) helped Gemini most (82.4% to 90.5% kept on the 25 dev inputs).
+- Limits: one sample per (model, input); 40 of the 80 test inputs; one judge model (GPT-6 Luna). See unresolved questions.
 
 ## 1. What Polish is
 
@@ -21,7 +21,7 @@ Status: bench, 2026-10-17 (03:24-04:30 IST). Agent `polish-bench`. Paid: USD 1.3
 
 - All 105 Polish rows with `status = 'succeeded'` (3 `error`, 2 `short_text` and 1 `timeout` rows have no output). All 105 inputs are distinct. Input: median 234 words, mean 281, range 35-924. 50 inputs hold Wispr's list HTML (`<ul>`, `<ol>`, `<li>`); the bench turns it into "- " and "1. " lines, because kotoba's input is plain text.
 - Split by a hash of the row id: 25 dev inputs pick the prompt, 80 test inputs rank the models. The test numbers are the honest ones.
-- Cut to fit the USD 1.50 cap (the paid judge costs about USD 0.001 per verdict): the prompt choice is judged on the first 12 dev inputs; the models run and are judged on a test sample of 40, 10 from each input-length quartile (35-924 words). Code-side metrics on the dev set cover all 25.
+- Cut to fit the cap (the paid judge costs about USD 0.001 per verdict): the prompt choice is judged on all 25 dev inputs; the models run and are judged on a test sample of 40 of the 80 test inputs, 10 from each input-length quartile (35-924 words).
 - The input is the text the owner sent to Polish, so it is Wispr's transcript after Wispr's own cleanup, with the speech-to-text errors left in it (for example a framework name heard as other words). That is the real case for kotoba too: Polish runs on a dictation that is already pasted.
 - No vocabulary block: these inputs have no kotoba dictionary match data, and Polish runs on text, not audio.
 
@@ -34,7 +34,7 @@ Four signals per output. Wispr's own output gets the same scores, as a reference
 3. **Concision.** Output words over input words, median per variant.
 4. **Added content and answering (judge).** Statements, requests, names or steps that the input does not support; and whether the output answers or does the task instead of rewriting it. The judge also gives a 1-5 clarity score (how easy the output is for a coding agent to act on).
 
-Judge: OpenAI GPT-6 Luna at medium reasoning through OpenRouter, zero-data-retention endpoints (Azure), JSON schema output. It is not a candidate, so no model grades its own rewrites. A first pilot with Claude Haiku 5.5 as judge "corrected" speech-to-text names in its checklists (for example a misheard package name written as the real one), so a rewrite that guessed the same name looked faithful; the checklist brief now says to copy every name as the text spells it. The judge is one model, one sample per output: read differences of a few points as noise.
+Judge: OpenAI GPT-6 Luna at medium reasoning through OpenRouter, zero-data-retention endpoints (Azure), JSON schema output. It is not a candidate, so no model grades its own rewrites. A first pilot with Claude Haiku 5.5 as judge "corrected" speech-to-text names in its checklists (for example a misheard package name written as the real one), so a rewrite that guessed the same name looked faithful; the checklist brief now says to copy every name as the text spells it. Check against the Codex pilot (checklist by GPT-6.1 Sol, verdicts by GPT-6 Luna in Codex) on the one input both scored: both judges flag the same gpt-oss losses (a deferred decision, a stated doubt, the final summary; Codex 4 lost, 1 weakened, 1 changed; OpenRouter 3 lost, 4 weakened). The Codex verdict passed every Haiku item; the OpenRouter judge flagged one changed name in the Haiku output (a misheard package name replaced by a guessed one), which the rubric counts as changed. The judge is one model, one sample per output: read differences of a few points as noise.
 
 Judge rubric (the full briefs and JSON schemas are in the runbooks folder, `judge/`):
 
@@ -109,25 +109,25 @@ Request settings (OpenRouter `POST /chat/completions`, streaming, `provider.zdr:
 
 ### 5.1 Prompt choice (dev)
 
-Judge columns on the first 12 dev inputs; code columns on all 25. Latency from the concurrent pass (4 in flight).
+All 25 dev inputs, judged. Latency from the concurrent pass (4 in flight).
 
 | Model | Prompt | Items kept | Rows that lose an item | Lost items per row | Rows with added content | Word ratio p50 | Code tokens kept |
 | --- | --- | --- | --- | --- | --- | --- | --- |
-| Gemini 3.5 Flash-Lite | v1 | 83.7% | 66.7% | 2.00 | 41.7% | 0.54 | 95.3% |
-| | **v2** | **91.2%** | 66.7% | 1.33 | **16.7%** | 0.69 | **98.1%** |
-| | v3 | 85.1% | 66.7% | 1.75 | 25.0% | 0.60 | 96.2% |
-| Qwen 3.8 27B (Cerebras) | v1 | 85.4% | 66.7% | 2.58 | 41.7% | 0.56 | 93.4% |
-| | v2 | 83.4% | 75.0% | 2.33 | 25.0% | 0.54 | 92.5% |
-| | v3 | 82.6% | 75.0% | 2.75 | 33.3% | 0.49 | 91.5% |
-| gpt-oss-120b (Cerebras) | v1 | 82.6% | 66.7% | 2.50 | 41.7% | 0.57 | 90.6% |
-| | v2 | 76.0% | 75.0% | 4.00 | 33.3% | 0.46 | 90.6% |
-| | v3 | 77.6% | 75.0% | 3.67 | 58.3% | 0.49 | 91.5% |
-| Claude Haiku 5.5 | v1 | 95.6% | 58.3% | 0.92 | 41.7% | 0.85 | 92.5% |
-| | v2 | 94.8% | 58.3% | 1.08 | 41.7% | 0.83 | 92.5% |
-| | v3 | 92.0% | 66.7% | 1.75 | 66.7% | 0.74 | 92.5% |
-| Wispr Flow (reference) | | 83.1% | 58.3% | 2.00 | 58.3% | 0.69 | 89.6% |
+| Gemini 3.5 Flash-Lite | v1 | 82.4% | 64.0% | 2.24 | 44.0% | 0.54 | 95.3% |
+| | **v2** | **90.5%** | **48.0%** | **1.00** | **24.0%** | 0.69 | **98.1%** |
+| | v3 | 86.9% | 60.0% | 1.40 | 24.0% | 0.60 | 96.2% |
+| Qwen 3.8 27B (Cerebras) | v1 | 84.2% | 68.0% | 2.24 | 48.0% | 0.56 | 93.4% |
+| | v2 | 83.1% | 72.0% | 2.20 | 32.0% | 0.54 | 92.5% |
+| | v3 | 81.0% | 68.0% | 2.60 | 32.0% | 0.49 | 91.5% |
+| gpt-oss-120b (Cerebras) | v1 | 83.1% | 68.0% | 2.32 | 32.0% | 0.57 | 90.6% |
+| | v2 | 77.9% | 72.0% | 3.32 | 44.0% | 0.46 | 90.6% |
+| | v3 | 78.6% | 80.0% | 3.12 | 60.0% | 0.49 | 91.5% |
+| Claude Haiku 5.5 | v1 | 94.5% | 44.0% | 0.76 | 48.0% | 0.85 | 92.5% |
+| | v2 | 93.2% | 52.0% | 1.04 | 44.0% | 0.83 | 92.5% |
+| | v3 | 92.8% | 48.0% | 1.28 | 64.0% | 0.74 | 92.5% |
+| Wispr Flow (reference) | | 84.3% | 60.0% | 1.56 | 56.0% | 0.69 | 89.6% |
 
-v2 was picked: the largest gain (Gemini), the fewest rows with added content on 3 of 4 models, and v1 and v2 within noise on the others at n = 12. v3's length target cost preservation on every model. No output on any prompt answered the text or did the task.
+v2 was picked: the largest gain (Gemini: 82.4% to 90.5% kept, lost items per row 2.24 to 1.00), fewer or equal rows with added content on 3 of 4 models, and v1 within noise of v2 on Qwen and Haiku. On gpt-oss, v1 keeps more than v2, but gpt-oss is out on quality either way. v3's length target cost preservation on 3 of 4 models. One Haiku v2 output answered the text (judge flag); no other dev output did.
 
 ### 5.2 Models (test sample, prompt v2)
 
@@ -192,7 +192,7 @@ bun polish/run.ts --only report     # results/report.md, from the raw files only
 
 ## Unresolved questions
 
-1. Full Codex judge run for the owner's go: checklists on GPT-6.1 Sol and verdicts on GPT-6 Luna for all 105 inputs and every variant, about 170 Codex credits, about 30 min. It would replace the 40-input sample and give a second judge. The 4 pilot jobs (2.38 credits) agreed with the OpenRouter judge on the two inputs they covered.
+1. Full Codex judge run for the owner's go: checklists on GPT-6.1 Sol and verdicts on GPT-6 Luna for all 105 inputs and every variant, about 170 Codex credits, about 30 min. It would cover all 80 test inputs and give a second judge. The 4 pilot jobs (2.38 credits) agreed in direction with the OpenRouter judge on the input they both scored.
 2. Variance: each (model, input) ran once. Is DeepSeek's lead over Gemini stable over 3-5 samples? DeepSeek at `temperature: 0` and Gemini (which ignores temperature) can both vary.
 3. Does the owner want DeepSeek's length (0.78 of the input) or Gemini's (0.68, closer to Wispr's 0.69)? The bench says "keeps more" against "cuts more"; only the owner can weigh it.
 4. Together is one host. Should kotoba send `provider.order` with two or three fast DeepSeek hosts (Together, PrimeIntellect, Relace) and fallbacks on, instead of `only`? Not measured.

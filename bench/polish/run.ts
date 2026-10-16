@@ -11,7 +11,7 @@ import { writeReport } from "./report.ts";
 import { htmlToText, split, stratified, wordCount } from "./score.ts";
 
 /** Hard stop over every raw file of this bench (generation and any paid judge), across runs. */
-export const COST_CAP_USD = 1.5;
+export const COST_CAP_USD = 3;
 /** Inputs that pick the prompt; the rest are the test set. */
 export const DEV_SIZE = 25;
 /** Test inputs that were generated and judged (inside the USD cap): an equal share per input-length quartile. */
