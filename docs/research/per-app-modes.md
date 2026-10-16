@@ -154,7 +154,7 @@ Later, in order of value: custom instructions per mode; Paste Raw (already in th
 1. A cleanup has a 5 s deadline on the pipeline clock (`Settings.cleanupDeadline`, about 2x the 2.3 s p90). Past it the raw text pastes and the pill says "Cleanup too slow: pasted as spoken"; the late answer is dropped and its cost goes to the ledger (`Store.addUsage`).
 2. `ModeRules` decodes tolerantly: a missing field takes its default, and an unknown mode (from a later build) drops only its own entry.
 3. Esc keeps the app and the mode of the Esc.
-4. The bench runs the Writing prompt (`bun run bench --only cleanup --prompt writing`: 28 clips from Writing apps in kotoba-bench-v1, 84 calls, about $0.03); `docs/release.md` holds the release gate.
+4. The bench runs the Writing prompt (`bun run bench --only cleanup --prompt writing`: 4 clips from the standard Writing apps in kotoba-bench-v1 (browsers stay in Code), 12 calls, under $0.01); `docs/release.md` holds the release gate.
 5. The Modes pane says when cleanup has no OpenRouter key, with "Add Key…", and looks up apps only when it shows (3-9 ms for the standard lists, measured).
 6. The app saves only the owner's changes to `ModeRules.standard` (`ModeChanges`: added or moved apps, removed standard apps, other apps, the toggles), so apps a later build adds to the standard lists reach owners who edited the list too (lead decision).
 

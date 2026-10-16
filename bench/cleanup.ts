@@ -77,8 +77,8 @@ export function variantKey(model: string, prompt: CleanupPrompt): string {
 }
 
 /**
- * Where a Writing run's clips were dictated: the Writing apps of kotoba's `ModeRules.standard` (chat, mail, notes),
- * plus browsers, where messages and mail are written in web apps.
+ * Where a Writing run's clips were dictated: the Writing apps of kotoba's `ModeRules.standard` (chat, mail, notes).
+ * Browsers are not here: the standard rules keep them in Code.
  */
 export const WRITING_APPS = new Set([
 	"com.tinyspeck.slackmacgap",
@@ -92,14 +92,6 @@ export const WRITING_APPS = new Set([
 	"com.superhuman.electron",
 	"com.apple.Notes",
 	"notion.id",
-	"com.apple.Safari",
-	"com.google.Chrome",
-	"org.mozilla.firefox",
-	"com.brave.Browser",
-	"company.thebrowser.Browser",
-	"company.thebrowser.dia",
-	"app.zen-browser.zen",
-	"net.imput.helium",
 ]);
 
 /** The clips a Writing run cleans: dictated into a Writing app, with a reference to score against. */

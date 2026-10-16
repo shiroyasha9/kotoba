@@ -24,9 +24,10 @@ describe("writing run", () => {
 	const clip = (id: string, app: string | null, reference = "some words"): Clip =>
 		({ id, app, reference }) as unknown as Clip;
 
-	test("takes only clips dictated into chat, mail, notes and browsers", () => {
+	test("takes only clips dictated into the standard Writing apps (chat, mail, notes)", () => {
 		const clips = [
 			clip("slack", "com.tinyspeck.slackmacgap"),
+			clip("notes", "com.apple.Notes"),
 			clip("browser", "company.thebrowser.dia"),
 			clip("terminal", "com.mitchellh.ghostty"),
 			clip("editor", "com.todesktop.230313mzl4w4u92"),
@@ -34,7 +35,7 @@ describe("writing run", () => {
 			clip("empty", "com.apple.Notes", " "),
 		];
 
-		expect(writingClips(clips).map((c) => c.id)).toEqual(["slack", "browser"]);
+		expect(writingClips(clips).map((c) => c.id)).toEqual(["slack", "notes"]);
 	});
 
 	test("a Writing row has its own variant, so it never counts as a Code row", () => {

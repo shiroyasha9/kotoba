@@ -154,12 +154,13 @@ extension HistoryStore {
         CREATE INDEX IF NOT EXISTS usage_ledger_time ON usage_ledger (time);
         """
 
-    /// Each entry once: a record saved again with the same entries adds nothing. Costs are whole billionths of a
-    /// dollar, so sums in SQLite are exact.
+    /// Billed answers with no row to write (`Store.addUsage`): a cleanup answer that came after its deadline.
     public func addUsage(_ entries: [UsageEntry]) throws {
         try database.transaction { () throws(SQLiteError) in try Self.addToLedger(entries, in: database) }
     }
 
+    /// Each entry once: a record saved again with the same entries adds nothing. Costs are whole billionths of a
+    /// dollar, so sums in SQLite are exact.
     static func addToLedger(_ entries: [UsageEntry], in database: SQLiteDatabase) throws(SQLiteError) {
         guard !entries.isEmpty else { return }
         let rows = Array(repeating: "(?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)", count: entries.count)
