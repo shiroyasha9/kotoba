@@ -25,7 +25,7 @@ extension DictationPipeline {
         let outcome = await delivery.deliver(
             job,
             beforePaste: {
-                await self.waitForChordRelease()
+                await self.waitForChordRelease(after: current.stoppingPress)
                 await self.takePasteTarget(for: current.id)
             },
             beforeCleanup: { await self.cleanupStarted(current.id) },
@@ -91,13 +91,21 @@ extension DictationPipeline {
         }
     }
 
-    /// A Cmd-V posted while the chord is held reaches the app as Ctrl+Opt+Cmd+V. A release that never comes holds
-    /// the paste only for `Settings.chordReleaseWait`.
-    private func waitForChordRelease() async {
-        guard isChordDown else { return }
-        let bound = work.schedule(at: ports.clock.now + settings.chordReleaseWait) { await self.endReleaseWait() }
-        await withCheckedContinuation { releaseWaiters.add($0) }
-        bound.cancel()
+    /// A Cmd-V posted while a chord is held reaches the app as Ctrl+Opt+Cmd+V, so the paste waits for every press to
+    /// end. Only the press that stopped this dictation (`stoppingPress`) can have lost its release: it holds the paste
+    /// for `Settings.chordReleaseWait` at most. A later press (the next push-to-talk hold) holds it until its release,
+    /// however long; a lost one is repaired at the next key event (`HotkeyMissedReleaseTests`).
+    private func waitForChordRelease(after stoppingPress: Int?) async {
+        while isChordDown {
+            let isStoppingPress = press == stoppingPress
+            let bound =
+                isStoppingPress
+                ? work.schedule(at: ports.clock.now + settings.chordReleaseWait) { await self.endReleaseWait() } : nil
+            await withCheckedContinuation { releaseWaiters.add($0) }
+            bound?.cancel()
+            // Still the stopping press after the wake: the bound passed, its release was lost.
+            if isStoppingPress, isChordDown, press == stoppingPress { return }
+        }
     }
 
     private func endReleaseWait() {

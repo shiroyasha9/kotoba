@@ -184,6 +184,7 @@ extension DictationPipeline {
     func stop(_ current: Recording, at now: Instant) {
         var current = current
         current.frontAppAtStop = ports.frontApp()
+        current.stoppingPress = isChordDown ? press : nil
         current.output = settings.modes.output(for: current.frontAppAtStop?.app, isCleanupChord: current.isCleanupSeen)
         // Warmed while the audio is sent, so the cleanup request finds the connection open.
         if current.output != .transcript, !current.isCleanerWarm {

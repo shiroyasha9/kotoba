@@ -183,9 +183,10 @@ extension DictationPipeline {
         public var minimumRecording: Duration
         /// Slow apps read the pasteboard late; restoring sooner can paste the old clipboard.
         public var restoreDelay: Duration
-        /// The longest a paste waits for the chord's release (a Cmd-V with the chord held reaches the app as
-        /// ⌃⌥⌘V). A release after a stop tap comes within `tapThreshold`; the tap repairs a lost release only at the
-        /// next key event, which does not come while the owner waits for the text, so the wait needs its own bound.
+        /// The longest a paste waits for the release of the press that stopped the dictation (a Cmd-V with the chord
+        /// held reaches the app as ⌃⌥⌘V). A release after a stop tap comes within `tapThreshold`; the tap repairs a
+        /// lost release only at the next key event, which does not come while the owner waits for the text, so the
+        /// wait needs its own bound. A later press (the next dictation's) holds the paste until its release.
         public var chordReleaseWait: Duration
         /// How long Undo can resume a recording after Esc.
         public var undoWindow: Duration

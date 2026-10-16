@@ -31,6 +31,8 @@ public actor DictationPipeline {
     /// Set while Esc's Undo window is open.
     var paused: UndoWindow<Recording>?
     var isChordDown = false
+    /// Counts chord presses: the number of the press that is down now, or of the last one.
+    var press = 0
     /// The release of the last push-to-talk tap, if it was dropped and no chord was pressed since: a push-to-talk press
     /// soon after it is a double tap (`Settings.doubleTapGap`).
     var droppedTapEnd: Instant?

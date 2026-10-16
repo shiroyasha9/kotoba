@@ -40,4 +40,36 @@ struct PipelineChordReleaseTests {
 
         #expect(await world.paster.pasted == ["held"])
     }
+
+    /// A push-to-talk hold for the next dictation is a new press: the bound is only for the press that stopped this
+    /// one, so the paste waits for the new press's release however long it is held (a Cmd-V before it would reach
+    /// the app as ⌃⌥⌘V and paste nothing).
+    @Test func aNewPressHoldsThePasteUntilItsReleaseWithNoBound() async {
+        let world = FakeWorld(transcript: "first")
+        let pipeline = world.makePipeline()
+        let gate = Gate()
+        await world.provider.hold(at: gate)
+        await pipeline.tap(world)
+        world.clock.advance(by: .seconds(1))
+        await pipeline.tap(world)
+        #expect(await eventually { await gate.hasWaiters })
+
+        // The next dictation: a push-to-talk hold while the first one is still being transcribed.
+        await pipeline.handle(.chordDown(.tapOrHold))
+        await gate.open()
+        let pastedAtOnce = await eventually { await world.paster.pasteCount > 0 }
+        for _ in 0..<5 {
+            world.clock.advance(by: .seconds(1))
+            _ = await eventually { await world.paster.pasteCount > 0 }
+        }
+        let pastedWhileHeld = await world.paster.pasteCount
+
+        await world.provider.hear("second")
+        await pipeline.handle(.chordUp)
+        await pipeline.settle()
+
+        #expect(pastedAtOnce == false)
+        #expect(pastedWhileHeld == 0)
+        #expect(await world.paster.pasted == ["first", "second"])
+    }
 }

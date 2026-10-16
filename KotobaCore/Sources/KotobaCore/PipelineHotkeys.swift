@@ -7,6 +7,7 @@ extension DictationPipeline {
     /// mic on. In the Undo window a press waits for its release (`UndoWindow`).
     func chordDown(_ gesture: ChordGesture, at now: Instant) async {
         isChordDown = true
+        press += 1
         let tapEnd = droppedTapEnd
         droppedTapEnd = nil
         if paused != nil {

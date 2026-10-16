@@ -36,6 +36,8 @@ extension DictationPipeline {
         var frontAppAtStop: FrontApp?
         /// What the dictation does with its transcript, decided at the stop.
         var output = DictationOutput.transcript
+        /// The press that stopped it, while that press was down at the stop (a stop tap); nil for a stop at a release.
+        var stoppingPress: Int?
 
         /// The pill marks the dictation as one that will be cleaned up.
         var isCleaned: Bool { isCleanupSeen || cleansAtKeyDown }
