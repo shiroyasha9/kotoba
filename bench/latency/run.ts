@@ -353,6 +353,8 @@ async function plan(): Promise<Job[][]> {
 						["noise1big", join(out, "audio", "noise-1s-48k.flac"), 1],
 						["noise1full", join(out, "audio", "noise-1s-48k-full.flac"), 1],
 						["noise1wav", join(out, "audio", "noise-1s-48k-s32.wav"), 1],
+						// The app's large primer (`OpenRouterPrimer.noiseWAV`), written by the same SplitMix64 steps.
+						["appwav", join(out, "audio", "noise-1s-app.wav"), 1],
 						["speech3", join(out, "audio", `${clip.clipId}.3s.flac`), 3],
 					].map(([set, file, sec]) => [
 						set as string,

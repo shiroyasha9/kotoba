@@ -94,7 +94,8 @@ public enum DictationState: Sendable, Equatable {
 extension DictationPipeline {
     public struct Ports: Sendable {
         public let audio: any AudioSource
-        public let provider: any TranscriptionProvider
+        /// The pipeline wraps it so it knows when the route last answered (`RouteWarmth`).
+        public internal(set) var provider: any TranscriptionProvider
         public let paster: any Paster
         public let pasteboard: any Pasteboard
         public let clock: any PipelineClock

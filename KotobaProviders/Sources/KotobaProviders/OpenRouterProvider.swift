@@ -10,8 +10,10 @@ final class OpenRouterProvider: RouteClient {
         return url
     }()
 
-    private let connection: ProviderConnection
-    private let baseURL: URL
+    let connection: ProviderConnection
+    let baseURL: URL
+    /// The primers' request bodies (`OpenRouterPrimer.swift`).
+    let primerBodies = PrimerBodies()
 
     init(
         apiKey: any APIKeySource,
@@ -44,58 +46,26 @@ final class OpenRouterProvider: RouteClient {
     {
         let label = options.route.rawValue
         let fields = Self.fields(terms: request.dictionaryTerms, language: request.language, options: options)
-        let (answer, reply) = try await post(fields, label: label) {
-            try $0.write(contentsOf: request.audio, base64: true)
-        }
+        let rest = try ProviderHTTP.encode(fields)
+        let reply = try await connection.send(
+            baseURL.appending(path: "audio/transcriptions"), contentType: "application/json", label: label,
+            body: .streamed { writer in
+                // `input_audio` first, its base64 streamed from the FLAC, then the other fields from `rest`.
+                try writer.write(#"{"input_audio":{"format":"flac","data":""#)
+                try writer.write(contentsOf: request.audio, base64: true)
+                try writer.write(#""},"#)
+                try writer.write(rest.dropFirst())  // `rest` is a non-empty object: drop its "{".
+            })
+        let answer = try ProviderHTTP.decode(OpenRouterAnswer.self, from: reply, label: label)
         let usage = TranscriptionUsage.priced(
             audio: answer.usage?.seconds.map { .seconds($0) }, cost: answer.usage?.charged, recorded: request.duration,
             on: options.route)
         return Transcript(text: answer.text ?? "", usage: usage, model: label, network: reply.network)
     }
 
-    /// Half a second of 16 kHz mono silence as FLAC (110 bytes), in base64: `flac --best --no-padding --no-seektable`
-    /// on the output of `ffmpeg -f lavfi -i anullsrc=r=16000:cl=mono -t 0.5 -c:a pcm_s16le`. MAI bills it as one
-    /// second.
-    static let primerAudio =
-        "ZkxhQwAAACIQABAAAAALAAANA+gA8AAAH0Ae4Bk2cWCcfWPP6JuSCtMThAAAKCAAAAByZWZlcmVuY2UgbGliRkxBQyAxLjUuMCAyMDI1"
-        + "MDIxMQAAAAD/+MUIAG8AAABlVf/4dQgBDz/iAAAAZoI="
-
-    /// After a quiet minute OpenRouter MAI answered about 1.6 s slower, and the key-down `HEAD` did not change that;
-    /// a billed transcription did (docs/research/latency-pass.md). The primer is one, with the route's model, language
-    /// and data policy and no dictionary terms. A failure only means the next answer pays the cold start.
-    func prime(_ options: TranscriptionSettings.RouteOptions, language: Locale.Language) async -> Transcript? {
-        let label = "primer \(options.route.rawValue)"
-        let fields = Self.fields(terms: [], language: language, options: options)
-        guard let (answer, _) = try? await post(fields, label: label, audio: { try $0.write(Self.primerAudio) }) else {
-            return nil
-        }
-        let usage = TranscriptionUsage.priced(
-            audio: answer.usage?.seconds.map { .seconds($0) }, cost: answer.usage?.charged,
-            recorded: .milliseconds(500), on: options.route)
-        return Transcript(text: answer.text ?? "", usage: usage, model: options.route.rawValue)
-    }
-
-    var hasPrimer: Bool { true }
-
-    /// POSTs `input_audio` first, its base64 from `audio`, then the other fields, and decodes the answer.
-    private func post(
-        _ fields: RequestFields, label: String, audio: @escaping (BodyWriter) throws -> Void
-    ) async throws -> (SuccessBody, ProviderConnection.Reply) {
-        let rest = try ProviderHTTP.encode(fields)
-        let reply = try await connection.send(
-            baseURL.appending(path: "audio/transcriptions"), contentType: "application/json", label: label,
-            body: .streamed { writer in
-                try writer.write(#"{"input_audio":{"format":"flac","data":""#)
-                try audio(writer)
-                try writer.write(#""},"#)
-                try writer.write(rest.dropFirst())  // `rest` is a non-empty object: drop its "{".
-            })
-        return (try ProviderHTTP.decode(SuccessBody.self, from: reply, label: label), reply)
-    }
-
     /// Every body field except `input_audio`. The dictionary terms come within the route limits
     /// (`PersonalDictionary.keyterms`).
-    private static func fields(
+    static func fields(
         terms: [String], language: Locale.Language, options: TranscriptionSettings.RouteOptions
     ) -> RequestFields {
         let route = options.route
@@ -123,8 +93,8 @@ final class OpenRouterProvider: RouteClient {
 }
 
 /// Every body field except `input_audio`, which the body writer streams in before them.
-private struct RequestFields: Encodable {
-    struct Provider: Encodable {
+struct RequestFields: Encodable, Equatable {
+    struct Provider: Encodable, Equatable {
         /// `TranscriptionRoute.hasZeroDataRetention`.
         var zdr: Bool
         var options: ProviderOptions?
@@ -138,8 +108,8 @@ private struct RequestFields: Encodable {
 /// Upstream fields keyed by OpenRouter's provider tag, sent under the provider's own field names. OpenRouter documents
 /// the `options` passthrough; kotoba-bench-v1 showed `phraseList` and `keyterm` reach the model (MAI term recall
 /// 58.7% -> 73.2%). xAI fields: https://docs.x.ai/developers/rest-api-reference/inference/speech-to-text
-private struct ProviderOptions: Encodable {
-    struct Azure: Encodable {
+struct ProviderOptions: Encodable, Equatable {
+    struct Azure: Encodable, Equatable {
         var phraseList: PhraseList
     }
 
@@ -149,7 +119,7 @@ private struct ProviderOptions: Encodable {
 
 /// xAI documents `format` and `filler_words` as "true" / "false" form fields. The live check on 2026-10-15 showed
 /// OpenRouter forwards `filler_words` as a JSON boolean (fillers kept); `format` is not yet confirmed.
-private struct XAIOptions: Encodable {
+struct XAIOptions: Encodable, Equatable {
     enum CodingKeys: String, CodingKey {
         case keyterm
         case format
@@ -165,7 +135,8 @@ private struct XAIOptions: Encodable {
     var language: String?
 }
 
-private struct SuccessBody: Decodable {
+/// A transcription answer.
+struct OpenRouterAnswer: Decodable {
     var text: String?
     var usage: OpenRouterUsage?
 }

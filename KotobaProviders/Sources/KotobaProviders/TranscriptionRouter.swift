@@ -38,10 +38,13 @@ public final class TranscriptionRouter: TranscriptionProvider {
         client(for: settings.route.account).hasPrimer
     }
 
-    public func prime(language: Locale.Language) async -> Transcript? {
+    public func prime(language: Locale.Language, size: PrimerSize) async -> Transcript? {
         let options = settings.routeOptions
-        return await client(for: options.route.account).prime(options, language: language)
+        return await client(for: options.route.account).prime(options, language: language, size: size)
     }
+
+    /// How many primer bodies the OpenRouter client built, for the tests: each is built once and kept.
+    var primerBodyBuilds: Int { openRouter.primerBodyBuilds }
 
     /// A request that names a route's model (History's "Transcribe Again With") goes down that route once; the
     /// owner's choice stays.
@@ -82,7 +85,8 @@ protocol RouteClient: Sendable {
     /// `TranscriptionProvider.hasPrimer` for this provider's routes.
     var hasPrimer: Bool { get }
     /// `TranscriptionProvider.prime` on this route.
-    func prime(_ options: TranscriptionSettings.RouteOptions, language: Locale.Language) async -> Transcript?
+    func prime(_ options: TranscriptionSettings.RouteOptions, language: Locale.Language, size: PrimerSize) async
+        -> Transcript?
 }
 
 /// What a key check found.

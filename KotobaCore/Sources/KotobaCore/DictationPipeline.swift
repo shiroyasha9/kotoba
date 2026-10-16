@@ -51,6 +51,8 @@ public actor DictationPipeline {
     var isPrimerInFlight = false
     /// When the last route primer was sent: the route stays warm for about 45 s after it.
     var primedAt: Instant?
+    /// When the route last answered: it wraps the provider port, so every request reports to it.
+    let warmth: RouteWarmth
     let work: PendingWork
     /// The last stop's capture end; a new capture starts only after it, so the two never overlap.
     var captureEnd: Task<RecordedAudio?, Never>?
@@ -67,6 +69,9 @@ public actor DictationPipeline {
         self.historyChanges = historyChanges
         var ports = ports
         ports.store = AnnouncingStore(base: ports.store, changes: changes)
+        let warmth = RouteWarmth(base: ports.provider, clock: ports.clock)
+        ports.provider = warmth
+        self.warmth = warmth
         self.ports = ports
         self.settings = settings
         work = PendingWork(clock: ports.clock)

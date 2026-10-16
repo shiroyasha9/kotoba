@@ -105,7 +105,9 @@ actor FakeTranscriptionProvider: TranscriptionProvider {
     /// Whether the route has a primer; false acts as a direct route.
     nonisolated let hasPrimer: Bool
     /// How many primers the pipeline sent, and what each answers: nil (an answer with no cost) by default.
-    private(set) var primes = 0
+    var primes: Int { primeSizes.count }
+    /// Each primer's size, in order.
+    private(set) var primeSizes: [PrimerSize] = []
     private var primer: Transcript?
     private var primerGate: Gate?
 
@@ -119,8 +121,8 @@ actor FakeTranscriptionProvider: TranscriptionProvider {
     private(set) var maxPrimesInFlight = 0
     private var primesInFlight = 0
 
-    func prime(language: Locale.Language) async -> Transcript? {
-        primes += 1
+    func prime(language: Locale.Language, size: PrimerSize) async -> Transcript? {
+        primeSizes.append(size)
         primesInFlight += 1
         maxPrimesInFlight = max(maxPrimesInFlight, primesInFlight)
         await primerGate?.pass()

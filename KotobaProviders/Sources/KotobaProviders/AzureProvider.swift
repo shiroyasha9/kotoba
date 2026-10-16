@@ -46,7 +46,9 @@ final class AzureProvider: RouteClient {
     var hasPrimer: Bool { false }
 
     /// Never called: `hasPrimer` is false.
-    func prime(_ options: TranscriptionSettings.RouteOptions, language: Locale.Language) async -> Transcript? { nil }
+    func prime(_ options: TranscriptionSettings.RouteOptions, language: Locale.Language, size: PrimerSize) async
+        -> Transcript?
+    { nil }
 
     func transcribe(_ request: TranscriptionRequest, _ options: TranscriptionSettings.RouteOptions) async throws
         -> Transcript

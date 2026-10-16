@@ -14,7 +14,7 @@ final class ProviderConnection: Sendable {
     }
 
     enum Body {
-        /// A small body sent from memory.
+        /// A body sent from memory: a small one, or a route primer kept for every send.
         case data(Data)
         /// A body with the audio in it, written to a temp file piece by piece and uploaded from there.
         case streamed((BodyWriter) throws -> Void)
@@ -202,7 +202,7 @@ enum ProviderHTTP {
 }
 
 /// Azure's `phraseList` field, sent direct and through OpenRouter's `provider.options.azure`.
-struct PhraseList: Encodable {
+struct PhraseList: Encodable, Equatable {
     var phrases: [String]
 }
 

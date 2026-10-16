@@ -1,4 +1,5 @@
 import Foundation
+import Synchronization
 
 /// One cloud speech-to-text route.
 ///
@@ -11,10 +12,59 @@ public protocol TranscriptionProvider: Sendable {
     /// Sends the route's smallest billed request through its whole path, so the answer at the stop does not pay the
     /// route's cold start. The pipeline calls it when a dictation is announced, never for a dropped shortcut press, and
     /// never waits for it. Returns the primer's answer for its cost, or nil when the route has no primer or it failed.
-    func prime(language: Locale.Language) async -> Transcript?
+    func prime(language: Locale.Language, size: PrimerSize) async -> Transcript?
     /// Returns every answer, with its usage, even one with no words (it is billed); the pipeline decides that such
     /// an answer heard no speech.
     func transcribe(_ request: TranscriptionRequest) async throws -> Transcript
+}
+
+/// The provider the pipeline calls: it passes every call through and keeps when the route last answered (a
+/// transcription or a primer), so the pipeline can tell a cold route from a warm one.
+final class RouteWarmth: TranscriptionProvider {
+    private let base: any TranscriptionProvider
+    private let clock: any PipelineClock
+    private let lastAnswer = Mutex<ContinuousClock.Instant?>(nil)
+
+    init(base: any TranscriptionProvider, clock: any PipelineClock) {
+        self.base = base
+        self.clock = clock
+    }
+
+    var hasPrimer: Bool { base.hasPrimer }
+
+    func warmUp() async {
+        await base.warmUp()
+    }
+
+    func prime(language: Locale.Language, size: PrimerSize) async -> Transcript? {
+        let primer = await base.prime(language: language, size: size)
+        if primer != nil { answered() }
+        return primer
+    }
+
+    func transcribe(_ request: TranscriptionRequest) async throws -> Transcript {
+        let transcript = try await base.transcribe(request)
+        answered()
+        return transcript
+    }
+
+    /// The route answered within `window` before now.
+    func isWarm(within window: Duration) -> Bool {
+        lastAnswer.withLock { $0.map { clock.now - $0 <= window } ?? false }
+    }
+
+    private func answered() {
+        lastAnswer.withLock { [now = clock.now] in $0 = now }
+    }
+}
+
+/// How large a route primer's body is. A silent primer warms most of a cold route; the rest warms only with the bytes
+/// sent, so a cold route gets a large one (docs/research/latency-pass.md, section 2.1).
+public enum PrimerSize: Sendable, Equatable {
+    /// Half a second of silence, about 110 bytes.
+    case silent
+    /// One second of noise, about 384 KB: billed as one second like the silent one.
+    case large
 }
 
 public struct TranscriptionRequest: Sendable, Equatable {

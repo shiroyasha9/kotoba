@@ -97,7 +97,8 @@ extension DictationPipeline {
         recording?.clipboard = takeClipboard()
         current.announcement.cancel()
         latencies.mark(.cue, of: id, at: instant)
-        primeRoute(for: id)
+        // A route that answered nothing within the window is cold: only bytes warm the last part of it.
+        primeRoute(for: id, size: warmth.isWarm(within: settings.primerInterval) ? .silent : .large)
         emit(.recording(isLong: false, isSilent: current.sound.isWarning, isCleaned: current.isCleaned))
         await ports.readback?.dictationStarted()
     }
@@ -106,14 +107,14 @@ extension DictationPipeline {
     /// primed every `Settings.primerInterval`; a route with no primer gets neither. Nothing waits for it. Its cost goes
     /// to the ledger with this dictation, with no audio and no words, so minutes and words per minute stay what the
     /// owner dictated.
-    func primeRoute(for id: DictationID) {
+    func primeRoute(for id: DictationID, size: PrimerSize) {
         guard ports.provider.hasPrimer, !isPrimerInFlight else { return }
         isPrimerInFlight = true
         primedAt = ports.clock.now
         armPrimer(for: id)
         let language = settings.language
         work.track { [provider = ports.provider, store = ports.store, clock = ports.clock] in
-            let primer = await provider.prime(language: language)
+            let primer = await provider.prime(language: language, size: size)
             await self.primerFinished()
             guard let primer else { return }
             do {
@@ -147,7 +148,7 @@ extension DictationPipeline {
     private func primerTimerFired(_ id: DictationID) {
         guard recording?.id == id else { return }
         recording?.primerTimer = nil
-        primeRoute(for: id)
+        primeRoute(for: id, size: .silent)
     }
 
     private func takeClipboard() -> ClipboardGuard.Pending {
