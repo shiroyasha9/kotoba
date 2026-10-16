@@ -161,3 +161,12 @@ Owner decisions, each with a recommendation.
 7. "Add to kotoba Dictionary" service (2.2d): wanted? Recommendation: yes; it is the cheapest way to learn in terminals.
 8. Does Ghostty (and so cmux) support the macOS Services menu on selected text? UNCONFIRMED; the service is worth less without it. Check by hand once the service is built.
 9. Does an `AVAudioFile` FLAC whose writer was killed decode? The spike in 5.4 answers it before the recovery is built.
+
+## Owner decisions (2026-10-16, 10:41 IST)
+
+- Orphan audio (5.4): transcribe orphans at launch into Recovered, as a quit does.
+- Pins (section 3): yes, a star per term.
+- Wispr history seed (2.2c): build it as a feature: offer it where the Wispr import already is (onboarding and Settings > Dictionary), and show the word pairs as suggestions.
+- Paste Last and Copy Last shortcuts (gap A): Wispr Flow has a "Paste last transcript" shortcut, so build it (after 5.2, both edit `GeneralPane.swift`).
+- "Add to kotoba Dictionary" service (2.2d): research Services support (Ghostty, cmux, Terminal, iTerm2, browsers) first, then build if the research supports it.
+- List-size bench (section 3): go given; it runs now.
