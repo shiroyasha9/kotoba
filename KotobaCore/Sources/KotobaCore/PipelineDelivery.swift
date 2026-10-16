@@ -6,7 +6,7 @@ extension DictationPipeline {
     /// `audio` is nil when the audio source ran no capture: the stop says nothing was recorded and keeps nothing.
     /// Audio shorter than `Settings.minimumRecording` (an accidental double tap) is discarded with no word, unless the
     /// file stopped taking audio (`RecordedAudio.isIncomplete`): then the pill says the audio was not saved. A longer
-    /// incomplete file is sent; its paste says the text has only the part saved.
+    /// incomplete file is sent; its paste says the text has only the part saved (`TranscriptDelivery`).
     func finish(_ current: Recording, audio: RecordedAudio?, clipboard: ClipboardGuard.Pending) async {
         let (keyDown, latency) = latencies.take(current.id)
         guard let audio else {
@@ -29,9 +29,7 @@ extension DictationPipeline {
         if let write = outcome.restore {
             work.schedule(at: ports.clock.now + settings.restoreDelay) { await self.clipboard.restore(after: write) }
         }
-        var showing = outcome.showing ?? .outcome(of: outcome.record)
-        if audio.isIncomplete, showing == .idle, outcome.record.status == .pasted { showing = .audioCut(current.id) }
-        finishDictation(current.id, showing: showing)
+        finishDictation(current.id, showing: outcome.showing ?? .outcome(of: outcome.record))
         // Learning reads the field only between dictations, and not after a Return submitted it.
         if let readback = ports.readback, outcome.record.status == .pasted, !outcome.isSubmitted, recording == nil,
             paused == nil, let text = outcome.record.deliveredText

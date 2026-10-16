@@ -33,9 +33,12 @@ final class ReleaseAppWatcher {
     }
 
     private nonisolated static func releaseProcesses(_ apps: [NSRunningApplication]?) -> [Int32] {
-        // An app with no process reports -1; it must not keep the build giving way.
-        (apps ?? []).filter { $0.bundleIdentifier == Install.releaseBundleID && $0.processIdentifier > 0 }
-            .map(\.processIdentifier)
+        running(apps ?? [], of: Install.releaseBundleID).map(\.processIdentifier)
+    }
+
+    /// The apps of `bundleID` with a process: an app with no process reports -1, and it must not count as running.
+    nonisolated static func running(_ apps: [NSRunningApplication], of bundleID: String) -> [NSRunningApplication] {
+        apps.filter { $0.bundleIdentifier == bundleID && $0.processIdentifier > 0 }
     }
 }
 
@@ -65,13 +68,12 @@ extension AppDelegate {
 extension AppDelegate {
     /// True when another copy of this install runs and this one hands over to it (`SingleInstance`): it asks that copy
     /// to show its main window, as a second open from Finder or the Dock does, and quits. Call it first at launch,
-    /// before the Dock icon, the history and the hotkey tap. Costs one Launch Services query at launch (about 1 ms, `swiftc -O` probe 2026-10-17); nothing observes later.
+    /// before the Dock icon, the history and the hotkey tap. Costs one Launch Services query at launch (about 1 ms,
+    /// `swiftc -O` probe 2026-10-17); nothing observes later.
     func handOverToRunningCopy() -> Bool {
         let current = NSRunningApplication.current
-        let others = NSRunningApplication.runningApplications(withBundleIdentifier: Install.bundleID)
-            .filter {
-                $0.processIdentifier != current.processIdentifier && $0.processIdentifier > 0 && !$0.isTerminated
-            }
+        let others = ReleaseAppWatcher.running(NSWorkspace.shared.runningApplications, of: Install.bundleID)
+            .filter { $0.processIdentifier != current.processIdentifier && !$0.isTerminated }
         guard
             let first = SingleInstance.handOver(from: Self.copy(current), others: others.map(Self.copy)),
             let running = others.first(where: { $0.processIdentifier == first.processID })
@@ -94,7 +96,19 @@ extension AppDelegate {
         return true
     }
 
+    /// The kernel's start time comes first: Launch Services has no `launchDate` for a copy started from a terminal,
+    /// and every copy must order the others alike.
     private static func copy(_ app: NSRunningApplication) -> SingleInstance.Copy {
-        SingleInstance.Copy(processID: app.processIdentifier, launchedAt: app.launchDate)
+        SingleInstance.Copy(
+            processID: app.processIdentifier, launchedAt: startTime(of: app.processIdentifier) ?? app.launchDate)
+    }
+
+    private static func startTime(of processID: pid_t) -> Date? {
+        var info = kinfo_proc()
+        var size = MemoryLayout<kinfo_proc>.stride
+        var name = [CTL_KERN, KERN_PROC, KERN_PROC_PID, processID]
+        guard sysctl(&name, u_int(name.count), &info, &size, nil, 0) == 0, size > 0 else { return nil }
+        let start = info.kp_proc.p_un.__p_starttime
+        return Date(timeIntervalSince1970: TimeInterval(start.tv_sec) + TimeInterval(start.tv_usec) / 1_000_000)
     }
 }

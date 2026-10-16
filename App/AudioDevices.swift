@@ -3,15 +3,20 @@ import Foundation
 import KotobaCore
 import Synchronization
 
-/// The listeners that `AudioDevices.observe(_:)` added; they are removed when this is released. A restart of the audio
-/// service (coreaudiod) drops every listener a client added (AudioHardware.h, `kAudioHardwarePropertyServiceRestarted`),
-/// so the observation adds its own again before it reports the restart.
+/// The listeners that `AudioDevices.observe(_:)` added; they are removed when this is released. A restart of the
+/// audio service (coreaudiod) drops every listener a client added (AudioHardware.h,
+/// `kAudioHardwarePropertyServiceRestarted`), so the observation adds its own again before it reports the restart.
 final class AudioDeviceObservation: Sendable {
     /// `AudioObjectPropertyListenerBlock` is not marked Sendable; CoreAudio calls each block on the main queue.
     private struct Listener: @unchecked Sendable {
         let address: AudioObjectPropertyAddress
         let block: AudioObjectPropertyListenerBlock
     }
+
+    private static let watchedProperties: [(AudioObjectPropertySelector, AudioDevices.Change)] = [
+        (kAudioHardwarePropertyDefaultInputDevice, .devices), (kAudioHardwarePropertyDefaultOutputDevice, .devices),
+        (kAudioHardwarePropertyDevices, .devices), (kAudioHardwarePropertyServiceRestarted, .serviceRestarted),
+    ]
 
     private let onChange: @Sendable (AudioDevices.Change) -> Void
     /// Changed on the main queue at a restart, and by `init` and `deinit` on the owner's thread.
@@ -27,7 +32,7 @@ final class AudioDeviceObservation: Sendable {
     }
 
     private func addListeners() {
-        for (selector, change) in AudioDevices.watchedProperties {
+        for (selector, change) in Self.watchedProperties {
             var address = PropertyAddress(selector)
             let block: AudioObjectPropertyListenerBlock = { [weak self] _, _ in self?.changed(change) }
             let status = AudioObjectAddPropertyListenerBlock(
@@ -113,11 +118,6 @@ enum AudioDevices {
         /// and listener from before is stale (AudioHardware.h).
         case serviceRestarted
     }
-
-    static let watchedProperties: [(AudioObjectPropertySelector, Change)] = [
-        (kAudioHardwarePropertyDefaultInputDevice, .devices), (kAudioHardwarePropertyDefaultOutputDevice, .devices),
-        (kAudioHardwarePropertyDevices, .devices), (kAudioHardwarePropertyServiceRestarted, .serviceRestarted),
-    ]
 
     /// Calls `onChange` on the main queue on each change, until the returned value is released: the app keeps one for
     /// its whole life, a window only while it is open.

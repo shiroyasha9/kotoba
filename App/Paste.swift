@@ -119,11 +119,11 @@ struct CGEventPaster: Paster {
     /// Marks every event kotoba posts, so the hotkey tap lets its own Cmd-V and Return pass ("kotoba" in ASCII).
     static let postedEventTag: Int64 = 0x6B6F_746F_6261
 
-    /// Asks for Accessibility at each post: it can be turned off while kotoba runs, and macOS then drops posted events
-    /// with no error, so the text would go nowhere. Not allowed, the text stays on the clipboard (`.copied`).
-    /// `AXIsProcessTrusted` reads a cache the system refreshes on each Accessibility change: 0.5 µs a call (p90 0.6 µs,
-    /// `swiftc -O` probe, 2026-10-17); the first call in a process (about 11 ms) runs at launch, in `Readiness`.
-    /// `CGPreflightPostEventAccess` costs about 3 ms a call.
+    /// Asks for Accessibility at each post: it can be turned off while kotoba runs, and macOS then drops posted
+    /// events with no error, so the text would go nowhere. Not allowed, the text stays on the clipboard (`.copied`).
+    /// `AXIsProcessTrusted` reads a cache the system refreshes on each Accessibility change: 0.5 µs a call (p90
+    /// 0.6 µs, `swiftc -O` probe, 2026-10-17); the first call in a process (about 11 ms) runs at launch, in
+    /// `Readiness`. `CGPreflightPostEventAccess` costs about 3 ms a call.
     private static func post(_ keyCode: CGKeyCode, flags: CGEventFlags) throws {
         guard AXIsProcessTrusted() else { throw PasteError.notAllowed }
         let source = shared.source
@@ -139,8 +139,8 @@ struct CGEventPaster: Paster {
         keyUp.post(tap: .cghidEventTap)
     }
 
-    /// Finds the key that types `character` in the current layout while ⌘ is held: the paste is ⌘V, and a layout such
-    /// as "Dvorak - QWERTY ⌘" switches to QWERTY keys under ⌘, so its base-layer "v" key would send ⌘. instead.
+    /// Finds the key that types `character` in the current layout while ⌘ is held: the paste is ⌘V, and a layout
+    /// such as "Dvorak - QWERTY ⌘" switches to QWERTY keys under ⌘, so its base-layer "v" key would send ⌘. instead.
     @MainActor
     private static func keyCode(for character: Character) -> CGKeyCode? {
         guard

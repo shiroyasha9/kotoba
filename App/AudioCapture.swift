@@ -186,18 +186,18 @@ actor AudioCapture: AudioSource {
     }
 
     func resumeCapture() async throws {
-        guard writer != nil, let input else { throw CaptureError.notCapturing }
+        guard let writer, let input else { throw CaptureError.notCapturing }
         do {
             try input.start()
+            isPaused = false
         } catch {
-            // As at a press (`startInput`): a unit that does not start is built again once; the writer follows the new
-            // input's sample rate.
+            // As at a press (`startInput`): a unit that does not start is built again once. Not paused, the rebuild
+            // starts the new input after the writer has switched to its sample rate.
             Log.audio.error("The mic did not resume; building a new input: \(error)")
+            isPaused = false
             await requestRebuild(reason: "the mic did not resume")
-            guard writer != nil, let rebuilt = self.input, rebuilt !== input else { throw error }
-            try rebuilt.start()
+            guard self.writer === writer, self.input != nil else { throw error }
         }
-        isPaused = false
     }
 
     func cancelCapture() async -> RecordedAudio? {

@@ -188,7 +188,7 @@ final class SetupFlow {
     /// A grant made in System Settings shows without a click: Readiness reads again when the menu opens (the menu
     /// does that), when kotoba becomes active, and when macOS announces an Accessibility change, so onboarding sees
     /// the grant while System Settings is in front. macOS announces no Microphone change; returning to kotoba (an
-    /// activation) reads it. Nothing runs at idle: this replaced a read every second while any window was open.
+    /// activation) reads it. Nothing runs at idle.
     func watchGrants() {
         activations = Task { [weak self] in
             for await _ in NotificationCenter.default.notifications(named: NSApplication.didBecomeActiveNotification) {
@@ -196,8 +196,7 @@ final class SetupFlow {
             }
         }
         accessibilityChanges = Task { [weak self] in
-            let changes = DistributedNotificationCenter.default().notifications(named: Self.accessibilityChanged)
-            for await _ in changes {
+            for await _ in Self.accessibilityChanges() {
                 // macOS posts it before `AXIsProcessTrusted` returns the new value; Loop and Hammerspoon read again
                 // 150-250 ms later.
                 do {
@@ -210,9 +209,21 @@ final class SetupFlow {
         }
     }
 
-    /// Posted to every app when the Accessibility list in System Settings changes (not documented; Hammerspoon, Loop
-    /// and AltTab observe it on current macOS).
-    private static let accessibilityChanged = Notification.Name("com.apple.accessibility.api")
+    /// Each change of the Accessibility list in System Settings; a burst comes as one. AppKit holds a distributed
+    /// notification until the app is active again unless its observer asks for immediate delivery, and the grant is
+    /// made while System Settings is in front. The name is not documented; Hammerspoon, Loop and AltTab observe it on
+    /// current macOS.
+    private static func accessibilityChanges() -> AsyncStream<Void> {
+        let (changes, continuation) = AsyncStream.makeStream(of: Void.self, bufferingPolicy: .bufferingNewest(1))
+        let relay = NotificationRelay { continuation.yield() }
+        let center = DistributedNotificationCenter.default()
+        center.addObserver(
+            relay, selector: #selector(NotificationRelay.received),
+            name: Notification.Name("com.apple.accessibility.api"),
+            object: nil, suspensionBehavior: .deliverImmediately)
+        continuation.onTermination = { _ in center.removeObserver(relay) }
+        return changes
+    }
 
     /// Returns once the hotkey tap runs. The tap and Cmd-V need Accessibility, so it starts when Readiness sees
     /// the grant. A grant can take a moment to reach the event system, so a failed start tries twice more.
@@ -229,5 +240,18 @@ final class SetupFlow {
             }
             Log.app.error("The hotkey tap did not start although Accessibility is allowed")
         }
+    }
+}
+
+/// A selector target for an observer API with no block form, such as a distributed notification's immediate delivery.
+private final class NotificationRelay: NSObject, Sendable {
+    private let onReceive: @Sendable () -> Void
+
+    init(_ onReceive: @escaping @Sendable () -> Void) {
+        self.onReceive = onReceive
+    }
+
+    @objc func received(_ notification: Notification) {
+        onReceive()
     }
 }

@@ -97,20 +97,22 @@ struct TranscriptDelivery: Sendable {
         // The answers' ledger entries go with this save. A crash between the answer and here (at most the cleanup and
         // the paste, 1-2 s) loses them; the pending row is sent again at the next launch.
         await store.saveOrLog(record)
-        let showing = Self.notice(for: record, cleanupMiss: cleanupMiss, submitted: submitted)
+        let showing = Self.notice(for: record, cleanupMiss: cleanupMiss, submitted: submitted, audio: job.audio)
         return Outcome(record: record, restore: restore, showing: showing, isSubmitted: submitted == .sent)
     }
 
     /// A copied transcript needs the owner's Cmd-V, so "Copied" wins over the cleanup note. A Return the owner asked
-    /// for and did not get wins over the cleanup note too.
+    /// for and did not get wins over the cleanup note too, and the cleanup note over a cut recording's.
     private static func notice(
-        for record: DictationRecord, cleanupMiss: TranscriptionSteps.CleanupMiss?, submitted: Submitted?
+        for record: DictationRecord, cleanupMiss: TranscriptionSteps.CleanupMiss?, submitted: Submitted?,
+        audio: RecordedAudio
     ) -> DictationState? {
         if submitted == .frontAppChanged { return .returnSkipped(record.id) }
-        guard record.status == .pasted, let cleanupMiss else { return nil }
+        guard record.status == .pasted else { return nil }
         return switch cleanupMiss {
         case .failed: .cleanupFailed(record.id)
         case .tooSlow: .cleanupTooSlow(record.id)
+        case nil: audio.isIncomplete ? .audioCut(record.id) : nil
         }
     }
 

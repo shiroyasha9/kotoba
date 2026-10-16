@@ -7,7 +7,7 @@ import Foundation
 public enum SingleInstance {
     public struct Copy: Sendable, Equatable {
         public let processID: Int32
-        /// Nil for a copy not launched through Launch Services (started from a terminal).
+        /// When the process started; nil when unknown.
         public let launchedAt: Date?
 
         public init(processID: Int32, launchedAt: Date?) {
