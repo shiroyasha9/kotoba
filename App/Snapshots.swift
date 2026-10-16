@@ -125,6 +125,9 @@ enum Snapshots {
 
     static func runIfRequested() {
         let arguments = CommandLine.arguments
+        if arguments.contains("--snapshot-checks") {
+            runChecks()
+        }
         guard let flag = arguments.firstIndex(of: "--snapshots"), arguments.indices.contains(flag + 1) else { return }
         isRunning = true
         let folder = URL(filePath: arguments[flag + 1], directoryHint: .isDirectory)
@@ -171,9 +174,44 @@ enum Snapshots {
         exit(0)
     }
 
+    /// `make check` launches the app binary with `--snapshot-checks`: the pills' layout and VoiceOver checks, in light,
+    /// with no image written, so the bar catches a broken pill without a full snapshot run (about 18 s).
+    private static func runChecks() {
+        isRunning = true
+        NSApplication.shared.setActivationPolicy(.prohibited)
+        let snapshots = IndicatorPanel.snapshots()
+        do {
+            for snapshot in snapshots {
+                _ = try layOut(snapshot, in: NSAppearance(named: .aqua) ?? NSAppearance.currentDrawing())
+            }
+        } catch {
+            FileHandle.standardError.write(Data("Snapshot checks failed: \(error)\n".utf8))
+            exit(1)
+        }
+        FileHandle.standardError.write(Data("Checked \(snapshots.count) pills\n".utf8))
+        exit(0)
+    }
+
     /// Lays the view out in a borderless window that is never ordered on screen, over the window
     /// background, and returns PNG data.
     private static func render(_ snapshot: Snapshot, in appearance: NSAppearance) throws -> Data {
+        // The window holds the backdrop's appearance while it draws, so it lives until the image is made.
+        let window = try layOut(snapshot, in: appearance)
+        guard let backdrop = window.contentView,
+            let bitmap = backdrop.bitmapImageRepForCachingDisplay(in: backdrop.bounds)
+        else {
+            throw SnapshotError.noBitmap(snapshot.name)
+        }
+        backdrop.cacheDisplay(in: backdrop.bounds, to: bitmap)
+        guard let png = bitmap.representation(using: .png, properties: [:]) else {
+            throw SnapshotError.noBitmap(snapshot.name)
+        }
+        return png
+    }
+
+    /// Builds the snapshot's view and lays it out in a borderless window that is never ordered on screen, over the window
+    /// background, then runs its check. Returns the window; its content view is the backdrop.
+    private static func layOut(_ snapshot: Snapshot, in appearance: NSAppearance) throws -> NSWindow {
         let view = snapshot.make()
         if view.frame.size == .zero {
             view.setFrameSize(view.fittingSize)
@@ -191,14 +229,7 @@ enum Snapshots {
         if let problem = snapshot.check?(view) {
             throw SnapshotError.layout(snapshot.name, problem)
         }
-        guard let bitmap = backdrop.bitmapImageRepForCachingDisplay(in: backdrop.bounds) else {
-            throw SnapshotError.noBitmap(snapshot.name)
-        }
-        backdrop.cacheDisplay(in: backdrop.bounds, to: bitmap)
-        guard let png = bitmap.representation(using: .png, properties: [:]) else {
-            throw SnapshotError.noBitmap(snapshot.name)
-        }
-        return png
+        return window
     }
 
     enum SnapshotError: Error {
