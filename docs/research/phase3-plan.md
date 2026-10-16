@@ -170,3 +170,4 @@ Owner decisions, each with a recommendation.
 - Paste Last and Copy Last shortcuts (gap A): Wispr Flow has a "Paste last transcript" shortcut, so build it (after 5.2, both edit `GeneralPane.swift`).
 - "Add to kotoba Dictionary" service (2.2d): research Services support (Ghostty, cmux, Terminal, iTerm2, browsers) first, then build if the research supports it.
 - List-size bench (section 3): go given; it runs now.
+- Context awareness (section 4, 11:59 IST): parked. The research stays in `context-awareness.md`; "text near the cursor" (v1 there) is the candidate for a later, in-depth discussion. If built, dictionary terms keep their places and context terms take only free slots.
