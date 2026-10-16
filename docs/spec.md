@@ -173,7 +173,7 @@ Plans: `docs/research/ux-polish.md` (49 items, IDs used below) and `docs/researc
 Design and evidence: `docs/research/per-app-modes.md`.
 - Two modes in v1, Code and Writing. A mode sets the cleanup prompt and "Clean up every dictation" (off by default for both). Apps map to a mode by bundle ID, from standard lists the owner edits; every other app uses Code. Only the owner's changes to the standard lists are saved, so a later build's new standard apps reach them too.
 - The app in front at the stop decides the mode (the same rule as submit's Return); key-down only warms the cleaner and marks the pill. Esc keeps the app and the mode of the Esc. A retry cleans in the mode the record keeps.
-- The cleanup chord cleans with the mode's prompt. A cleanup has a 5 s deadline on the pipeline clock; past it the raw text pastes, the pill says so, and the late answer's cost still goes to the ledger.
+- The cleanup chord cleans with the mode's prompt. A live cleanup has a 5 s deadline on the pipeline clock; past it the raw text pastes, the pill says so, and the late answer's cost still goes to the ledger. A retry has no paste waiting, so its cleanup waits for the cleaner's own timeout.
 - Speech model, language and website rules per mode: later, not v1.
 - The Writing prompt ships in a release only after its benchmark passes (`docs/release.md`).
 

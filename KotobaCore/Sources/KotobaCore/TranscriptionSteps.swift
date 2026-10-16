@@ -55,10 +55,13 @@ struct TranscriptionSteps: Sendable {
     /// the record, empty or not. The replacements run once, on the cleaner's output, so a rule such as
     /// "kotoba" -> "kotoba.app" does not grow twice.
     @discardableResult
+    /// `deadline` bounds a live cleanup, whose paste waits on it; a retry passes nil, so its cleanup waits for the
+    /// cleaner's own timeout.
     func clean(
-        _ raw: String, in mode: AppMode, into record: inout DictationRecord, settings: DictationPipeline.Settings
+        _ raw: String, in mode: AppMode, into record: inout DictationRecord, settings: DictationPipeline.Settings,
+        deadline: Duration?
     ) async -> CleanupMiss? {
-        switch await cleaned(raw, in: mode, record: &record, settings: settings) {
+        switch await cleaned(raw, in: mode, record: &record, settings: settings, deadline: deadline) {
         case .success(let text):
             record.cleanedText = text
             return nil
@@ -69,7 +72,8 @@ struct TranscriptionSteps: Sendable {
     }
 
     private func cleaned(
-        _ raw: String, in mode: AppMode, record: inout DictationRecord, settings: DictationPipeline.Settings
+        _ raw: String, in mode: AppMode, record: inout DictationRecord, settings: DictationPipeline.Settings,
+        deadline: Duration?
     ) async -> Result<String, CleanupMiss> {
         let id = record.id
         guard let cleaner else {
@@ -77,7 +81,11 @@ struct TranscriptionSteps: Sendable {
             return .failure(.failed)
         }
         let cleaned: CleanedText
-        switch await answer(of: cleaner, raw, in: mode, for: record, settings: settings) {
+        let terms = settings.dictionary.keyterms
+        let request: @Sendable () async throws -> CleanedText = {
+            try await cleaner.clean(raw, vocabulary: terms, mode: mode)
+        }
+        switch await answer(to: request, for: record, deadline: deadline) {
         case .answered(.success(let answer)):
             cleaned = answer
         case .answered(.failure(let error)):
@@ -109,19 +117,25 @@ struct TranscriptionSteps: Sendable {
         case tooSlow
     }
 
-    /// The cleaner's answer, or `.tooSlow` when `Settings.cleanupDeadline` passes first on the pipeline clock. The
-    /// request is not cancelled: a late answer was billed, so its cost goes to the ledger when it comes, with no words
-    /// delivered.
+    /// The cleaner's answer, or `.tooSlow` when `deadline` passes first on the pipeline clock. The request is not
+    /// cancelled: a late answer was billed, so its cost goes to the ledger when it comes, with no words delivered.
     private func answer(
-        of cleaner: any TextCleaner, _ raw: String, in mode: AppMode, for record: DictationRecord,
-        settings: DictationPipeline.Settings
+        to request: @escaping @Sendable () async throws -> CleanedText, for record: DictationRecord,
+        deadline: Duration?
     ) async -> Answer {
+        guard let deadline else {
+            do {
+                return .answered(.success(try await request()))
+            } catch {
+                return .answered(.failure(error))
+            }
+        }
         let first = FirstOf<Answer>()
-        let deadline = work.schedule(at: clock.now + settings.cleanupDeadline) { first.settle(.tooSlow) }
-        work.track { [clock, store, id = record.id, app = record.app, terms = settings.dictionary.keyterms] in
+        let timer = work.schedule(at: clock.now + deadline) { first.settle(.tooSlow) }
+        work.track { [clock, store, id = record.id, app = record.app] in
             let result: Result<CleanedText, any Error>
             do {
-                result = .success(try await cleaner.clean(raw, vocabulary: terms, mode: mode))
+                result = .success(try await request())
             } catch {
                 result = .failure(error)
             }
@@ -137,7 +151,7 @@ struct TranscriptionSteps: Sendable {
             }
         }
         let answer = await first.value
-        deadline.cancel()
+        timer.cancel()
         return answer
     }
 }

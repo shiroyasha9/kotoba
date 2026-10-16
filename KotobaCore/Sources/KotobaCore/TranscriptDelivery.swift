@@ -77,7 +77,9 @@ struct TranscriptDelivery: Sendable {
             if let mode = job.output.cleanupMode {
                 await beforeCleanup()
                 mark(.cleanStart, at: clock.now)
-                cleanupMiss = await steps.clean(transcribed.raw, in: mode, into: &record, settings: job.settings)
+                cleanupMiss = await steps.clean(
+                    transcribed.raw, in: mode, into: &record, settings: job.settings,
+                    deadline: job.settings.cleanupDeadline)
                 mark(.cleanResponse, at: clock.now)
             }
             (record.status, restore) = await paste(

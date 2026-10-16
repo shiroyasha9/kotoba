@@ -3,8 +3,8 @@ import Testing
 
 @testable import KotobaCore
 
-/// A cleanup has `Settings.cleanupDeadline` (5 s) on the pipeline clock: after it the raw transcript pastes and the pill
-/// says so. A mode that cleans every dictation must not hold each paste for a stalled cleaner. The late answer is
+/// A live cleanup has `Settings.cleanupDeadline` (5 s) on the pipeline clock: after it the raw transcript pastes and
+/// the pill says so. A mode that cleans every dictation must not hold each paste for a stalled cleaner. The late answer is
 /// dropped, but it was billed, so its cost goes to the ledger.
 struct PipelineCleanupDeadlineTests {
     let world = FakeWorld(transcript: "raw words")
@@ -62,7 +62,8 @@ struct PipelineCleanupDeadlineTests {
         #expect(await pipeline.state == .idle)
     }
 
-    @Test func aRetriedCleanupHasTheDeadlineToo() async throws {
+    /// A retry has no paste waiting on it, so its cleanup waits for the cleaner's own timeout, not the deadline.
+    @Test func aRetriedCleanupWaitsPastTheDeadline() async throws {
         let pipeline = world.makePipeline(cleaner: cleaner, modes: ModeRules())
         await world.provider.fail(with: ProviderError.offline)
         await pipeline.cleanupTap()
@@ -72,14 +73,13 @@ struct PipelineCleanupDeadlineTests {
 
         let retry = Task { await pipeline.retryPending() }
         #expect(await eventually { await gate.hasWaiters })
-        world.clock.advance(by: .seconds(5))
+        world.clock.advance(by: .seconds(30))
+        #expect(await world.store.records.first?.status == .failed)
+        await gate.open()
         await retry.value
 
         let record = try #require(await world.store.records.first)
         #expect(record.status == .recovered)
-        #expect(record.transcript == "raw words")
-        #expect(record.cleanedText == nil)
-        await gate.open()
-        await pipeline.settle()
+        #expect(record.cleanedText == "clean words")
     }
 }

@@ -124,8 +124,9 @@ extension DictationPipeline {
         public var chordReleaseWait: Duration
         /// How long Undo can resume a recording after Esc.
         public var undoWindow: Duration
-        /// The longest a cleanup may take; then the raw transcript pastes (about 2x the cleanup p90 of 2.3 s in
-        /// kotoba-bench-v1). A late answer is dropped and its cost still goes to the ledger.
+        /// The longest a live cleanup may take; then the raw transcript pastes (about 2x the cleanup p90 of 2.3 s in
+        /// kotoba-bench-v1). A late answer is dropped and its cost still goes to the ledger. A retry has no paste
+        /// waiting, so it has no deadline.
         public var cleanupDeadline: Duration
         /// A transcript that ends with a submit phrase ("press enter", "press return") is pasted without it, then Return.
         public var isSubmitPhraseOn: Bool

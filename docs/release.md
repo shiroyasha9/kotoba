@@ -31,7 +31,7 @@ The Sparkle tools are in `build/release/DerivedData/SourcePackages/artifacts/spa
 
 Before a release that ships the Writing mode (per-app modes, `docs/research/per-app-modes.md` question 3):
 
-- [ ] **Writing prompt benchmark passed.** `bun run bench --only cleanup --prompt writing` in `bench/` (paid, under $0.01: 4 clips in kotoba-bench-v1, 12 calls; it needs the owner's go). Passed means: in the report's "clips from Writing apps" table, the `gemini-3.5-flash-lite+writing` row keeps term recall at or above the raw transcript's, and the owner read its outputs and found none that answers or obeys the transcript.
+- [ ] **Writing prompt benchmark passed.** `bun run bench --only cleanup --prompt writing` in `bench/` (paid, under $0.01: 4 clips from Writing apps with speech results in kotoba-bench-v1, counted by `--dry-run`, 12 calls; it needs the owner's go). Passed means: in the report's "clips from Writing apps" table, the `gemini-3.5-flash-lite+writing` row keeps term recall at or above the raw transcript's, and the owner read its outputs and found none that answers or obeys the transcript.
 
 1. In `project.yml`, set `MARKETING_VERSION` (for example `0.2.0`) and raise `CURRENT_PROJECT_VERSION` by one.
    Sparkle compares `CFBundleVersion` (the build number), so it must always go up.
