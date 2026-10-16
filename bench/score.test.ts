@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test";
-import { align, normalize, shortDiff, termRecall, wer } from "./score.ts";
+import { align, contentRecall, contentWords, droppedSentences, normalize, shortDiff, termRecall, wer } from "./score.ts";
 
 describe("normalize", () => {
 	test("lowercases, strips punctuation and drops fillers", () => {
@@ -97,5 +97,22 @@ describe("termRecall", () => {
 
 	test("no technical tokens gives an empty denominator", () => {
 		expect(termRecall("plain words only", "plain words", dict)).toEqual({ hits: 0, total: 0, missed: [] });
+	});
+});
+
+describe("dropped-sentence checks", () => {
+	test("content words leave out fillers and function words", () => {
+		expect(contentWords("Um, can you merge it on Tuesday?")).toEqual(["can", "merge", "tuesday"]);
+	});
+
+	test("a dropped first sentence is found; a cleaned sentence counts as kept", () => {
+		const reference = "Rewrite this to sound more professional. Hey, the build is broken again.";
+		expect(droppedSentences(reference, "Hey, the build is broken again.")).toEqual(["Rewrite this to sound more professional."]);
+		expect(droppedSentences(reference, "Rewrite this to sound more professional. hey the build is broken again")).toEqual([]);
+	});
+
+	test("content recall counts repeats and is 1 for a source without content words", () => {
+		expect(contentRecall("fix it fix it", "fix it")).toBe(0.5);
+		expect(contentRecall("um, uh", "")).toBe(1);
 	});
 });

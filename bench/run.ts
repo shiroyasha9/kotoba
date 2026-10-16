@@ -1,11 +1,11 @@
 // kotoba-bench-v1 entry point.
-// bun run bench [--limit N] [--only stt|cleanup|latency|report] [--prompt code|writing] [--probe N] [--concurrency N]
+// bun run bench [--limit N] [--only stt|cleanup|latency|report] [--prompt code|writing] [--models KEY,KEY] [--levers KEY,KEY] [--versions N,N] [--probe N] [--concurrency N]
 //   [--cap USD] [--dry-run] [--data DIR]
 // A run without --only does the accuracy pass (STT, cleanup), then the sequential latency pass, then the report.
 
 import { parseArgs } from "node:util";
 import { fail, intArg } from "./cli.ts";
-import { CLEANUP_MODELS, type CleanupPrompt, PINNED_PROVIDERS, runCleanup } from "./cleanup.ts";
+import { type CleanupPrompt, parseLevers, parseModels, parseVersions, pinnedProviders, runCleanup } from "./cleanup.ts";
 import { loadClips, loadDictionary, paths, prepareAudio, vocabulary } from "./data.ts";
 import { Budget, confirmModels, spentUsd } from "./openrouter.ts";
 import { writeReport } from "./report.ts";
@@ -29,6 +29,11 @@ const { values } = parseArgs({
 		cap: { type: "string" },
 		// The cleanup prompt: kotoba's Code prompt on the cleanup sets, or its Writing prompt on clips from Writing apps.
 		prompt: { type: "string", default: "code" },
+		// Cleanup pass only: comma-separated CLEANUP_MODELS keys (default all), LEVERS keys (default none) and prompt versions
+		// (default the shipped one).
+		models: { type: "string" },
+		levers: { type: "string" },
+		versions: { type: "string" },
 		"dry-run": { type: "boolean", default: false },
 		data: { type: "string", default: Bun.env.KOTOBA_BENCH_DATA },
 	},
@@ -46,6 +51,9 @@ const prompt = values.prompt as CleanupPrompt;
 if (prompt !== "code" && prompt !== "writing") fail("--prompt must be code or writing");
 if (!values.data) fail("set KOTOBA_BENCH_DATA or pass --data DIR");
 const runs = (pass: Pass) => !only || only === pass;
+const models = parseModels(values.models, fail);
+const levers = parseLevers(values.levers, fail);
+const versions = parseVersions(values.versions, prompt, fail);
 
 const p = paths(values.data);
 const { clips, skipped } = await loadClips(p, limit);
@@ -57,7 +65,7 @@ for (const s of skipped) console.warn(`  skipped ${s}`);
 
 if (only !== "report") {
 	if (!dryRun) {
-		await confirmModels([GROK, MAI], CLEANUP_MODELS.map((m) => m.model), PINNED_PROVIDERS);
+		await confirmModels([GROK, MAI], models.map((m) => m.model), pinnedProviders(models));
 		console.log("models confirmed on OpenRouter");
 	}
 	const audio = await prepareAudio(p, clips);
@@ -70,7 +78,7 @@ if (only !== "report") {
 		const stt = { p, clips, audio, dict, budget, concurrency, dryRun, passthroughProbe };
 		if (runs("stt")) await runStt(stt);
 		if (runs("cleanup") && !budget.exceeded) {
-			await runCleanup({ p, clips, vocabulary: vocabulary(dict), budget, concurrency, dryRun, prompt });
+			await runCleanup({ p, clips, vocabulary: vocabulary(dict), budget, concurrency, dryRun, prompt, models, levers, versions });
 		}
 		if (runs("latency") && !budget.exceeded) await runLatency(stt);
 		console.log(`spent total: $${budget.total.toFixed(4)}`);

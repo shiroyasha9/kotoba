@@ -172,3 +172,48 @@ export function termRecall(reference: string, hypothesis: string, dictionaryTerm
 	}
 	return { hits, total: marked.size, missed };
 }
+
+// --- Dropped-sentence checks (docs/research/cleanup-prompts.md, sections 9 and 10) ---
+
+/** Fillers and short function words: what a correct cleanup may drop or reorder without losing content. */
+const FUNCTION_WORDS = new Set(
+	(
+		"a an the and or but so if of to in on at by for with from as is are was were be been am it its i me my we us our " +
+		"you your he she they them their this that these those do does did not no yes oh ah like just well also then than"
+	).split(" "),
+);
+
+/** The words that carry content, in order: normalized tokens without fillers and function words. */
+export function contentWords(text: string): string[] {
+	return normalize(text).filter((t) => !FUNCTION_WORDS.has(t));
+}
+
+/** Share of `source`'s content words (as a multiset) found in `output`; 1 when `source` has none. */
+export function contentRecall(source: string, output: string): number {
+	const words = contentWords(source);
+	if (!words.length) return 1;
+	const pool = new Map<string, number>();
+	for (const w of contentWords(output)) pool.set(w, (pool.get(w) ?? 0) + 1);
+	let hits = 0;
+	for (const w of words) {
+		const left = pool.get(w) ?? 0;
+		if (left > 0) {
+			hits++;
+			pool.set(w, left - 1);
+		}
+	}
+	return hits / words.length;
+}
+
+/** Sentences of `text`, split after ".", "!" or "?" and at line breaks. */
+export function sentences(text: string): string[] {
+	return text
+		.split(/(?<=[.!?])\s+|\n+/)
+		.map((s) => s.trim())
+		.filter(Boolean);
+}
+
+/** The reference sentences missing from `output`: a sentence is kept when at least `share` of its content words are in it. */
+export function droppedSentences(reference: string, output: string, share = 0.8): string[] {
+	return sentences(reference).filter((s) => contentRecall(s, output) < share);
+}

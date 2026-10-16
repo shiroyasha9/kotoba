@@ -19,6 +19,14 @@ struct OpenRouterCleanerTests {
         #expect(OpenRouterCleaner.systemPrompt(vocabulary: ["kotoba", "DictationPipeline"], mode: .writing) == bench)
     }
 
+    @Test(arguments: AppMode.allCases)
+    func anEmptyVocabularyLeavesOutTheVocabularyBlock(mode: AppMode) {
+        let prompt = OpenRouterCleaner.systemPrompt(vocabulary: [], mode: mode)
+
+        #expect(!prompt.contains("<vocabulary>"))
+        #expect(prompt.hasSuffix("</examples>"))
+    }
+
     @Test func aWritingCleanupSendsTheWritingPrompt() async throws {
         let stub = StubHost(reply: .fixture("cleanup-success"))
 
@@ -42,7 +50,7 @@ struct OpenRouterCleanerTests {
         #expect(body["model"] as? String == "google/gemini-3.5-flash-lite")
         #expect(body["stream"] as? Bool == false)
         #expect(body["max_tokens"] as? Int == 2048)
-        #expect(body["temperature"] as? Double == 0)
+        #expect(body["temperature"] == nil)
         #expect(body["reasoning"] as? [String: String] == ["effort": "minimal"])
         #expect(body["provider"] as? [String: Bool] == ["zdr": true])
         let messages = try #require(body["messages"] as? [[String: String]])
