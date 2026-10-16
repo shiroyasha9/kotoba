@@ -12,7 +12,7 @@ public actor DictationPipeline {
     /// What is live after each change: whether "Paste Again" can paste, and which dictations are being sent. Only
     /// the newest value is kept.
     public nonisolated let activity: AsyncStream<PipelineActivity>
-    /// Each write to the store, in order: the menu reads its counts and lists again, an open History window its rows.
+    /// Each write to the store, in order: the menu reads its counts and lists again, an open History pane its rows.
     public nonisolated let historyChanges: AsyncStream<HistoryChange>
     /// The keyterms of each dictation that got its text, live or retried, after its paste.
     public nonisolated let termReports: AsyncStream<TermReport>
@@ -44,7 +44,7 @@ public actor DictationPipeline {
     var lastStopped: DictationID?
     let work: PendingWork
     /// The last stop's capture end; a new capture starts only after it, so the two never overlap.
-    var captureEnd: Task<RecordedAudio, Never>?
+    var captureEnd: Task<RecordedAudio?, Never>?
     var audioDeletion = AudioDeletion()
     /// Retries waiting until no dictation is live.
     private var quietWaiters = Waiters()
@@ -120,7 +120,7 @@ public actor DictationPipeline {
         if results.contains(where: \.status.isTranscribed) { work.track { await self.deleteExpiredAudio() } }
     }
 
-    /// The History window's Retry: sends the chosen kept dictations again, each after no dictation is live. A cancelled
+    /// The History pane's Retry: sends the chosen kept dictations again, each after no dictation is live. A cancelled
     /// or rejected one joins the queue first (`DictationRecord.isRetryable`).
     public func retry(_ ids: Set<DictationID>) async {
         for id in ids {
@@ -133,7 +133,7 @@ public actor DictationPipeline {
         await retryPending(.only(ids))
     }
 
-    /// The History window's Delete. A dictation in flight is kept: its own save would bring the row back. False when a
+    /// The History pane's Delete. A dictation in flight is kept: its own save would bring the row back. False when a
     /// dictation stays because its audio file cannot be removed, or the store failed: the window says so.
     public func delete(_ ids: Set<DictationID>) async -> Bool {
         let deletable = ids.subtracting(inFlight)

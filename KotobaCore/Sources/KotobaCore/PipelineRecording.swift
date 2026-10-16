@@ -137,16 +137,11 @@ extension DictationPipeline {
         work.track { await self.finish(current, audio: await ended.value, clipboard: clipboard) }
     }
 
-    /// Stops after the buffer that holds the stop moment. On an error no capture ran, so the dictation has no audio and
-    /// is not sent (`RecordedAudio.hasAudio`).
-    func endCapture(of current: Recording) async -> RecordedAudio {
-        let audio: RecordedAudio
-        do {
-            audio = try await ports.audio.endCapture()
-        } catch {
-            Log.pipeline.error("Capture did not end cleanly, no audio to send: \(error)")
-            audio = RecordedAudio(file: current.file, duration: .zero)
-        }
+    /// Stops after the buffer that holds the stop moment, with the length the audio source wrote. Nil when it ran no
+    /// capture: nothing was written, so there is no dictation to keep.
+    func endCapture(of current: Recording) async -> RecordedAudio? {
+        let audio = await ports.audio.endCapture()
+        if audio == nil { Log.pipeline.error("The capture was gone at the stop, nothing was recorded") }
         await current.captureEvents.value
         return audio
     }

@@ -175,6 +175,33 @@ struct PipelineHotkeyTests {
         #expect(await world.store.records.isEmpty)
     }
 
+    /// The adapter lost the capture before the stop: nothing was written, so no dictation with a made-up length is
+    /// kept, and nothing is sent.
+    @Test func aStopThatFindsNoCaptureKeepsNothing() async {
+        let world = FakeWorld(transcript: "never recorded")
+        let pipeline = world.makePipeline()
+        await pipeline.tap(world)
+        await world.audio.loseCapture()
+
+        await pipeline.tap(world)
+        await pipeline.settle()
+
+        #expect(await pipeline.state == .captureFailed)
+        #expect(await world.store.records.isEmpty)
+        #expect(await world.provider.requests.isEmpty)
+    }
+
+    @Test func aQuitThatFindsNoCaptureKeepsNothing() async {
+        let world = FakeWorld(transcript: "never recorded")
+        let pipeline = world.makePipeline()
+        await pipeline.tap(world)
+        await world.audio.loseCapture()
+
+        await pipeline.shutdown()
+
+        #expect(await world.store.records.isEmpty)
+    }
+
     @Test func escapeCancelsAndKeepsTheAudio() async {
         let world = FakeWorld(transcript: "never sent")
         let pipeline = world.makePipeline()

@@ -176,8 +176,8 @@ actor AudioCapture: AudioSource {
         return events
     }
 
-    func endCapture() async throws -> RecordedAudio {
-        guard let writer else { throw CaptureError.notCapturing }
+    func endCapture() async -> RecordedAudio? {
+        guard let writer else { return nil }
         self.writer = nil
         // Keep the hardware cycle that holds the stop moment, so the last word is not cut.
         let audio = await writer.stop(after: mach_absolute_time())

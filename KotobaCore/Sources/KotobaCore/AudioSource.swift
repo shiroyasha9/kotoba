@@ -6,9 +6,9 @@ public protocol AudioSource: Sendable {
     /// Starts capture into `file` and returns at once, without waiting for audio.
     /// The stream reports capture events and finishes when capture ends.
     func beginCapture(into file: URL) async throws -> AsyncStream<CaptureEvent>
-    /// Stops after one more buffer, so the last word is kept, and closes the file. Throws only when no capture runs:
-    /// nothing was written then.
-    func endCapture() async throws -> RecordedAudio
+    /// Stops after one more buffer, so the last word is kept, closes the file and reports the length written. Nil when
+    /// no capture runs: nothing was written then.
+    func endCapture() async -> RecordedAudio?
     /// Stops at once and keeps what was written.
     func cancelCapture() async -> RecordedAudio?
     /// Stops at once and deletes the file. False when the file stays on disk (its removal failed): the pipeline then

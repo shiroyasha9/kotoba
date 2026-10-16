@@ -3,8 +3,13 @@ import Foundation
 // MARK: - Transcription and paste
 
 extension DictationPipeline {
-    func finish(_ current: Recording, audio: RecordedAudio, clipboard: ClipboardGuard.Pending) async {
+    /// `audio` is nil when the audio source ran no capture: the stop shows that capture failed and keeps nothing.
+    func finish(_ current: Recording, audio: RecordedAudio?, clipboard: ClipboardGuard.Pending) async {
         let (keyDown, latency) = latencies.take(current.id)
+        guard let audio else {
+            finishDictation(current.id, showing: .captureFailed)
+            return
+        }
         let job = TranscriptDelivery.Job(
             id: current.id, audio: audio, createdAt: ports.clock.date, keyDown: keyDown, latency: latency,
             clipboard: clipboard, settings: settings, output: current.output,
