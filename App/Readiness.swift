@@ -144,6 +144,8 @@ final class SetupFlow {
     private var accessibilityChanges: Task<Void, Never>?
     /// Makes the hotkey tap again after Accessibility comes back (`startHotkeys`).
     private var regrants: Task<Void, Never>?
+    /// Reads Readiness again when the system disables the tap for user input (`HotkeyTap.disabledByUserInput`).
+    private var tapDisables: Task<Void, Never>?
 
     /// `router` checks a key in onboarding.
     init(
@@ -236,6 +238,12 @@ final class SetupFlow {
         for await isAllowed in Observations({ readiness.isAccessibilityAllowed }) where isAllowed {
             guard await Self.start(hotkeys) else { continue }
             regrants = Task { [weak self] in await self?.remakeHotkeysAfterRegrant(hotkeys) }
+            // A second way to see a revoke, if the Accessibility notification does not come.
+            tapDisables = Task { [weak self] in
+                for await _ in hotkeys.disabledByUserInput {
+                    self?.readiness.refresh()
+                }
+            }
             return
         }
     }

@@ -31,6 +31,10 @@ final class HotkeyTap: Sendable {
     /// Each event with the time the tap saw it, so a busy consumer does not shift tap vs hold.
     let events: AsyncStream<(event: HotkeyEvent, at: ContinuousClock.Instant)>
     private let continuation: AsyncStream<(event: HotkeyEvent, at: ContinuousClock.Instant)>.Continuation
+    /// The system disabled the tap for user input, which an Accessibility revoke can cause: Readiness reads the
+    /// grants again (`SetupFlow`). Several in a row come as one.
+    let disabledByUserInput: AsyncStream<Void>
+    private let disabledContinuation: AsyncStream<Void>.Continuation
     private let state: Mutex<State>
     /// On while the tap runs, is enabled and no recorder listens.
     @MainActor let mouse = MouseDownMonitors()
@@ -45,6 +49,7 @@ final class HotkeyTap: Sendable {
                     handsFreeChord: saved.handsFree, pushToTalkChord: saved.pushToTalk, cleanupChord: saved.cleanup,
                     pasteLastChord: saved.pasteLast, copyLastChord: saved.copyLast, isReturnGestureOn: true)))
         (events, continuation) = AsyncStream.makeStream(of: (event: HotkeyEvent, at: ContinuousClock.Instant).self)
+        (disabledByUserInput, disabledContinuation) = AsyncStream.makeStream(bufferingPolicy: .bufferingNewest(1))
         chords.tap = self
         mouse.onMouseDown = { [weak self] in self?.sendMouseDown() }
     }
@@ -224,6 +229,7 @@ final class HotkeyTap: Sendable {
         let input: KeyInput
         switch type {
         case .tapDisabledByTimeout, .tapDisabledByUserInput:
+            if type == .tapDisabledByUserInput { disabledContinuation.yield() }
             guard let reenabled = reenableAfterTimeout() else { return Unmanaged.passUnretained(event) }
             input = reenabled
         case _ where event.getIntegerValueField(.eventSourceUserData) == CGEventPaster.postedEventTag:
