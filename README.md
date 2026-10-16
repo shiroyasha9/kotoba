@@ -12,15 +12,22 @@
 </p>
 
 <p align="center">
-  <a href="https://github.com/shiroyasha9/kotoba/releases/latest">Download</a> ·
-  <a href="#numbers">Numbers</a> ·
-  <a href="#features">Features</a> ·
+  <a href="https://github.com/shiroyasha9/kotoba/releases/latest"><b>Download the latest DMG</b></a>
+  <br>
+  <a href="#why-kotoba">Why kotoba</a> ·
   <a href="#install">Install</a> ·
+  <a href="#features">Features</a> ·
+  <a href="#numbers">Numbers</a> ·
   <a href="#privacy">Privacy</a> ·
   <a href="#build-from-source">Build from source</a>
 </p>
 
-kotoba is a native, open-source alternative to Wispr Flow, built for developers who dictate prompts for coding agents: text full of file names, flags and identifiers, typed into terminals, editors and browsers. The microphone opens when you press the shortcut, the audio goes to a cloud speech model with your own OpenRouter key, and kotoba pastes the text where your cursor is. There is no account and no subscription: you pay OpenRouter about $0.10 per hour of audio.
+<p align="center">
+  <picture>
+    <source media="(prefers-color-scheme: dark)" srcset="docs/images/readme-home-dark.png">
+    <img src="docs/images/readme-home-light.png" alt="The kotoba window on Home: kotoba is ready to dictate, with today’s words, this week’s words, the streak and the newest dictations">
+  </picture>
+</p>
 
 <p align="center">
   <picture>
@@ -34,26 +41,38 @@ kotoba is a native, open-source alternative to Wispr Flow, built for developers 
   </picture>
 </p>
 
-## Numbers
+kotoba is a native, open-source alternative to Wispr Flow, built for developers who dictate prompts for coding agents: text full of file names, flags and identifiers, typed into terminals, editors and browsers. The microphone opens when you press the shortcut, the audio goes to a cloud speech model, and kotoba pastes the text where your cursor is.
 
-| | kotoba | Wispr Flow |
-|---|---|---|
-| Memory at idle | **15.9 MB** | 748 MB (third-party test) |
-| Word error rate on real dictations | **3.3%** | 6.0% |
-| Technical terms transcribed exactly | **84.6%** (44 of 52) | 50.0% (26 of 52) |
-| Speech round trip, p50 / p90 | 902 ms / 1,083 ms | not compared |
-| Price | **about $0.10 per hour of audio**, paid to OpenRouter | $12-15 per month for Pro |
-| Download | 4.4 MB DMG | |
+## Why kotoba
 
-How these were measured:
+- **Fast.** Your words appear about one second after you stop. The speech round trip is 902 ms at the median.
+- **Accurate on technical words.** Add names and terms to your dictionary, and kotoba spells them your way. On 62 real dictations, kotoba had a word error rate of 3.3% (Wispr Flow 6.0%) and got 84.6% of technical terms exactly right (Wispr Flow 50.0%).
+- **Private.** kotoba needs no account and sends no telemetry. Your audio goes only to the speech service you choose, with your own key.
+- **Cheap and light.** There is no subscription: you pay OpenRouter about $0.10 per hour of audio. kotoba uses 15.9 MB of memory at idle.
 
-- **Memory.** Release build with Sparkle, idle 35 s after launch, no window opened: physical footprint from `vmmap --summary`, median of 5 launches (range 15.6-16.8 MB), on an M3 Pro with macOS 27. This was measured on the 0.1.0 shape of the app; see [`docs/research/memory-spike.md`](docs/research/memory-spike.md). Opening the kotoba window (Home, History, Insights, Usage and Settings) loads SwiftUI, which adds about 18-24 MB that stays until you quit. The Wispr Flow figure is not ours: it is from [tl;dv's review](https://tldv.io/blog/wispr-flow-notetaker-review/) (Wispr Flow 1.6.937 at rest on an 8 GB iMac), quoted in [`docs/research/beyond-wispr.md`](docs/research/beyond-wispr.md).
-- **Accuracy.** 62 real dictations from one developer, mostly coding prompts in a terminal, each with a hand-corrected reference. kotoba ran MAI-Transcribe-2 through OpenRouter with the personal dictionary sent as a phrase list. The Wispr Flow column is Wispr's own speech recognition on the same clips (its raw transcript, before its formatter). The 95% confidence interval for kotoba's word error rate is 1.6-5.8%; 62 clips is a small set. Details in [`docs/research/quality-perf-2.md`](docs/research/quality-perf-2.md); the harness is in [`bench/`](bench/). The audio is personal, so the clips and the full report are not in this repository.
-- **Round trip.** From the start of the upload to the full answer, for MAI-Transcribe-2 through OpenRouter with zero data retention on. 40 clips of 10-20 s, sent one at a time from a home network in India by the bench harness, not by the app. A second run without zero data retention gave p50 881 ms and p90 1,461 ms. The app's own target from stop tap to paste is p50 at most 1.0 s and p90 at most 1.5 s; `make latency` reports it from the app's latency log.
-- **Price.** The speech requests of that bench cost $0.17 for 99.2 minutes of audio, which matches OpenRouter's list price of $0.10 per hour. MAI-Transcribe-2 is in public preview, and this price is a promotion until 2026-12-31. Cleanup, which is optional, costs extra. Wispr Flow's price is from its Pro plan ($15 per month, or $12 per month billed yearly), as quoted in `docs/research/beyond-wispr.md`.
-- **Download.** The size of `kotoba-0.1.0.dmg` on the Releases page.
+How these were measured is under [Numbers](#numbers).
 
-Two more numbers from the capture path (built-in mic, from the commit that moved capture to AUHAL): recording starts 38-47 ms after the key press, and after the stop tap kotoba waits at most 13 ms for the last audio, so your last word is kept.
+## Install
+
+Requires macOS 26 or later.
+
+1. Download the latest `kotoba-<version>.dmg` from [Releases](https://github.com/shiroyasha9/kotoba/releases).
+2. Open it and drag kotoba to Applications.
+3. Open kotoba from Applications. It appears in the Dock and in the menu bar; hide either one in Settings > General.
+
+The app is signed with a Developer ID and notarized by Apple.
+
+### First run
+
+A setup window walks you through three steps, then lets you try a dictation:
+
+1. **Microphone.** Allow microphone access when macOS asks.
+2. **Accessibility.** Turn on kotoba in System Settings > Privacy & Security > Accessibility. kotoba needs it to notice the shortcut in every app and to paste your text.
+3. **OpenRouter key.** Create a key at [openrouter.ai](https://openrouter.ai) and paste it. You pay OpenRouter for the audio you send. Once saved, the key shows masked, with Change… and Remove.
+
+When Wispr Flow is installed, an optional step imports its dictionary. Each step waits for you to click Continue.
+
+The last step has a switch to open kotoba at login, on by default. You can change it later in Settings > General.
 
 ## Features
 
@@ -106,20 +125,11 @@ The screenshots show sample data.
   <tr>
     <td width="50%">
       <picture>
-        <source media="(prefers-color-scheme: dark)" srcset="docs/images/readme-home-dark.png">
-        <img src="docs/images/readme-home-light.png" alt="Home: kotoba is ready to dictate, with today’s words, this week’s words, the streak and the newest dictations">
-      </picture>
-      <p align="center">Home</p>
-    </td>
-    <td width="50%">
-      <picture>
         <source media="(prefers-color-scheme: dark)" srcset="docs/images/readme-history-dark.png">
         <img src="docs/images/readme-history-light.png" alt="History: dictations by day, with the app, length and word count of each, and the ones not yet transcribed">
       </picture>
       <p align="center">History</p>
     </td>
-  </tr>
-  <tr>
     <td width="50%">
       <picture>
         <source media="(prefers-color-scheme: dark)" srcset="docs/images/readme-insights-dark.png">
@@ -127,6 +137,8 @@ The screenshots show sample data.
       </picture>
       <p align="center">Insights</p>
     </td>
+  </tr>
+  <tr>
     <td width="50%">
       <picture>
         <source media="(prefers-color-scheme: dark)" srcset="docs/images/readme-usage-dark.png">
@@ -134,8 +146,6 @@ The screenshots show sample data.
       </picture>
       <p align="center">Usage</p>
     </td>
-  </tr>
-  <tr>
     <td width="50%">
       <picture>
         <source media="(prefers-color-scheme: dark)" srcset="docs/images/readme-modes-dark.png">
@@ -143,41 +153,41 @@ The screenshots show sample data.
       </picture>
       <p align="center">Modes</p>
     </td>
-    <td width="50%">
+  </tr>
+  <tr>
+    <td colspan="2" align="center">
       <picture>
         <source media="(prefers-color-scheme: dark)" srcset="docs/images/readme-general-dark.png">
-        <img src="docs/images/readme-general-light.png" alt="General: sound, indicator, saved audio, and whether kotoba opens at login and shows in the Dock and menu bar">
+        <img src="docs/images/readme-general-light.png" width="50%" alt="General: sound, indicator, saved audio, and whether kotoba opens at login and shows in the Dock and menu bar">
       </picture>
       <p align="center">General</p>
     </td>
   </tr>
 </table>
 
-## Install
+## Numbers
 
-Requires macOS 26 or later.
+| | kotoba | Wispr Flow |
+|---|---|---|
+| Memory at idle | **15.9 MB** | 748 MB (third-party test) |
+| Word error rate on real dictations | **3.3%** | 6.0% |
+| Technical terms transcribed exactly | **84.6%** (44 of 52) | 50.0% (26 of 52) |
+| Speech round trip, p50 / p90 | 902 ms / 1,083 ms | not compared |
+| Price | **about $0.10 per hour of audio**, paid to OpenRouter | $12-15 per month for Pro |
+| Download | 4.4 MB DMG | |
 
-1. Download the latest `kotoba-<version>.dmg` from [Releases](https://github.com/shiroyasha9/kotoba/releases).
-2. Open it and drag kotoba to Applications.
-3. Open kotoba from Applications. It appears in the Dock and in the menu bar; hide either one in Settings > General.
+<details>
+<summary>How these were measured</summary>
 
-The app is signed with a Developer ID and notarized by Apple.
+- **Memory.** Release build with Sparkle, idle 35 s after launch, no window opened: physical footprint from `vmmap --summary`, median of 5 launches (range 15.6-16.8 MB), on an M3 Pro with macOS 27. This was measured on the 0.1.0 shape of the app; see [`docs/research/memory-spike.md`](docs/research/memory-spike.md). Opening the kotoba window (Home, History, Insights, Usage and Settings) loads SwiftUI, which adds about 18-24 MB that stays until you quit. The Wispr Flow figure is not ours: it is from [tl;dv's review](https://tldv.io/blog/wispr-flow-notetaker-review/) (Wispr Flow 1.6.937 at rest on an 8 GB iMac), quoted in [`docs/research/beyond-wispr.md`](docs/research/beyond-wispr.md).
+- **Accuracy.** 62 real dictations from one developer, mostly coding prompts in a terminal, each with a hand-corrected reference. kotoba ran MAI-Transcribe-2 through OpenRouter with the personal dictionary sent as a phrase list. The Wispr Flow column is Wispr's own speech recognition on the same clips (its raw transcript, before its formatter). The 95% confidence interval for kotoba's word error rate is 1.6-5.8%; 62 clips is a small set. Details in [`docs/research/quality-perf-2.md`](docs/research/quality-perf-2.md); the harness is in [`bench/`](bench/). The audio is personal, so the clips and the full report are not in this repository.
+- **Round trip.** From the start of the upload to the full answer, for MAI-Transcribe-2 through OpenRouter with zero data retention on. 40 clips of 10-20 s, sent one at a time from a home network in India by the bench harness, not by the app. A second run without zero data retention gave p50 881 ms and p90 1,461 ms. The app's own target from stop tap to paste is p50 at most 1.0 s and p90 at most 1.5 s; `make latency` reports it from the app's latency log.
+- **Price.** The speech requests of that bench cost $0.17 for 99.2 minutes of audio, which matches OpenRouter's list price of $0.10 per hour. MAI-Transcribe-2 is in public preview, and this price is a promotion until 2026-12-31. Cleanup, which is optional, costs extra. Wispr Flow's price is from its Pro plan ($15 per month, or $12 per month billed yearly), as quoted in `docs/research/beyond-wispr.md`.
+- **Download.** The size of `kotoba-0.1.0.dmg` on the Releases page.
 
-## First run
+Two more numbers from the capture path (built-in mic, from the commit that moved capture to AUHAL): recording starts 38-47 ms after the key press, and after the stop tap kotoba waits at most 13 ms for the last audio, so your last word is kept.
 
-A setup window walks you through three steps, then lets you try a dictation:
-
-1. **Microphone.** Allow microphone access when macOS asks.
-2. **Accessibility.** Turn on kotoba in System Settings > Privacy & Security > Accessibility. kotoba needs it to notice the shortcut in every app and to paste your text.
-3. **OpenRouter key.** Create a key at [openrouter.ai](https://openrouter.ai) and paste it. You pay OpenRouter for the audio you send. Once saved, the key shows masked, with Change… and Remove.
-
-When Wispr Flow is installed, an optional step imports its dictionary. Each step waits for you to click Continue.
-
-The last step has a switch to open kotoba at login, on by default. You can change it later in Settings > General.
-
-## Updates
-
-kotoba updates itself with [Sparkle](https://sparkle-project.org). It checks once a day; turn this off in Settings > General. You can also click "Check for Updates…" in the menu.
+</details>
 
 ## Privacy
 
@@ -187,6 +197,10 @@ kotoba updates itself with [Sparkle](https://sparkle-project.org). It checks onc
 - **No telemetry.** No analytics and no crash reporting. The only other network request is Sparkle's update check, which you can turn off.
 - **Local history.** Transcripts, audio and the dictionary stay on your Mac in `~/Library/Application Support/kotoba/`, with the audio retention you choose.
 - **Learning stays local.** To learn from your edits, kotoba reads the text field you pasted into, for a short time after the paste, through Accessibility. It never reads password fields, and it keeps only the words it learns, not the text it read.
+
+## Updates
+
+kotoba updates itself with [Sparkle](https://sparkle-project.org). It checks once a day; turn this off in Settings > General. You can also click "Check for Updates…" in the menu.
 
 ## Limits
 
