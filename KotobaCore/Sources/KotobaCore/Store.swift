@@ -141,6 +141,9 @@ extension DictationRecord {
     /// The text kotoba pasted or offers to copy: the cleaned text of a cleanup dictation, else the transcript.
     public var deliveredText: String? { cleanedText ?? transcript }
 
+    /// There is text to copy, paste again or fix: `deliveredText` is there and not empty.
+    public var hasText: Bool { deliveredText?.isEmpty == false }
+
     /// The words of `deliveredText`, as the History pane counts them; the usage ledger counts each answer's text
     /// the same way. Nil when there is no text.
     public var wordCount: Int? {

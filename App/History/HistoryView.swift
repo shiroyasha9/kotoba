@@ -163,7 +163,7 @@ struct HistoryRow: View {
             .frame(width: 24, height: 24)
             .accessibilityHidden(true)
             VStack(alignment: .leading, spacing: 3) {
-                if let text = record.deliveredText, !text.isEmpty {
+                if record.hasText, let text = record.deliveredText {
                     Text(text).lineLimit(3)
                 } else {
                     Text(isRetryable ? "No text · audio saved" : "No text").foregroundStyle(.secondary)

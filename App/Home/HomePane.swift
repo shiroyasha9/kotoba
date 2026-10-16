@@ -168,7 +168,7 @@ private struct HomePane: View {
                             .buttonStyle(.borderless)
                             .help("Copy the text")
                             .padding(.top, 4)
-                        if record.deliveredText?.isEmpty == false {
+                        if record.hasText {
                             copy
                         } else {
                             copy.hidden()

@@ -208,12 +208,12 @@ final class HistoryModel {
     /// The text of each row, oldest first, a blank line between: the order they were spoken. `raw` takes the
     /// transcript before cleanup, which is the delivered text of a dictation without cleanup.
     static func text(of records: [DictationRecord], raw: Bool = false) -> String? {
-        let texts = records.reversed().compactMap { raw ? $0.transcript : $0.deliveredText }
+        let texts = records.reversed().compactMap { raw ? $0.transcript : $0.deliveredText }.filter { !$0.isEmpty }
         return texts.isEmpty ? nil : texts.joined(separator: "\n\n")
     }
 
     static func hasText(_ records: [DictationRecord]) -> Bool {
-        records.contains { $0.deliveredText != nil }
+        records.contains(where: \.hasText)
     }
 
     func copy(_ records: [DictationRecord], raw: Bool = false) {
@@ -223,7 +223,7 @@ final class HistoryModel {
 
     /// One row with text: the Fix window learns from one dictation's edit.
     func canFix(_ records: [DictationRecord]) -> Bool {
-        records.count == 1 && records.first?.deliveredText?.isEmpty == false
+        records.count == 1 && records.first?.hasText == true
     }
 
     func fix(_ records: [DictationRecord]) {
@@ -233,7 +233,7 @@ final class HistoryModel {
 
     /// One row only: two texts pasted in one go would read as one dictation.
     func canPasteAgain(_ records: [DictationRecord]) -> Bool {
-        activity.isQuiet && records.count == 1 && records.first?.deliveredText != nil
+        activity.isQuiet && records.count == 1 && records.first?.hasText == true
     }
 
     func pasteAgain(_ records: [DictationRecord]) {
