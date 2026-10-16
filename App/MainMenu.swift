@@ -7,24 +7,32 @@ import AppKit
 /// to the key window's delegate; the main window answers it by focusing the shown pane's search field.
 ///
 /// The app menu's own items have no target, so they go along the responder chain to the app delegate
-/// (`StatusMenuActions`).
+/// (`StatusMenuActions`). Its update item is the menu bar menu's (`MenuModel.updateItem`), built again from the same
+/// model each time the app menu opens: "Install Update…" while an update waits, disabled while Sparkle is busy.
 @MainActor
-struct MainMenu {
+final class MainMenu: NSObject, NSMenuDelegate {
     let menu = NSMenu()
     let services = NSMenu(title: "Services")
     let window = NSMenu(title: "Window")
     /// No items: AppKit adds its Search field.
     let help = NSMenu(title: "Help")
+    /// The update item's state, as the menu bar menu reads it; nil in a Debug build, which has no updater.
+    private let updates: @MainActor () -> MenuModel.Updates?
+    private weak var target: StatusMenuActions?
+    private var updateItem: NSMenuItem?
 
-    /// `hasUpdater`: the release's "Check for Updates…"; a Debug build has no updater.
-    init(hasUpdater: Bool) {
+    init(target: StatusMenuActions?, updates: @escaping @MainActor () -> MenuModel.Updates?) {
+        self.target = target
+        self.updates = updates
+        super.init()
         let name = Install.displayName
         let app = NSMenu(title: name)
+        app.delegate = self
         app.addItem(withTitle: "About \(name)", action: #selector(StatusMenuActions.showAbout), keyEquivalent: "")
-        if hasUpdater {
-            app.addItem(
-                withTitle: "Check for Updates…", action: #selector(StatusMenuActions.checkForUpdates),
-                keyEquivalent: "")
+        if let updates = updates() {
+            let item = MenuModel.updateItem(updates, target: target)
+            app.addItem(item)
+            updateItem = item
         }
         app.addItem(.separator())
         app.addItem(withTitle: "Settings…", action: #selector(StatusMenuActions.openSettings), keyEquivalent: ",")
@@ -54,6 +62,16 @@ struct MainMenu {
         ] {
             menu.addItem(withTitle: title, action: nil, keyEquivalent: "").submenu = submenu
         }
+    }
+
+    /// The app menu opens: its update item follows the updater's state now.
+    func menuNeedsUpdate(_ menu: NSMenu) {
+        guard let old = updateItem, let updates = updates() else { return }
+        let item = MenuModel.updateItem(updates, target: target)
+        let index = menu.index(of: old)
+        menu.removeItem(at: index)
+        menu.insertItem(item, at: index)
+        updateItem = item
     }
 
     /// Sets the menu as the app's main menu, with its Services, Window and Help menus.

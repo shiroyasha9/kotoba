@@ -47,8 +47,13 @@ extension AppDelegate: StatusMenuActions {
             hasLastDictation: hasLastDictation,
             hasRawLastDictation: hasRawLastDictation,
             suggestionCount: mainWindow.dictionary?.suggestions.count ?? 0,
-            updates: updater.map { MenuModel.Updates(canCheck: $0.canCheck, hasWaitingUpdate: $0.hasWaitingUpdate) }
+            updates: updates
         )
+    }
+
+    /// The update item's state for the menu bar menu and the app menu; nil in a Debug build, which has no updater.
+    var updates: MenuModel.Updates? {
+        updater.map { MenuModel.Updates(canCheck: $0.canCheck, hasWaitingUpdate: $0.hasWaitingUpdate) }
     }
 
     func finishSetup() {

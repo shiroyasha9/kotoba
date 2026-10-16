@@ -63,6 +63,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     let updater = Updater.forThisBuild()
     /// A development build gives way while the release app runs (`InstallYield`).
     let releaseWatcher = ReleaseAppWatcher()
+    lazy var mainMenu = MainMenu(target: self) { [weak self] in self?.updates }
     lazy var mainWindow: MainWindowController = MainWindowController(
         routeSettings: routeSettings, vault: vault, router: router, microphones: microphones, audio: audio,
         readiness: readiness, finishSetup: { [weak self] in self?.setup.finishSetup() },
@@ -87,7 +88,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         CGEventPaster.trackKeyboardLayout()
         FrontAppObserver.track()
         CGEventPaster.warmUp()
-        MainMenu(hasUpdater: updater != nil).install()
+        mainMenu.install()
         statusItem = DockAndMenuBar.shared.attach(StatusBarItem(target: self) { [weak self] in self?.menuModel() })
         updater?.onWaitingUpdateChange = { [weak self] in self?.updateIcon() }
         guard let store = openHistory() else { return }

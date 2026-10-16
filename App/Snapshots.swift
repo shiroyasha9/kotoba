@@ -116,11 +116,18 @@ enum Snapshots {
                 }
             }
             // The menu as text, one line per item, so a review can diff its words.
-            // The Dock icon's menu is the ready menu bar menu without Quit; the main menu is the release's.
+            // The Dock icon's menu is the ready menu bar menu without Quit; the main menu is the release's, also with an update
+            // waiting.
             let menus =
                 MenuModel.samples().map { ($0.name, $0.model.text()) }
                 + MenuModel.samples().filter { $0.name == "ready" }.map { ("dock", $0.model.text(for: .dock)) }
-                + [("main", MainMenu(hasUpdater: true).menu.outline())]
+                + [
+                    ("main", MainMenu(target: nil) { MenuModel.Updates() }.menu.outline()),
+                    (
+                        "main-update-waiting",
+                        MainMenu(target: nil) { MenuModel.Updates(hasWaitingUpdate: true) }.menu.outline()
+                    ),
+                ]
             for (name, text) in menus {
                 try text.write(to: folder.appending(path: "menu-\(name).txt"), atomically: true, encoding: .utf8)
                 written += 1

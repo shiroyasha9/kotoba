@@ -186,8 +186,9 @@ struct MenuModel {
         return items
     }
 
-    /// Without an action the menu disables the item, as it does the status line.
-    private static func updateItem(_ updates: Updates, target: StatusMenuActions?) -> NSMenuItem {
+    /// "Check for Updates…" or "Install Update…", in this menu and in the app menu (`MainMenu`). Without an action the
+    /// menu disables the item, as it does the status line.
+    static func updateItem(_ updates: Updates, target: StatusMenuActions?) -> NSMenuItem {
         let item = NSMenuItem.action(
             updates.hasWaitingUpdate ? "Install Update…" : "Check for Updates…", target: target,
             action: #selector(StatusMenuActions.checkForUpdates))
