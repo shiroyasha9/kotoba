@@ -17,6 +17,15 @@ extension SettingsPane {
 @MainActor
 @Observable
 final class GeneralModel {
+    /// One setting as the pane sees it: where its value comes from and where a change goes.
+    struct Setting<Value> {
+        var read: @MainActor () -> Value
+        var write: @MainActor (Value) -> Void
+
+        /// A stand-in for snapshots: always `value`, and a change goes nowhere.
+        static func fixed(_ value: Value) -> Self where Value: Sendable { Self(read: { value }, write: { _ in }) }
+    }
+
     /// Where the pane reads and writes launch at login: `LaunchAtLogin`, or a stand-in for snapshots.
     struct LoginItem {
         /// On, or turned on and waiting for approval in System Settings.
@@ -29,6 +38,38 @@ final class GeneralModel {
             change: { LaunchAtLogin.change(to: $0) })
     }
 
+    /// Where each setting outside `TranscriptionSettings` is kept: the app (`live`), or stand-ins for snapshots.
+    /// A new setting is one field here, one property below, and one line in `live` and `sample()`.
+    struct Backing {
+        var loginItem: LoginItem
+        var soundCues: Setting<Bool>
+        var indicatorAnchor: Setting<IndicatorAnchor>
+        var indicatorVisibility: Setting<IndicatorVisibility>
+        var submitPhrase: Setting<Bool>
+        /// Nil in a Debug build, which has no updater.
+        var checksForUpdates: Setting<Bool>?
+
+        /// `submitPhraseChanged` hands a new submit phrase setting to the pipeline.
+        static func live(
+            indicator: IndicatorPanel, updater: Updater?, submitPhraseChanged: @escaping @MainActor (Bool) -> Void
+        ) -> Self {
+            Self(
+                loginItem: .live,
+                soundCues: Setting(read: { AppDefaults.areSoundCuesOn }, write: { AppDefaults.areSoundCuesOn = $0 }),
+                indicatorAnchor: Setting(read: { indicator.anchor }, write: { indicator.anchor = $0 }),
+                indicatorVisibility: Setting(read: { indicator.visibility }, write: { indicator.visibility = $0 }),
+                submitPhrase: Setting(
+                    read: { AppDefaults.isSubmitPhraseOn },
+                    write: {
+                        AppDefaults.isSubmitPhraseOn = $0
+                        submitPhraseChanged($0)
+                    }),
+                checksForUpdates: updater.map { updater in
+                    Setting(read: { updater.checksAutomatically }, write: { updater.checksAutomatically = $0 })
+                })
+        }
+    }
+
     var cleanupModel: CleanupModel {
         didSet { settings.cleanupModel = cleanupModel }
     }
@@ -39,34 +80,30 @@ final class GeneralModel {
     private(set) var loginProblem: LaunchAtLogin.Problem?
 
     var areSoundsOn: Bool {
-        didSet { AppDefaults.areSoundCuesOn = areSoundsOn }
+        didSet { backing.soundCues.write(areSoundsOn) }
     }
 
     var indicatorAnchor: IndicatorAnchor {
-        didSet { setAnchor(indicatorAnchor) }
+        didSet { backing.indicatorAnchor.write(indicatorAnchor) }
     }
 
     var indicatorVisibility: IndicatorVisibility {
-        didSet { setVisibility(indicatorVisibility) }
+        didSet { backing.indicatorVisibility.write(indicatorVisibility) }
     }
 
     var isSubmitPhraseOn: Bool {
-        didSet { setSubmitPhrase(isSubmitPhraseOn) }
+        didSet { backing.submitPhrase.write(isSubmitPhraseOn) }
     }
 
     var checksForUpdates: Bool {
-        didSet { setChecksForUpdates?(checksForUpdates) }
+        didSet { backing.checksForUpdates?.write(checksForUpdates) }
     }
 
     /// False in a Debug build, which has no updater: the Updates section hides.
-    var hasUpdater: Bool { setChecksForUpdates != nil }
+    var hasUpdater: Bool { backing.checksForUpdates != nil }
 
     @ObservationIgnored private let settings: TranscriptionSettings
-    @ObservationIgnored private let loginItem: LoginItem
-    @ObservationIgnored private let setAnchor: @MainActor (IndicatorAnchor) -> Void
-    @ObservationIgnored private let setVisibility: @MainActor (IndicatorVisibility) -> Void
-    @ObservationIgnored private let setSubmitPhrase: @MainActor (Bool) -> Void
-    @ObservationIgnored private let setChecksForUpdates: (@MainActor (Bool) -> Void)?
+    @ObservationIgnored private let backing: Backing
     /// Observable itself: the rows and the cleanup model follow a new recording.
     @ObservationIgnored let chords: HotkeyChords
     /// The History section; nil when the history database did not open.
@@ -77,52 +114,33 @@ final class GeneralModel {
         settings: TranscriptionSettings, indicator: IndicatorPanel, updater: Updater?, audio: AudioRetentionModel?,
         submitPhraseChanged: @escaping @MainActor (Bool) -> Void
     ) {
-        var setChecksForUpdates: (@MainActor (Bool) -> Void)?
-        if let updater {
-            setChecksForUpdates = { updater.checksAutomatically = $0 }
-        }
         self.init(
-            settings: settings, loginItem: .live, chords: .shared, areSoundsOn: AppDefaults.areSoundCuesOn,
-            indicatorAnchor: indicator.anchor, setAnchor: { indicator.anchor = $0 },
-            indicatorVisibility: indicator.visibility, setVisibility: { indicator.visibility = $0 },
-            isSubmitPhraseOn: AppDefaults.isSubmitPhraseOn,
-            setSubmitPhrase: {
-                AppDefaults.isSubmitPhraseOn = $0
-                submitPhraseChanged($0)
-            }, checksForUpdates: updater?.checksAutomatically ?? false, setChecksForUpdates: setChecksForUpdates,
-            audio: audio)
+            settings: settings, chords: .shared, audio: audio,
+            backing: .live(indicator: indicator, updater: updater, submitPhraseChanged: submitPhraseChanged))
     }
 
     private init(
-        settings: TranscriptionSettings, loginItem: LoginItem, chords: HotkeyChords, areSoundsOn: Bool,
-        indicatorAnchor: IndicatorAnchor, setAnchor: @escaping @MainActor (IndicatorAnchor) -> Void,
-        indicatorVisibility: IndicatorVisibility, setVisibility: @escaping @MainActor (IndicatorVisibility) -> Void,
-        isSubmitPhraseOn: Bool, setSubmitPhrase: @escaping @MainActor (Bool) -> Void,
-        checksForUpdates: Bool, setChecksForUpdates: (@MainActor (Bool) -> Void)?, audio: AudioRetentionModel?
+        settings: TranscriptionSettings, chords: HotkeyChords, audio: AudioRetentionModel?, backing: Backing
     ) {
         self.settings = settings
-        self.loginItem = loginItem
-        self.setAnchor = setAnchor
-        self.setVisibility = setVisibility
-        self.setSubmitPhrase = setSubmitPhrase
-        self.setChecksForUpdates = setChecksForUpdates
         self.chords = chords
         self.audio = audio
+        self.backing = backing
         cleanupModel = settings.cleanupModel
-        isLaunchAtLoginOn = loginItem.isOn()
-        loginProblem = loginItem.problem()
-        self.areSoundsOn = areSoundsOn
-        self.indicatorAnchor = indicatorAnchor
-        self.indicatorVisibility = indicatorVisibility
-        self.isSubmitPhraseOn = isSubmitPhraseOn
-        self.checksForUpdates = checksForUpdates
+        isLaunchAtLoginOn = backing.loginItem.isOn()
+        loginProblem = backing.loginItem.problem()
+        areSoundsOn = backing.soundCues.read()
+        indicatorAnchor = backing.indicatorAnchor.read()
+        indicatorVisibility = backing.indicatorVisibility.read()
+        isSubmitPhraseOn = backing.submitPhrase.read()
+        checksForUpdates = backing.checksForUpdates?.read() ?? false
     }
 
     /// One register or unregister call per click; the toggle then shows what the system holds.
     func setLaunchAtLogin(_ isOn: Bool) {
         guard isOn != isLaunchAtLoginOn else { return }
-        loginProblem = loginItem.change(isOn)
-        isLaunchAtLoginOn = loginItem.isOn()
+        loginProblem = backing.loginItem.change(isOn)
+        isLaunchAtLoginOn = backing.loginItem.isOn()
     }
 
     /// Fixed values for snapshots: no UserDefaults, Login Items, indicator or updater is read. `loginItem` stands
@@ -131,10 +149,11 @@ final class GeneralModel {
         -> GeneralModel
     {
         GeneralModel(
-            settings: .inMemory(), loginItem: loginItem, chords: HotkeyChords(defaults: nil), areSoundsOn: true,
-            indicatorAnchor: .bottomCenter, setAnchor: { _ in }, indicatorVisibility: .whileDictating,
-            setVisibility: { _ in }, isSubmitPhraseOn: true, setSubmitPhrase: { _ in }, checksForUpdates: true,
-            setChecksForUpdates: { _ in }, audio: .sample())
+            settings: .inMemory(), chords: HotkeyChords(defaults: nil), audio: .sample(),
+            backing: Backing(
+                loginItem: loginItem, soundCues: .fixed(true), indicatorAnchor: .fixed(.bottomCenter),
+                indicatorVisibility: .fixed(.whileDictating), submitPhrase: .fixed(true),
+                checksForUpdates: .fixed(true)))
     }
 }
 
