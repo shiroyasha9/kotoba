@@ -672,7 +672,7 @@ Rows 500-514 use kotoba Dev with the release kotoba quit. A fresh setup: `defaul
 | 503 | Key step with a key saved earlier (quit and reopen kotoba Dev on this step) | The masked key ("sk-or-v1-…" and four characters) with **Change…** and **Remove**; "Key saved" under it; no empty key field | |
 | 504 | Click **Change…**, then press Esc | The field shows with the cursor in it and a **Cancel** button; Esc puts the masked key back; the saved key still works | |
 | 505 | Click **Change…**, paste another key (⌘V), press Return | The new key's last four characters show; the key check runs again | |
-| 506 | Click **Remove** | The empty field "Paste your OpenRouter key" shows; the Done step says kotoba has no key | |
+| 506 | Click **Remove**; click **Cancel**; click **Remove** again, then **Remove** in the alert | The alert “Remove Your OpenRouter Key?” says kotoba can’t dictate until you save a new key; Cancel keeps the key; Remove shows the empty field "Paste your OpenRouter key", and the Done step says kotoba has no key | |
 | 507 | With Wispr Flow installed, Continue from the key step | "Bring Your Words from Wispr Flow" shows as a step (7 dots); **Import from Wispr Flow…** shows the same alert as Settings > Dictionary with the counts | |
 | 508 | Click **Import** in the alert | "Added N words and M replacements." with a checkmark; **Continue** is the default button; Settings > Dictionary lists the words | |
 | 509 | Run the Wispr Flow step again after an import | "Nothing New in Wispr Flow"; **OK** shows "Your dictionary already has every word from Wispr Flow." | |
@@ -683,3 +683,4 @@ Rows 500-514 use kotoba Dev with the release kotoba quit. A fresh setup: `defaul
 | 514 | Start a dictation, then click **Test Microphone** while it records | "A dictation is recording. Test again when it ends." with an orange warning; the dictation goes on | |
 | 515 | Key step: save a good key; Try It step: dictate into the field | **Continue** turns prominent on each step once it is done | |
 | 516 | Leave Microphone off and go to the Done step | “kotoba can’t use the microphone yet.” (the same words as Home) with **Allow Microphone**; the text above says to open kotoba from the menu bar or the Dock | |
+| 517 | Settings > Speech > **Remove**, then press Esc | The same alert; Esc cancels and the key stays | |

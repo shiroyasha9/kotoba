@@ -250,7 +250,23 @@ extension Pane {
                         route: .azureMAI, azureEndpoint: "", savedKeys: [.azure],
                         keyStatus: [.azure: .checked(.invalid)])),
                 named: "settings-speech-azure"),
+            removeKeyAlert,
         ]
+    }
+
+    /// The Remove confirmation as AppKit draws it, with KeyField's words: SwiftUI's `.alert` is a sheet on the window,
+    /// which an offscreen run cannot show.
+    private static var removeKeyAlert: Snapshot {
+        Snapshot(name: "settings-speech-remove-key") {
+            let alert = NSAlert()
+            alert.alertStyle = .warning
+            alert.messageText = KeyField.removeTitle(.openRouter)
+            alert.informativeText = KeyField.removeMessage
+            alert.addButton(withTitle: "Remove").hasDestructiveAction = true
+            alert.addButton(withTitle: "Cancel")
+            alert.layout()
+            return alert.window.contentView ?? NSView()
+        }
     }
 }
 

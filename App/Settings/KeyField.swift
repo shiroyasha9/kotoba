@@ -12,6 +12,7 @@ struct KeyField: View {
     /// The owner clicked Change…: the field shows over the saved key until Save or Cancel.
     @State private var isChanging = false
     @State private var draft = ""
+    @State private var isConfirmingRemove = false
     @FocusState private var isFieldFocused: Bool
 
     var body: some View {
@@ -24,9 +25,16 @@ struct KeyField: View {
                     .textSelection(.disabled)
                     .accessibilityLabel("Saved \(account.title) key")
                 Button("Change…") { isChanging = true }
-                Button("Remove", role: .destructive) { keyChecks.remove(account) }
+                Button("Remove", role: .destructive) { isConfirmingRemove = true }
             }
             .task { await keyChecks.loadMask(for: account) }
+            // Without the key every dictation waits, so Remove asks first (lead, 2026-10-16).
+            .alert(Self.removeTitle(account), isPresented: $isConfirmingRemove) {
+                Button("Remove", role: .destructive) { keyChecks.remove(account) }
+                Button("Cancel", role: .cancel) {}
+            } message: {
+                Text(Self.removeMessage)
+            }
         } else {
             HStack {
                 SecureField("Key", text: $draft, prompt: Text("Paste your \(account.title) key"))
@@ -49,6 +57,12 @@ struct KeyField: View {
             }
         }
     }
+
+    static func removeTitle(_ account: ProviderAccount) -> String {
+        "Remove Your \(account.title) Key?"
+    }
+
+    static let removeMessage = "kotoba can’t dictate until you save a new key."
 
     private var isDraftEmpty: Bool { draft.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty }
 

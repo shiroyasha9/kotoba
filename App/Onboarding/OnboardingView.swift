@@ -41,17 +41,18 @@ struct OnboardingView: View {
         .wisprImportAlert(model.dictionary, imported: model.wisprImportAnswered)
     }
 
+    /// The step's symbol; kotoba's app icon on Welcome.
     @ViewBuilder private var icon: some View {
-        if model.step == .welcome {
-            Image(nsImage: NSApp.applicationIconImage)
-                .resizable()
-                .frame(width: Self.iconHeight, height: Self.iconHeight)
-                .accessibilityHidden(true)
-        } else {
+        if let symbol {
             Image(systemName: symbol)
                 .font(.largeTitle)
                 .imageScale(.large)
                 .foregroundStyle(.tint)
+        } else {
+            Image(nsImage: NSApp.applicationIconImage)
+                .resizable()
+                .frame(width: Self.iconHeight, height: Self.iconHeight)
+                .accessibilityHidden(true)
         }
     }
 
@@ -67,9 +68,9 @@ struct OnboardingView: View {
         }
     }
 
-    private var symbol: String {
+    private var symbol: String? {
         switch model.step {
-        case .welcome: "waveform"
+        case .welcome: nil
         case .microphone: "mic"
         case .accessibility: "accessibility"
         case .key: "key"
