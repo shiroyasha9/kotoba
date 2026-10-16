@@ -15,6 +15,10 @@ public protocol AudioSource: Sendable {
     /// remembers the discard, so the file is never sent (`Store.markDiscarded`).
     @discardableResult
     func discardCapture() async -> Bool
+    /// Deletes the file of a capture that already ended (`endCapture`): a recording too short to send
+    /// (`Settings.minimumRecording`). False when the file stays on disk, as for `discardCapture`.
+    @discardableResult
+    func discard(_ audio: RecordedAudio) async -> Bool
     /// Turns the mic off and keeps the file open, for the Undo window after Esc.
     func pauseCapture() async
     /// Turns the mic back on and appends to the same file.

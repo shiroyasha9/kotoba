@@ -149,12 +149,12 @@ UI text in this list is the text in the code at the phase 2 gate (2026-10-15). I
 
 | # | Do this | Expect | Result |
 |---|---|---|---|
-| 90 | Turn Wi-Fi off, dictate, turn Wi-Fi on | Indicator "Failed - retry from the menu"; no text lost; **Retry Failed Dictations (1)** sends it; it appears under **Recovered (1)**; a click copies it; the clipboard was not changed automatically | |
+| 90 | Turn Wi-Fi off, dictate, turn Wi-Fi on | The pill says “Couldn’t reach OpenRouter. Saved.” with **Retry**; no text lost; **Retry Failed Dictations (1)** sends it; it appears under **Recovered (1)**; a click copies it; the clipboard was not changed automatically | |
 | 91 | Quit kotoba during an upload, open it again | The dictation appears under **Recovered** | |
 | 92 | Quit kotoba Dev (**Quit kotoba Dev** or Cmd-Q) during a recording, open it again | Nothing is lost: the dictation is transcribed at launch and appears under **Recovered** | |
-| 93 | Tap the chord, say nothing, tap again within 1 s | No paste; the pill says “No speech heard”, not “Couldn’t reach OpenRouter”; no Dock badge, nothing waits for a retry | |
-| 94 | In **History**, retry that dictation | It is sent once more; empty again, it stays “No speech heard” and is not retried by itself | |
-| 95 | Use a key with no credits (or a refused request) | "Refused - check the key or credits"; the audio is kept; it is not retried | |
+| 93 | Tap the chord twice fast (under half a second of audio) | No paste, no error pill: the pill goes away; no new row in **History**, no Dock badge | |
+| 94 | Tap the chord, say nothing for 2 s, tap again; then retry that dictation in **History** | No paste; the pill says “No speech heard”, not “Couldn’t reach OpenRouter”; no Dock badge. The retry sends it once more; empty again, it stays “No speech heard” and is not retried by itself | |
+| 95 | Use a key with no credits, then send a request the route refuses | No credit: “OpenRouter is out of credit. Saved.” with **Add Credit…**; the dictation waits for credit. Refused: “OpenRouter refused the audio. Saved.”; it is not retried. The audio is kept in both | |
 
 ## Audio devices
 

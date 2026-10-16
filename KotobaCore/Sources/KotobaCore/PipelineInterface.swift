@@ -141,6 +141,10 @@ extension DictationPipeline {
         public var longRecordingWarning: Duration
         /// The mic gave no sound this long: the indicator warns (`NoSoundPolicy`).
         public var noSoundWarning: Duration
+        /// A stop with less audio than this (an accidental double tap) discards the dictation: no request, no file,
+        /// no history row and no error. Measured on the audio written, Undo's resumed part included, not on the key
+        /// times. Wispr Flow discards under about 0.5 s.
+        public var minimumRecording: Duration
         /// Slow apps read the pasteboard late; restoring sooner can paste the old clipboard.
         public var restoreDelay: Duration
         /// The longest a paste waits for the chord's release (a Cmd-V with the chord held reaches the app as
@@ -174,6 +178,7 @@ extension DictationPipeline {
             tapThreshold: Duration = .milliseconds(400),
             longRecordingWarning: Duration = .seconds(600),
             noSoundWarning: Duration = .seconds(2),
+            minimumRecording: Duration = .milliseconds(500),
             restoreDelay: Duration = .seconds(1),
             chordReleaseWait: Duration = .seconds(2),
             undoWindow: Duration = .seconds(5),
@@ -188,6 +193,7 @@ extension DictationPipeline {
             self.tapThreshold = tapThreshold
             self.longRecordingWarning = longRecordingWarning
             self.noSoundWarning = noSoundWarning
+            self.minimumRecording = minimumRecording
             self.restoreDelay = restoreDelay
             self.chordReleaseWait = chordReleaseWait
             self.undoWindow = undoWindow

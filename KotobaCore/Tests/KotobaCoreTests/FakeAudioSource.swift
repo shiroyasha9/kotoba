@@ -9,9 +9,9 @@ actor FakeAudioSource: AudioSource {
     /// The mic is off for the Undo window; the file is still open.
     private(set) var isPaused = false
     private(set) var resumes = 0
-    /// Files deleted by `discardCapture`.
+    /// Files deleted by `discardCapture` or `discard(_:)`.
     private(set) var discarded: [URL] = []
-    /// Files `discardCapture` could not delete: they stay on disk.
+    /// Files `discardCapture` or `discard(_:)` could not delete: they stay on disk.
     private(set) var undeletable: [URL] = []
     private var isRemovalFailing = false
     private var isCaptureLost = false
@@ -99,6 +99,14 @@ actor FakeAudioSource: AudioSource {
         isCapturing = false
         continuation?.finish()
         guard let file = files.popLast() else { return true }
+        return remove(file)
+    }
+
+    func discard(_ audio: RecordedAudio) async -> Bool {
+        remove(audio.file)
+    }
+
+    private func remove(_ file: URL) -> Bool {
         if isRemovalFailing {
             undeletable.append(file)
             return false

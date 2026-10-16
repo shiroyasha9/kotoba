@@ -220,16 +220,20 @@ extension DictationPipeline {
     /// stays on disk is remembered as discarded, so no launch takes it for an orphan and sends it (`OrphanAudio`).
     func discard(_ current: Recording) async {
         endRecording(current)
-        if await !ports.audio.discardCapture() {
-            do {
-                try await ports.store.markDiscarded(current.id)
-            } catch {
-                Log.pipeline.error("Cannot remember discarded audio \(current.id.rawValue): \(error)")
-            }
-        }
+        await remember(current.id, unless: await ports.audio.discardCapture())
         await current.captureEvents.value
         _ = latencies.take(current.id)
         emit(inFlightState)
         resumeQuietWaiters()
+    }
+
+    /// Remembers a discarded recording whose file stayed on disk (`isDeleted` false).
+    func remember(_ id: DictationID, unless isDeleted: Bool) async {
+        guard !isDeleted else { return }
+        do {
+            try await ports.store.markDiscarded(id)
+        } catch {
+            Log.pipeline.error("Cannot remember discarded audio \(id.rawValue): \(error)")
+        }
     }
 }

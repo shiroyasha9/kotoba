@@ -4,10 +4,16 @@ import Foundation
 
 extension DictationPipeline {
     /// `audio` is nil when the audio source ran no capture: the stop says nothing was recorded and keeps nothing.
+    /// Audio shorter than `Settings.minimumRecording` (an accidental double tap) is discarded with no word.
     func finish(_ current: Recording, audio: RecordedAudio?, clipboard: ClipboardGuard.Pending) async {
         let (keyDown, latency) = latencies.take(current.id)
         guard let audio else {
             finishDictation(current.id, showing: .nothingRecorded)
+            return
+        }
+        guard audio.duration >= settings.minimumRecording else {
+            await remember(current.id, unless: await ports.audio.discard(audio))
+            finishDictation(current.id, showing: .idle)
             return
         }
         let job = TranscriptDelivery.Job(

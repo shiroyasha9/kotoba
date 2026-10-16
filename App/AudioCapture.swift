@@ -217,6 +217,11 @@ actor AudioCapture: AudioSource {
     @discardableResult
     func discardCapture() async -> Bool {
         guard let audio = await cancelCapture() else { return true }
+        return await discard(audio)
+    }
+
+    @discardableResult
+    func discard(_ audio: RecordedAudio) async -> Bool {
         do {
             try FileManager.default.removeItem(at: audio.file)
             return true
