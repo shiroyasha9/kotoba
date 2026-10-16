@@ -8,6 +8,8 @@ import SwiftUI
 struct OnboardingView: View {
     /// A readable line length in the window: every step's text and boxes share it.
     static let textWidth: CGFloat = 420
+    /// The app icon's size on Welcome; every step's symbol sits in a slot this tall.
+    private static let iconHeight: CGFloat = 80
 
     @Bindable var model: OnboardingModel
     /// Closes the window after Done.
@@ -15,8 +17,11 @@ struct OnboardingView: View {
 
     var body: some View {
         VStack(spacing: 0) {
+            // Top-aligned at a fixed inset, with the icon in a slot of one height, so the title stays in place from step
+            // to step.
             VStack(spacing: 14) {
                 icon
+                    .frame(height: Self.iconHeight)
                 Text(title)
                     .font(.title)
                     .fontWeight(.semibold)
@@ -24,7 +29,8 @@ struct OnboardingView: View {
             }
             .multilineTextAlignment(.center)
             .padding(.horizontal, 48)
-            .frame(maxWidth: .infinity, maxHeight: .infinity)
+            .padding(.top, 28)
+            .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
             Divider()
             footer
                 .padding(.horizontal, 20)
@@ -39,7 +45,7 @@ struct OnboardingView: View {
         if model.step == .welcome {
             Image(nsImage: NSApp.applicationIconImage)
                 .resizable()
-                .frame(width: 88, height: 88)
+                .frame(width: Self.iconHeight, height: Self.iconHeight)
                 .accessibilityHidden(true)
         } else {
             Image(systemName: symbol)
@@ -95,9 +101,13 @@ struct OnboardingView: View {
             switch OnboardingFlow.footer(on: model.step, isDone: model.isDone(model.step)) {
             case .getStarted:
                 Button("Get Started", action: model.goForward).keyboardShortcut(.defaultAction)
-            case .continue(let isDefault):
-                // Not the default where Return belongs to the step's text field.
-                Button("Continue", action: model.goForward).keyboardShortcut(isDefault ? .defaultAction : nil)
+            case .continue(.plain):
+                Button("Continue", action: model.goForward)
+            case .continue(let emphasis):
+                // Prominent once the step is done; Return presses it unless the step's text field takes Return.
+                Button("Continue", action: model.goForward)
+                    .buttonStyle(.borderedProminent)
+                    .keyboardShortcut(emphasis == .defaultAction ? .defaultAction : nil)
             case .notNow:
                 Button("Not Now", action: model.goForward)
             case .waitsForStep:

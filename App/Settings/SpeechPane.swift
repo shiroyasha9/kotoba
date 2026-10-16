@@ -209,15 +209,20 @@ private struct KeyRow: View {
     let model: SpeechSettingsModel
 
     var body: some View {
-        LabeledContent(label) {
-            VStack(alignment: .trailing, spacing: 4) {
-                KeyField(account: account, keyChecks: model.keyChecks)
+        LabeledContent {
+            KeyField(account: account, keyChecks: model.keyChecks)
+        } label: {
+            // The status is the row's subtitle, as System Settings shows a row's state under its name.
+            Text(label)
+            Group {
                 if let status = model.keyChecks.status[account] {
                     KeyCheckLine(status: status, account: account)
                 } else if model.keyChecks.isSaved(account) {
                     StatusLabel("Saved", systemImage: "checkmark.circle.fill", color: .green)
                 }
             }
+            .font(.callout)
+            .controlSize(.small)
         }
     }
 }

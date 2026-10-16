@@ -97,7 +97,8 @@ final class OnboardingModel {
     /// Whether the step's own requirement is met; the window marks it done.
     func isDone(_ step: OnboardingStep) -> Bool {
         switch step {
-        case .welcome, .tryIt, .done: false
+        case .welcome, .done: false
+        case .tryIt: !tryItText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
         case .microphone: readiness.microphone == .allowed
         case .accessibility: readiness.isAccessibilityAllowed
         case .key: readiness.missingSetup == nil

@@ -148,7 +148,7 @@ struct KeyCheckLine: View {
         case .checked(.valid):
             StatusLabel("Key works", systemImage: "checkmark.circle.fill", color: .green)
         case .checked(.invalid):
-            StatusLabel("\(account.title) did not accept this key", systemImage: "xmark.circle.fill", color: .red)
+            StatusLabel("\(account.title) didn’t accept this key.", systemImage: "xmark.circle.fill", color: .red)
         case .checked(.noCredit):
             HStack {
                 StatusLabel("This key has no credit.", systemImage: "exclamationmark.circle.fill", color: .orange)

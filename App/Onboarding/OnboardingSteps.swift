@@ -33,10 +33,12 @@ struct WelcomeStep: View {
                 text: "Add names and terms to your dictionary, and kotoba spells them your way.")
             Point(
                 "Private", systemImage: "lock",
-                text: "No account. Your audio goes only to the speech service you choose, with your own key.")
+                text:
+                    "kotoba needs no account. Your audio goes only to the speech service you choose, with your own key."
+            )
         }
         .frame(width: OnboardingView.textWidth, alignment: .leading)
-        .padding(.vertical, 6)
+        .padding(.vertical, 2)
         Form {
             Section {
                 LabeledContent("Shortcut") {
@@ -124,7 +126,7 @@ struct AccessibilityStep: View {
         if model.readiness.isAccessibilityAllowed {
             StatusLine("Accessibility allowed", .good).padding(.top, 8)
         } else {
-            Button("Open Accessibility Settings", action: model.allowAccessibility)
+            Button("Open System Settings…", action: model.allowAccessibility)
                 .buttonStyle(.borderedProminent)
                 .keyboardShortcut(.defaultAction)
                 .controlSize(.large)
@@ -221,7 +223,7 @@ struct TryItStep: View {
             .frame(width: 360)
             .focused($isFieldFocused)
             .onAppear { isFieldFocused = true }
-        if model.tryItText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+        if !model.isDone(.tryIt) {
             Text("Or hold \(StatusText.dictationChord) while you speak, and let go.")
                 .font(.callout)
                 .foregroundStyle(.secondary)
@@ -235,7 +237,7 @@ struct DoneStep: View {
     @Bindable var model: OnboardingModel
 
     var body: some View {
-        StepText("kotoba lives in the menu bar. Click the waveform icon to change your microphone or open Settings.")
+        StepText("Open kotoba from the menu bar or the Dock to change your microphone or settings.")
         Form {
             Toggle(
                 "Open kotoba when you log in",
@@ -253,9 +255,9 @@ struct DoneStep: View {
             Text(problem.text).font(.callout).foregroundStyle(.secondary)
             Button("Open Login Items…", action: model.openLoginItemsSettings)
         }
-        if let step = model.firstMissingStep {
+        if let step = model.firstMissingStep, let missing = model.readiness.firstMissing {
             HStack {
-                StatusLine(missingText(step), .problem)
+                StatusLine(missing.problemText, .problem)
                 if model.readiness.missingSetup?.item == .endpoint {
                     Button("Add Your Azure Endpoint…", action: model.openSpeechSettings)
                 } else {
@@ -267,20 +269,9 @@ struct DoneStep: View {
         }
     }
 
-    /// What the missing step leaves undone, in the owner's terms.
-    private func missingText(_ step: OnboardingStep) -> String {
-        switch step {
-        case .microphone: "kotoba cannot use the microphone yet."
-        case .accessibility: "kotoba cannot hear \(StatusText.dictationChord) or paste yet."
-        default:
-            model.readiness.missingSetup?.item == .endpoint
-                ? "kotoba has no Azure endpoint yet." : "kotoba has no \(model.account.title) key yet."
-        }
-    }
-
     private func fixTitle(_ step: OnboardingStep) -> String {
         switch step {
-        case .microphone: "Allow the Microphone"
+        case .microphone: "Allow Microphone"
         case .accessibility: "Allow Accessibility"
         default: "Add Your Key"
         }

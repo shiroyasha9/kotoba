@@ -16,9 +16,16 @@ public enum OnboardingStep: String, CaseIterable, Sendable, Identifiable {
 
 /// What the footer offers on a step, next to Back.
 public enum OnboardingFooter: Equatable, Sendable {
+    /// How Continue stands out: prominent once the step is done; also Return's button unless the step's text field
+    /// takes Return.
+    public enum Emphasis: Equatable, Sendable {
+        case plain
+        case prominent
+        case defaultAction
+    }
+
     case getStarted
-    /// `isDefault`: Return presses it. Not on a step whose text field takes Return.
-    case `continue`(isDefault: Bool)
+    case `continue`(Emphasis)
     /// The step is optional and not done: the footer moves on without it.
     case notNow
     /// Continue shows dimmed until the step is done: kotoba cannot work without it (a permission).
@@ -65,9 +72,9 @@ public struct OnboardingFlow: Equatable, Sendable {
     public static func footer(on step: OnboardingStep, isDone: Bool) -> OnboardingFooter {
         switch step {
         case .welcome: .getStarted
-        case .microphone, .accessibility: isDone ? .continue(isDefault: true) : .waitsForStep
-        case .wisprImport: isDone ? .continue(isDefault: true) : .notNow
-        case .key, .tryIt: .continue(isDefault: false)
+        case .microphone, .accessibility: isDone ? .continue(.defaultAction) : .waitsForStep
+        case .wisprImport: isDone ? .continue(.defaultAction) : .notNow
+        case .key, .tryIt: .continue(isDone ? .prominent : .plain)
         case .done: .done
         }
     }

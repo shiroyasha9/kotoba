@@ -50,19 +50,19 @@ struct OnboardingFlowTests {
     @Test(arguments: [OnboardingStep.microphone, .accessibility])
     func aPermissionStepWaitsForItsGrant(step: OnboardingStep) {
         #expect(OnboardingFlow.footer(on: step, isDone: false) == .waitsForStep)
-        #expect(OnboardingFlow.footer(on: step, isDone: true) == .continue(isDefault: true))
+        #expect(OnboardingFlow.footer(on: step, isDone: true) == .continue(.defaultAction))
     }
 
     @Test func theWisprStepIsOptional() {
         #expect(OnboardingFlow.footer(on: .wisprImport, isDone: false) == .notNow)
-        #expect(OnboardingFlow.footer(on: .wisprImport, isDone: true) == .continue(isDefault: true))
+        #expect(OnboardingFlow.footer(on: .wisprImport, isDone: true) == .continue(.defaultAction))
     }
 
-    /// Return belongs to the text field on the key and Try It steps.
+    /// Return belongs to the text field on the key and Try It steps; Continue stands out once the step is done.
     @Test(arguments: [OnboardingStep.key, .tryIt])
     func aStepWithATextFieldHasNoDefaultContinue(step: OnboardingStep) {
-        #expect(OnboardingFlow.footer(on: step, isDone: false) == .continue(isDefault: false))
-        #expect(OnboardingFlow.footer(on: step, isDone: true) == .continue(isDefault: false))
+        #expect(OnboardingFlow.footer(on: step, isDone: false) == .continue(.plain))
+        #expect(OnboardingFlow.footer(on: step, isDone: true) == .continue(.prominent))
     }
 
     @Test func welcomeStartsAndDoneFinishes() {

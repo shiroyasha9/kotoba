@@ -198,7 +198,7 @@ Rows from each agent's phase 2.5 work. The numbers continue the list above.
 | 112 | Microphone step: click **Allow Microphone**, then **Allow** in the prompt | "Microphone allowed" with a checkmark; the window stays on the step; **Continue** turns on and Return presses it | |
 | 113 | Microphone step, deny instead | "Microphone access is off."; **Open System Settings** opens Privacy & Security > Microphone | |
 | 114 | Turn kotoba Dev on there | The step turns green within 1 s and stays until you click **Continue** | |
-| 115 | Accessibility step: click **Open Accessibility Settings** | The system prompt shows (kotoba joins the list) | |
+| 115 | Accessibility step: click **Open System Settings…** | The system prompt shows (kotoba joins the list) | |
 | 116 | Click it again | Privacy & Security > Accessibility opens | |
 | 117 | Turn kotoba Dev on there | The step turns green within 1 s and stays until you click **Continue** | |
 | 118 | Key step: press ⌘V in the key field, then ⌘A | The key pastes, then all of it is selected; no beep | |
@@ -230,7 +230,7 @@ Rows from each agent's phase 2.5 work. The numbers continue the list above.
 | 139 | Click **Get a Key…**, then **See Pricing…** | The browser opens OpenRouter's keys page, then the MAI-Transcribe-2 price page | |
 | 140 | Pick each speech model in turn and click **Get a Key…** and **See Pricing…** | OpenRouter, the xAI console and the Azure portal (keys), and each provider's price page open (sign in if asked) | |
 | 141 | Paste a valid key, press **Save** | "Checking the key…", then a green "Key works" | |
-| 142 | Paste a wrong key (for example "sk-or-wrong"), press **Save** | "OpenRouter did not accept this key" in red | |
+| 142 | Paste a wrong key (for example "sk-or-wrong"), press **Save** | "OpenRouter didn’t accept this key." in red, under "Key" | |
 | 143 | Save a key with no credit | "This key has no credit." with **Add Credit…**, which opens OpenRouter's credits page | |
 | 144 | Turn Wi-Fi off, save a key | "Couldn’t reach OpenRouter. The key is saved; kotoba checks it at your first dictation." | |
 | 145 | Save a key, then save another one at once | Only the second key's result shows | |
@@ -666,7 +666,7 @@ Rows 500-514 use kotoba Dev with the release kotoba quit. A fresh setup: `defaul
 
 | # | Do this | Expect | Result |
 |---|---|---|---|
-| 500 | Fresh setup; open kotoba Dev | Welcome shows kotoba's app icon, "Fast", "Accurate" and "Private" with one line each, the **Shortcut** box, and under it "Tap ⌃⌥⌘, speak, then tap it again." and "Or hold ⌃⌥⌘ while you speak, and let go." No key names in words | |
+| 500 | Fresh setup; open kotoba Dev, then click through the steps | The icon and title stay at the same height on every step. Welcome shows kotoba's app icon, "Fast", "Accurate" and "Private" with one line each, the **Shortcut** box, and under it "Tap ⌃⌥⌘, speak, then tap it again." and "Or hold ⌃⌥⌘ while you speak, and let go." No key names in words | |
 | 501 | Microphone step before you allow | No **Skip for Now**; **Continue** is dimmed; Return presses **Allow Microphone** | |
 | 502 | Accessibility step before you allow | No **Skip for Now**; **Continue** is dimmed | |
 | 503 | Key step with a key saved earlier (quit and reopen kotoba Dev on this step) | The masked key ("sk-or-v1-…" and four characters) with **Change…** and **Remove**; "Key saved" under it; no empty key field | |
@@ -677,8 +677,9 @@ Rows 500-514 use kotoba Dev with the release kotoba quit. A fresh setup: `defaul
 | 508 | Click **Import** in the alert | "Added N words and M replacements." with a checkmark; **Continue** is the default button; Settings > Dictionary lists the words | |
 | 509 | Run the Wispr Flow step again after an import | "Nothing New in Wispr Flow"; **OK** shows "Your dictionary already has every word from Wispr Flow." | |
 | 510 | Without Wispr Flow (rename its folder in Application Support), reopen onboarding | No Wispr Flow step; 6 dots | |
-| 511 | Settings > Speech with a saved key | The masked key with **Change…** and **Remove**, and "Saved" or the key check under it | |
+| 511 | Settings > Speech with a saved key | The masked key with **Change…** and **Remove** on the right; "Saved" or the key check under "Key" on the left | |
 | 512 | Settings > Speech > **Change…**, press ⌘V, then ⌘A | The key pastes (dots), then all of it is selected; no beep | |
 | 513 | Settings > Microphone > **Test Microphone** right after the onboarding grant (first run) | The bar moves for 5 s, the orange dot shows, and "Listening for 5 seconds. Speak to see the level." shows under the row; `log show --last 5m --predicate 'subsystem == "tech.teensy.kotoba.dev" AND category == "audio"'` has "The mic test started on …" | |
 | 514 | Start a dictation, then click **Test Microphone** while it records | "A dictation is recording. Test again when it ends." with an orange warning; the dictation goes on | |
-
+| 515 | Key step: save a good key; Try It step: dictate into the field | **Continue** turns prominent on each step once it is done | |
+| 516 | Leave Microphone off and go to the Done step | “kotoba can’t use the microphone yet.” (the same words as Home) with **Allow Microphone**; the text above says to open kotoba from the menu bar or the Dock | |
