@@ -1,7 +1,7 @@
 import { Hono } from "hono";
 import type { AppEnv } from "./app";
 import { ApiError, numberVar } from "./errors";
-import { hashCode, hex, SESSION_DAYS, sealSession } from "./session";
+import { hashCode, hex, issueSession } from "./session";
 
 /** Sends the six-digit sign-in code. The prototype prints it; a real mailer (Resend in the proposal) comes later. */
 export interface Mailer {
@@ -115,8 +115,7 @@ authRoutes.post("/verify", async (c) => {
   if (trialGranted) {
     c.executionCtx.waitUntil(db.prepare("UPDATE users SET trial_granted_at = ? WHERE id = ?").bind(now, userId).run());
   }
-  const expiresAt = Math.floor(now / 1000) + SESSION_DAYS * 86_400;
-  const token = await sealSession(c.env.SESSION_KEY, { userId, generation, expiresAt });
+  const { token, expiresAt } = await issueSession(c.env.SESSION_KEY, userId, generation, now);
   return c.json({
     token,
     expires_at: new Date(expiresAt * 1000).toISOString(),

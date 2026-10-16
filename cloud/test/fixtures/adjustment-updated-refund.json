@@ -1,0 +1,42 @@
+{
+  "event_id": "evt_01kotobarefund000000000000001",
+  "event_type": "adjustment.updated",
+  "occurred_at": "2026-10-18T06:00:00.000000Z",
+  "notification_id": "ntf_01kotobarefund000000000000001",
+  "data": {
+    "id": "adj_01kotobarefund000000000000001",
+    "action": "refund",
+    "type": "full",
+    "reason": "error",
+    "status": "approved",
+    "transaction_id": "txn_01kotobapack0000000000000001",
+    "subscription_id": null,
+    "customer_id": "ctm_01kotobacustomer000000000001",
+    "currency_code": "INR",
+    "items": [
+      {
+        "id": "adjitm_01kotobarefund00000000000001",
+        "item_id": "txnitm_01kotobapack0000000000000001",
+        "type": "full",
+        "amount": "89800",
+        "proration": null,
+        "totals": {
+          "subtotal": "76102",
+          "tax": "13698",
+          "total": "89800"
+        }
+      }
+    ],
+    "totals": {
+      "subtotal": "76102",
+      "tax": "13698",
+      "total": "89800",
+      "fee": "0",
+      "retained_fee": "0",
+      "earnings": "0",
+      "currency_code": "INR"
+    },
+    "created_at": "2026-10-18T05:00:00.000000Z",
+    "updated_at": "2026-10-18T06:00:00.000000Z"
+  }
+}

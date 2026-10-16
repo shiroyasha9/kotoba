@@ -21,6 +21,10 @@ CREATE INDEX auth_codes_expires ON auth_codes (expires_at);
 CREATE TABLE purchases (
   paddle_txn_id TEXT NOT NULL,
   price_id TEXT NOT NULL,
+  -- Paddle's transaction line item (txnitm_) and its total in the currency's smallest unit: refunds name the line
+  -- item, and a partial refund takes back the same share of seconds as of this total.
+  line_item_id TEXT,
+  amount_total TEXT,
   user_id TEXT NOT NULL REFERENCES users (id),
   kind TEXT NOT NULL CHECK (kind IN ('pack', 'pro')),
   seconds_granted INTEGER NOT NULL,

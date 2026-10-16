@@ -9,13 +9,18 @@ import { decodeHex } from "./session";
  * - `transaction.completed`: a pack adds pack hours; a Pro price starts the paid period (`billing_period`), every
  *   renewal too, so renewals need no other event.
  * - `subscription.*` (created, updated, paused, resumed, canceled): kept in D1; status `canceled` or `paused` ends the
- *   plan hours now.
+ *   plan hours now. A resume brings no hours back: the next `transaction.completed` does.
+ * - `adjustment.created|updated`, an approved refund or chargeback of a pack: takes back what is left of the pack's
+ *   seconds (a share of them for a partial refund), never below zero. Adjustments carry no `custom_data`, so the user
+ *   comes from `purchases`.
  * Paddle retries a notification until it gets a 200 and does not keep the order. The `paddle_events` check only saves
  * work: the writes themselves are idempotent (the Balance ledger by transaction and price, `purchases` by key,
  * `subscriptions` by event time), so two deliveries that race both land once.
  * Docs: https://developer.paddle.com/webhooks/signature-verification, https://developer.paddle.com/webhooks/respond-to-webhooks
  */
 export const paddleRoutes = new Hono<AppEnv>();
+
+const NO_PURCHASE = "no_purchase";
 
 interface Product {
   kind: "pack" | "pro";
@@ -39,7 +44,18 @@ interface PaddleEvent {
     items?: Item[];
     billing_period?: { starts_at: string; ends_at: string } | null;
     current_billing_period?: { starts_at: string; ends_at: string } | null;
+    details?: { line_items?: { id: string; price_id: string; totals: { total: string } }[] };
   };
+}
+
+/** `adjustment.*` data: https://developer.paddle.com/webhooks/adjustments/adjustment-created */
+interface Adjustment {
+  id: string;
+  action: string;
+  type?: "full" | "partial";
+  status: string;
+  transaction_id: string;
+  items: { item_id: string; type: string; amount: string | null }[];
 }
 
 paddleRoutes.post("/paddle", async (c) => {
@@ -59,6 +75,8 @@ paddleRoutes.post("/paddle", async (c) => {
   if (seen) return c.json({ ok: true, duplicate: true });
 
   const outcome = await handle(c.env, event, now);
+  // Paddle does not keep the order: a refund can come before its purchase. A non-200 makes Paddle send it again later.
+  if (outcome === NO_PURCHASE) return c.json({ ok: false, outcome }, 409);
   await db
     .prepare(
       "INSERT OR IGNORE INTO paddle_events (event_id, event_type, occurred_at, outcome, received_at) VALUES (?, ?, ?, ?, ?)",
@@ -71,6 +89,9 @@ paddleRoutes.post("/paddle", async (c) => {
 
 /** What the event did, for the log and the `paddle_events` row. An event we cannot place still gets a 200. */
 async function handle(env: Env, event: PaddleEvent, now: number): Promise<string> {
+  if (event.event_type === "adjustment.created" || event.event_type === "adjustment.updated") {
+    return takeBackRefund(env, event.data as unknown as Adjustment, now);
+  }
   const userId = await knownUser(env.DB, event.data.custom_data?.kotoba_user_id);
   if (!userId) return "no_user";
   switch (event.event_type) {
@@ -99,6 +120,7 @@ async function completeTransaction(env: Env, userId: string, event: PaddleEvent,
       continue;
     }
     const ref = `${txn.id}:${item.price.id}`;
+    const line = txn.details?.line_items?.find((l) => l.price_id === item.price.id);
     let seconds = product.seconds;
     if (product.kind === "pack") {
       seconds *= item.quantity;
@@ -121,10 +143,11 @@ async function completeTransaction(env: Env, userId: string, event: PaddleEvent,
       );
     }
     await env.DB.prepare(
-      `INSERT OR IGNORE INTO purchases (paddle_txn_id, price_id, user_id, kind, seconds_granted, created_at)
-       VALUES (?, ?, ?, ?, ?, ?)`,
+      `INSERT OR IGNORE INTO purchases
+         (paddle_txn_id, price_id, line_item_id, amount_total, user_id, kind, seconds_granted, created_at)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
     )
-      .bind(txn.id, item.price.id, userId, product.kind, seconds, now)
+      .bind(txn.id, item.price.id, line?.id ?? null, line?.totals.total ?? null, userId, product.kind, seconds, now)
       .run();
     outcomes.push(product.kind);
   }
@@ -158,6 +181,47 @@ async function updateSubscription(env: Env, userId: string, event: PaddleEvent, 
     return `plan_ended:${status}`;
   }
   return status;
+}
+
+interface PurchaseRow {
+  user_id: string;
+  price_id: string;
+  line_item_id: string | null;
+  amount_total: string | null;
+  kind: "pack" | "pro";
+  seconds_granted: number;
+}
+
+/**
+ * An approved refund or chargeback takes back from each refunded pack the same share of its seconds as of its money
+ * (all of them for a full refund), from what is left of that pack (`Balance.takeBackPack`). Shares of several partial
+ * refunds add up to at most the whole, as Paddle never refunds more than was paid. Tax and proration lines take
+ * nothing; Pro refunds take nothing here, as Paddle ends the subscription by its own events.
+ */
+async function takeBackRefund(env: Env, adjustment: Adjustment, now: number): Promise<string> {
+  if (adjustment.action !== "refund" && adjustment.action !== "chargeback") return "ignored";
+  if (adjustment.status !== "approved") return "not_approved";
+  const { results } = await env.DB.prepare(
+    `SELECT user_id, price_id, line_item_id, amount_total, kind, seconds_granted FROM purchases
+     WHERE paddle_txn_id = ?`,
+  )
+    .bind(adjustment.transaction_id)
+    .all<PurchaseRow>();
+  if (results.length === 0) return NO_PURCHASE;
+  const takes = adjustment.items.map((item) => {
+    const purchase = results.find((row) => row.line_item_id === item.item_id);
+    if (purchase?.kind !== "pack" || (item.type !== "full" && item.type !== "partial")) return 0;
+    const share = item.amount === null ? 1 : Number(item.amount) / Number(purchase.amount_total);
+    if (!Number.isFinite(share)) return 0;
+    return env.BALANCE.getByName(purchase.user_id).takeBackPack(
+      `refund:${adjustment.id}:${item.item_id}`,
+      `${adjustment.transaction_id}:${purchase.price_id}`,
+      Math.floor(purchase.seconds_granted * Math.min(1, share)),
+      now,
+    );
+  });
+  const taken = (await Promise.all(takes)).reduce((sum, seconds) => sum + seconds, 0);
+  return `refund:${taken}`;
 }
 
 async function knownUser(db: D1Database, value: unknown): Promise<string | undefined> {

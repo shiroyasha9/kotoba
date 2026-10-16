@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { CODE_ATTEMPTS, CODE_TTL_MS, RESEND_MS } from "../src/auth";
-import { account, errorCode, harness, json, newEmail } from "./helpers";
+import { SESSION_DAYS } from "../src/session";
+import { account, bearer, DAY, errorCode, harness, json, newEmail, signIn } from "./helpers";
 
 function wrong(code: string): string {
   return String((Number(code) + 1) % 1_000_000).padStart(6, "0");
@@ -107,5 +108,23 @@ describe("email sign-in", () => {
       statuses.push((await h.fetch("/auth/start", json({ email: newEmail() }, "192.0.2.99"))).status);
     expect(statuses.slice(0, 10).every((s) => s === 202)).toBe(true);
     expect(statuses[10]).toBe(429);
+  });
+
+  it("renews a token older than 30 days in X-Kotoba-Token, on a successful request", async () => {
+    const h = harness();
+    const { token } = await signIn(h);
+    h.clock.now += 29 * DAY;
+    expect((await h.fetch("/v1/account", bearer(token))).headers.get("X-Kotoba-Token")).toBeNull();
+    h.clock.now += 2 * DAY;
+    const response = await h.fetch("/v1/account", bearer(token));
+    const renewed = response.headers.get("X-Kotoba-Token");
+    expect(renewed).toMatch(/^v1\./);
+    expect(response.headers.get("X-Kotoba-Token-Expires")).toBe(
+      new Date(h.clock.now + SESSION_DAYS * DAY).toISOString(),
+    );
+    // The old token still works until it expires; the new one lives 180 days from now.
+    h.clock.now += 170 * DAY;
+    expect((await h.fetch("/v1/account", bearer(token))).status).toBe(401);
+    expect((await h.fetch("/v1/account", bearer(renewed ?? ""))).status).toBe(200);
   });
 });

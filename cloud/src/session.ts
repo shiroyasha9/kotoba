@@ -16,6 +16,8 @@ export interface Session {
 }
 
 export const SESSION_DAYS = 180;
+/** A token older than this gets a fresh one in `X-Kotoba-Token` on its next successful request (a sliding session). */
+export const RENEW_AFTER_DAYS = 30;
 const PREFIX = "v1.";
 const AAD = new TextEncoder().encode("kotoba-session-v1");
 
@@ -96,14 +98,30 @@ export async function hashCode(secret: string, email: string, code: string): Pro
   return hex(new Uint8Array(mac));
 }
 
-/** `Authorization: Bearer <token>` -> `c.var.session`, or 401 `signed_out`. */
+/** A new token for the same user and generation, valid SESSION_DAYS from `nowMs`. */
+export function issueSession(secret: string, userId: string, generation: number, nowMs: number) {
+  const expiresAt = Math.floor(nowMs / 1000) + SESSION_DAYS * 86_400;
+  return sealSession(secret, { userId, generation, expiresAt }).then((token) => ({ token, expiresAt }));
+}
+
+/**
+ * `Authorization: Bearer <token>` -> `c.var.session`, or 401 `signed_out`. A 200 answer to a token older than
+ * RENEW_AFTER_DAYS carries a fresh one in `X-Kotoba-Token` (expiry in `X-Kotoba-Token-Expires`); the app stores it.
+ * Only a 200 renews: there the user's Balance object has already accepted the token's generation.
+ */
 export const requireSession = createMiddleware<AppEnv>(async (c, next) => {
   const header = c.req.header("Authorization") ?? "";
   const token = header.startsWith("Bearer ") ? header.slice(7).trim() : "";
-  const session = token ? await openSession(c.env.SESSION_KEY, token, c.var.deps.now()) : undefined;
+  const now = c.var.deps.now();
+  const session = token ? await openSession(c.env.SESSION_KEY, token, now) : undefined;
   if (!session) throw signedOut();
   c.set("session", session);
   await next();
+  const issuedAt = (session.expiresAt - SESSION_DAYS * 86_400) * 1000;
+  if (c.res.status !== 200 || now - issuedAt < RENEW_AFTER_DAYS * 86_400_000) return;
+  const renewed = await issueSession(c.env.SESSION_KEY, session.userId, session.generation, now);
+  c.header("X-Kotoba-Token", renewed.token);
+  c.header("X-Kotoba-Token-Expires", new Date(renewed.expiresAt * 1000).toISOString());
 });
 
 export function hex(bytes: Uint8Array): string {

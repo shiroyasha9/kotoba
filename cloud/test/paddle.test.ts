@@ -1,11 +1,12 @@
 import { describe, expect, it } from "vitest";
 import { verifySignature } from "../src/paddle";
 import { hex } from "../src/session";
+import refund from "./fixtures/adjustment-updated-refund.json";
 import canceled from "./fixtures/subscription-canceled.json";
 import updated from "./fixtures/subscription-updated.json";
 import pack from "./fixtures/transaction-completed-pack.json";
 import pro from "./fixtures/transaction-completed-pro.json";
-import { account, errorCode, type Harness, harness, signIn, T0 } from "./helpers";
+import { account, dictation, errorCode, type Harness, harness, signIn, speech, T0 } from "./helpers";
 
 const SECRET = "pdl_ntfset_test_secret";
 
@@ -21,9 +22,16 @@ async function sign(body: string, ts: number, secret = SECRET): Promise<string> 
   return hex(new Uint8Array(mac));
 }
 
-/** The fixture as Paddle would send it, for `userId`, with a fresh event id when `eventId` is set. */
-function payload(fixture: object, userId: string, eventId?: string): string {
-  const body = JSON.stringify(fixture).replaceAll("{{user}}", userId);
+const PACK_TXN = "txn_01kotobapack0000000000000001";
+const PRO_SUB = "sub_01kotobapro00000000000000001";
+
+/**
+ * The fixture as Paddle would send it, for `userId`, with a fresh event id when `eventId` is set. `renames` swaps ids
+ * (transactions, subscriptions, adjustments): D1 tables are shared by the tests of this file.
+ */
+function payload(fixture: object, userId: string, eventId?: string, renames: Record<string, string> = {}): string {
+  let body = JSON.stringify(fixture).replaceAll("{{user}}", userId);
+  for (const [from, to] of Object.entries(renames)) body = body.replaceAll(from, to);
   return eventId ? body.replace(/"event_id":"[^"]+"/, `"event_id":"${eventId}"`) : body;
 }
 
@@ -102,6 +110,88 @@ describe("POST /billing/paddle", () => {
     // The older "updated" event, delivered late under a new id, changes nothing.
     const late = await deliver(h, payload(updated, userId, "evt_late"));
     expect(await late.json()).toMatchObject({ outcome: "stale" });
+  });
+
+  it("brings plan hours back after a pause only with the next payment", async () => {
+    const h = harness();
+    const { token, userId } = await signIn(h);
+    const own = (fixture: object, eventId: string) =>
+      JSON.parse(payload(fixture, userId, eventId, { [PRO_SUB]: "sub_pause" }));
+    await deliver(h, JSON.stringify(own(pro, "evt_pro_1")));
+    const at = (iso: string) => JSON.stringify(updated).replaceAll("2026-11-01T06:00:00.000000Z", iso);
+    const paused = own(JSON.parse(at("2026-10-20T06:00:00.000000Z")), "evt_paused");
+    paused.event_type = "subscription.paused";
+    paused.data.status = "paused";
+    paused.data.scheduled_change = null;
+    expect(await (await deliver(h, JSON.stringify(paused))).json()).toMatchObject({
+      outcome: "plan_ended:paused",
+    });
+    const resumed = own(JSON.parse(at("2026-10-25T06:00:00.000000Z")), "evt_resumed");
+    resumed.event_type = "subscription.resumed";
+    resumed.data.scheduled_change = null;
+    await deliver(h, JSON.stringify(resumed));
+    expect(await account(h, token)).toMatchObject({ plan: null, plan_seconds_left: 0 });
+
+    const renewal = own(pro, "evt_pro_2");
+    renewal.data.id = "txn_01kotobapro00000000000000002"; // A new payment.
+    renewal.data.billing_period = { starts_at: "2026-10-25T06:00:00.000000Z", ends_at: "2026-11-25T06:00:00.000000Z" };
+    await deliver(h, JSON.stringify(renewal));
+    expect(await account(h, token)).toMatchObject({ plan: "pro", plan_seconds_left: 28800 });
+  });
+
+  it("takes back a refunded pack's unused hours once approved, never below zero", async () => {
+    const h = harness();
+    const { token, userId } = await signIn(h, { trialSeconds: 0 });
+    const own = (fixture: object, eventId?: string) =>
+      payload(fixture, userId, eventId, { [PACK_TXN]: "txn_refund_full" });
+    await deliver(h, own(pack, "evt_pack_r"));
+    const pending = JSON.parse(own(refund, "evt_refund_pending"));
+    pending.event_type = "adjustment.created";
+    pending.data.status = "pending_approval";
+    expect(await (await deliver(h, JSON.stringify(pending))).json()).toMatchObject({ outcome: "not_approved" });
+    expect(await account(h, token)).toMatchObject({ pack_seconds: 36000 });
+
+    // Some hours are used before Paddle approves the refund.
+    expect((await h.fetch("/v1/transcribe", dictation(token, speech(10), 10))).status).toBe(200);
+    expect(await (await deliver(h, own(refund))).json()).toMatchObject({ outcome: "refund:35990" });
+    expect(await account(h, token)).toMatchObject({ pack_seconds: 0, seconds_left: 0 });
+    expect(await (await deliver(h, own(refund, "evt_refund_again"))).json()).toMatchObject({
+      outcome: "refund:0",
+    });
+  });
+
+  it("takes back a share of the seconds for a partial refund", async () => {
+    const h = harness();
+    const { token, userId } = await signIn(h, { trialSeconds: 0 });
+    const renames = { [PACK_TXN]: "txn_partial" };
+    await deliver(h, payload(pack, userId, "evt_pack_p", renames));
+    const partial = (adjustment: string, eventId: string) => {
+      const body = JSON.parse(
+        payload(refund, userId, eventId, { ...renames, adj_01kotobarefund000000000000001: adjustment }),
+      );
+      body.data.type = "partial";
+      body.data.items[0].type = "partial";
+      body.data.items[0].amount = "22450"; // A quarter of 89800.
+      return JSON.stringify(body);
+    };
+    await deliver(h, partial("adj_partial_1", "evt_refund_partial_1"));
+    expect(await account(h, token)).toMatchObject({ pack_seconds: 27000 });
+    // A second partial refund takes another quarter, not more.
+    await deliver(h, partial("adj_partial_2", "evt_refund_partial_2"));
+    expect(await account(h, token)).toMatchObject({ pack_seconds: 18000 });
+  });
+
+  it("asks Paddle to send a refund again when it comes before its purchase", async () => {
+    const h = harness();
+    const { token, userId } = await signIn(h, { trialSeconds: 0 });
+    const renames = { [PACK_TXN]: "txn_early" };
+    const early = await deliver(h, payload(refund, userId, "evt_early", renames));
+    expect([early.status, await early.json()]).toEqual([409, { ok: false, outcome: "no_purchase" }]);
+    await deliver(h, payload(pack, userId, "evt_early_pack", renames));
+    expect(await (await deliver(h, payload(refund, userId, "evt_early", renames))).json()).toMatchObject({
+      outcome: "refund:36000",
+    });
+    expect(await account(h, token)).toMatchObject({ pack_seconds: 0 });
   });
 
   it("answers 200 for an event it cannot place, so Paddle stops retrying", async () => {
