@@ -123,7 +123,6 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         watchReleaseApp()
         Task {
             await dictionaryRead.value
-            setup.dictionaryOpened()
             // Audio left with no row (a crash during a recording) joins this launch's retry.
             await OrphanAudioRecovery.run(in: AppFiles.audio, store: store, launchedAt: launchedAt)
             await pipeline.retryPending()

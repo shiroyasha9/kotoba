@@ -9,6 +9,11 @@ extension AppDelegate {
         switch AppPresence.window(at: launch, needsOnboarding: setup.needsOnboarding) {
         case .onboarding:
             setup.showOnboarding()
+            // The Wispr Flow step needs the dictionary, which is read after the window opens.
+            Task {
+                await dictionaryRead.value
+                setup.dictionaryOpened()
+            }
         case .main:
             Task {
                 await dictionaryRead.value
