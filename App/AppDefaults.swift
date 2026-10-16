@@ -7,7 +7,10 @@ enum AppDefaults {
     enum Key: String {
         case soundCues
         case cueVoice = "sound.cueVoice"
-        case dictationChord = "hotkey.dictationChord"
+        /// The name from before push to talk had its own chord, so an update keeps the owner's chord.
+        case handsFreeChord = "hotkey.dictationChord"
+        /// Unset while push to talk uses the hands-free chord.
+        case pushToTalkChord = "hotkey.pushToTalkChord"
         case cleanupChord = "hotkey.cleanupChord"
         case pasteLastChord = "hotkey.pasteLastChord"
         case microphoneOrder = "microphone.order"

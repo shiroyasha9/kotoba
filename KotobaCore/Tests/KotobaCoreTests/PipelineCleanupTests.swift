@@ -85,7 +85,7 @@ struct PipelineCleanupTests {
         let cleaner = FakeTextCleaner(result: .success("clean"))
         let pipeline = world.makePipeline(cleaner: cleaner)
 
-        await pipeline.handle(.chordDown)
+        await pipeline.handle(.chordDown(.tapOrHold))
         await pipeline.handle(.cleanupModifier)
         await pipeline.settle()
 
@@ -246,7 +246,7 @@ extension FakeWorld {
 extension DictationPipeline {
     /// Cleanup chord down and up within the tap threshold.
     func cleanupTap() async {
-        await handle(.chordDown)
+        await handle(.chordDown(.tapOrHold))
         await handle(.cleanupModifier)
         await handle(.chordUp)
     }

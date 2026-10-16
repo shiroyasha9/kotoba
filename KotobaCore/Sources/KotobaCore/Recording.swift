@@ -8,6 +8,8 @@ extension DictationPipeline {
         let startedAt: Instant
         /// True until the chord-up that decides tap or hold.
         var isUndecided: Bool
+        /// What the release of the starting press does; a chord with more keys can change it before the announcement.
+        var gesture: ChordGesture
         /// The cleanup modifier was seen before the announcement; it cannot change after it.
         var isCleanupSeen = false
         /// The mode of the app in front at key-down cleans every dictation: the cleaner warms and the pill says so. The
@@ -16,7 +18,8 @@ extension DictationPipeline {
         /// The cleaner's connection was warmed for this dictation, so a later step does not warm it again.
         var isCleanerWarm = false
         /// The indicator and start cue are on. They wait until the press is a tap (released in
-        /// time) or a hold (threshold passed), so a shortcut press shows and plays nothing.
+        /// time) or a hold (threshold passed), so a shortcut press shows and plays nothing. Push to talk shows only at
+        /// the threshold.
         var isAnnounced = false
         let captureEvents: Task<Void, Never>
         /// The clipboard, taken at the announcement (so a shortcut press reads nothing) while capture runs.

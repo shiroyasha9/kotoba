@@ -11,7 +11,7 @@ struct PipelineLatencyTests {
         let pipeline = world.makePipeline()
         let keyDown = world.clock.now
 
-        await pipeline.handle(.chordDown)
+        await pipeline.handle(.chordDown(.tapOrHold))
         await pipeline.handle(.chordUp)
         await world.audio.deliverFirstBuffer(at: keyDown + .milliseconds(40))
         world.clock.advance(by: .seconds(12))
@@ -37,7 +37,7 @@ struct PipelineLatencyTests {
                 connected: keyDown + .milliseconds(12_040), uploadSent: keyDown + .milliseconds(12_100),
                 firstByte: keyDown + .milliseconds(12_700)))
 
-        await pipeline.handle(.chordDown)
+        await pipeline.handle(.chordDown(.tapOrHold))
         await pipeline.handle(.chordUp)
         world.clock.advance(by: .seconds(12))
         await pipeline.tap(world)
@@ -83,7 +83,7 @@ struct PipelineLatencyTests {
 
         await pipeline.tap(world)
         world.clock.advance(by: .seconds(3))
-        await pipeline.handle(.chordDown)
+        await pipeline.handle(.chordDown(.tapOrHold))
         #expect(await pipeline.state == .transcribing)
         world.clock.advance(by: .milliseconds(150))
         await pipeline.handle(.chordUp)
@@ -97,7 +97,7 @@ struct PipelineLatencyTests {
         let world = FakeWorld(transcript: "hold")
         let pipeline = world.makePipeline()
 
-        await pipeline.handle(.chordDown)
+        await pipeline.handle(.chordDown(.tapOrHold))
         world.clock.advance(by: .seconds(2))
         await pipeline.handle(.chordUp)
         await pipeline.settle()

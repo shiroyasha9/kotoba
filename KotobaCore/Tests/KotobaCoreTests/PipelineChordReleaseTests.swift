@@ -12,7 +12,7 @@ struct PipelineChordReleaseTests {
         world.clock.advance(by: .seconds(1))
 
         // The stop tap's release is lost.
-        await pipeline.handle(.chordDown)
+        await pipeline.handle(.chordDown(.tapOrHold))
         let pastedAtOnce = await eventually { await world.paster.pasteCount > 0 }
         world.clock.advance(by: .milliseconds(1_900))
         let pastedBeforeTheBound = await eventually { await world.paster.pasteCount > 0 }
@@ -30,7 +30,7 @@ struct PipelineChordReleaseTests {
         let pipeline = world.makePipeline()
         await pipeline.tap(world)
         world.clock.advance(by: .seconds(1))
-        await pipeline.handle(.chordDown)
+        await pipeline.handle(.chordDown(.tapOrHold))
         _ = await eventually { await world.paster.pasteCount > 0 }
 
         await pipeline.handle(.chordUp)

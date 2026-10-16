@@ -99,7 +99,7 @@ struct OrphanAudioTests {
         let pipeline = world.makePipeline()
         await world.audio.failRemoval()
 
-        await pipeline.handle(.chordDown)
+        await pipeline.handle(.chordDown(.tapOrHold))
         await pipeline.handle(.chordInterrupted)
         await pipeline.handle(.chordUp)
         await pipeline.settle()
@@ -128,7 +128,7 @@ struct OrphanAudioTests {
         let world = FakeWorld(transcript: "part of a shortcut")
         let pipeline = world.makePipeline()
 
-        await pipeline.handle(.chordDown)
+        await pipeline.handle(.chordDown(.tapOrHold))
         await pipeline.handle(.chordInterrupted)
         await pipeline.handle(.chordUp)
         await pipeline.settle()

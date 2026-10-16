@@ -79,7 +79,8 @@ public actor DictationPipeline {
     public func handle(_ event: HotkeyEvent, at instant: ContinuousClock.Instant? = nil) async {
         let now = instant ?? ports.clock.now
         switch event {
-        case .chordDown: await chordDown(at: now)
+        case .chordDown(let gesture): await chordDown(gesture, at: now)
+        case .gestureChanged(let gesture): gestureChanged(gesture)
         case .cleanupModifier: cleanupModifier()
         case .chordUp: await chordUp(at: now)
         case .escape:
@@ -224,57 +225,6 @@ public actor DictationPipeline {
         if let current = recording {
             endRecording(current)
             await keep(current, audio: await endCapture(of: current), as: .pending)
-        }
-    }
-
-    // MARK: Hotkey events
-
-    private func chordDown(at now: Instant) async {
-        isChordDown = true
-        if paused != nil {
-            paused?.pressBegan(at: now)
-        } else if let recording {
-            stop(recording, at: now)
-        } else {
-            await start(at: now)
-        }
-    }
-
-    private func chordUp(at now: Instant) async {
-        isChordDown = false
-        releaseWaiters.resumeAll()
-        if paused?.isPressing == true {
-            if paused?.pressEnded(at: now, threshold: settings.tapThreshold) == true {
-                await resume(at: now)
-            }
-            return
-        }
-        guard let current = recording, current.isUndecided else { return }
-        if now - current.startedAt < settings.tapThreshold {
-            recording?.isUndecided = false
-            announce(current.id, at: now)
-        } else {
-            stop(current, at: now)
-        }
-    }
-
-    /// Counts only before the announcement, so the press that starts a dictation decides its mode.
-    private func cleanupModifier() {
-        guard let current = recording, !current.isAnnounced, !current.isCleanupSeen else { return }
-        recording?.isCleanupSeen = true
-        if !current.isCleanerWarm {
-            recording?.isCleanerWarm = warmCleaner()
-        }
-    }
-
-    private func chordInterrupted() async {
-        if paused?.isPressing == true {
-            paused?.pressInterrupted()
-            return
-        }
-        // Only the press that started this recording, before its cue, is a shortcut; a later key is typing.
-        if let recording, recording.isUndecided, !recording.isAnnounced {
-            await discard(recording)
         }
     }
 }

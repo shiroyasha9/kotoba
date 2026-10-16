@@ -170,6 +170,11 @@ final class IndicatorPanel {
         }
     }
 
+    /// Whether `window` is the pill's panel: its click is a chord tap (`onTap`), not a mouse-down that drops a press.
+    func holds(_ window: NSWindow?) -> Bool {
+        window != nil && window === built?.panel
+    }
+
     private func tapped() {
         if !isRecording {
             isTapPending = true

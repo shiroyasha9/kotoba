@@ -289,7 +289,7 @@ nonisolated(nonsending) func eventually(_ condition: () async -> Bool) async -> 
 extension DictationPipeline {
     /// Chord down and up within the tap threshold.
     func tap(_ world: FakeWorld) async {
-        await handle(.chordDown)
+        await handle(.chordDown(.tapOrHold))
         await handle(.chordUp)
     }
 

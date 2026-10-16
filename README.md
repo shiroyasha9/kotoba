@@ -62,7 +62,7 @@ kotoba is a native, open-source alternative to Wispr Flow, built for developers 
 
 ### Dictate anywhere
 
-- Tap ⌃⌥⌘ to start and again to stop, or hold it while you speak. Any shortcut works, even fn alone.
+- Tap ⌃⌥⌘ to start and again to stop, or hold it while you speak. Any shortcut works, even fn alone, and push to talk can have its own, even ⌥ alone.
 - Text goes into the focused app: terminals, editors, browsers, chat. Your clipboard comes back after the paste.
 - Esc cancels, with 5 seconds to Undo. Press Return while you speak, or end with "press enter", to paste and send in one step.
 - A small indicator shows the mic level and warns when the mic hears nothing.

@@ -95,16 +95,22 @@ private struct HomePane: View {
     private var shortcuts: some View {
         Section {
             LabeledContent {
-                Text(model.chords.dictation.title)
+                Text(model.chords.handsFree.title)
             } label: {
-                Text("Dictate")
-                Text(StatusText.shortcutHelp(.dictation))
+                Text(StatusText.shortcutTitle(.handsFree))
+                Text(StatusText.shortcutHelp(.handsFree))
+            }
+            LabeledContent {
+                Text(model.chords.pushToTalk.title)
+            } label: {
+                Text(StatusText.shortcutTitle(.pushToTalk))
+                Text(StatusText.shortcutHelp(.pushToTalk))
             }
             if let cleanup = model.chords.cleanup {
                 LabeledContent {
                     Text(cleanup.title)
                 } label: {
-                    Text("Clean up")
+                    Text(StatusText.shortcutTitle(.cleanup))
                     Text(StatusText.shortcutHelp(.cleanup))
                 }
             }
@@ -112,7 +118,7 @@ private struct HomePane: View {
                 LabeledContent {
                     Text(pasteLast.title)
                 } label: {
-                    Text("Paste last dictation")
+                    Text(StatusText.shortcutTitle(.pasteLast))
                     Text(StatusText.shortcutHelp(.pasteLast))
                 }
             }
@@ -156,7 +162,7 @@ private struct HomePane: View {
     private func recent(_ figures: HomeModel.Figures) -> some View {
         Section {
             if figures.recent.isEmpty {
-                EmptyState.noDictations(chord: model.chords.dictation)
+                EmptyState.noDictations(chords: model.chords)
             } else {
                 ForEach(figures.recent) { record in
                     HStack(alignment: .top) {

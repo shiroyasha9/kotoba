@@ -1,8 +1,13 @@
 import Foundation
 
-/// A key event from the owner's dictation, cleanup or Paste Last chord, Esc or Return, as `HotkeyClassifier` reports it.
+/// A key event from the owner's hands-free, push-to-talk, cleanup or Paste Last chord, Esc or Return, as
+/// `HotkeyClassifier` reports it.
 public enum HotkeyEvent: Sendable, Equatable {
-    case chordDown
+    /// A press began; `ChordGesture` says what its release does.
+    case chordDown(ChordGesture)
+    /// A chord with more keys than the one that began this press is now held (⌥ for push to talk, then ⌃⌘ for
+    /// hands-free ⌃⌥⌘): the press follows it. A dictation not yet announced takes the new gesture; later, it is ignored.
+    case gestureChanged(ChordGesture)
     /// The whole cleanup chord (the dictation chord plus Shift by default) was down at some moment of this
     /// press. A dictation not yet announced becomes a cleanup dictation; later, it is ignored.
     case cleanupModifier
@@ -16,6 +21,17 @@ public enum HotkeyEvent: Sendable, Equatable {
     /// The Paste Last chord was pressed and every modifier is up again: paste the last dictation again, as the menu's
     /// "Paste Last Dictation" does.
     case pasteLast
+}
+
+/// What the release of the press that starts a dictation does (spec "Hotkey state machine").
+public enum ChordGesture: Sendable, Equatable {
+    /// The hands-free and push-to-talk chords are one chord: a tap toggles, a hold over the threshold is push to talk.
+    /// The cleanup chord works so too.
+    case tapOrHold
+    /// The hands-free chord: a press starts, the next press stops. A long hold does not stop at its release.
+    case toggle
+    /// The push-to-talk chord: the release stops. A release under the threshold drops the press, as a shortcut's.
+    case hold
 }
 
 /// What the indicator shows.
@@ -119,7 +135,8 @@ extension DictationPipeline {
         /// How the owner uses each keyterm, by `TermUse.key(for:)`: over `PersonalDictionary.maxKeyterms`, the request
         /// sends the terms `TermRanking` puts first.
         public var termUse: [String: TermUse] = [:]
-        /// A chord released sooner is a tap (toggle mode); a longer hold is push-to-talk.
+        /// A chord released sooner is a tap (`ChordGesture`); a longer hold is push to talk. Push to talk drops a
+        /// shorter press, and the indicator and cue of every press wait for the tap's release or for this threshold.
         public var tapThreshold: Duration
         public var longRecordingWarning: Duration
         /// The mic gave no sound this long: the indicator warns (`NoSoundPolicy`).

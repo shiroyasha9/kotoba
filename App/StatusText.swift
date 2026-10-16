@@ -4,9 +4,25 @@ import KotobaProviders
 
 /// Status lines that belong to no `DictationState`, and the text helpers the menu and panes share.
 enum StatusText {
-    /// The owner's dictation chord; every text that names it uses this, so it follows a new recording.
-    @MainActor static var dictationChord: String { HotkeyChords.shared.dictation.title }
-    @MainActor static var ready: String { "Tap \(dictationChord) to dictate" }
+    /// How to dictate with the owner's chords: "Tap ⌃⌥⌘ to dictate", or "Tap ⌃⌥⌘ or hold ⌥ to dictate" while push to
+    /// talk has a chord of its own. Every text that names the chords reads them, so it follows a new recording.
+    @MainActor static var ready: String { howToDictate(.shared) }
+
+    @MainActor static func howToDictate(_ chords: HotkeyChords) -> String {
+        guard let pushToTalk = chords.separatePushToTalk else { return "Tap \(chords.handsFree.title) to dictate" }
+        return "Tap \(chords.handsFree.title) or hold \(pushToTalk.title) to dictate"
+    }
+
+    /// The dictation chords as a list: "⌃⌥⌘", or "⌃⌥⌘ and ⌥" while push to talk has a chord of its own.
+    @MainActor static func dictationChords(_ chords: HotkeyChords) -> String {
+        guard let pushToTalk = chords.separatePushToTalk else { return chords.handsFree.title }
+        return "\(chords.handsFree.title) and \(pushToTalk.title)"
+    }
+
+    /// Onboarding's line for the second way to dictate.
+    @MainActor static func holdToDictate(_ chords: HotkeyChords) -> String {
+        "Or hold \(chords.pushToTalk.title) while you speak, and let go."
+    }
     /// The history database cannot be read: the panes' failure state (title and message) and the menu status line.
     static let historyReadFailedTitle = "Couldn’t Read History"
     static let historyReadFailedMessage = "Quit and reopen kotoba."
@@ -62,10 +78,21 @@ enum StatusText {
         }
     }
 
+    /// A shortcut's name, as General, Home and onboarding label it.
+    static func shortcutTitle(_ role: ChordRole) -> String {
+        switch role {
+        case .handsFree: "Hands-free"
+        case .pushToTalk: "Push to talk"
+        case .cleanup: "Clean up"
+        case .pasteLast: "Paste last dictation"
+        }
+    }
+
     /// What a shortcut does: the line under its name.
     static func shortcutHelp(_ role: ChordRole) -> String {
         switch role {
-        case .dictation: "Tap to start and stop, or hold while you speak."
+        case .handsFree: "Tap to start. Tap again to stop and paste."
+        case .pushToTalk: "Hold while you speak. Let go to paste."
         case .cleanup: "Removes filler words and fixes punctuation. Takes a second or two longer."
         case .pasteLast: "Pastes your last dictation again."
         }

@@ -201,15 +201,21 @@ private struct GeneralPane: View {
         Form {
             Section("Shortcuts") {
                 LabeledContent {
-                    ChordRecorder(chords: model.chords, role: .dictation)
+                    ChordRecorder(chords: model.chords, role: .handsFree)
                 } label: {
-                    Text("Dictate")
-                    Text(StatusText.shortcutHelp(.dictation))
+                    Text(StatusText.shortcutTitle(.handsFree))
+                    Text(StatusText.shortcutHelp(.handsFree))
+                }
+                LabeledContent {
+                    ChordRecorder(chords: model.chords, role: .pushToTalk)
+                } label: {
+                    Text(StatusText.shortcutTitle(.pushToTalk))
+                    Text(StatusText.shortcutHelp(.pushToTalk))
                 }
                 LabeledContent {
                     ChordRecorder(chords: model.chords, role: .cleanup)
                 } label: {
-                    Text("Clean up")
+                    Text(StatusText.shortcutTitle(.cleanup))
                     Text(StatusText.shortcutHelp(.cleanup))
                 }
                 Picker("Cleanup model", selection: $model.cleanupModel) {
@@ -219,7 +225,7 @@ private struct GeneralPane: View {
                 LabeledContent {
                     ChordRecorder(chords: model.chords, role: .pasteLast)
                 } label: {
-                    Text("Paste last dictation")
+                    Text(StatusText.shortcutTitle(.pasteLast))
                     Text(StatusText.shortcutHelp(.pasteLast) + " Off until you record a shortcut.")
                 }
             }

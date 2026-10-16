@@ -13,7 +13,7 @@ struct PipelineCleanupModeTests {
     @Test func theModifierAtChordDownMakesACleanupDictation() async {
         let pipeline = world.makePipeline(cleaner: cleaner)
 
-        await pipeline.handle(.chordDown)
+        await pipeline.handle(.chordDown(.tapOrHold))
         await pipeline.handle(.cleanupModifier)
         await pipeline.handle(.chordUp)
         await pipeline.tap(world)
@@ -25,7 +25,7 @@ struct PipelineCleanupModeTests {
     @Test func theModifierReleasedBeforeTheDecisionStillCounts() async {
         let pipeline = world.makePipeline(cleaner: cleaner)
 
-        await pipeline.handle(.chordDown)
+        await pipeline.handle(.chordDown(.tapOrHold))
         world.clock.advance(by: .milliseconds(100))
         await pipeline.handle(.cleanupModifier)
         world.clock.advance(by: .milliseconds(500))
@@ -51,7 +51,7 @@ struct PipelineCleanupModeTests {
     @Test func theModifierAfterTheHoldThresholdIsIgnored() async {
         let pipeline = world.makePipeline(cleaner: cleaner)
 
-        await pipeline.handle(.chordDown)
+        await pipeline.handle(.chordDown(.tapOrHold))
         world.clock.advance(by: .milliseconds(400))
         await pipeline.settle()
         await pipeline.handle(.cleanupModifier)
@@ -65,7 +65,7 @@ struct PipelineCleanupModeTests {
     @Test func theCleanerWarmsWhenTheModifierIsSeen() async {
         let pipeline = world.makePipeline(cleaner: cleaner)
 
-        await pipeline.handle(.chordDown)
+        await pipeline.handle(.chordDown(.tapOrHold))
         await pipeline.settle()
         #expect(await cleaner.warmUps == 0)
         await pipeline.handle(.cleanupModifier)
@@ -78,7 +78,7 @@ struct PipelineCleanupModeTests {
         let pipeline = world.makePipeline(cleaner: cleaner)
         await world.provider.fail(with: ProviderError.offline)
 
-        await pipeline.handle(.chordDown)
+        await pipeline.handle(.chordDown(.tapOrHold))
         await pipeline.handle(.cleanupModifier)
         await pipeline.handle(.chordUp)
         await pipeline.tap(world)

@@ -1,3 +1,4 @@
+import AppKit
 import Carbon
 import CoreGraphics
 import Foundation
@@ -5,12 +6,13 @@ import IOKit
 import KotobaCore
 import Synchronization
 
-/// Reports the owner's dictation, cleanup and Paste Last chords, Esc and Return from a CGEventTap that runs on its own
-/// thread.
+/// Reports the owner's hands-free, push-to-talk, cleanup and Paste Last chords, Esc and Return from a CGEventTap that
+/// runs on its own thread.
 ///
 /// A modifier-only chord works while secure input is on. The tap is active, so it can swallow Esc and Return while
 /// recording and the key of a key chord; an active tap needs the Accessibility permission. Key-up events go
 /// through the tap only while a saved chord has a key, so with modifier-only chords typing makes fewer round trips.
+/// Mouse-down events come from `MouseDownMonitors`, not the tap, so no click waits for kotoba.
 final class HotkeyTap: Sendable {
     private struct State {
         var classifier: HotkeyClassifier
@@ -25,6 +27,8 @@ final class HotkeyTap: Sendable {
     let events: AsyncStream<(event: HotkeyEvent, at: ContinuousClock.Instant)>
     private let continuation: AsyncStream<(event: HotkeyEvent, at: ContinuousClock.Instant)>.Continuation
     private let state: Mutex<State>
+    /// On while the tap runs, is enabled and no recorder listens.
+    @MainActor let mouse = MouseDownMonitors()
 
     /// Starts with the saved chords and follows every later change to them.
     @MainActor
@@ -32,22 +36,25 @@ final class HotkeyTap: Sendable {
         state = Mutex(
             State(
                 classifier: HotkeyClassifier(
-                    dictationChord: chords.dictation, cleanupChord: chords.cleanup, pasteLastChord: chords.pasteLast,
-                    isReturnGestureOn: true)))
+                    handsFreeChord: chords.handsFree, pushToTalkChord: chords.savedPushToTalk,
+                    cleanupChord: chords.cleanup, pasteLastChord: chords.pasteLast, isReturnGestureOn: true)))
         (events, continuation) = AsyncStream.makeStream(of: (event: HotkeyEvent, at: ContinuousClock.Instant).self)
         chords.tap = self
+        mouse.onMouseDown = { [weak self] in self?.sendMouseDown() }
     }
 
-    /// `isPaused` is on while a shortcut recorder listens: no chord counts.
-    func setChords(dictation: Chord, cleanup: Chord?, pasteLast: Chord?, isPaused: Bool) {
-        let hasKey = dictation.keyCode != nil || cleanup?.keyCode != nil || pasteLast != nil
-        let runLoop = state.withLock {
-            $0.classifier.dictationChord = dictation
-            $0.classifier.cleanupChord = cleanup
-            $0.classifier.pasteLastChord = pasteLast
-            $0.classifier.isPaused = isPaused
-            return $0.tap?.hasKeyUp == hasKey ? nil : $0.runLoop
+    /// `isPaused` is on while a shortcut recorder listens: no chord counts. A nil `pushToTalk` is the hands-free chord.
+    func setChords(handsFree: Chord, pushToTalk: Chord?, cleanup: Chord?, pasteLast: Chord?, isPaused: Bool) {
+        let (runLoop, hasKey) = state.withLock { state -> (TapRunLoop?, Bool) in
+            state.classifier.handsFreeChord = handsFree
+            state.classifier.pushToTalkChord = pushToTalk
+            state.classifier.cleanupChord = cleanup
+            state.classifier.pasteLastChord = pasteLast
+            state.classifier.isPaused = isPaused
+            let hasKey = state.classifier.hasKeyChord
+            return (state.tap?.hasKeyUp == hasKey ? nil : state.runLoop, hasKey)
         }
+        updateMouse()
         guard let runLoop else { return }
         CFRunLoopPerformBlock(runLoop.loop, CFRunLoopMode.commonModes.rawValue) { [self] in install(keyUp: hasKey) }
         CFRunLoopWakeUp(runLoop.loop)
@@ -67,6 +74,7 @@ final class HotkeyTap: Sendable {
             state.isEnabled = isOn
             return state.runLoop
         }
+        updateMouse()
         guard let runLoop else { return }
         CFRunLoopPerformBlock(runLoop.loop, CFRunLoopMode.commonModes.rawValue) { [self] in applyEnabled() }
         CFRunLoopWakeUp(runLoop.loop)
@@ -81,22 +89,41 @@ final class HotkeyTap: Sendable {
         if let tap {
             CGEvent.tapEnable(tap: tap.port, enable: isEnabled)
         }
-        let events = state.withLock { state in
+        state.withLock { state in
             let keys =
                 isEnabled
                 ? Self.reenabled(heldChordKey: state.classifier.heldChordKey)
                 : .tapReenabled(modifiers: [], isChordKeyDown: false)
-            return state.classifier.classify(keys).events
+            send(state.classifier.classify(keys).events)
         }
-        send(events)
     }
 
     /// A click on the indicator pill: the events of a chord tap, in order with the real chord's.
     func sendTap() {
-        send(state.withLock { $0.classifier.pillClick() })
+        state.withLock { send($0.classifier.pillClick()) }
     }
 
-    /// Each event with the time the tap saw it; events seen together share one instant.
+    /// A mouse button went down (`MouseDownMonitors`), on the main thread after the click: during a press not yet
+    /// announced it drops the press. Sent under the lock, so the press's own events cannot pass it; a late one, after the
+    /// press ended or showed, changes nothing.
+    private func sendMouseDown() {
+        state.withLock { state in
+            guard state.isEnabled else { return }
+            send(state.classifier.classify(.mouseDown).events)
+        }
+    }
+
+    /// Turns the mouse monitors on while the tap runs, is enabled and no recorder listens; nothing observes clicks
+    /// otherwise. Each call reads the state when it runs on the main thread, so calls queued in any order end right.
+    private func updateMouse() {
+        DispatchQueue.main.async { [self] in
+            let isOn = state.withLock { $0.tap != nil && $0.isEnabled && !$0.classifier.isPaused }
+            MainActor.assumeIsolated { mouse.setOn(isOn) }
+        }
+    }
+
+    /// Each event with the time the tap saw it; events seen together share one instant. Called under the state lock, so
+    /// events from the tap thread and the main thread reach the pipeline in the order the classifier made them.
     private func send(_ events: HotkeyEvents, at now: ContinuousClock.Instant = .now) {
         for event in events {
             continuation.yield((event, now))
@@ -113,10 +140,7 @@ final class HotkeyTap: Sendable {
 
     private func startThread(reporting started: @escaping @Sendable (Bool) -> Void) {
         let thread = Thread { [self] in
-            let hasKey = state.withLock {
-                $0.classifier.dictationChord.keyCode != nil || $0.classifier.cleanupChord?.keyCode != nil
-                    || $0.classifier.pasteLastChord != nil
-            }
+            let hasKey = state.withLock { $0.classifier.hasKeyChord }
             // Before the tap exists, so a `setEnabled` or chord change that comes during `install` is applied after it.
             state.withLock { $0.runLoop = TapRunLoop(loop: CFRunLoopGetCurrent()) }
             guard install(keyUp: hasKey) else {
@@ -125,6 +149,7 @@ final class HotkeyTap: Sendable {
                 return
             }
             started(true)
+            updateMouse()
             CFRunLoopRun()
         }
         thread.name = "kotoba.hotkey-tap"
@@ -188,22 +213,22 @@ final class HotkeyTap: Sendable {
         default:
             return Unmanaged.passUnretained(event)
         }
-        let (released, decision) = state.withLock { state in
+        // Sent under the lock, so a mouse-down from the main thread (`sendMouseDown`) cannot pass these events.
+        let decision = state.withLock { state in
             // An event already queued when `setEnabled` turned the tap off counts for nothing.
-            guard state.isEnabled else { return (HotkeyDecision.pass, HotkeyDecision.pass) }
+            guard state.isEnabled else { return HotkeyDecision.pass }
+            let now = ContinuousClock.now
             // A key chord's key-up can be lost (Secure Input takes the keyboard). While one is held, each event
             // checks its key, so the press ends at the next event, not at the next press of the key.
-            var released = HotkeyDecision.pass
             if let key = state.classifier.heldChordKey, Self.checksHeldKey(input, key),
                 !CGEventSource.keyState(.combinedSessionState, key: key)
             {
-                released = state.classifier.classify(.chordKeyReleased)
+                send(state.classifier.classify(.chordKeyReleased).events, at: now)
             }
-            return (released, state.classifier.classify(input))
+            let decision = state.classifier.classify(input)
+            send(decision.events, at: now)
+            return decision
         }
-        let now = ContinuousClock.now
-        send(released.events, at: now)
-        send(decision.events, at: now)
         return decision.isSwallowed ? nil : Unmanaged.passUnretained(event)
     }
 
@@ -212,7 +237,7 @@ final class HotkeyTap: Sendable {
         switch input {
         case .modifiersChanged, .keyDown: true
         case .keyUp(let keyCode, _): keyCode != key
-        case .tapReenabled, .chordKeyReleased, .posted: false
+        case .tapReenabled, .chordKeyReleased, .posted, .mouseDown: false
         }
     }
 

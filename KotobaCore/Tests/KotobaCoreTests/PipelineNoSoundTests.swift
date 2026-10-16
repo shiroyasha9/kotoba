@@ -112,7 +112,7 @@ struct PipelineNoSoundTests {
         let pipeline = world.makePipeline(noSoundWarning: .seconds(2))
         var states = pipeline.states.makeAsyncIterator()
 
-        await pipeline.handle(.chordDown)
+        await pipeline.handle(.chordDown(.tapOrHold))
         await world.meter(pipeline, 0, for: .milliseconds(1_900))
         await pipeline.handle(.chordUp)
         await pipeline.settle()

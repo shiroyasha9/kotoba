@@ -104,13 +104,13 @@ struct PipelineClipboardTests {
         let world = FakeWorld(transcript: "dictated")
         let pipeline = world.makePipeline()
 
-        await pipeline.handle(.chordDown)
+        await pipeline.handle(.chordDown(.tapOrHold))
         await pipeline.handle(.chordInterrupted)
         await pipeline.handle(.chordUp)
         await pipeline.settle()
         #expect(await world.pasteboard.snapshots == 0)
 
-        await pipeline.handle(.chordDown)
+        await pipeline.handle(.chordDown(.tapOrHold))
         world.clock.advance(by: .milliseconds(100))
         await pipeline.handle(.chordUp)
         #expect(await eventually { await world.pasteboard.snapshots == 1 })

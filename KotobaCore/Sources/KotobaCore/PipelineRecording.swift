@@ -3,7 +3,7 @@ import Foundation
 // MARK: - Recording
 
 extension DictationPipeline {
-    func start(at now: Instant) async {
+    func start(_ gesture: ChordGesture, at now: Instant) async {
         let id = DictationID()
         let file = settings.audioDirectory.appending(path: id.audioFileName)
         // The connection warms while the engine starts.
@@ -23,7 +23,6 @@ extension DictationPipeline {
             return
         }
         latencies.begin(id, keyDown: now)
-        await ports.readback?.dictationStarted()
         let captureEvents = Task {
             for await event in events {
                 switch event {
@@ -41,6 +40,7 @@ extension DictationPipeline {
             file: file,
             startedAt: now,
             isUndecided: isChordDown,
+            gesture: gesture,
             cleansAtKeyDown: cleansAtKeyDown,
             isCleanerWarm: isCleanerWarm,
             captureEvents: captureEvents,
@@ -89,14 +89,16 @@ extension DictationPipeline {
         }
     }
 
-    /// Shows the recording: the indicator appears and the start cue plays.
-    func announce(_ id: DictationID, at instant: Instant) {
+    /// Shows the recording: the indicator appears and the start cue plays. The edit session of the last paste ends
+    /// here, not at key-down, so a press that turns out to be a shortcut (⌥⌫ with ⌥ for push to talk) leaves it on.
+    func announce(_ id: DictationID, at instant: Instant) async {
         guard let current = recording, current.id == id, !current.isAnnounced else { return }
         recording?.isAnnounced = true
         recording?.clipboard = takeClipboard()
         current.announcement.cancel()
         latencies.mark(.cue, of: id, at: instant)
         emit(.recording(isLong: false, isSilent: current.sound.isWarning, isCleaned: current.isCleaned))
+        await ports.readback?.dictationStarted()
     }
 
     private func takeClipboard() -> ClipboardGuard.Pending {

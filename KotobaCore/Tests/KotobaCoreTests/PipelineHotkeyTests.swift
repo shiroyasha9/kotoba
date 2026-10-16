@@ -40,7 +40,7 @@ struct PipelineHotkeyTests {
         let world = FakeWorld(transcript: "push to talk")
         let pipeline = world.makePipeline()
 
-        await pipeline.handle(.chordDown)
+        await pipeline.handle(.chordDown(.tapOrHold))
         world.clock.advance(by: .milliseconds(400))
         await pipeline.handle(.chordUp)
         await pipeline.settle()
@@ -53,7 +53,7 @@ struct PipelineHotkeyTests {
         let world = FakeWorld(transcript: "toggle")
         let pipeline = world.makePipeline()
 
-        await pipeline.handle(.chordDown)
+        await pipeline.handle(.chordDown(.tapOrHold))
         world.clock.advance(by: .milliseconds(399))
         await pipeline.handle(.chordUp)
         await pipeline.settle()
@@ -67,7 +67,7 @@ struct PipelineHotkeyTests {
         let pipeline = world.makePipeline()
         await pipeline.tap(world)
 
-        await pipeline.handle(.chordDown)
+        await pipeline.handle(.chordDown(.tapOrHold))
         let pastedWhileHeld = await eventually { await world.paster.pasteCount > 0 }
         await pipeline.handle(.chordUp)
         await pipeline.settle()
@@ -84,7 +84,7 @@ struct PipelineHotkeyTests {
         let gate = Gate()
         await world.audio.holdBegin(at: gate)
 
-        async let pressed: Void = pipeline.handle(.chordDown)
+        async let pressed: Void = pipeline.handle(.chordDown(.tapOrHold))
         #expect(await eventually { await gate.hasWaiters })
         #expect(await pipeline.state == .idle)
         await gate.open()
@@ -99,7 +99,7 @@ struct PipelineHotkeyTests {
         let world = FakeWorld(transcript: "tap")
         let pipeline = world.makePipeline()
 
-        await pipeline.handle(.chordDown)
+        await pipeline.handle(.chordDown(.tapOrHold))
         #expect(await world.audio.isCapturing)
         #expect(await pipeline.state == .idle)
         world.clock.advance(by: .milliseconds(150))
@@ -116,7 +116,7 @@ struct PipelineHotkeyTests {
         let world = FakeWorld(transcript: "hold")
         let pipeline = world.makePipeline()
 
-        await pipeline.handle(.chordDown)
+        await pipeline.handle(.chordDown(.tapOrHold))
         world.clock.advance(by: .milliseconds(399))
         await pipeline.settle()
         #expect(await pipeline.state == .idle)
@@ -132,7 +132,7 @@ struct PipelineHotkeyTests {
         let pipeline = world.makePipeline()
         var states = pipeline.states.makeAsyncIterator()
 
-        await pipeline.handle(.chordDown)
+        await pipeline.handle(.chordDown(.tapOrHold))
         world.clock.advance(by: .milliseconds(120))
         await pipeline.handle(.chordInterrupted)
         await pipeline.handle(.chordUp)
@@ -153,7 +153,7 @@ struct PipelineHotkeyTests {
         await world.audio.holdBegin(at: gate)
         let pressedAt = world.clock.now
 
-        async let pressed: Void = pipeline.handle(.chordDown, at: pressedAt)
+        async let pressed: Void = pipeline.handle(.chordDown(.tapOrHold), at: pressedAt)
         #expect(await eventually { await gate.hasWaiters })
         world.clock.advance(by: .milliseconds(600))
         await gate.open()
@@ -224,7 +224,7 @@ struct PipelineHotkeyTests {
         let world = FakeWorld(transcript: "never")
         let pipeline = world.makePipeline()
 
-        await pipeline.handle(.chordDown)
+        await pipeline.handle(.chordDown(.tapOrHold))
         await pipeline.handle(.chordInterrupted)
         await pipeline.handle(.chordUp)
         await pipeline.settle()
@@ -241,7 +241,7 @@ struct PipelineHotkeyTests {
         let world = FakeWorld(transcript: "hold and type")
         let pipeline = world.makePipeline()
 
-        await pipeline.handle(.chordDown)
+        await pipeline.handle(.chordDown(.tapOrHold))
         world.clock.advance(by: .milliseconds(500))
         await pipeline.settle()
         #expect(await pipeline.state == .recording(isLong: false))

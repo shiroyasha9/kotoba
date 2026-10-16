@@ -111,7 +111,7 @@ struct PipelineUndoTests {
 
         await pipeline.tap(world)
         await pipeline.handle(.escape)
-        await pipeline.handle(.chordDown)
+        await pipeline.handle(.chordDown(.tapOrHold))
         await pipeline.handle(.chordInterrupted)
         await pipeline.handle(.chordUp)
 
@@ -126,7 +126,7 @@ struct PipelineUndoTests {
 
         await pipeline.tap(world)
         await pipeline.handle(.escape)
-        await pipeline.handle(.chordDown)
+        await pipeline.handle(.chordDown(.tapOrHold))
         world.clock.advance(by: .milliseconds(500))
         await pipeline.handle(.chordUp)
 

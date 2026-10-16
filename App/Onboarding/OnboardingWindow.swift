@@ -7,7 +7,7 @@ import SwiftUI
 /// so it costs nothing at idle. The app opens it on first launch and from "Finish Setting Up kotoba…".
 @MainActor
 final class OnboardingController: NSObject, NSWindowDelegate {
-    static let size = NSSize(width: 560, height: 560)
+    static let size = NSSize(width: 560, height: 600)
 
     private enum Key {
         static let isComplete = "onboarding.completed"

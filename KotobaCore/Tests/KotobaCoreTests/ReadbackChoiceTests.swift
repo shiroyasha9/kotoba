@@ -22,6 +22,59 @@ struct PipelineReadbackTests {
         #expect(readback.field.isClosed)
     }
 
+    /// ⌥⌫ after a paste, with ⌥ for push to talk: the press is dropped, so the owner's edit is still followed.
+    @Test(arguments: [ChordGesture.hold, .toggle, .tapOrHold])
+    func aDroppedPressKeepsTheSession(_ gesture: ChordGesture) async {
+        let world = FakeWorld(transcript: "deploy it to versel today")
+        let readback = ReadbackWorld()
+        let pipeline = world.makePipeline(readback: readback.readback)
+        await pipeline.dictate(world)
+        await readback.readback.settle()
+
+        await pipeline.handle(.chordDown(gesture))
+        world.clock.advance(by: .milliseconds(100))
+        await pipeline.handle(.chordInterrupted)
+        await pipeline.handle(.chordUp)
+        await pipeline.settle()
+        await readback.readback.settle()
+
+        #expect(await world.audio.discarded.count == 1)
+        #expect(await readback.readback.isFollowing)
+        #expect(readback.field.isClosed == false)
+    }
+
+    @Test func aShortPushToTalkPressKeepsTheSession() async {
+        let world = FakeWorld(transcript: "deploy it to versel today")
+        let readback = ReadbackWorld()
+        let pipeline = world.makePipeline(readback: readback.readback)
+        await pipeline.dictate(world)
+        await readback.readback.settle()
+
+        await pipeline.press(.hold)
+        await pipeline.settle()
+        await readback.readback.settle()
+
+        #expect(await readback.readback.isFollowing)
+    }
+
+    @Test func aPushToTalkHoldEndsTheSessionWhenItShows() async {
+        let world = FakeWorld(transcript: "deploy it to versel today")
+        let readback = ReadbackWorld()
+        let pipeline = world.makePipeline(readback: readback.readback)
+        await pipeline.dictate(world)
+        await readback.readback.settle()
+
+        await pipeline.handle(.chordDown(.hold))
+        await readback.readback.settle()
+        #expect(await readback.readback.isFollowing)
+        world.clock.advance(by: .milliseconds(400))
+        await pipeline.settle()
+        await readback.readback.settle()
+
+        #expect(await readback.readback.isFollowing == false)
+        #expect(readback.field.isClosed)
+    }
+
     @Test func aPasteWhileTheNextDictationRecordsStartsNoSession() async {
         let world = FakeWorld(transcript: "deploy it to versel today")
         let gate = Gate()

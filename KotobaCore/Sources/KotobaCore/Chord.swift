@@ -10,7 +10,8 @@ public struct Chord: Sendable, Hashable {
         self.keyCode = keyCode
     }
 
-    public static let defaultDictation = Self(modifiers: [.control, .option, .command])
+    /// Hands-free, and push to talk until the owner records its own.
+    public static let defaultHandsFree = Self(modifiers: [.control, .option, .command])
     /// A Caps Lock "Hyper" key also presses all four, in any order.
     public static let defaultCleanup = Self(modifiers: [.control, .option, .shift, .command])
 
@@ -23,11 +24,18 @@ public struct Chord: Sendable, Hashable {
     func isPressed(by pressed: UInt16, with held: ModifierKeys) -> Bool {
         pressed == keyCode && held.kinds == modifiers.kinds && modifiers.isSatisfied(by: held)
     }
+
+    /// How many keys the chord holds: when two chords are held at once, the press follows the one with more.
+    var rank: Int {
+        modifiers.kindCount + (keyCode == nil ? 0 : 1)
+    }
 }
 
-/// What a chord does: start a dictation, start a cleanup dictation, or paste the last dictation again.
+/// What a chord does: start a dictation hands-free or push to talk, start a cleanup dictation, or paste the last
+/// dictation again.
 public enum ChordRole: Sendable, Hashable {
-    case dictation
+    case handsFree
+    case pushToTalk
     case cleanup
     case pasteLast
 }
@@ -36,54 +44,78 @@ public enum ChordRole: Sendable, Hashable {
 public enum ChordProblem: Sendable, Equatable {
     /// A key with no ⌃, ⌥, ⌘ or fn (⇧ alone types a capital): the key would stop typing.
     case noModifier
-    /// One left or either-side ⌃, ⌥, ⇧ or ⌘ alone: it is part of most shortcuts and of typing.
+    /// One left or either-side ⌃, ⌥, ⇧ or ⌘ alone: it is part of most shortcuts and of typing. Push to talk may use ⌃
+    /// or ⌥ alone: a shortcut press is shorter than the hold threshold, so it is dropped. ⇧ and ⌘ stay refused: they
+    /// are held longer than the threshold, while typing capitals and while pausing before a shortcut.
     case commonModifierAlone
     /// Exactly two modifiers, one of them ⌘ (⌘⇧, ⌥⌘, ⌃⌘, fn⌘): many app shortcuts start with them, and the mic
-    /// would open for a moment on each.
+    /// would open for a moment on each. Push to talk too: ⌘ is held while the owner pauses before a shortcut.
     case commandPair
     /// macOS or kotoba itself uses it: Spotlight, the app switcher, screenshots, ⌘V for the paste.
     case reserved
     /// Esc cancels a dictation.
     case escape
-    /// It is the other chord.
-    case sameAsOther
-    /// Each press of the dictation chord also completes the cleanup chord, so no dictation could skip cleanup.
-    case dictationIncludesCleanup
+    /// The cleanup chord is the dictation chord of `role` (hands-free or push to talk). The two dictation chords may
+    /// be one chord.
+    case sameAsCleanup(ChordRole)
+    /// Each press of the dictation chord of `role` also completes the cleanup chord, so no dictation could skip
+    /// cleanup.
+    case dictationIncludesCleanup(ChordRole)
     /// The Paste Last chord has no key: modifiers alone would paste each time they are pressed for another shortcut.
     case needsKey
-    /// The Paste Last chord is the chord of `role` (dictation or cleanup).
+    /// The Paste Last chord is the chord of `role` (hands-free, push to talk or cleanup).
     case pasteLastSameAs(ChordRole)
     /// The Paste Last chord holds the modifier-only chord of `role` on the way to its key, so it would start a
-    /// dictation first.
+    /// dictation first. Its key is not another key typed during that press, so nothing drops the dictation.
     case pasteLastIncludes(ChordRole)
 }
 
 extension Chord {
-    /// Two modifiers alone: an app shortcut that starts with them opens the mic for a moment before the press is
-    /// discarded. The recorder says so.
+    /// One or two modifiers alone (fn has its own note): an app shortcut that uses them opens the mic for a moment
+    /// before the press is dropped. The recorder says so.
     public var opensMicBriefly: Bool {
-        keyCode == nil && modifiers.kindCount == 2
+        keyCode == nil && modifiers != .function && (1...2).contains(modifiers.kindCount)
     }
 
-    /// The first reason the chords cannot be saved, or nil. A chord's own problem comes before a clash.
-    public static func problem(dictation: Chord, cleanup: Chord?, pasteLast: Chord? = nil) -> ChordProblem? {
-        if let problem = dictation.ownProblem { return problem }
+    /// The first reason the chords cannot be saved, or nil. A chord's own problem comes before a clash. A nil
+    /// `pushToTalk` is the hands-free chord.
+    ///
+    /// A cleanup or hands-free chord may hold the push-to-talk chord on the way (⌃⌥⇧⌘ holds ⌥): the press follows the
+    /// chord with more keys before the dictation shows (`HotkeyClassifier`), as cleanup follows ⇧ today.
+    public static func problem(
+        handsFree: Chord, pushToTalk: Chord? = nil, cleanup: Chord?, pasteLast: Chord? = nil
+    ) -> ChordProblem? {
+        if let problem = handsFree.ownProblem(as: .handsFree) { return problem }
+        if let problem = pushToTalk?.ownProblem(as: .pushToTalk) { return problem }
+        let dictation = [(handsFree, ChordRole.handsFree)] + (pushToTalk.map { [($0, .pushToTalk)] } ?? [])
         if let cleanup {
-            if let problem = cleanup.ownProblem { return problem }
-            if dictation == cleanup { return .sameAsOther }
-            if cleanup.keyCode == nil, cleanup.modifiers.isImplied(by: dictation.modifiers) {
-                return .dictationIncludesCleanup
+            if let problem = cleanup.ownProblem(as: .cleanup) { return problem }
+            for (chord, role) in dictation {
+                if chord == cleanup { return .sameAsCleanup(role) }
+                if cleanup.keyCode == nil, cleanup.modifiers.isImplied(by: chord.modifiers) {
+                    return .dictationIncludesCleanup(role)
+                }
             }
         }
         guard let pasteLast else { return nil }
         guard pasteLast.keyCode != nil else { return .needsKey }
-        return pasteLast.ownProblem ?? pasteLast.clash(with: dictation, cleanup: cleanup)
+        return pasteLast.ownProblem(as: .pasteLast) ?? pasteLast.clash(with: dictation + [(cleanup, .cleanup)])
     }
 
-    /// How this Paste Last chord clashes with the dictation or cleanup chord. The classifier tries those two first,
-    /// so a key press that matches both, or that holds one of them on the way, never reaches Paste Last.
-    private func clash(with dictation: Chord, cleanup: Chord?) -> ChordProblem? {
-        for (other, role) in [(dictation, ChordRole.dictation), (cleanup, .cleanup)] {
+    /// The push-to-talk chord to keep after the owner saves `chord` (nil: Reset) as `role`; nil is the hands-free
+    /// chord. Push to talk saved as the hands-free chord, or reset, keeps none, so it follows the hands-free chord. A
+    /// push-to-talk chord the owner set stays when the hands-free chord changes, even to the same chord.
+    public static func pushToTalk(afterSaving chord: Chord?, as role: ChordRole, handsFree: Chord, kept: Chord?)
+        -> Chord?
+    {
+        guard role == .pushToTalk else { return kept }
+        return chord == handsFree ? nil : chord
+    }
+
+    /// How this Paste Last chord clashes with a dictation or cleanup chord. The classifier tries those first, so a key
+    /// press that matches one, or that holds one of them on the way, never reaches Paste Last.
+    private func clash(with others: [(Chord?, ChordRole)]) -> ChordProblem? {
+        for (other, role) in others {
             guard let other else { continue }
             if other.keyCode == nil, other.modifiers.isSatisfied(by: modifiers) { return .pasteLastIncludes(role) }
             if other.keyCode == keyCode, other.modifiers.kinds == modifiers.kinds { return .pasteLastSameAs(role) }
@@ -91,12 +123,17 @@ extension Chord {
         return nil
     }
 
-    private var ownProblem: ChordProblem? {
+    private func ownProblem(as role: ChordRole) -> ChordProblem? {
         guard let keyCode else {
             if modifiers.isEmpty { return .noModifier }
             let isOneKind = ModifierKeys.allKinds.contains(modifiers.kinds)
             let isRightOnly = modifiers.isSubset(of: .rightSides)
-            if isOneKind, modifiers != .function, !isRightOnly { return .commonModifierAlone }
+            // Push to talk drops a shortcut press, shorter than the hold threshold, so ⌥ or ⌃ alone can be its chord.
+            // ⇧ and ⌘ are held longer: while typing capitals, and while pausing before a shortcut.
+            let isHeldLong = !modifiers.isDisjoint(with: [.shift, .command])
+            if isOneKind, modifiers != .function, !isRightOnly, role != .pushToTalk || isHeldLong {
+                return .commonModifierAlone
+            }
             let isCommandPair = modifiers.kindCount == 2 && !modifiers.isDisjoint(with: .command)
             return isCommandPair && !isRightOnly ? .commandPair : nil
         }
@@ -196,7 +233,7 @@ public struct ChordCapture: Sendable {
         case .keyDown(let keyCode, _, _):
             if keyCode == KeyCode.escape, held.isEmpty { return .cancelled }
             return .recorded(Chord(modifiers: Self.sides(held), keyCode: keyCode))
-        case .keyUp, .chordKeyReleased, .posted:
+        case .keyUp, .chordKeyReleased, .posted, .mouseDown:
             return nil
         }
     }

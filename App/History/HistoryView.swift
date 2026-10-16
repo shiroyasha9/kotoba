@@ -48,7 +48,7 @@ struct HistoryView: View {
             EmptyState.loadFailed(retry: model.tryAgain)
         } else if model.rows.isEmpty, model.isLoaded {
             if model.search.isEmpty {
-                EmptyState.noDictations(chord: HotkeyChords.shared.dictation)
+                EmptyState.noDictations(chords: .shared)
             } else {
                 NoSearchResults(search: model.search)
             }

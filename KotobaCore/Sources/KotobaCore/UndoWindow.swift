@@ -1,5 +1,6 @@
 /// A recording that Esc cancelled, waiting for Undo, and the chord press (if any) during the
-/// window. Only a clean tap resumes: a hold, or a press that became a shortcut, does not.
+/// window. Only a clean tap resumes: a hold, a press that became a shortcut, or a press of the push-to-talk chord
+/// (which has no tap) does not.
 struct UndoWindow<Item> {
     typealias Schedule = (ContinuousClock.Instant) -> Task<Void, Never>
 
@@ -8,8 +9,14 @@ struct UndoWindow<Item> {
     private(set) var timer: Task<Void, Never>
     /// The window's time, held while the pointer is on the Undo pill. A timer that wakes while held does nothing.
     private(set) var countdown: Countdown
-    private var pressStartedAt: ContinuousClock.Instant?
-    private var isPressInterrupted = false
+    /// The chord press in progress, if any.
+    private var press: Press?
+
+    private struct Press {
+        let startedAt: ContinuousClock.Instant
+        var gesture: ChordGesture
+        var isInterrupted = false
+    }
 
     /// `schedule` starts the timer that ends the window at the given deadline.
     init(item: Item, duration: Duration, at now: ContinuousClock.Instant, schedule: Schedule) {
@@ -30,21 +37,25 @@ struct UndoWindow<Item> {
         }
     }
 
-    var isPressing: Bool { pressStartedAt != nil }
+    var isPressing: Bool { press != nil }
 
-    mutating func pressBegan(at instant: ContinuousClock.Instant) {
-        pressStartedAt = instant
-        isPressInterrupted = false
+    mutating func pressBegan(at instant: ContinuousClock.Instant, gesture: ChordGesture) {
+        press = Press(startedAt: instant, gesture: gesture)
+    }
+
+    /// A chord with more keys took over the press (`HotkeyEvent.gestureChanged`).
+    mutating func pressChanged(to gesture: ChordGesture) {
+        press?.gesture = gesture
     }
 
     mutating func pressInterrupted() {
-        isPressInterrupted = true
+        press?.isInterrupted = true
     }
 
     /// True when the press that ends here was a tap under `threshold` with no other key.
     mutating func pressEnded(at instant: ContinuousClock.Instant, threshold: Duration) -> Bool {
-        defer { pressStartedAt = nil }
-        guard let start = pressStartedAt else { return false }
-        return !isPressInterrupted && instant - start < threshold
+        defer { press = nil }
+        guard let press else { return false }
+        return !press.isInterrupted && press.gesture != .hold && instant - press.startedAt < threshold
     }
 }

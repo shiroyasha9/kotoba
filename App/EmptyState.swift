@@ -28,10 +28,11 @@ extension EmptyState where Actions == EmptyView {
     }
 
     /// History, and Home's newest dictations, before the first dictation.
-    static func noDictations(chord: Chord) -> Self {
+    @MainActor
+    static func noDictations(chords: HotkeyChords) -> Self {
         EmptyState(
             "No Dictations Yet", systemImage: "waveform",
-            description: "Tap \(chord.title) to dictate. Each dictation appears here.")
+            description: "\(StatusText.howToDictate(chords)). Each dictation appears here.")
     }
 }
 

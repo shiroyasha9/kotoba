@@ -3,8 +3,8 @@ import Foundation
 import KotobaCore
 import Observation
 
-/// The owner's dictation, cleanup and Paste Last chords, saved in UserDefaults. Every text that names a chord reads it
-/// here, so views redraw when the owner records a new one, and the hotkey tap follows each change at once.
+/// The owner's hands-free, push-to-talk, cleanup and Paste Last chords, saved in UserDefaults. Every text that names a
+/// chord reads it here, so views redraw when the owner records a new one, and the hotkey tap follows each change at once.
 @MainActor
 @Observable
 final class HotkeyChords {
@@ -12,7 +12,10 @@ final class HotkeyChords {
 
     static let shared = HotkeyChords(defaults: .standard)
 
-    private(set) var dictation: Chord
+    private(set) var handsFree: Chord
+    /// The push-to-talk chord the owner recorded; nil (the default) uses the hands-free chord and follows a new one.
+    /// A recorded chord stays when the hands-free chord changes (`Chord.pushToTalk(afterSaving:as:handsFree:kept:)`).
+    private(set) var savedPushToTalk: Chord?
     /// nil turns cleanup dictation off.
     private(set) var cleanup: Chord?
     /// Unset (nil) by default: a default chord could take a shortcut another app uses. The menu item works without it.
@@ -30,37 +33,52 @@ final class HotkeyChords {
     @ObservationIgnored private let defaults: UserDefaults?
 
     init(
-        defaults: UserDefaults?, dictation: Chord = .defaultDictation, cleanup: Chord? = .defaultCleanup,
-        pasteLast: Chord? = nil
+        defaults: UserDefaults?, handsFree: Chord = .defaultHandsFree, pushToTalk: Chord? = nil,
+        cleanup: Chord? = .defaultCleanup, pasteLast: Chord? = nil
     ) {
         self.defaults = defaults
-        self.dictation = defaults.flatMap { Self.load(Key.dictationChord, from: $0) }.flatMap { $0 } ?? dictation
+        self.handsFree = defaults.flatMap { Self.load(Key.handsFreeChord, from: $0) }.flatMap { $0 } ?? handsFree
+        savedPushToTalk = defaults.flatMap { Self.load(Key.pushToTalkChord, from: $0) }.flatMap { $0 } ?? pushToTalk
         self.cleanup = defaults.flatMap { Self.load(Key.cleanupChord, from: $0) } ?? cleanup
         self.pasteLast = defaults.flatMap { Self.load(Key.pasteLastChord, from: $0) } ?? pasteLast
     }
 
+    var pushToTalk: Chord { savedPushToTalk ?? handsFree }
+
+    /// Push to talk while it is another chord than hands-free; nil while one chord does both, as before the split (tap
+    /// to toggle, hold for push to talk).
+    var separatePushToTalk: Chord? { pushToTalk == handsFree ? nil : pushToTalk }
+
     func chord(_ role: Role) -> Chord? {
         switch role {
-        case .dictation: dictation
+        case .handsFree: handsFree
+        case .pushToTalk: pushToTalk
         case .cleanup: cleanup
         case .pasteLast: pasteLast
         }
     }
 
-    /// Saves `chord` (nil turns cleanup or Paste Last off) unless the chords cannot work together; then returns why
-    /// and keeps the old one.
+    /// Saves `chord` (nil turns cleanup or Paste Last off, and gives push to talk the hands-free chord) unless the
+    /// chords cannot work together; then returns why and keeps the old one.
     func save(_ chord: Chord?, as role: Role) -> ChordProblem? {
-        var new = (dictation: dictation, cleanup: cleanup, pasteLast: pasteLast)
+        var new = (handsFree: handsFree, pushToTalk: savedPushToTalk, cleanup: cleanup, pasteLast: pasteLast)
         switch role {
-        case .dictation: new.dictation = chord ?? .defaultDictation
+        case .handsFree: new.handsFree = chord ?? .defaultHandsFree
+        case .pushToTalk: break
         case .cleanup: new.cleanup = chord
         case .pasteLast: new.pasteLast = chord
         }
-        if let problem = Chord.problem(dictation: new.dictation, cleanup: new.cleanup, pasteLast: new.pasteLast) {
-            return problem
+        new.pushToTalk = Chord.pushToTalk(afterSaving: chord, as: role, handsFree: new.handsFree, kept: savedPushToTalk)
+        let problem = Chord.problem(
+            handsFree: new.handsFree, pushToTalk: new.pushToTalk, cleanup: new.cleanup, pasteLast: new.pasteLast)
+        if let problem { return problem }
+        (handsFree, savedPushToTalk, cleanup, pasteLast) = new
+        defaults?.set(handsFree.storedValue, forKey: Key.handsFreeChord.rawValue)
+        if let savedPushToTalk {
+            defaults?.set(savedPushToTalk.storedValue, forKey: Key.pushToTalkChord.rawValue)
+        } else {
+            defaults?.removeObject(forKey: Key.pushToTalkChord.rawValue)
         }
-        (dictation, cleanup, pasteLast) = new
-        defaults?.set(dictation.storedValue, forKey: Key.dictationChord.rawValue)
         defaults?.set(cleanup?.storedValue ?? Self.off, forKey: Key.cleanupChord.rawValue)
         defaults?.set(pasteLast?.storedValue ?? Self.off, forKey: Key.pasteLastChord.rawValue)
         apply()
@@ -68,7 +86,9 @@ final class HotkeyChords {
     }
 
     private func apply() {
-        tap?.setChords(dictation: dictation, cleanup: cleanup, pasteLast: pasteLast, isPaused: isRecording)
+        tap?.setChords(
+            handsFree: handsFree, pushToTalk: savedPushToTalk, cleanup: cleanup, pasteLast: pasteLast,
+            isPaused: isRecording)
     }
 
     private typealias Key = AppDefaults.Key

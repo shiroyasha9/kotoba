@@ -47,10 +47,10 @@ struct IndicatorClickTests {
         let world = FakeWorld(transcript: "clicked")
         let pipeline = world.makePipeline()
 
-        await pipeline.handle(.chordDown)
+        await pipeline.handle(.chordDown(.tapOrHold))
         await pipeline.handle(.chordUp)
         #expect(await pipeline.state == .recording(isLong: false))
-        await pipeline.handle(.chordDown)
+        await pipeline.handle(.chordDown(.tapOrHold))
         await pipeline.handle(.chordUp)
         await pipeline.settle()
 
@@ -63,11 +63,11 @@ struct IndicatorClickTests {
     @Test func aClickDuringPushToTalkPastesAfterTheChordIsReleased() async {
         let world = FakeWorld(transcript: "held")
         let pipeline = world.makePipeline()
-        await pipeline.handle(.chordDown)
+        await pipeline.handle(.chordDown(.tapOrHold))
         world.clock.advance(by: .seconds(1))
 
         // The click while the chord is held.
-        await pipeline.handle(.chordDown)
+        await pipeline.handle(.chordDown(.tapOrHold))
         let pastedWhileHeld = await eventually { await world.paster.pasteCount > 0 }
         await pipeline.handle(.chordUp)
         await pipeline.settle()

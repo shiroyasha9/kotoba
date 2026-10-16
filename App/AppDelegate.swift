@@ -285,6 +285,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     /// does not delay key-down.
     private func startHotkeys(feeding pipeline: DictationPipeline) {
         let hotkeys = hotkeys
+        // A click on the pill is a chord tap (`indicator.onTap`), not a click that drops a press.
+        hotkeys.mouse.isPillWindow = { [indicator] in indicator.holds($0) }
         Task.detached {
             for await (event, instant) in hotkeys.events {
                 await pipeline.handle(event, at: instant)

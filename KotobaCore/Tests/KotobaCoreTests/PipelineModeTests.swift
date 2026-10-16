@@ -77,7 +77,7 @@ struct PipelineModeTests {
         modes.cleansEveryDictation = [.writing]
         let pipeline = world.makePipeline(cleaner: cleaner, modes: modes)
 
-        await pipeline.handle(.chordDown)
+        await pipeline.handle(.chordDown(.tapOrHold))
         await pipeline.settle()
 
         #expect(await cleaner.warmUps == 1)
@@ -271,7 +271,7 @@ struct PipelineModeTests {
         #expect(await eventually { await gate.hasWaiters })
 
         // The chord was part of another app's shortcut: the press is discarded.
-        await pipeline.handle(.chordDown)
+        await pipeline.handle(.chordDown(.tapOrHold))
         await pipeline.handle(.chordInterrupted)
         await pipeline.handle(.chordUp)
 

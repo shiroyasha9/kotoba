@@ -41,13 +41,18 @@ struct WelcomeStep: View {
         .padding(.vertical, 2)
         Form {
             Section {
-                LabeledContent("Shortcut") {
-                    ChordRecorder(chords: .shared, role: .dictation)
+                LabeledContent(StatusText.shortcutTitle(.handsFree)) {
+                    ChordRecorder(chords: .shared, role: .handsFree)
+                }
+                LabeledContent(StatusText.shortcutTitle(.pushToTalk)) {
+                    ChordRecorder(chords: .shared, role: .pushToTalk)
                 }
             } footer: {
-                let chord = StatusText.dictationChord
-                Text("Tap \(chord), speak, then tap it again.\nOr hold \(chord) while you speak, and let go.")
-                    .frame(maxWidth: .infinity, alignment: .leading)
+                let chords = HotkeyChords.shared
+                Text(
+                    "Tap \(chords.handsFree.title), speak, then tap it again.\n" + StatusText.holdToDictate(chords)
+                )
+                .frame(maxWidth: .infinity, alignment: .leading)
             }
         }
         .formStyle(.grouped)
@@ -119,9 +124,9 @@ struct AccessibilityStep: View {
 
     var body: some View {
         StepText(
-            "kotoba needs Accessibility to notice \(StatusText.dictationChord) in every app and to paste your text. "
-                + "kotoba reads only the text field it pasted into, and only when “Learn from my edits” is on, "
-                + "to learn your corrections. It never reads your screen."
+            "kotoba needs Accessibility to notice \(StatusText.dictationChords(.shared)) in every app and to paste "
+                + "your text. kotoba reads only the text field it pasted into, and only when “Learn from my edits” "
+                + "is on, to learn your corrections. It never reads your screen."
         )
         if model.readiness.isAccessibilityAllowed {
             StatusLine("Accessibility allowed", .good).padding(.top, 8)
@@ -213,7 +218,7 @@ struct TryItStep: View {
     @FocusState private var isFieldFocused: Bool
 
     var body: some View {
-        let chord = StatusText.dictationChord
+        let chord = HotkeyChords.shared.handsFree.title
         StepText("Tap \(chord), say \u{201C}Hello from kotoba\u{201D}, then tap \(chord) again.")
         TextField("Try It", text: $model.tryItText, prompt: Text("Your words appear here"), axis: .vertical)
             .labelsHidden()
@@ -224,7 +229,7 @@ struct TryItStep: View {
             .focused($isFieldFocused)
             .onAppear { isFieldFocused = true }
         if !model.isDone(.tryIt) {
-            Text("Or hold \(StatusText.dictationChord) while you speak, and let go.")
+            Text(StatusText.holdToDictate(.shared))
                 .font(.callout)
                 .foregroundStyle(.secondary)
         } else {

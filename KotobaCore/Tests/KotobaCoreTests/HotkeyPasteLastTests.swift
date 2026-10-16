@@ -75,7 +75,10 @@ extension HotkeyClassifierTests {
             pasteLastChord: controlCommandV,
             steps: [
                 (controlCommand, .pass), (down(KeyCode.ansiV), .swallow),
-                (.modifiersChanged([.leftControl, .leftOption, .leftCommand]), HotkeyDecision(event: .chordDown)),
+                (
+                    .modifiersChanged([.leftControl, .leftOption, .leftCommand]),
+                    HotkeyDecision(event: .chordDown(.tapOrHold))
+                ),
                 (none, HotkeyDecision(event: .chordUp)),
             ]
         ),
@@ -113,8 +116,8 @@ extension ChordTests {
             pasteLast: Chord(modifiers: .shift, keyCode: KeyCode.ansiV), problem: .noModifier),
         Row(
             name: "Paste Last on the dictation key chord",
-            dictation: Chord(modifiers: .option, keyCode: KeyCode.space),
-            pasteLast: Chord(modifiers: .option, keyCode: KeyCode.space), problem: .pasteLastSameAs(.dictation)),
+            handsFree: Chord(modifiers: .option, keyCode: KeyCode.space),
+            pasteLast: Chord(modifiers: .option, keyCode: KeyCode.space), problem: .pasteLastSameAs(.handsFree)),
         Row(
             name: "Paste Last on the cleanup key chord with the other Option",
             cleanup: Chord(modifiers: .option, keyCode: KeyCode.space),
@@ -122,27 +125,27 @@ extension ChordTests {
         Row(
             name: "Paste Last holds the dictation chord on the way",
             pasteLast: Chord(modifiers: [.control, .option, .command], keyCode: KeyCode.ansiV),
-            problem: .pasteLastIncludes(.dictation)),
+            problem: .pasteLastIncludes(.handsFree)),
         Row(
             name: "Paste Last holds the cleanup chord on the way",
-            dictation: Chord(modifiers: .function),
+            handsFree: Chord(modifiers: .function),
             pasteLast: Chord(modifiers: [.control, .option, .shift, .command], keyCode: KeyCode.ansiV),
             problem: .pasteLastIncludes(.cleanup)),
         Row(
             name: "either-side ⌘ in Paste Last holds a right ⌘ dictation chord",
-            dictation: Chord(modifiers: .rightCommand), pasteLast: controlCommandV,
-            problem: .pasteLastIncludes(.dictation)),
+            handsFree: Chord(modifiers: .rightCommand), pasteLast: controlCommandV,
+            problem: .pasteLastIncludes(.handsFree)),
         Row(
             name: "with cleanup off, Paste Last may use the cleanup modifiers",
-            dictation: Chord(modifiers: .function), cleanup: nil,
+            handsFree: Chord(modifiers: .function), cleanup: nil,
             pasteLast: Chord(modifiers: [.control, .option, .shift, .command], keyCode: KeyCode.ansiV), problem: nil),
         Row(
             name: "Paste Last next to a dictation key chord with the same modifiers",
-            dictation: Chord(modifiers: [.control, .option, .command], keyCode: KeyCode.space),
+            handsFree: Chord(modifiers: [.control, .option, .command], keyCode: KeyCode.space),
             pasteLast: Chord(modifiers: [.control, .option, .command], keyCode: KeyCode.ansiV), problem: nil),
         Row(
             name: "a chord's own problem comes before Paste Last's",
-            dictation: Chord(modifiers: .option), pasteLast: Chord(modifiers: .function),
+            handsFree: Chord(modifiers: .option), pasteLast: Chord(modifiers: .function),
             problem: .commonModifierAlone),
     ]
 }
