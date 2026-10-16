@@ -71,20 +71,12 @@ struct CGEventPaster: Paster {
     }
 
     private static let vKeyCode = Mutex(CGKeyCode(kVK_ANSI_V))
-    private static let trusted = Atomic(false)
     /// One event source for every paste. CGEventSource is a CF object that is safe to share; Swift
     /// does not mark it Sendable.
     private struct SharedSource: @unchecked Sendable {
         let source = CGEventSource(stateID: .hidSystemState)
     }
     private static let shared = SharedSource()
-
-    /// Accessibility trust, set by the app's tap poll, so a paste does not ask the system each time
-    /// (`CGPreflightPostEventAccess` costs about 3 ms).
-    static var isTrusted: Bool {
-        get { trusted.load(ordering: .relaxed) }
-        set { trusted.store(newValue, ordering: .relaxed) }
-    }
 
     /// Builds one keyboard event off the main thread: the first event in a process costs about 21 ms,
     /// which would otherwise land on the first paste.
@@ -127,8 +119,13 @@ struct CGEventPaster: Paster {
     /// Marks every event kotoba posts, so the hotkey tap lets its own Cmd-V and Return pass ("kotoba" in ASCII).
     static let postedEventTag: Int64 = 0x6B6F_746F_6261
 
+    /// Asks for Accessibility at each post: it can be turned off while kotoba runs, and macOS then drops posted events
+    /// with no error, so the text would go nowhere. Not allowed, the text stays on the clipboard (`.copied`).
+    /// `AXIsProcessTrusted` reads a cache the system refreshes on each Accessibility change: 0.5 µs a call (p90 0.6 µs,
+    /// `swiftc -O` probe, 2026-10-17); the first call in a process (about 11 ms) runs at launch, in `Readiness`.
+    /// `CGPreflightPostEventAccess` costs about 3 ms a call.
     private static func post(_ keyCode: CGKeyCode, flags: CGEventFlags) throws {
-        guard isTrusted else { throw PasteError.notAllowed }
+        guard AXIsProcessTrusted() else { throw PasteError.notAllowed }
         let source = shared.source
         guard
             let keyDown = CGEvent(keyboardEventSource: source, virtualKey: keyCode, keyDown: true),

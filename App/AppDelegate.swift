@@ -293,7 +293,6 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         }
         Task {
             await setup.startHotkeys(hotkeys)
-            CGEventPaster.isTrusted = true
             Log.app.info("Hotkey tap started")
             // Story 31: launch's turn for audio retention, once dictation works; the pipeline and store do it off main.
             await pipeline.deleteExpiredAudio()
