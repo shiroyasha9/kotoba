@@ -63,6 +63,9 @@ struct EditableList<Row: Identifiable, RowView: View, AddItems: View, Accessory:
         }
         .listStyle(.plain)
         .scrollContentBackground(.hidden)
+        // Every row at least as tall as a row with a pop-up button (32 pt, Modes, measured offscreen 2026-10-16), so a
+        // list of names (Microphone) is not denser than the other lists and form rows in the window.
+        .environment(\.defaultMinListRowHeight, 32)
         .scrollDisabled(true)
         .onScrollGeometryChange(for: CGFloat.self, of: \.contentSize.height) { _, height in self.height = height }
         .frame(height: height)

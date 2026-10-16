@@ -27,7 +27,7 @@ enum PillAction: Sendable, Equatable {
         case .copy: "Copy"
         case .allowPasting: "Allow Pasting…"
         case .openMicrophoneSettings: "Open System Settings…"
-        case .chooseMicrophone: "Microphone…"
+        case .chooseMicrophone: "Choose Mic…"
         }
     }
 }

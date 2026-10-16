@@ -83,7 +83,7 @@ private struct InsightsPane: View {
                 Highlight(
                     title: "Words per minute", systemImage: "speedometer",
                     value: insights.wordsPerMinute?.formatted() ?? "None",
-                    detail: "Over \(StatusText.counted(insights.dictations, "dictation"))")
+                    detail: "Across \(StatusText.counted(insights.dictations, "dictation"))")
                 Divider()
                 Highlight(
                     title: "Streak", systemImage: "flame", value: StatusText.counted(insights.streak, "day"),
@@ -139,7 +139,8 @@ private struct InsightsPane: View {
     @ViewBuilder
     private func apps(_ insights: DictationInsights) -> some View {
         if !insights.apps.isEmpty {
-            Section("Top Apps") {
+            // Usage shows the top apps of its period; this list counts every dictation.
+            Section("Top Apps of All Time") {
                 ForEach(insights.apps, id: \.app.bundleID) { row in
                     AppWordsRow(row: row, apps: model.apps)
                 }
@@ -158,7 +159,7 @@ private struct InsightsPane: View {
 extension DictationInsights {
     /// The line under the streak, here and on Home.
     var streakDetail: String {
-        if isTodayInStreak { return "Today included" }
+        if isTodayInStreak { return "Including today" }
         return streak > 0 ? "Dictate today to keep it" : "Dictate today to start one"
     }
 }
@@ -191,15 +192,20 @@ private struct WordsChart: View {
             BarMark(x: .value("Day", day.start, unit: .day), y: .value("Words", day.words))
                 .foregroundStyle(.tint)
         }
-        // A label at each week's start, without the year; three word counts are enough to read a bar.
+        // A label at each week's start, without the year; three word counts are enough to read a bar. Every axis label
+        // names its anchor: with the default one, Charts logs "Custom UnitPoint values are not supported".
         .chartXAxis {
             AxisMarks(values: .stride(by: .weekOfYear)) {
                 AxisGridLine()
-                AxisValueLabel(format: .dateTime.month(.abbreviated).day())
+                AxisValueLabel(format: .dateTime.month(.abbreviated).day(), anchor: .topLeading)
             }
         }
         .chartYAxis {
-            AxisMarks(values: .automatic(desiredCount: 3))
+            AxisMarks(values: .automatic(desiredCount: 3)) {
+                AxisGridLine()
+                AxisTick()
+                AxisValueLabel(anchor: .leading)
+            }
         }
         .frame(height: 120)
     }

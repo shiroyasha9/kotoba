@@ -197,7 +197,7 @@ final class HistoryModel {
     }
 
     /// The ids of `records` a retry can send: retryable, with the audio file still on disk.
-    private static func kept(_ records: [DictationRecord]) -> Set<DictationID> {
+    static func kept(_ records: [DictationRecord]) -> Set<DictationID> {
         Set(
             records.lazy.filter { $0.isRetryable && FileManager.default.fileExists(atPath: $0.audio.file.path) }.map(
                 \.id))

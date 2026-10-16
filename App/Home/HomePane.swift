@@ -32,7 +32,7 @@ private struct HomePane: View {
                 if figures.insights.dictations > 0 {
                     activity(figures.insights)
                 }
-                recent(figures.recent)
+                recent(figures)
             }
             shortcuts
         }
@@ -91,25 +91,30 @@ private struct HomePane: View {
         return Button(title, action: model.finishSetup)
     }
 
-    /// The chords as the owner set them in General; each redraws when a chord changes.
+    /// The chords as the owner set them in General; each redraws when a chord changes. The words are General's.
     private var shortcuts: some View {
         Section {
             LabeledContent {
                 Text(model.chords.dictation.title)
             } label: {
                 Text("Dictate")
-                Text("Tap, speak, then tap again. Or hold while you speak.")
+                Text(StatusText.shortcutHelp(.dictation))
             }
             if let cleanup = model.chords.cleanup {
                 LabeledContent {
                     Text(cleanup.title)
                 } label: {
                     Text("Clean up")
-                    Text("Dictate with filler words removed and punctuation fixed.")
+                    Text(StatusText.shortcutHelp(.cleanup))
                 }
             }
             if let pasteLast = model.chords.pasteLast {
-                LabeledContent("Paste last dictation", value: pasteLast.title)
+                LabeledContent {
+                    Text(pasteLast.title)
+                } label: {
+                    Text("Paste last dictation")
+                    Text(StatusText.shortcutHelp(.pasteLast))
+                }
             }
             LabeledContent {
                 Text("Esc")
@@ -148,27 +153,33 @@ private struct HomePane: View {
         }
     }
 
-    private func recent(_ records: [DictationRecord]) -> some View {
+    private func recent(_ figures: HomeModel.Figures) -> some View {
         Section {
-            if records.isEmpty {
+            if figures.recent.isEmpty {
                 EmptyState.noDictations(chord: model.chords.dictation)
             } else {
-                ForEach(records) { record in
+                ForEach(figures.recent) { record in
                     HStack(alignment: .top) {
-                        HistoryRow(record: record, apps: model.apps)
-                        Button("Copy", systemImage: "doc.on.doc") { model.copy(record) }
+                        HistoryRow(
+                            record: record, apps: model.apps, isRetryable: figures.retryable.contains(record.id))
+                        // Hidden, not removed, on a row with no text: the times stay in one column.
+                        let copy = Button("Copy", systemImage: "doc.on.doc") { model.copy(record) }
                             .labelStyle(.iconOnly)
                             .buttonStyle(.borderless)
                             .help("Copy the text")
-                            .disabled(record.deliveredText == nil)
                             .padding(.top, 4)
+                        if record.deliveredText?.isEmpty == false {
+                            copy
+                        } else {
+                            copy.hidden()
+                        }
                     }
                 }
             }
         } header: {
-            header("Recent Dictations", link: "Show All", opening: .history)
+            header("Recent Dictations", link: figures.recent.isEmpty ? nil : "Show All", opening: .history)
         } footer: {
-            if model.reader.value?.hasLastDictation == true {
+            if figures.hasLastDictation {
                 HStack {
                     Spacer()
                     Button("Fix Last Dictation…", action: model.fixLast)
@@ -177,13 +188,16 @@ private struct HomePane: View {
         }
     }
 
-    /// A section title with a link to the pane that shows more, as in Music's "See All".
-    private func header(_ title: String, link: String, opening pane: PaneID) -> some View {
+    /// A section title with a link to the pane that shows more, as in Music's "See All"; no link when there is no
+    /// more to show.
+    private func header(_ title: String, link: String?, opening pane: PaneID) -> some View {
         HStack {
             Text(title)
             Spacer()
-            Button(link) { openPane(pane) }
-                .buttonStyle(.link)
+            if let link {
+                Button(link) { openPane(pane) }
+                    .buttonStyle(.link)
+            }
         }
     }
 }
@@ -211,7 +225,8 @@ extension HomeModel {
         let recent = Array(HistoryController.sampleRows().prefix(recentCount))
         return HomeModel(
             readiness: .sample(), chords: HotkeyChords(defaults: nil),
-            figures: Figures(insights: insights, recent: recent, hasLastDictation: true))
+            figures: Figures(
+                insights: insights, recent: recent, hasLastDictation: true, retryable: HistoryModel.kept(recent)))
     }
 
     /// A first launch: no OpenRouter key yet, nothing dictated.

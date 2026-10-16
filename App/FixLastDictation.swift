@@ -247,10 +247,10 @@ struct FixLastDictationView: View {
         VStack(alignment: .leading, spacing: 4) {
             if model.canLearn {
                 Text(
-                    "Correct the words kotoba got wrong, then click Learn. To add a word it got right, select it and "
-                        + "click Add Selected Word.")
+                    "Fix the wrong words, then click Learn. To add a word that is right, select it and click Add "
+                        + "Selected Word.")
             } else {
-                Text("Correct the words kotoba got wrong, then click Copy.")
+                Text("Fix the wrong words, then click Copy.")
             }
             if !model.addedWords.isEmpty {
                 Label(

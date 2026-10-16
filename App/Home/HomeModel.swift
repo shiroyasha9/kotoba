@@ -14,6 +14,8 @@ final class HomeModel {
         var recent: [DictationRecord]
         /// A dictation reached the owner, so "Fix Last Dictation…" has something to fix (`LastDictation`).
         var hasLastDictation: Bool
+        /// The rows of `recent` whose audio waits for a retry, as History marks them (`HistoryModel.kept`).
+        var retryable: Set<DictationID> = []
     }
 
     /// What Home does. The snapshot run passes none and sets the figures itself.

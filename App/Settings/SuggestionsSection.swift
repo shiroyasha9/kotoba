@@ -41,18 +41,21 @@ struct LearnFromEditsToggle: View {
     // Custom row: outside a Form a switch sits next to its label, and this row puts it at the trailing edge, as a Form
     // row does. A grouped Form above the word list cannot hold it: a fixed-height Form makes the pane's ideal height
     // the list's full height, and the main window then grows past the screen (spike, docs/research/native-ui.md).
+    // The subtitle font and the mini switch are what a grouped Form row draws (spike, 2026-10-16), so the row matches
+    // the switches of the other panes.
     var body: some View {
         HStack {
             VStack(alignment: .leading) {
                 Text("Learn from my edits")
-                Text("When you fix a word kotoba pasted, kotoba adds it to your dictionary.")
-                    .font(.callout)
+                Text("When you fix a word after kotoba pastes it, the word goes into your dictionary.")
+                    .font(.subheadline)
                     .foregroundStyle(.secondary)
             }
             Spacer()
             Toggle("Learn from my edits", isOn: $isLearningFromEdits)
                 .labelsHidden()
                 .toggleStyle(.switch)
+                .controlSize(.mini)
         }
     }
 }

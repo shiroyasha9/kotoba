@@ -56,7 +56,7 @@ UI text in this list is the text in the code at the phase 2 gate (2026-10-15). I
 
 | # | Do this | Expect | Result |
 |---|---|---|---|
-| 27 | Dictionary > **Import from Wispr Flow…** | "Import from Wispr Flow?" with "Adds N words and M replacements." and, when Wispr has them, "Includes N learned corrections…", "N entries already in your dictionary." and "Not imported: N snippets." | |
+| 27 | Dictionary > **Import from Wispr Flow…** | "Import from Wispr Flow?" with "Adds N words and M replacements." (with ", including N corrections Wispr learned from your edits" when Wispr has them), "Already in your dictionary: N entries." and "Skips N snippets." | |
 | 28 | Check the counts against Wispr Flow's dictionary | The counts match the words and replacements that are not already in kotoba | |
 | 29 | Click **Import** | The words and replacements show in the list | |
 | 30 | **Import from Wispr Flow…** again | "Nothing New in Wispr Flow": "Every word in Wispr Flow's dictionary is already here." | |
@@ -67,15 +67,15 @@ UI text in this list is the text in the code at the phase 2 gate (2026-10-15). I
 | # | Do this | Expect | Result |
 |---|---|---|---|
 | 32 | Open the **Microphone: …** submenu | The connected inputs; the one in use is checked; the title shows "Microphone: <name>" | |
-| 33 | Pick another mic, dictate | kotoba records from the mic you picked; Settings > **Microphone** shows it at the top of **Your Order** | |
-| 34 | Settings > **Microphone**: click **+** under **Your Order** | A menu of the connected mics that are not in your order; **+** is dimmed when there are none | |
-| 35 | Pick a mic in the **+** menu | It joins the end of **Your Order** | |
-| 36 | Drag a mic to the top of **Your Order**, dictate | The row moves while you drag; kotoba records from that mic (“In use” on its row) | |
+| 33 | Pick another mic, dictate | kotoba records from the mic you picked; Settings > **Microphone** shows it at the top of **Microphone Order** | |
+| 34 | Settings > **Microphone**: click **+** under **Microphone Order** | A menu of the connected mics that are not in your order; **+** is dimmed when there are none | |
+| 35 | Pick a mic in the **+** menu | It joins the end of **Microphone Order** | |
+| 36 | Drag a mic to the top of **Microphone Order**, dictate | The row moves while you drag; kotoba records from that mic (“In use” on its row) | |
 | 37 | Disconnect the first mic in the order, dictate | kotoba uses the next connected mic in the order; the first one shows "Not connected" | |
 | 38 | Connect it again, dictate | kotoba uses it again | |
 | 39 | Connect a mic during a recording | The recording keeps its mic; the new mic is used from the next dictation | |
 | 40 | Look at a Bluetooth mic in the pane (in the order, or in the **+** menu) | “Bluetooth: call-quality audio” | |
-| 41 | Right-click a mic in **Your Order** > **Remove from Order**; then select one and click **−**; then select one and press Delete | Each time it leaves the order (and shows in the **+** menu if it is connected) | |
+| 41 | Right-click a mic in **Microphone Order** > **Remove from Order**; then select one and click **−**; then select one and press Delete | Each time it leaves the order (and shows in the **+** menu if it is connected) | |
 | 42 | Click **Follow System Default** | "No mics in your order: kotoba follows the system default input."; with AirPods as output, kotoba records from the built-in mic | |
 
 ## Indicator position
@@ -87,7 +87,7 @@ UI text in this list is the text in the code at the phase 2 gate (2026-10-15). I
 | 45 | While the pill shows, start to drag it | The pill becomes a small round waveform icon; three faint glass shapes show at bottom center, left mid-height and right mid-height; the nearest one is tinted | |
 | 46 | Drag it to the left edge and release | It snaps to the left edge with a short animation; "Listening" stands vertical (dot over a level bar) | |
 | 47 | Drag it to the right edge and release; stop the dictation | It snaps to the right edge; "Transcribing" stands vertical (dot over a spinner) | |
-| 48 | At a side edge, press Esc during a recording | "Cancelled" + **Undo** shows as a horizontal pill at mid-height on that edge | |
+| 48 | At a side edge, press Esc during a recording | "Canceled" + **Undo** shows as a horizontal pill at mid-height on that edge | |
 | 49 | Drag it back to the bottom and release | It snaps to the bottom center | |
 | 50 | Leave it at an edge, quit and open kotoba, dictate | The pill shows at the same edge | |
 | 51 | Type in TextEdit, start a dictation, drag the pill, release, then type without a click | TextEdit stays the active app; the text cursor stays; the keys go to TextEdit | |
@@ -139,7 +139,7 @@ UI text in this list is the text in the code at the phase 2 gate (2026-10-15). I
 
 | # | Do this | Expect | Result |
 |---|---|---|---|
-| 85 | Start a dictation, press Esc | "Cancelled" + **Undo** for 5 s; menu first line "Cancelled - Undo available"; orange mic dot goes off; nothing pastes | |
+| 85 | Start a dictation, press Esc | "Canceled" + **Undo** for 5 s; menu first line "Canceled - Undo available"; orange mic dot goes off; nothing pastes | |
 | 86 | Esc, then click **Undo** within 5 s, speak more, tap to stop | One text with everything said before and after; focus stays in your app | |
 | 87 | Esc, then tap Ctrl+Opt+Cmd within 5 s, speak, tap to stop | Same as 86 | |
 | 88 | Esc, wait more than 5 s | Cancel is final; nothing pastes | |
@@ -224,7 +224,7 @@ Rows from each agent's phase 2.5 work. The numbers continue the list above.
 |---|---|---|---|
 | 134 | Open Settings | The sidebar shows "Speech" with a speech-bubble symbol (not "Providers") | |
 | 135 | Speech > **Speech model** | "MAI-Transcribe-2 via OpenRouter (Recommended)" and "Grok via OpenRouter"; under "Advanced": "Grok via xAI" and "MAI-Transcribe-2 via Azure"; no "Untested" text | |
-| 136 | Pick **Grok via OpenRouter** | Footer: "OpenRouter may keep this audio. MAI-Transcribe-2 keeps none."; the toggles "Format numbers and units" and "Keep filler words" show; no "a few cents per hour" line | |
+| 136 | Pick **Grok via OpenRouter** | Footer: "OpenRouter may keep this audio. With MAI-Transcribe-2 it keeps none."; the toggles "Format numbers and units" and "Keep filler words" show; no "a few cents per hour" line | |
 | 137 | Pick **MAI-Transcribe-2 via OpenRouter (Recommended)** | Only the "OpenRouter Key" section shows, with "You pay OpenRouter directly, a few cents per hour of speech."; no Azure section; no toggles | |
 | 138 | Look under the key row | **Get a Key…** and **See Pricing…** | |
 | 139 | Click **Get a Key…**, then **See Pricing…** | The browser opens OpenRouter's keys page, then the MAI-Transcribe-2 price page | |
@@ -275,7 +275,7 @@ Rows from each agent's phase 2.5 work. The numbers continue the list above.
 |---|---|---|---|
 | 170 | With a message pill that has a button (for example Wi-Fi off, **Retry**), look at the pill bottom | A thin bar starts full and empties in about 8 s; the pill hides when it is empty | |
 | 171 | Hold the pointer on that pill for 20 s, then move it away | The bar stops while the pointer is on the pill; after you leave it runs on from where it stopped, and the pill hides when the bar is empty | |
-| 172 | Press Esc during a recording; hold the pointer on the Cancelled pill for 20 s, then click **Undo** | The bar stops and the Undo window stays open; **Undo** resumes the recording | |
+| 172 | Press Esc during a recording; hold the pointer on the Canceled pill for 20 s, then click **Undo** | The bar stops and the Undo window stays open; **Undo** resumes the recording | |
 | 173 | Press Esc during a recording; hold the pointer on the pill for 2 s, move it away, wait | The bar runs on; the pill hides when the bar is empty (about 5 s in total, not counting the hold) | |
 | 174 | Settings > General > **Show indicator**: **Always** | A small round waveform pill shows at the saved position; it shows no level and no motion | |
 | 175 | Type in TextEdit, click the round pill, speak, click the pill again | The click starts a dictation like a chord tap; the second click stops it; the text pastes into TextEdit; TextEdit stays the active app and keeps its cursor | |
@@ -285,7 +285,7 @@ Rows from each agent's phase 2.5 work. The numbers continue the list above.
 | 179 | On macOS 27, with **Always**, move the pointer over the round pill and press | The glass shows a response to the pointer and the press (interactive glass) | |
 | 264 | With **While Dictating**, start a dictation with the chord, then click the Listening pill | The click stops the dictation like a chord tap; the text pastes into your app | |
 | 265 | Look at the pill edges over a light and a dark window | The glass shadow is soft on every side; no straight cut-off edge; clicks just outside the pill reach the app below | |
-| 277 | Put the pointer where the pill appears and keep it still; dictate, press Esc (the Cancelled pill appears under the pointer), then move the pointer away | The bar stops while the pointer is on the pill; after you move away the bar runs on and the pill goes in about 5 s; the next dictation works | |
+| 277 | Put the pointer where the pill appears and keep it still; dictate, press Esc (the Canceled pill appears under the pointer), then move the pointer away | The bar stops while the pointer is on the pill; after you move away the bar runs on and the pill goes in about 5 s; the next dictation works | |
 
 ### Learning from edits (phase 2.6)
 
@@ -349,7 +349,7 @@ Rows from each agent's phase 2.5 work. The numbers continue the list above.
 | 247 | Tap the chord, speak, press ⇧Return | The recording goes on; the app gets ⇧Return as usual | |
 | 248 | Press Return with no dictation running, and press Esc during a recording | Return reaches the app as usual; Esc still cancels with Undo | |
 | 249 | Turn Wi-Fi off, tap the chord, speak, press Return; turn Wi-Fi on and retry | The dictation goes to **Recovered Dictations**; no Return is sent | |
-| 288 | In Slack, tap the chord, say "hello. Press enter.", tap the chord, and click TextEdit within 1 s | "hello." pastes into TextEdit; no Return; the pill shows "Didn’t press Return: app changed" | |
+| 288 | In Slack, tap the chord, say "hello. Press enter.", tap the chord, and click TextEdit within 1 s | "hello." pastes into TextEdit; no Return; the pill shows "Return not pressed: app changed" | |
 | 289 | Tap the chord to stop, and press Return at once (within about 0.1 s) | One Return, after the paste; the Return is not lost | |
 | 290 | Start a long dictation, stop it, and during "Transcribing" choose menu > **Paste Last Dictation** | Nothing pastes from the menu; the new dictation pastes once | |
 
@@ -357,13 +357,13 @@ Rows from each agent's phase 2.5 work. The numbers continue the list above.
 
 | # | Do this | Expect | Result |
 |---|---|---|---|
-| 266 | Choose the built-in mic. In System Settings > Sound > Input, set the input volume to 0; tap the chord and say nothing | About 2 s after the start the pill and the menu status show “No sound from the mic” with **Microphone…**; the pill’s help tag names the mic; recording goes on | |
+| 266 | Choose the built-in mic. In System Settings > Sound > Input, set the input volume to 0; tap the chord and say nothing | About 2 s after the start the pill and the menu status show “No sound from the mic” with **Choose Mic…**; the pill’s help tag names the mic; recording goes on | |
 | 267 | With the warning up, set the input volume back and speak | The warning goes away at your first word; the pill says “Listening” again | |
 | 268 | Input volume normal, in a quiet room, tap the chord and say nothing for 15 s | No warning at any time | |
 | 269 | Hold the chord with the input volume at 0 for about 1 s, then release | No warning; the dictation ends as usual | |
 | 270 | Choose AirPods as the mic; tap the chord, wait 1 s, then speak; later stay silent for 10 s | No warning while the AirPods start; note if a warning shows in the silence (AirPods noise suppression) | |
 | 271 | During a recording with a USB mic, unplug it | Within about 2 s the pill shows the warning (or recording moves to another mic and shows its level) | |
-| 272 | Click **Microphone…** on the warning | Settings opens on the Microphone pane; recording goes on until you stop it | |
+| 272 | Click **Choose Mic…** on the warning | Settings opens on the Microphone pane; recording goes on until you stop it | |
 
 ### Native components (phase 2.6)
 
@@ -377,8 +377,8 @@ Rows from each agent's phase 2.5 work. The numbers continue the list above.
 | 257 | Fix Last Dictation…: click into the text, press ⌘A then type | The whole text is replaced; the box has no separate border inside the grouped box | |
 | 258 | Onboarding Done step: click each switch | Each switch changes; the two switches sit in one grouped box | |
 | 259 | Settings window toolbar | No sidebar toggle button; the sidebar cannot be hidden | |
-| 260 | Choose AirPods as the mic (menu), then open Settings > Microphone | “Bluetooth mic: call-quality audio” with its detail at the top of **Your Order**; the AirPods row says only “In use” | |
-| 261 | Settings > Microphone open: plug in a USB mic, then unplug it | It shows in the **+** menu (or as connected in **Your Order**) at once, and goes away again; no reopen needed | |
+| 260 | Choose AirPods as the mic (menu), then open Settings > Microphone | “Bluetooth mic: call-quality audio” with its detail at the top of **Microphone Order**; the AirPods row says only “In use” | |
+| 261 | Settings > Microphone open: plug in a USB mic, then unplug it | It shows in the **+** menu (or as connected in **Microphone Order**) at once, and goes away again; no reopen needed | |
 | 262 | Settings > Microphone open: pick another mic in the menu bar **Microphone** submenu | “In use” moves to that mic in the pane at once; with AirPods, the Bluetooth warning appears | |
 | 273 | AirPods as output, choose **AirPods Pro** in **Microphone** | At the foot of the submenu: a dimmed warning “Bluetooth mic: call-quality audio” with “Playback drops to call quality. Start and stop are slower, and kotoba can miss the first word.” | |
 | 274 | AirPods as output, the built-in mic or a USB mic in use; play a video, then dictate | No warning in the menu; the video audio does not drop to call quality; System Settings > Sound > Input keeps its default | |
@@ -398,7 +398,7 @@ Rows from each agent's phase 2.5 work. The numbers continue the list above.
 | 297 | Click into a text field in another app, open History, select a row, click **Paste Again** (toolbar) | The app you were in comes to the front and the text pastes there; History and any other kotoba window stay open behind it; your clipboard comes back after about 1 s | |
 | 298 | Start a dictation, then look at **Paste Again** in History while it records and transcribes | **Paste Again** is dimmed until the dictation ends | |
 | 299 | Turn Wi-Fi off, dictate, turn Wi-Fi on before the network retry, then in History select the “Not transcribed” row > **Retry** | The pill shows “Saved dictation recovered”; the row changes to “Recovered” with its text | |
-| 300 | Press Esc during a dictation and let Undo run out; in History select the “Cancelled” row > **Retry** | The audio is sent; the row changes to “Recovered” with its text | |
+| 300 | Press Esc during a dictation and let Undo run out; in History select the “Canceled” row > **Retry** | The audio is sent; the row changes to “Recovered” with its text | |
 | 301 | Select two rows, press Delete; click **Delete** in the dialog | “Delete 2 Dictations?”; the rows are gone, and their audio files are gone from `~/Library/Application Support/kotoba-dev/audio` | |
 | 302 | Scroll History with more than 200 dictations | Older rows load as you reach the end; no pause | |
 | 303 | Close History, then open it again | It opens at the same size and place, with the search cleared | |
@@ -434,7 +434,7 @@ Rows from each agent's phase 2.5 work. The numbers continue the list above.
 |---|---|---|---|
 | 324 | Open Settings > **General** on a fresh install | **History** section: **Keep audio** is “7 Days”; **Saved audio** shows “Zero KB” and **Delete Audio Now…** is dimmed | |
 | 325 | Keep Settings on **General** and dictate | **Saved audio** grows when the dictation is pasted, without leaving the pane | |
-| 326 | Have dictations from more than one day ago (pasted, one “Not transcribed”, one “Cancelled”); set **Keep audio** to “1 Day” | “Delete Audio Older Than 1 Day?” asks first and says how much it deletes. **Cancel** keeps the old period and deletes nothing. **Delete Audio**: the pasted rows older than a day show “audio deleted” in History and **Saved audio** gets smaller; the “Not transcribed” and “Cancelled” rows still say “audio saved” and **Retry** works on them | |
+| 326 | Have dictations from more than one day ago (pasted, one “Not transcribed”, one “Canceled”); set **Keep audio** to “1 Day” | “Delete Audio Older Than 1 Day?” asks first and says how much it deletes. **Cancel** keeps the old period and deletes nothing. **Delete Audio**: the pasted rows older than a day show “audio deleted” in History and **Saved audio** gets smaller; the “Not transcribed” and “Canceled” rows still say “audio saved” and **Retry** works on them | |
 | 327 | Select a row that shows “audio deleted” | Copy and Paste Again work; there is no Retry; the text is the same as before | |
 | 328 | Note **Spend** in **Usage**; set **Keep audio** to “1 Day” as in row 326; look at **Usage** again | Spend, Audio, Words and Dictations do not change | |
 | 329 | Click **Delete Audio Now…**, then **Cancel**; click it again, then **Delete Audio** | The dialog says how much it deletes. Cancel deletes nothing. **Delete Audio** deletes the audio of every transcribed dictation, today’s too: **Saved audio** goes to “Zero KB” and the button dims; failed, cancelled and refused rows keep theirs; every row stays in History | |
@@ -467,7 +467,7 @@ The Writing prompt waits for its benchmark (docs/research/per-app-modes.md, ques
 | 345 | Turn **Writing apps** off; dictate in Notes with a plain tap | Raw transcript, about as fast as before; no wand, no “Cleaning up” | |
 | 346 | Set **Other apps** to Writing; dictate with the cleanup chord in Ghostty or Terminal | Still a Code cleanup (terminals stay in Code); in an app not in the list (for example TextEdit removed in row 339) the cleanup is prose | |
 | 347 | Change a mode in Settings and at once dictate | The next dictation uses the new setting | |
-| 348 | With **Writing apps** on, slow the network (Network Link Conditioner, “Very Bad Network”) and dictate in Notes | After about 5 s of “Cleaning up” the raw text pastes and the pill says “Cleanup too slow: pasted as spoken”; **Usage** later counts the cleanup’s cost | |
+| 348 | With **Writing apps** on, slow the network (Network Link Conditioner, “Very Bad Network”) and dictate in Notes | After about 5 s of “Cleaning up” the raw text pastes and the pill says “Pasted without cleanup: too slow”; **Usage** later counts the cleanup’s cost | |
 | 349 | Use a direct route (xAI or Azure) with no OpenRouter key; open Settings > **Modes** | “Cleanup needs your OpenRouter key” with **Add Key…**, which opens **Speech**; after you save the key and come back, the note is gone | |
 | 350 | Dictate with the cleanup chord in Notes, press Esc, click into Terminal within 5 s; then History > **Retry** that row | The row names Notes, and the retried text is cleaned as prose (the Esc’s app and mode) | |
 
@@ -476,8 +476,8 @@ The Writing prompt waits for its benchmark (docs/research/per-app-modes.md, ques
 | # | Do this | Expect | Result |
 |---|---|---|---|
 | 351 | On a fresh install, open Settings > **Insights** | “No Insights Yet”; the sidebar shows **Insights** above **Usage** | |
-| 352 | Dictate twice today, then open **Insights** | **Streak** “1 day”, “Today included”; **This week**, **This month** and **All time** equal the sum of the History window’s word counts; today’s bar is the last one in the chart | |
-| 353 | Dictate on two days in a row; on the third day, open **Insights** before you dictate | **Streak** “2 days”, “Dictate today to keep it”; after one dictation: “3 days”, “Today included” | |
+| 352 | Dictate twice today, then open **Insights** | **Streak** “1 day”, “Including today”; **This week**, **This month** and **All time** equal the sum of the History window’s word counts; today’s bar is the last one in the chart | |
+| 353 | Dictate on two days in a row; on the third day, open **Insights** before you dictate | **Streak** “2 days”, “Dictate today to keep it”; after one dictation: “3 days”, “Including today” | |
 | 354 | Read a 60-word paragraph aloud at your normal pace in one dictation; look at **Words per minute** on a new install | About 60 divided by the recording’s length in minutes (a pause in the middle lowers it) | |
 | 355 | Keep Settings open on **Insights** and dictate | The numbers and today’s bar change when the dictation is pasted, without leaving the pane | |
 | 356 | Keep Settings open on **Insights**. Correct a pasted word in TextEdit so kotoba learns it (sparkle pill), and add one word with **Fix Last Dictation…** | **Words learned** goes up by 2 without leaving the pane: “1 from your edits · 1 from Fix Last Dictation” (or more if you had some) | |
@@ -505,7 +505,7 @@ Force quit with Activity Monitor (**Force Quit**) or `kill -9 <pid>` of kotoba D
 | 420 | In kotoba Dev, tap the chord, speak for about 10 s, and force quit kotoba Dev while it records; open kotoba Dev again | Within seconds the pill says “Saved dictation recovered”; the menu lists it under **Recovered Dictations** with your words up to about the last half second; nothing is pasted | |
 | 421 | Open **History** after row 420 | The dictation is there at the time you started it, with its length, its text and “Recovered”; no app name | |
 | 422 | Quit kotoba Dev with ⌘Q and open it again after row 420 | Nothing new is recovered, and History has the dictation once | |
-| 423 | Tap the chord and force quit kotoba Dev in the first half second of the recording; open it again | History shows a “Cancelled” row with “No text”; **Delete** removes it | |
+| 423 | Tap the chord and force quit kotoba Dev in the first half second of the recording; open it again | History shows a “Canceled” row with “No text”; **Delete** removes it | |
 | 424 | Run `chmod 555 ~/Library/Application\ Support/kotoba-dev/audio`; in History, delete a dictation; then run `chmod 755` on the same folder | The alert “Couldn’t Delete” shows and the row stays; after `chmod 755`, **Delete** removes the row; quit and open kotoba Dev: it does not come back | |
 
 ### Discarded and empty recordings (0.2.1)
@@ -517,7 +517,7 @@ Rows 450-452 deny file removal in the audio folder of kotoba Dev with an ACL; ro
 | 450 | Run `chmod +a "everyone deny delete_child" ~/Library/Application\ Support/kotoba-dev/audio` and count its files (`ls … \| wc -l`); in TextEdit, use the chord's modifiers in a shortcut; count again | One file more (its removal failed); no pill and no History row | |
 | 451 | After row 450, with the ACL still on, quit kotoba Dev with ⌘Q and open it again | No “Saved dictation recovered” pill; no new History row; the Usage pane counts no new dictation; the file is still there | |
 | 452 | Run `chmod -a "everyone deny delete_child" ~/Library/Application\ Support/kotoba-dev/audio`; quit and open kotoba Dev | The file from row 450 is gone; History has no new row | |
-| 453 | Select the “Cancelled” row with “No text” and 0:00 from row 423 in History; open its context menu | The row says “No text”, not “No text · audio saved”; **Retry** is dimmed in the toolbar and the menu; **Delete** removes the row | |
+| 453 | Select the “Canceled” row with “No text” and 0:00 from row 423 in History; open its context menu | The row says “No text”, not “No text · audio saved”; **Retry** is dimmed in the toolbar and the menu; **Delete** removes the row | |
 
 ### Windows open in front (kotoba Dev, branch fix-window-front)
 
@@ -556,7 +556,7 @@ macOS can refuse kotoba's request to become the active app. kotoba then still sh
 ## Known offscreen-only doubts
 
 The offscreen snapshots (`make snapshots`) show two things that may not happen in the real app. Check them on screen:
-- Row 54: the "Undo" title on the dark Cancelled pill renders black on dark offscreen.
+- Row 54: the "Undo" title on the dark Canceled pill renders black on dark offscreen.
 - Row 74: the empty Azure endpoint's example URL renders as bright as typed text offscreen.
 - History (`window-history-toolbar`): the search field's “Search” placeholder renders as dark as typed text, and the selected row grey. On screen the placeholder must be grey and the selection blue.
 - Dark mode: the Settings sidebar labels and the pill's glass button titles (Undo, Retry) render near black offscreen (text on glass, docs/research/native-ui.md). On screen they must be light.
@@ -624,3 +624,15 @@ One window for Home, History, Insights, Usage and the settings. Rows 480-493 use
 | 491 | Show **Usage**, close the window; open kotoba Dev again from Spotlight | The window opens at **Usage** | |
 | 492 | Show **Insights**, quit kotoba Dev, open it, then open it again from Spotlight | The window opens at **Insights** | |
 | 493 | Show **Usage**, close the window; click the pill’s **Add Key…** (no key saved) | The window opens at **Speech**, not Usage | |
+
+## UI polish (0.3.0)
+
+Layout and copy pass over the main window. Snapshots cannot show the toolbar's glass text or a real resize.
+
+| # | Do this | Expect | Result |
+|---|---|---|---|
+| 700 | Show **Usage** in light and in dark mode; click **Last 30 Days**, then **This Month** | The period switch sits in the middle of the toolbar; the selected segment’s title is readable in both modes; the figures change; the traffic lights and the Back/Forward buttons do not move when you switch to Usage from another pane | |
+| 701 | Click **General**, then **Dictionary**; then make the window as wide as the screen and click each again | The Dictionary boxes start and end where General’s boxes do, at both widths; nothing jumps sideways | |
+| 702 | On **Home**, look at a row with “No text” | It has no copy icon; its time lines up with the other rows’ times. With no dictations, **Recent Dictations** has no **Show All** | |
+| 703 | General > **Shortcuts**: set a cleanup shortcut that is not the default | The ⓧ and the reset arrow sit left of the shortcut; the right edges of the Dictate, Clean up and Paste last shortcuts line up | |
+| 704 | Dictionary: compare the **Learn from my edits** switch with a switch in General | Same size | |

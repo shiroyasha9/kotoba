@@ -224,7 +224,7 @@ struct HistoryStatus {
         case .recovered:
             (title, systemImage, isProblem) = ("Recovered", "checkmark.circle", false)
         case .cancelled:
-            (title, systemImage, isProblem) = ("Cancelled", "xmark.circle", false)
+            (title, systemImage, isProblem) = ("Canceled", "xmark.circle", false)
         case .pending where isSending:
             (title, systemImage, isProblem) = ("Transcribing", "ellipsis.circle", false)
         case .pending, .failed:

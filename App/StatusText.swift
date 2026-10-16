@@ -55,7 +55,7 @@ enum StatusText {
 
     /// The pill after auto-learn added a word to the dictionary.
     static func learned(_ word: String) -> String {
-        "Added \(word)"
+        "Added “\(word)”"
     }
 
     /// What the owner adds for a dictation that waits: "Add your OpenRouter key".
@@ -64,6 +64,15 @@ enum StatusText {
         case .key: "Add your \(account.title) key"
         case .endpoint: "Add your \(account.title) endpoint"
         case .credit: "Add credit at \(account.title)"
+        }
+    }
+
+    /// What a shortcut does: the line under its name.
+    static func shortcutHelp(_ role: ChordRole) -> String {
+        switch role {
+        case .dictation: "Tap to start and stop, or hold while you speak."
+        case .cleanup: "Removes filler words and fixes punctuation. Takes a second or two longer."
+        case .pasteLast: "Pastes your last dictation again."
         }
     }
 
@@ -104,7 +113,7 @@ extension DictationState {
         case .recording: context.isSecureInputOn ? "Listening · Secure Input on" : "Listening"
         case .transcribing: "Transcribing"
         case .cleaning: "Cleaning up"
-        case .undoable: "Cancelled"
+        case .undoable: "Canceled"
         default: outcomeText(context)
         }
     }
@@ -126,8 +135,8 @@ extension DictationState {
     private var deliveredText: String? {
         switch self {
         case .cleanupFailed: "Pasted without cleanup"
-        case .cleanupTooSlow: "Cleanup too slow: pasted as spoken"
-        case .returnSkipped: "Didn’t press Return: app changed"
+        case .cleanupTooSlow: "Pasted without cleanup: too slow"
+        case .returnSkipped: "Return not pressed: app changed"
         case .recovered: "Saved dictation recovered"
         case .copied: "Copied. Press ⌘V to paste."
         case .idle, .recording, .transcribing, .cleaning, .undoable, .failed, .needsSetup, .rejected, .captureFailed,

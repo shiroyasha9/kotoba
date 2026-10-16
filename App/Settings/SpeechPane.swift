@@ -155,23 +155,26 @@ private struct SpeechPane: View {
                 }
             } footer: {
                 if model.route == .openRouterGrok {
-                    Text("OpenRouter may keep this audio. MAI-Transcribe-2 keeps none.")
+                    Text("OpenRouter may keep this audio. With MAI-Transcribe-2 it keeps none.")
                 }
             }
             Section {
                 // The section header names the provider, so the row says only "Key".
                 KeyRow(account: account, label: "Key", model: model)
-                HStack(spacing: 16) {
-                    Button("Get a Key…") { NSWorkspace.shared.open(account.keysPage) }
-                    Button("See Pricing…") { NSWorkspace.shared.open(account.pricingPage) }
-                }
-                .buttonStyle(.link)
             } header: {
                 Text("\(account.title) Key")
             } footer: {
-                // Only the recommended model has a known price; every model links to its price page above.
-                if let price = PriceLine.text(for: model.route) {
-                    Text(price)
+                // The links sit with the price under the box, as "Learn More" links do in System Settings. Only the
+                // recommended model has a known price; every model links to its price page.
+                VStack(alignment: .leading) {
+                    if let price = PriceLine.text(for: model.route) {
+                        Text(price)
+                    }
+                    HStack(spacing: 16) {
+                        Button("Get a Key…") { NSWorkspace.shared.open(account.keysPage) }
+                        Button("See Pricing…") { NSWorkspace.shared.open(account.pricingPage) }
+                    }
+                    .buttonStyle(.link)
                 }
             }
             if model.route == .azureMAI {

@@ -19,14 +19,8 @@ struct ChordRecorder: View {
 
     var body: some View {
         VStack(alignment: .trailing) {
+            // Turn Off and Reset come before the recorder, so every recorder in a column keeps the same trailing edge.
             HStack {
-                Button(action: toggle) {
-                    Text(caption)
-                        .frame(minWidth: Self.captionWidth)
-                        .foregroundStyle(listener.isListening ? AnyShapeStyle(.tint) : AnyShapeStyle(.primary))
-                }
-                .help(
-                    listener.isListening ? "Press the new shortcut, or Esc to stop" : "Click to record a new shortcut")
                 if role != .dictation, chord != nil {
                     Button("Turn Off", systemImage: "xmark.circle") { save(nil) }
                         .labelStyle(.iconOnly)
@@ -39,6 +33,13 @@ struct ChordRecorder: View {
                         .buttonStyle(.borderless)
                         .help("Reset to \(defaultChord.title)")
                 }
+                Button(action: toggle) {
+                    Text(caption)
+                        .frame(minWidth: Self.captionWidth)
+                        .foregroundStyle(listener.isListening ? AnyShapeStyle(.tint) : AnyShapeStyle(.primary))
+                }
+                .help(
+                    listener.isListening ? "Press the new shortcut, or Esc to stop" : "Click to record a new shortcut")
             }
             if let note {
                 Text(note.text)

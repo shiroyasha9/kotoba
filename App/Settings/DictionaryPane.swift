@@ -36,7 +36,7 @@ private struct DictionaryPane: View {
             }
             words
         }
-        .padding()
+        .groupedFormLayout()
         .searchable(text: $search, placement: .toolbar, prompt: "Search words")
         .searchFocused($isSearchFocused)
         .onChange(of: findRequests) { isSearchFocused = true }
@@ -209,23 +209,24 @@ private struct DictionaryPane: View {
     static func importMessage(_ state: DictionaryModel.WisprImport) -> String {
         switch state {
         case .preview(let preview, let contents):
+            // Only the learned corrections the import adds; the others are already here. The dictionary stores a rule's
+            // find text trimmed.
+            let learnedFinds = Set(contents.learned.map { $0.find.trimmingCharacters(in: .whitespacesAndNewlines) })
+            let learnedCount = preview.rules.count { learnedFinds.contains($0.find) }
+            let learned =
+                learnedCount > 0
+                ? ", including \(StatusText.counted(learnedCount, "correction")) Wispr learned from your edits" : ""
             var lines = [
                 preview.isEmpty
                     ? "Every word in Wispr Flow’s dictionary is already here."
                     : "Adds \(StatusText.counted(preview.terms.count, "word")) and "
-                        + "\(StatusText.counted(preview.rules.count, "replacement"))."
+                        + "\(StatusText.counted(preview.rules.count, "replacement"))\(learned)."
             ]
-            if contents.learnedCorrections > 0 {
-                lines.append(
-                    "Includes \(StatusText.counted(contents.learnedCorrections, "learned correction")). "
-                        + "Each one replaces what Wispr heard with the word you corrected it to.")
-            }
             if preview.duplicateCount > 0 {
-                lines.append(
-                    "\(StatusText.counted(preview.duplicateCount, "entry")) already in your dictionary.")
+                lines.append("Already in your dictionary: \(StatusText.counted(preview.duplicateCount, "entry")).")
             }
             if contents.snippets > 0 {
-                lines.append("Not imported: \(StatusText.counted(contents.snippets, "snippet")).")
+                lines.append("Skips \(StatusText.counted(contents.snippets, "snippet")).")
             }
             return lines.joined(separator: " ")
         case .notFound:
@@ -249,6 +250,18 @@ private struct DictionaryPane: View {
         guard !selection.isEmpty else { return }
         model.delete(selection)
         selection = []
+    }
+}
+
+extension View {
+    /// Lays out a pane that cannot be a grouped `Form` (Dictionary: its word list needs a list's lazy rows and
+    /// selection) at a grouped Form's margins and width, so it lines up with every other pane: 20 pt from each edge,
+    /// at most 704 pt wide, centred. SwiftUI has no API that reads these; measured offscreen on macOS 27 (2026-10-16)
+    /// at pane widths from 360 to 1300 pt.
+    func groupedFormLayout() -> some View {
+        frame(maxWidth: 704)
+            .padding(20)
+            .frame(maxWidth: .infinity)
     }
 }
 

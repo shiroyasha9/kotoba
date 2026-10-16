@@ -178,8 +178,10 @@ final class MainWindowController {
                 async let insights = history.insights(at: now, in: .current, apps: 0)
                 async let recent = history.page(limit: HomeModel.recentCount)
                 async let last = history.lastDelivered()
+                let rows = try await recent
                 return .init(
-                    insights: try await insights, recent: try await recent, hasLastDictation: try await last != nil)
+                    insights: try await insights, recent: rows, hasLastDictation: try await last != nil,
+                    retryable: HistoryModel.kept(rows))
             },
             copy: { [weak self] in await self?.pipeline?.copyAgain($0) },
             fixLast: fixLast, finishSetup: finishSetup)

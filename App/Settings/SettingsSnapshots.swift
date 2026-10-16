@@ -8,7 +8,8 @@ import KotobaStorage
 extension Pane {
     /// The whole main window: Home, History, and each settings pane, the Dictionary pane also with suggestions. History
     /// also in the framed window, for its toolbar with a selected row: one with text (Copy, Paste Again and Delete on),
-    /// a failed one (Retry and Delete on) and one with no audio (Delete on only).
+    /// a failed one (Retry and Delete on) and one with no audio (Delete on only). Usage framed for its period switch in
+    /// the toolbar.
     static func windowSnapshots() -> [Snapshot] {
         [
             windowSnapshot(selecting: .home, named: "window-home"),
@@ -17,7 +18,7 @@ extension Pane {
             windowSnapshot(selecting: .history, history: 2, named: "window-history-failed", isFramed: true),
             windowSnapshot(selecting: .history, history: 5, named: "window-history-no-audio", isFramed: true),
             windowSnapshot(selecting: .insights, named: "window-insights"),
-            windowSnapshot(selecting: .usage, named: "window-usage"),
+            windowSnapshot(selecting: .usage, named: "window-usage", isFramed: true),
             windowSnapshot(selecting: .general, named: "window-general"),
             windowSnapshot(selecting: .speech, named: "window-speech"),
             windowSnapshot(selecting: .dictionary, named: "window-dictionary"),
@@ -149,10 +150,10 @@ extension Pane {
         ]
     }
 
-    /// One window switched Home, History, General, Insights in turn, drawn at each step: the toolbar, traffic lights
+    /// One window switched Home, History, General, Insights, Usage in turn, drawn at each step: the toolbar, traffic lights
     /// and window frame stay where they were on Home.
     static func switchSnapshots() -> [Snapshot] {
-        let path: [PaneID] = [.home, .history, .general, .insights]
+        let path: [PaneID] = [.home, .history, .general, .insights, .usage]
         return path.indices.map { end in
             MainWindow.switchSnapshot(
                 of: samplePanes(), through: Array(path[...end]), named: "window-switch-\(path[end].rawValue)")

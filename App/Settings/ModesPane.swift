@@ -328,7 +328,7 @@ private struct ModesPane: View {
                     modeChoices
                 }
             } footer: {
-                Text("The mode of every app that is not in the list.")
+                Text("Apps not in the list use this mode.")
             }
         }
         .formStyle(.grouped)

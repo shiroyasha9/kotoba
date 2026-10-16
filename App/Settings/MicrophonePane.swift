@@ -231,7 +231,7 @@ private struct MicrophonePane: View {
                         .disabled(model.listed.isEmpty)
                 }
             } header: {
-                Text("Your Order")
+                Text("Microphone Order")
             } footer: {
                 Text("kotoba uses the first connected mic in this list. Drag to change the order.")
             }

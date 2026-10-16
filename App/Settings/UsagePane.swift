@@ -71,15 +71,8 @@ private struct UsagePane: View {
     @Bindable var model: UsageModel
 
     var body: some View {
+        // One container whatever it shows, so the reads start and stop with the pane, not with each state.
         VStack(spacing: 0) {
-            // Centered above the numbers, as the period switch in System Settings > Battery.
-            Picker("Period", selection: $model.period) {
-                ForEach(UsageModel.Period.allCases, id: \.self) { Text($0.title).tag($0) }
-            }
-            .pickerStyle(.segmented)
-            .labelsHidden()
-            .fixedSize()
-            .padding(.top)
             if model.reader.isLoadFailed {
                 EmptyState.loadFailed(retry: model.reader.show)
             } else if let summary = model.summary {
@@ -98,6 +91,17 @@ private struct UsagePane: View {
             } else {
                 // Before the first read.
                 Spacer()
+            }
+        }
+        // In the toolbar, as the period switch of Screen Time, so the figures start where every pane's content does.
+        .toolbar {
+            ToolbarItem(placement: .principal) {
+                Picker("Period", selection: $model.period) {
+                    ForEach(UsageModel.Period.allCases, id: \.self) { Text($0.title).tag($0) }
+                }
+                .pickerStyle(.segmented)
+                .labelsHidden()
+                .fixedSize()
             }
         }
         .reads(through: model.reader)
@@ -179,7 +183,7 @@ private struct UsagePane: View {
     private static func spendNote(_ summary: UsageSummary) -> String? {
         var notes: [String] = []
         if summary.isCostEstimated {
-            notes.append("Estimated in part from list prices")
+            notes.append("Partly estimated from list prices")
         }
         if summary.unpricedAnswers > 0 {
             notes.append(unpricedNote(summary.unpricedAnswers))
