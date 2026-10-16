@@ -61,11 +61,11 @@ the `code`, not the message.
 | 400 | `invalid_email` | `/auth/start` email is not an address | Show the message |
 | 400 | `code_invalid` | Wrong or malformed sign-in code | Let the person try again |
 | 400 | `code_expired` | Code too old, used up (5 wrong tries) or never sent | Ask for a new code |
-| 400 | `bad_audio` | Not FLAC, the upstream cannot read it, or the upstream heard more audio than the bytes can hold at the lowest allowed bitrate (a muted microphone or a crafted file; the hold is paid, no text) | Do not retry this recording |
+| 400 | `bad_audio` | Not 16 kHz mono 16-bit FLAC (checked from STREAMINFO before any upstream call), the upstream cannot read it, or the upstream heard more audio than the bytes can hold at the lowest allowed bitrate (a muted microphone or a crafted file; the hold is paid, no text) | Do not retry this recording |
 | 401 | `signed_out` | No token, bad or expired token, or "Sign out everywhere" ended it | Delete the token, show sign-in; keep the recording queued |
 | 401 | `bad_signature` | Paddle webhook signature check failed | (Paddle only) |
 | 402 | `out_of_hours` | No hours left | Keep the recording queued; show Buy Hours and Use My Own Key |
-| 402 | `not_enough_hours` | Some hours are left, but fewer than this recording's hold | Same as `out_of_hours`; the app should have caught it with `covered_bytes` |
+| 402 | `not_enough_hours` | Some hours are left, but fewer than this recording's length | Same as `out_of_hours`; the app should have caught it before the upload (see "Before upload") |
 | 411 | `length_required` | No `Content-Length` | Bug |
 | 413 | `audio_too_long` | Over `MAX_AUDIO_SECONDS` (1,200 s) | Do not retry |
 | 413 | `audio_too_large` | Over `MAX_AUDIO_BYTES` (32 MiB), or more bytes than `Content-Length` | Do not retry |
@@ -128,8 +128,7 @@ Answer `200`:
   "plan_seconds_left": 0,
   "pack_seconds": 3587,
   "plan_period_end": null,
-  "plan_resets_at": null,
-  "covered_bytes": 21522000
+  "plan_resets_at": null
 }
 ```
 
@@ -137,23 +136,36 @@ The balance fields are the balance after this dictation is paid. The payment run
 an estimate; `GET /v1/account` has the settled numbers. Update the hours shown in the app from this response; no
 polling is needed.
 
-Metering. The client's claims (STREAMINFO, `X-Kotoba-Audio-Seconds`) never set a price:
+Metering:
 
-1. **Hold:** the most the body can hold, `ceil(Content-Length / MIN_AUDIO_BYTES_PER_SECOND)` seconds (6,000 B/s,
+1. **Stated length:** STREAMINFO's length, else `X-Kotoba-Audio-Seconds`, rounded up. It only decides whether the
+   dictation may start, never what it costs. With neither, the byte bound below is the stated length.
+2. **Byte bound:** the most the body can hold, `ceil(Content-Length / MIN_AUDIO_BYTES_PER_SECOND)` seconds (6,000 B/s,
    at least 1, at most `MAX_AUDIO_SECONDS`). The owner's 16 kHz speech recordings run 13-17 KB/s (n = 24), so the
-   hold is about 2.5 times the real length.
-2. **Authorize:** the dictation starts only when the seconds not yet held cover the whole hold; else `402`
-   (`out_of_hours` at zero, `not_enough_hours` otherwise). This runs in parallel with the upload and answers in a few
-   milliseconds, so a refusal reaches the app while it still uploads.
-3. **Pay:** Azure's own `durationMilliseconds`, rounded up to whole seconds, at most the hold. With no duration from
+   bound is about 2.5 times the real length.
+3. **Authorize:** the dictation starts when the seconds not yet held cover the stated length; else `402`
+   (`out_of_hours` at zero, `not_enough_hours` otherwise). It holds the byte bound, at most the free seconds; it
+   cuts a hold to the free seconds only when no other dictation of the user is open (else `not_enough_hours`), so
+   parallel dictations cannot share one cut hold. This
+   runs in parallel with the upload and answers in a few milliseconds, so a refusal reaches the app while it still
+   uploads.
+4. **Pay:** Azure's own `durationMilliseconds`, rounded up to whole seconds, at most the hold. With no duration from
    Azure, the hold is paid. Plan hours first, then pack hours (oldest pack first). No balance goes below zero. A
    dictation is free only when its payment fails after the response (see "Stubbed").
+5. **More audio than the byte bound** (below the bitrate floor: a muted microphone or a crafted file): the user pays
+   the hold and gets `bad_audio`, no text.
 
-**Before upload:** every balance in a response carries `covered_bytes`, the largest recording the balance covers now
-(`seconds_left x 6,000`, at most `MAX_AUDIO_BYTES`; all of `MAX_AUDIO_BYTES` from 1,200 s left). It does not
-subtract dictations still in flight, so two at once can still get `not_enough_hours`. The app compares the recording's file size with it while it
-records (to warn when the balance runs out mid-dictation) and before it uploads; when the file is larger, it shows
-"Out of kotoba Cloud hours" with Buy Hours and Use My Own Key and keeps the recording, with no upload.
+**Most a lying client can take:** it understates the length, so the dictation starts, and the byte bound is held up to
+its whole balance. It pays its whole balance and gets the text of at most one recording past it, at most
+`MAX_AUDIO_SECONDS` (1,200 s, about USD 0.033 at USD 0.10/h). Then it is at 0 and gets `out_of_hours`. So the loss is
+at most 1,200 s of audio per account per top-up (the free hour counts as one). A file below the bitrate floor gets no
+text, so there is nothing to gain from one; what Azure transcribes of it before it answers (Azure takes up to 2 h of
+audio a request) is bounded only by the rate limit and the global daily cap, which counts Azure's duration.
+
+**Before upload:** the app compares the recording's length with `seconds_left` from the last response, while it
+records (to warn when the balance runs out mid-dictation) and before it uploads. When the recording is longer, it shows
+"Out of kotoba Cloud hours" with Buy Hours and Use My Own Key and keeps the recording, with no upload. The server's
+`not_enough_hours` is the backstop (for example two dictations at once).
 
 ### `GET /v1/account`
 
@@ -167,8 +179,7 @@ records (to warn when the balance runs out mid-dictation) and before it uploads;
   "plan_seconds_left": 27000,
   "pack_seconds": 3600,
   "plan_period_end": "2026-11-17T06:00:00.000Z",
-  "plan_resets_at": "2026-11-17T06:00:00.000Z",
-  "covered_bytes": 33554432
+  "plan_resets_at": "2026-11-17T06:00:00.000Z"
 }
 ```
 
@@ -251,6 +262,15 @@ Measure before launch (paired with the BYOK route, n >= 50, from an Indian home 
 6. Cold start of the Worker (first request after idle) and the first request of a new isolate (key import).
 7. The first dictation after sign-in (Durable Object creation).
 
+Do before launch (billing and abuse):
+
+1. Re-measure `MIN_AUDIO_BYTES_PER_SECOND` on more microphones and rooms (built-in, AirPods, USB, quiet and noisy).
+   Today's 6,000 B/s rests on 24 recordings from one Mac (13-17 KB/s). A real recording below the floor gets
+   `bad_audio`.
+2. A FLAC frame reader in the relay stream: cut the upload at `MAX_AUDIO_SECONDS` of frames, so a crafted
+   low-bitrate file cannot make Azure transcribe more than 1,200 s. The STREAMINFO format check (16 kHz mono 16-bit)
+   only makes such a file lie about less.
+
 ## Stubbed or not built
 
 - The email sender: `ConsoleMailer` prints the code. A real mailer (Resend in the proposal) is not written.
@@ -265,11 +285,5 @@ Measure before launch (paired with the BYOK route, n >= 50, from an Indian home 
 
 ## Unresolved questions
 
-1. `MIN_AUDIO_BYTES_PER_SECOND` (6,000) rests on 24 of the owner's recordings. A quiet room or another microphone may
-   compress better; a real recording below the floor gets `bad_audio`. Measure on more microphones before launch.
-2. A crafted file of up to 32 MiB at a very low bitrate holds at most 1,200 s but can make Azure transcribe more (up
-   to about 5,600 s at 6,000 B/s). The user pays the hold and gets no text, so there is nothing to gain, but we pay
-   Azure; only the rate limit and the daily cap bound it. Cutting the stream at 1,200 s needs a FLAC frame reader.
-   Is that exposure acceptable for v1?
-3. The hold is about 2.5 times a dictation's length, so a user with 10 minutes left cannot send a 5-minute recording.
-   Is that trade-off acceptable, or should the app split long recordings?
+None open. The owner's decisions so far: holds and refunds as above; the frame reader and the bitrate floor are
+pre-launch items ("Do before launch").

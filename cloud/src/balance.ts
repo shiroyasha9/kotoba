@@ -4,13 +4,13 @@ import { numberVar } from "./errors";
 /**
  * One Balance object per user (named by user id) holds the hours: SQLite storage, single-threaded, so every change is
  * atomic. Plan hours (Pro, reset each month) are spent before pack hours (never expire). Each pack (and the trial)
- * keeps its own seconds left, spent oldest first, so a refund takes back only what is left of that pack. A dictation
- * first takes a
- * hold for the most it can cost (`authorize`, in parallel with the upstream request; the Worker derives it from the
- * byte count, never from the client's claims), then pays its real length, at most the hold, after the response
- * (`settle`). A hold is taken only when the seconds not yet held cover it, so no balance goes below zero and no
- * dictation is free. An unsettled hold lapses after HOLD_MS. Every method takes `now` (ms) from the Worker, so tests
- * control the clock.
+ * keeps its own seconds left, spent oldest first, so a refund takes back only what is left of that pack.
+ *
+ * A dictation starts (`authorize`, in parallel with the upstream request) when the seconds not yet held cover its
+ * stated length, and holds the byte-count bound, at most the free seconds. After the response it pays its real length,
+ * at most the hold (`settle`). So no balance goes below zero, an honest recording needs only its own length, and a
+ * client that understates the length gets at most the rest of its balance. An unsettled hold lapses after HOLD_MS.
+ * Every method takes `now` (ms) from the Worker, so tests control the clock.
  */
 export const HOLD_MS = 10 * 60 * 1000;
 /** `use` rows only guard a settle against a repeat; after this long they go. Credits stay for good. */
@@ -29,7 +29,7 @@ export interface BalanceSnapshot {
 
 type Refusal<R extends string> = { ok: false; reason: R };
 export type Authorization =
-  | { ok: true; balance: BalanceSnapshot }
+  | { ok: true; balance: BalanceSnapshot; hold: number }
   | Refusal<"signed_out" | "out_of_hours" | "not_enough_hours">;
 export type AccountReply = { ok: true; balance: BalanceSnapshot } | Refusal<"signed_out">;
 
@@ -121,8 +121,11 @@ export class Balance extends DurableObject<Env> {
     return { ok: true, balance: snapshot(row) };
   }
 
-  /** Holds `seconds` for one dictation when the seconds not yet held cover them all. */
-  authorize(requestId: string, seconds: number, generation: number, now: number): Authorization {
+  /**
+   * Starts a dictation when the seconds not yet held cover `stated` (its claimed length, at least 1), and holds
+   * `maxHold` (the byte-count bound), at most the free seconds.
+   */
+  authorize(requestId: string, stated: number, maxHold: number, generation: number, now: number): Authorization {
     return this.ctx.storage.transactionSync(() => {
       const row = this.row(now);
       if (row.session_gen !== generation) return { ok: false, reason: "signed_out" } as const;
@@ -130,14 +133,18 @@ export class Balance extends DurableObject<Env> {
       const held = this.sql.exec<{ held: number }>("SELECT COALESCE(SUM(seconds), 0) AS held FROM holds").one().held;
       const balance = snapshot(row);
       if (balance.secondsLeft <= 0) return { ok: false, reason: "out_of_hours" } as const;
-      if (balance.secondsLeft - held < seconds) return { ok: false, reason: "not_enough_hours" } as const;
+      const free = balance.secondsLeft - held;
+      // A hold is cut to the free seconds only when no other dictation is open: else a parallel dictation with a short
+      // claim could take the cut while the first one holds the rest, and repeat.
+      if (free < stated || (free < maxHold && held > 0)) return { ok: false, reason: "not_enough_hours" } as const;
+      const hold = Math.min(maxHold, free);
       this.sql.exec(
         "INSERT OR REPLACE INTO holds (request_id, seconds, expires_at) VALUES (?, ?, ?)",
         requestId,
-        seconds,
+        hold,
         now + HOLD_MS,
       );
-      return { ok: true, balance } as const;
+      return { ok: true, balance, hold } as const;
     });
   }
 
@@ -297,17 +304,11 @@ export function spend(planSeconds: number, packSeconds: number, seconds: number)
 }
 
 /**
- * The hold of a dictation: the most seconds `bytes` of FLAC can hold at the lowest bitrate the relay bills in full,
- * at least 1, at most `maxSeconds`. Never the client's claims.
+ * The byte-count bound of a dictation: the most seconds `bytes` of FLAC can hold at the lowest bitrate the relay bills
+ * in full, at least 1, at most `maxSeconds`.
  */
 export function holdFor(bytes: number, limits: AudioLimits): number {
   return Math.min(limits.maxSeconds, Math.max(1, Math.ceil(bytes / limits.minBytesPerSecond)));
-}
-
-/** The largest body whose hold `secondsLeft` covers: what the app may upload without a `not_enough_hours`. */
-export function coveredBytes(secondsLeft: number, limits: AudioLimits): number {
-  if (secondsLeft >= limits.maxSeconds) return limits.maxBytes;
-  return Math.min(limits.maxBytes, Math.max(0, secondsLeft) * limits.minBytesPerSecond);
 }
 
 export interface AudioLimits {

@@ -1,6 +1,6 @@
 import { Hono } from "hono";
 import type { AppEnv } from "./app";
-import { type AudioLimits, audioLimits, type BalanceSnapshot, coveredBytes } from "./balance";
+import type { BalanceSnapshot } from "./balance";
 import { signedOut } from "./errors";
 import { requireSession } from "./session";
 
@@ -14,7 +14,7 @@ accountRoutes.get("/account", requireSession, async (c) => {
     c.env.BALANCE.getByName(userId).account(generation, c.var.deps.now()),
   ]);
   if (!user || !reply.ok) throw signedOut();
-  return c.json({ user: { id: userId, email: user.email }, ...balanceJson(reply.balance, audioLimits(c.env)) });
+  return c.json({ user: { id: userId, email: user.email }, ...balanceJson(reply.balance) });
 });
 
 /** Ends every token of this user, this one too. A token that is already ended gets 401. */
@@ -25,11 +25,10 @@ accountRoutes.post("/sign-out-everywhere", requireSession, async (c) => {
 });
 
 /**
- * The balance as the API shows it: seconds, ISO times or null, and `covered_bytes`, the largest recording the balance
- * covers now. The app checks a recording against it while it records and before it uploads, so "not enough hours"
- * comes before the upload, not after. Holds of dictations still in flight are not subtracted.
+ * The balance as the API shows it: seconds, and ISO times or null. A recording longer than `seconds_left` gets
+ * `not_enough_hours`, so the app checks its recording's length against it before it uploads.
  */
-export function balanceJson(balance: BalanceSnapshot, limits: AudioLimits) {
+export function balanceJson(balance: BalanceSnapshot) {
   const iso = (ms: number) => (ms === 0 ? null : new Date(ms).toISOString());
   return {
     plan: balance.planPeriodEnd === 0 ? null : "pro",
@@ -38,6 +37,5 @@ export function balanceJson(balance: BalanceSnapshot, limits: AudioLimits) {
     pack_seconds: balance.packSeconds,
     plan_period_end: iso(balance.planPeriodEnd),
     plan_resets_at: iso(balance.planResetsAt),
-    covered_bytes: coveredBytes(balance.secondsLeft, limits),
   };
 }

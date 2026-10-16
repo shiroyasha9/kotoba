@@ -4,7 +4,7 @@ import { balanceJson } from "./account";
 import type { AppEnv } from "./app";
 import { afterPaying, audioLimits, type BalanceSnapshot, holdFor } from "./balance";
 import { ApiError, numberVar, signedOut } from "./errors";
-import { FLAC_HEAD_BYTES, readStreamInfo } from "./flac";
+import { FLAC_HEAD_BYTES, isAppFormat, readStreamInfo } from "./flac";
 import { meterName } from "./meter";
 import { requireSession } from "./session";
 import { UpstreamError } from "./upstream";
@@ -15,12 +15,14 @@ export const MAX_PHRASE_LENGTH = 100;
 export const transcribeRoutes = new Hono<AppEnv>();
 
 /**
- * The hot path. The body is the FLAC file; it streams to the upstream as it arrives. Money never rests on the client's
- * claims: the hold is the most the body can hold, its byte count at MIN_AUDIO_BYTES_PER_SECOND (capped at
- * MAX_AUDIO_SECONDS), and the user pays the upstream's duration, at most the hold. Three gates run in parallel with the
- * upstream request: the user's Balance (the hold is covered, the session is not revoked), the global daily cap, and
- * the per-user rate limit. When a gate refuses, the upstream request is aborted and the meter gets its seconds back.
- * Payment happens after the response (`waitUntil`).
+ * The hot path. The body is the FLAC file; it streams to the upstream as it arrives. The stated length (STREAMINFO,
+ * else X-Kotoba-Audio-Seconds) only decides whether the dictation may start; what it can cost is the byte bound (the
+ * byte count at MIN_AUDIO_BYTES_PER_SECOND, capped at MAX_AUDIO_SECONDS), held up to the free balance, and the user
+ * pays the upstream's duration, at most the hold. A client that understates the length gets at most the rest of its
+ * balance, once. Three gates run in parallel with the upstream request: the user's Balance (the session is not
+ * revoked, the stated length is covered), the global daily cap (reserves the byte bound), and the per-user rate limit.
+ * When a gate refuses, the upstream request is aborted and the meter gets its seconds back. Payment happens after the
+ * response (`waitUntil`).
  */
 transcribeRoutes.post("/transcribe", requireSession, async (c) => {
   const { env, req } = c;
@@ -56,9 +58,11 @@ transcribeRoutes.post("/transcribe", requireSession, async (c) => {
   const reader = body.getReader();
   const head = await readHead(reader, FLAC_HEAD_BYTES);
   const flac = readStreamInfo(concat(head));
-  if (!flac.isFlac) throw new ApiError(400, "bad_audio", "The audio is not a FLAC file.");
+  // Only the app's own format: a crafted long file at a low bitrate then has to lie about less.
+  if (!isAppFormat(flac)) throw new ApiError(400, "bad_audio", "The audio is not in the app's FLAC format.");
   if (flac.seconds !== undefined && flac.seconds > maxSeconds) throw tooLong(maxSeconds);
-  const holdSeconds = holdFor(length, limits);
+  const byteBound = holdFor(length, limits);
+  const statedSeconds = flac.seconds ?? declared ?? byteBound;
   const audio = relay(reader, head, length);
 
   const { userId, generation } = c.var.session;
@@ -74,7 +78,7 @@ transcribeRoutes.post("/transcribe", requireSession, async (c) => {
       length,
       language,
       phrases,
-      audioSeconds: flac.seconds ?? declared ?? holdSeconds,
+      audioSeconds: statedSeconds,
     },
     signal,
   );
@@ -84,14 +88,15 @@ transcribeRoutes.post("/transcribe", requireSession, async (c) => {
   let metered = false; // Set as soon as the meter answers, so a gate that throws still gives the seconds back.
   const giveBack = () => {
     c.executionCtx.waitUntil(balance.release(requestId));
-    if (metered) c.executionCtx.waitUntil(meter.adjust(-holdSeconds));
+    if (metered) c.executionCtx.waitUntil(meter.adjust(-byteBound));
   };
 
   let before: BalanceSnapshot;
+  let hold: number;
   try {
     const [auth, underCap, rate] = await Promise.all([
-      balance.authorize(requestId, holdSeconds, generation, now),
-      meter.reserve(numberVar(env, "GLOBAL_DAILY_CAP_SECONDS"), holdSeconds).then((ok) => (metered = ok)),
+      balance.authorize(requestId, Math.ceil(statedSeconds), byteBound, generation, now),
+      meter.reserve(numberVar(env, "GLOBAL_DAILY_CAP_SECONDS"), byteBound).then((ok) => (metered = ok)),
       env.TRANSCRIBE_LIMITER.limit({ key: userId }),
     ]);
     if (!auth.ok && auth.reason === "signed_out") throw signedOut();
@@ -104,6 +109,7 @@ transcribeRoutes.post("/transcribe", requireSession, async (c) => {
     }
     if (!auth.ok) throw new ApiError(402, "not_enough_hours", "Not enough kotoba Cloud hours left for this recording.");
     before = auth.balance;
+    hold = auth.hold;
   } catch (error) {
     abort.abort();
     giveBack();
@@ -118,11 +124,11 @@ transcribeRoutes.post("/transcribe", requireSession, async (c) => {
     throw upstreamFailure(error, signal, audio.tooLarge(), maxBytes);
   }
 
-  // The upstream's own duration, rounded up, is what the audio cost; the user pays it, at most the hold.
-  const heard =
-    transcript.durationMs === undefined ? holdSeconds : Math.max(1, Math.ceil(transcript.durationMs / 1000));
-  const billed = Math.min(heard, holdSeconds);
-  const correction = heard - holdSeconds;
+  // The upstream's own duration, rounded up, is what the audio cost; the user pays it, at most the hold. Without it
+  // the meter keeps the byte bound, as no one knows what the upstream transcribed.
+  const heard = transcript.durationMs === undefined ? hold : Math.max(1, Math.ceil(transcript.durationMs / 1000));
+  const billed = Math.min(heard, hold);
+  const correction = transcript.durationMs === undefined ? 0 : heard - byteBound;
   c.executionCtx.waitUntil(
     Promise.all([balance.settle(requestId, billed, now), correction && meter.adjust(correction)]).then(([after]) => {
       // No audio and no text in logs: user, seconds and outcome only.
@@ -133,14 +139,14 @@ transcribeRoutes.post("/transcribe", requireSession, async (c) => {
   );
   // More audio than the bytes can hold at the lowest allowed bitrate: a crafted file, or a muted microphone. The user
   // pays the hold and gets no text, so a file built to dictate for less than it costs gains nothing.
-  if (heard > holdSeconds) {
+  if (heard > byteBound) {
     throw new ApiError(400, "bad_audio", "This recording is too quiet or too compressed to transcribe.");
   }
   return c.json({
     text: transcript.text,
     billed_seconds: billed,
     // An estimate: the payment runs after this response. GET /v1/account has the settled numbers.
-    ...balanceJson(afterPaying(before, billed), limits),
+    ...balanceJson(afterPaying(before, billed)),
   });
 });
 

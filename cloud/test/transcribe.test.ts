@@ -1,7 +1,7 @@
 import { exports } from "cloudflare:workers";
 import { encodeBase64Url } from "hono/utils/encode";
 import { describe, expect, it } from "vitest";
-import { readStreamInfo } from "../src/flac";
+import { APP_FORMAT, readStreamInfo } from "../src/flac";
 import {
   AzureTranscriber,
   type TranscribeInput,
@@ -69,28 +69,36 @@ describe("POST /v1/transcribe", () => {
     expect(upstream.calls[0]?.input.phrases).toEqual(phrases);
   });
 
-  it("holds a bound from the byte count, not the length the client claims", async () => {
-    const upstream = new RecordingTranscriber({ durationMs: 12_000 });
-    const h = harness(() => upstream);
-    const { token } = await signIn(h, { trialSeconds: 20 });
-    // About 12 s of speech, but STREAMINFO and the header both say 1 s.
-    const audio = flac(1, 180_000);
-    const response = await h.fetch("/v1/transcribe", dictation(token, audio, 1));
-    expect([response.status, await errorCode(response)]).toEqual([402, "not_enough_hours"]);
-    expect(upstream.calls.at(-1)?.aborted).toBe(true);
-    expect((await account(h, token)).seconds_left).toBe(20);
+  it("lets an honest 5-minute recording through with 10 minutes left", async () => {
+    const h = harness(() => new RecordingTranscriber());
+    const { token } = await signIn(h, { trialSeconds: 600 });
+    const audio = speech(300);
+    expect(holdOf(audio)).toBeGreaterThan(600); // The byte bound alone would refuse it.
+    const response = await h.fetch("/v1/transcribe", dictation(token, audio, 300));
+    expect(response.status).toBe(200);
+    expect(await account(h, token)).toMatchObject({ seconds_left: 300 });
   });
 
-  it("refuses a dictation the balance cannot cover, and out_of_hours at zero", async () => {
+  it("charges a lying length at most the balance, then answers out_of_hours", async () => {
+    const upstream = new RecordingTranscriber({ durationMs: 25_000 });
+    const h = harness(() => upstream);
+    const { token } = await signIn(h, { trialSeconds: 20 });
+    // About 25 s of audio, but STREAMINFO and the header both say 1 s.
+    const audio = flac(1, 180_000);
+    const response = await h.fetch("/v1/transcribe", dictation(token, audio, 1));
+    expect(await response.json()).toMatchObject({ billed_seconds: 20, seconds_left: 0 });
+    expect(await account(h, token)).toMatchObject({ seconds_left: 0 });
+    const next = await h.fetch("/v1/transcribe", dictation(token, flac(1, 180_000), 1));
+    expect([next.status, await errorCode(next)]).toEqual([402, "out_of_hours"]);
+  });
+
+  it("refuses a recording longer than the free seconds before the upload ends", async () => {
     const upstream = new RecordingTranscriber();
     const h = harness(() => upstream);
     const { token } = await signIn(h, { trialSeconds: 30 });
-    expect(holdOf(speech(10))).toBe(26);
     expect((await h.fetch("/v1/transcribe", dictation(token, speech(10), 10))).status).toBe(200);
-    // The app can tell before it uploads: the balance covers 20 s x 6,000 bytes, less than this recording.
-    expect(await account(h, token)).toMatchObject({ seconds_left: 20, covered_bytes: 120_000 });
-    expect(speech(10).byteLength).toBeGreaterThan(120_000);
-    const refused = await h.fetch("/v1/transcribe", dictation(token, speech(10), 10));
+    expect((await account(h, token)).seconds_left).toBe(20);
+    const refused = await h.fetch("/v1/transcribe", dictation(token, speech(25), 25));
     expect([refused.status, await errorCode(refused)]).toEqual([402, "not_enough_hours"]);
     expect(upstream.calls.at(-1)?.aborted).toBe(true);
     expect((await h.fetch("/v1/transcribe", dictation(token, speech(2), 2))).status).toBe(200);
@@ -101,12 +109,31 @@ describe("POST /v1/transcribe", () => {
     expect([none.status, await errorCode(none)]).toEqual([402, "out_of_hours"]);
   });
 
-  it("pays the hold when the upstream gives no duration", async () => {
-    const h = harness(() => new RecordingTranscriber({ durationMs: undefined }));
+  it("refuses FLAC that is not the app's format (16 kHz, mono, 16-bit) before any upstream call", async () => {
+    const upstream = new RecordingTranscriber();
+    const h = harness(() => upstream);
     const { token } = await signIn(h);
+    const formats = [
+      { ...APP_FORMAT, channels: 2 },
+      { ...APP_FORMAT, sampleRate: 8_000 },
+      { ...APP_FORMAT, bitsPerSample: 8 },
+    ];
+    for (const format of formats) {
+      const audio = flac(2, 30_000, format);
+      const response = await h.fetch("/v1/transcribe", dictation(token, audio, 2));
+      expect([response.status, await errorCode(response)]).toEqual([400, "bad_audio"]);
+    }
+    expect(upstream.calls).toHaveLength(0);
+  });
+
+  it("pays the hold, and keeps the byte bound on the meter, when the upstream gives no duration", async () => {
+    const h = harness(() => new RecordingTranscriber({ durationMs: undefined }));
+    h.clock.now += 50 * DAY;
+    const { token } = await signIn(h, { trialSeconds: 5 });
     const audio = speech(4);
     const response = await h.fetch("/v1/transcribe", dictation(token, audio, 4));
-    expect(await response.json()).toMatchObject({ billed_seconds: holdOf(audio) });
+    expect(await response.json()).toMatchObject({ billed_seconds: 5 });
+    expect(await meterSeconds(h.clock.now)).toBe(holdOf(audio));
   });
 
   it("never charges more than the hold, and gives no text when the upstream heard more than the bytes can hold", async () => {
@@ -337,8 +364,9 @@ describe("AzureTranscriber", () => {
 
 describe("readStreamInfo", () => {
   it("reads the length from STREAMINFO, and tells FLAC from other bytes", () => {
-    expect(readStreamInfo(flac(12.5))).toEqual({ isFlac: true, seconds: 12.5 });
-    expect(readStreamInfo(flac(0))).toEqual({ isFlac: true, seconds: undefined });
+    const format = { isFlac: true, ...APP_FORMAT };
+    expect(readStreamInfo(flac(12.5))).toEqual({ ...format, seconds: 12.5 });
+    expect(readStreamInfo(flac(0))).toEqual({ ...format, seconds: undefined });
     expect(readStreamInfo(new Uint8Array(64)).isFlac).toBe(false);
   });
 });
