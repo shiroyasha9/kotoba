@@ -55,7 +55,11 @@ final class HistoryModel {
     private(set) var retryable: Set<DictationID> = []
     /// False until the first read returns, so the empty state does not flash before the rows.
     private(set) var isLoaded = false
-    private(set) var loadError: String?
+    /// The last read of the first page failed: the pane shows the shared failure state with Try Again.
+    private(set) var isLoadFailed = false
+    /// What the pane reads: the search, and each Try Again after a failed read. The view reads when it changes.
+    var readKey: ReadKey { ReadKey(search: search, attempt: attempt) }
+    private var attempt = 0
     /// While a dictation records or is sent, Paste Again would race its paste; the rows being sent say so and cannot be
     /// deleted.
     var activity = PipelineActivity(isQuiet: true, inFlight: [])
@@ -70,7 +74,7 @@ final class HistoryModel {
     /// Each read takes the next number; a result that comes back after a newer read started is dropped.
     @ObservationIgnored private var generation = 0
     @ObservationIgnored private var isLoadingMore = false
-    /// The search the loaded rows match; nil until a read succeeds.
+    /// The search the loaded rows match; nil until a read succeeds, and after a read fails.
     @ObservationIgnored private var loadedSearch: String?
     @ObservationIgnored let apps = InstalledApps()
 
@@ -88,6 +92,18 @@ final class HistoryModel {
         isLoaded = true
     }
 
+    /// For snapshots: a first read that failed.
+    static var loadFailed: HistoryModel {
+        let model = HistoryModel(rows: [])
+        model.isLoadFailed = true
+        return model
+    }
+
+    struct ReadKey: Hashable {
+        var search: String
+        var attempt: Int
+    }
+
     var rows: [DictationRecord] { list.rows }
     var isComplete: Bool { list.isComplete }
 
@@ -98,6 +114,11 @@ final class HistoryModel {
     func show() async {
         guard !isLoaded || search != loadedSearch else { return }
         await reload()
+    }
+
+    /// Try Again after a failed read: the pane reads the first page again.
+    func tryAgain() {
+        attempt += 1
     }
 
     /// Reads the first page again for a new search.
@@ -112,11 +133,12 @@ final class HistoryModel {
             list.replace(with: page, limit: limit)
             retryable = Self.kept(list.rows)
             loadedSearch = search
-            loadError = nil
+            isLoadFailed = false
         } catch {
             guard current == generation else { return }
             Log.app.error("Cannot read the history: \(error)")
-            loadError = "kotoba can’t read your history. Quit and reopen kotoba."
+            loadedSearch = nil
+            isLoadFailed = true
         }
         selection.formIntersection(rows.map(\.id))
         isLoaded = true

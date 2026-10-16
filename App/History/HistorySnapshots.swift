@@ -4,13 +4,14 @@ import KotobaCore
 @MainActor
 extension Pane {
     /// The pane at the window's detail size: rows of each status over two days (yesterday's audio deleted), the empty
-    /// history, and a search with no results. Synthetic text only. The toolbar and search field belong to the real
-    /// window; `windowSnapshots()` in App/Settings/SettingsSnapshots.swift draws them.
+    /// history, a search with no results, and a read that failed. Synthetic text only. The toolbar and search field
+    /// belong to the real window; `windowSnapshots()` in App/Settings/SettingsSnapshots.swift draws them.
     static func historySnapshots() -> [Snapshot] {
         [
             ("history-rows", HistoryModel(rows: HistoryController.sampleRows())),
             ("history-empty", HistoryModel(rows: [])),
             ("history-no-results", HistoryModel(rows: [], search: "invoice")),
+            ("history-load-failed", HistoryModel.loadFailed),
         ].map { name, model in
             MainWindow.snapshot(of: .history(model), named: name)
         }

@@ -23,7 +23,7 @@ struct HistoryView: View {
             .searchFocused($isSearchFocused)
             .onChange(of: findRequests) { isSearchFocused = true }
             .toolbar { toolbar(for: model.selected) }
-            .task(id: model.search) { await model.show() }
+            .task(id: model.readKey) { await model.show() }
             .alert("Couldn’t Paste", isPresented: $model.isPasteFailureShown) {
                 Button("OK") {}
             } message: {
@@ -44,8 +44,8 @@ struct HistoryView: View {
     }
 
     @ViewBuilder private var content: some View {
-        if let error = model.loadError {
-            EmptyState("History Unavailable", systemImage: "exclamationmark.triangle", description: error)
+        if model.isLoadFailed {
+            EmptyState.loadFailed(retry: model.tryAgain)
         } else if model.rows.isEmpty, model.isLoaded {
             if model.search.isEmpty {
                 EmptyState.noDictations(chord: HotkeyChords.shared.dictation)
