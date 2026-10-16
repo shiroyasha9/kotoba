@@ -64,6 +64,8 @@ targets:
           APP_DISPLAY_NAME: kotoba Dev
           # A blue icon with a "DEV" band, so the Dock and ⌘-Tab tell it from the release (design/icon/).
           ASSETCATALOG_COMPILER_APPICON_NAME: AppIconDev
+          # The release icon too, for the README images (`HomeModel.Identity.release`).
+          ASSETCATALOG_COMPILER_INCLUDE_ALL_APPICON_ASSETS: YES
     info:
       path: App/Info.plist
       properties:
