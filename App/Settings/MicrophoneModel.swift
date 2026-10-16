@@ -48,7 +48,7 @@ final class MicrophoneModel {
                 },
                 observe: { onChange in
                     LiveObservation(
-                        devices: AudioDevices.observe { MainActor.assumeIsolated(onChange) },
+                        devices: AudioDevices.observe { _ in MainActor.assumeIsolated(onChange) },
                         input: NotificationCenter.default.addObserver(
                             forName: AudioCapture.inputDidChange, object: nil, queue: .main
                         ) { _ in MainActor.assumeIsolated(onChange) })

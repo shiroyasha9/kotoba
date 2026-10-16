@@ -1,22 +1,65 @@
 import CoreAudio
 import Foundation
 import KotobaCore
+import Synchronization
 
-/// The listeners that `AudioDevices.observe(_:)` added; they are removed when this is released.
-/// `@unchecked Sendable`: `add` runs only inside `observe`, before the value is returned,
-/// and read only in `deinit`.
-final class AudioDeviceObservation: @unchecked Sendable {
-    private var listeners: [(AudioObjectPropertyAddress, AudioObjectPropertyListenerBlock)] = []
+/// The listeners that `AudioDevices.observe(_:)` added; they are removed when this is released. A restart of the audio
+/// service (coreaudiod) drops every listener a client added (AudioHardware.h, `kAudioHardwarePropertyServiceRestarted`),
+/// so the observation adds its own again before it reports the restart.
+final class AudioDeviceObservation: Sendable {
+    /// `AudioObjectPropertyListenerBlock` is not marked Sendable; CoreAudio calls each block on the main queue.
+    private struct Listener: @unchecked Sendable {
+        let address: AudioObjectPropertyAddress
+        let block: AudioObjectPropertyListenerBlock
+    }
 
-    func add(_ address: AudioObjectPropertyAddress, _ block: @escaping AudioObjectPropertyListenerBlock) {
-        listeners.append((address, block))
+    private let onChange: @Sendable (AudioDevices.Change) -> Void
+    /// Changed on the main queue at a restart, and by `init` and `deinit` on the owner's thread.
+    private let listeners = Mutex<[Listener]>([])
+
+    init(_ onChange: @escaping @Sendable (AudioDevices.Change) -> Void) {
+        self.onChange = onChange
+        addListeners()
     }
 
     deinit {
-        for (address, block) in listeners {
-            var address = address
-            AudioObjectRemovePropertyListenerBlock(AudioObjectID(kAudioObjectSystemObject), &address, .main, block)
+        removeListeners()
+    }
+
+    private func addListeners() {
+        for (selector, change) in AudioDevices.watchedProperties {
+            var address = PropertyAddress(selector)
+            let block: AudioObjectPropertyListenerBlock = { [weak self] _, _ in self?.changed(change) }
+            let status = AudioObjectAddPropertyListenerBlock(
+                AudioObjectID(kAudioObjectSystemObject), &address, .main, block)
+            if status == noErr {
+                let listener = Listener(address: address, block: block)
+                listeners.withLock { $0.append(listener) }
+            } else {
+                Log.audio.error("Cannot watch the audio devices (\(selector)): \(status)")
+            }
         }
+    }
+
+    /// After a restart the old listeners are gone already; removing them again returns an error, which is ignored.
+    private func removeListeners() {
+        let removed = listeners.withLock { listeners in
+            defer { listeners = [] }
+            return listeners
+        }
+        for listener in removed {
+            var address = listener.address
+            AudioObjectRemovePropertyListenerBlock(
+                AudioObjectID(kAudioObjectSystemObject), &address, .main, listener.block)
+        }
+    }
+
+    private func changed(_ change: AudioDevices.Change) {
+        if change == .serviceRestarted {
+            removeListeners()
+            addListeners()
+        }
+        onChange(change)
     }
 }
 
@@ -62,29 +105,24 @@ enum AudioDevices {
         all().filter(\.hasInput)
     }
 
-    /// The default input or output changed (the output feeds the Bluetooth mic warning), or a device
-    /// connected or disconnected.
-    private static let watchedProperties = [
-        kAudioHardwarePropertyDefaultInputDevice, kAudioHardwarePropertyDefaultOutputDevice,
-        kAudioHardwarePropertyDevices,
+    enum Change: Sendable {
+        /// The default input or output changed (the output feeds the Bluetooth mic warning), or a device connected or
+        /// disconnected.
+        case devices
+        /// The audio service (coreaudiod) restarted, after a crash or `killall coreaudiod`: every device id, unit
+        /// and listener from before is stale (AudioHardware.h).
+        case serviceRestarted
+    }
+
+    static let watchedProperties: [(AudioObjectPropertySelector, Change)] = [
+        (kAudioHardwarePropertyDefaultInputDevice, .devices), (kAudioHardwarePropertyDefaultOutputDevice, .devices),
+        (kAudioHardwarePropertyDevices, .devices), (kAudioHardwarePropertyServiceRestarted, .serviceRestarted),
     ]
 
-    /// Calls `onChange` on the main queue on each `watchedProperties` change, until the returned value
-    /// is released: the app keeps one for its whole life, a window only while it is open.
-    static func observe(_ onChange: @escaping @Sendable () -> Void) -> AudioDeviceObservation {
-        let observation = AudioDeviceObservation()
-        for selector in watchedProperties {
-            var address = PropertyAddress(selector)
-            let block: AudioObjectPropertyListenerBlock = { _, _ in onChange() }
-            let status = AudioObjectAddPropertyListenerBlock(
-                AudioObjectID(kAudioObjectSystemObject), &address, .main, block)
-            if status == noErr {
-                observation.add(address, block)
-            } else {
-                Log.audio.error("Cannot watch the audio devices (\(selector)): \(status)")
-            }
-        }
-        return observation
+    /// Calls `onChange` on the main queue on each change, until the returned value is released: the app keeps one for
+    /// its whole life, a window only while it is open.
+    static func observe(_ onChange: @escaping @Sendable (Change) -> Void) -> AudioDeviceObservation {
+        AudioDeviceObservation(onChange)
     }
 
     /// A property that cannot be read (a device going away) counts as unknown, not as an error.

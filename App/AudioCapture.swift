@@ -22,7 +22,7 @@ actor AudioCapture: AudioSource {
     private let levelContinuation: AsyncStream<Float>.Continuation
     private let ring = SampleRing()
     private var input: HALInput?
-    private var writer: CaptureWriter?
+    private(set) var writer: CaptureWriter?
     /// In the Undo window after Esc: the input is stopped, the writer and its file stay open.
     private var isPaused = false
     /// Route changes arrive from two sources and can overlap; one rebuild runs at a time and a
@@ -32,7 +32,7 @@ actor AudioCapture: AudioSource {
     private let preferences: MicrophonePreferences
     /// The mic the input records from; a device change rebuilds only when this changes. Kept under a
     /// lock too, so the menu and Settings can read it without waiting on the actor.
-    private var currentInput: AudioDevice? {
+    private(set) var currentInput: AudioDevice? {
         didSet {
             inputInUseValue.withLock { $0 = currentInput }
             if currentInput?.uid != oldValue?.uid {
@@ -49,9 +49,9 @@ actor AudioCapture: AudioSource {
     private var isDeviceCheckQueued = false
     /// A mic change that arrived during a capture; it applies when the capture ends.
     private var isInputChangeDeferred = false
-    /// The Settings mic test's level stream, while a test records into a throwaway file.
-    private var testLevels: AsyncStream<Float>.Continuation?
-    private var testTimer: Task<Void, Never>?
+    /// The Settings mic test's level stream, while a test records into a throwaway file (MicrophoneTest.swift).
+    var testLevels: AsyncStream<Float>.Continuation?
+    var testTimer: Task<Void, Never>?
 
     init(preferences: MicrophonePreferences) {
         self.preferences = preferences
@@ -70,12 +70,18 @@ actor AudioCapture: AudioSource {
             input = makeInput()
         }
         guard deviceObservation == nil else { return }
-        deviceObservation = AudioDevices.observe { [weak self] in
-            Task { await self?.devicesChanged() }
+        deviceObservation = AudioDevices.observe { [weak self] change in
+            Task { await self?.devicesChanged(change) }
         }
     }
 
-    private func devicesChanged() async {
+    private func devicesChanged(_ change: AudioDevices.Change) async {
+        // The prepared unit and its device listeners belong to the service that is gone: build them again at once, so
+        // the next press does not fail first.
+        if change == .serviceRestarted {
+            await requestRebuild(reason: "audio service restarted")
+            return
+        }
         guard !isDeviceCheckQueued else { return }
         isDeviceCheckQueued = true
         await Task.yield()
@@ -108,57 +114,13 @@ actor AudioCapture: AudioSource {
         return try startCapture(into: file, levels: levelContinuation)
     }
 
-    /// The Settings mic test (ux-polish MP2): records `duration` into a throwaway file and yields the input level
-    /// until it ends. It does not start when the mic is not allowed (no prompt from Settings), a dictation records, or
-    /// no mic opens; it says which, so the pane never shows a click that did nothing.
-    func test(for duration: Duration) -> MicrophoneTest {
-        guard AVAudioApplication.shared.recordPermission == .granted else { return blocked(.notAllowed) }
-        guard writer == nil else { return blocked(.dictating) }
-        let (levels, continuation) = AsyncStream.makeStream(of: Float.self, bufferingPolicy: .bufferingNewest(1))
-        let file = URL.temporaryDirectory.appending(path: "kotoba-microphone-test-\(UUID().uuidString).flac")
-        do {
-            _ = try startCapture(into: file, levels: continuation)
-        } catch {
-            Log.audio.error("The mic test did not start: \(error)")
-            return .blocked(.noInput)
-        }
-        Log.audio.notice("The mic test started on \(self.currentInput?.name ?? "no mic", privacy: .public)")
-        testLevels = continuation
-        // A reader that stops early (the pane closed) ends the test; `endTest` does nothing when it already ran.
-        continuation.onTermination = { _ in Task { await self.endTest() } }
-        testTimer = Task {
-            // Cancelled only by an earlier end, which has done the work.
-            guard (try? await Task.sleep(for: duration)) != nil else { return }
-            await endTest()
-        }
-        return .running(levels)
-    }
-
-    private func blocked(_ problem: MicrophoneTest.Problem) -> MicrophoneTest {
-        Log.audio.notice("The mic test did not start: \(String(describing: problem), privacy: .public)")
-        return .blocked(problem)
-    }
-
-    private func endTest() async {
-        guard let testLevels else { return }
-        self.testLevels = nil
-        testTimer?.cancel()
-        testTimer = nil
-        await discardCapture()
-        testLevels.finish()
-    }
-
-    private func startCapture(
+    func startCapture(
         into file: URL, levels: AsyncStream<Float>.Continuation
     ) throws -> AsyncStream<CaptureEvent> {
-        if input == nil {
-            input = makeInput()
-        }
-        guard let input else { throw CaptureError.noInputDevice }
         // The input starts first; audio waits in the ring while the file and converter are made
         // (about 0.2 ms, or about 11 ms the first time in a process).
         let readPosition = ring.beginCapture()
-        try input.start()
+        let input = try startInput()
         let (events, continuation) = AsyncStream.makeStream(of: CaptureEvent.self)
         let writer: CaptureWriter
         do {
@@ -177,6 +139,31 @@ actor AudioCapture: AudioSource {
         writer.start()
         self.writer = writer
         return events
+    }
+
+    /// Starts the prepared input, or builds one when none is prepared. A unit that does not start stays broken (the
+    /// audio service restarted, the device went away), so it is dropped and one new input is tried in the same press;
+    /// when that fails too, the error goes to the pipeline and the next press builds again. The rebuild costs one
+    /// input build, only after a failure.
+    private func startInput() throws -> HALInput {
+        if let input {
+            do {
+                try input.start()
+                return input
+            } catch {
+                Log.audio.error("The mic did not start; building a new input: \(error)")
+                self.input = nil
+            }
+        }
+        guard let rebuilt = makeInput() else { throw CaptureError.noInputDevice }
+        input = rebuilt
+        do {
+            try rebuilt.start()
+        } catch {
+            input = nil
+            throw error
+        }
+        return rebuilt
     }
 
     func endCapture() async -> RecordedAudio? {
@@ -200,7 +187,16 @@ actor AudioCapture: AudioSource {
 
     func resumeCapture() async throws {
         guard writer != nil, let input else { throw CaptureError.notCapturing }
-        try input.start()
+        do {
+            try input.start()
+        } catch {
+            // As at a press (`startInput`): a unit that does not start is built again once; the writer follows the new
+            // input's sample rate.
+            Log.audio.error("The mic did not resume; building a new input: \(error)")
+            await requestRebuild(reason: "the mic did not resume")
+            guard writer != nil, let rebuilt = self.input, rebuilt !== input else { throw error }
+            try rebuilt.start()
+        }
         isPaused = false
     }
 
@@ -312,19 +308,4 @@ actor AudioCapture: AudioSource {
             writer.inputLost()
         }
     }
-}
-
-/// What a click on Test Microphone started, or why it started nothing.
-enum MicrophoneTest: Sendable {
-    enum Problem: Sendable {
-        case notAllowed
-        /// A dictation records; the test would take its mic.
-        case dictating
-        /// No mic opened, or it did not start (logged).
-        case noInput
-    }
-
-    /// The input level 0...1, about ten times a second, until the test ends.
-    case running(AsyncStream<Float>)
-    case blocked(Problem)
 }
