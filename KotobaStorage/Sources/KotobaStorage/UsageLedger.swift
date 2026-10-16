@@ -114,7 +114,7 @@ extension HistoryStore {
         try topApps(from: start, to: .distantFuture, limit: limit).map(\.app)
     }
 
-    private func topApps(from start: Date, to end: Date, limit: Int) throws -> [UsageSummary.AppWords] {
+    func topApps(from start: Date, to end: Date, limit: Int) throws -> [UsageSummary.AppWords] {
         // With one max() in the query, the bare `app_name` comes from the newest answer of each app.
         try database.query(
             """

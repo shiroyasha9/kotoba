@@ -203,6 +203,18 @@ extension DictionaryStore {
         )
     }
 
+    /// Words learned from corrections that are still in the dictionary, by where the correction came from (the
+    /// Insights pane): an added word the owner deleted is dismissed, so it no longer counts.
+    public func learnedWords() throws -> [SuggestionCandidate.Origin: Int] {
+        let rows = try database.query(
+            "SELECT origin, count(*) FROM dictionary_suggestions WHERE status = ?1 GROUP BY origin;",
+            [.text(DictionarySuggestion.Status.added.rawValue)])
+        return Dictionary(
+            uniqueKeysWithValues: rows.compactMap { row in
+                row[0].string.flatMap(SuggestionCandidate.Origin.init(rawValue:)).map { ($0, Int(row[1].integer ?? 0)) }
+            })
+    }
+
     /// Pairs the owner dismissed, which a detector must never suggest again.
     public func dismissedPairs() throws -> Set<SuggestionPair> {
         Set(
