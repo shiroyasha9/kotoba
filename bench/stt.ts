@@ -49,8 +49,8 @@ export type SttVariantKey =
  */
 export const XAI_TRUE: string | boolean = "true";
 
-export type SttVariant = {
-	key: SttVariantKey;
+export type SttVariant<K extends string = SttVariantKey> = {
+	key: K;
 	model: string;
 	/** Native provider fields, sent as provider.options.<tag> (OpenRouter STT guide, "Provider-Specific Options"). */
 	providerOptions?: Record<string, Record<string, unknown>>;
@@ -186,7 +186,7 @@ export function bestSttVariant(clips: Clip[], ok: Map<string, Map<string, SttRow
 	return best?.key ?? null;
 }
 
-export type SttJob = { variant: SttVariant; clip: Clip; info: AudioInfo; format: AudioFormat };
+export type SttJob = { variant: SttVariant<string>; clip: Clip; info: AudioInfo; format: AudioFormat };
 
 export async function transcribe(p: Paths, sink: CallSink, { variant, clip, info, format }: SttJob): Promise<SttRow> {
 	const file = format === "flac" ? audioPath(p, clip.id, "flac") : await ensureWav16(p, clip);
