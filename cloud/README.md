@@ -214,6 +214,7 @@ id to what it sells (INR prices are overrides on the same ids):
 | `subscription.created` / `updated` / `paused` / `resumed` / `canceled` | Kept in D1; an event older than the stored one changes nothing |
 | Any of those with status `paused` or `canceled` | Ends that subscription's plan hours now; pack hours stay. After a cancel, no late period of that subscription can start. A resume brings no hours back; the next `transaction.completed` does |
 | `adjustment.created` / `updated`, an approved `refund` or `chargeback` of a pack | Takes back the refunded share of that pack's seconds (all of them for a full refund), only from what is left of that pack, never below zero; used hours are not a debt. The user comes from `purchases` (adjustments carry no `custom_data`) |
+| `adjustment.created` / `updated`, an approved `refund` or `chargeback` of a Pro payment | The refunded share of the plan's monthly seconds comes off every month left in the period (so an annual plan stays smaller), this month's from its unused seconds, never below zero; when the shares reach the whole (a full refund), the period ends. A refund of a renewal leaves the subscription active, so this does not wait for a subscription event. An older period than the current one has nothing left to take. A late retry of the refunded payment cannot start the period again |
 
 A cancel at the period end keeps the hours: Paddle sends `subscription.canceled` on the date it takes effect.
 
@@ -278,7 +279,7 @@ Do before launch (billing and abuse):
 - `/v1/cleanup` (Gemini through the relay).
 - Real Azure: `AzureTranscriber` is written to Microsoft's REST reference and tested against a fake fetch and the local
   stand-in, never against Azure.
-- Pro refunds (Paddle's own subscription events end the plan) and `transaction.payment_failed`: ignored.
+- `transaction.payment_failed`: ignored (Paddle's subscription events carry the status).
 - A retry when `settle` fails after a response: the hold lapses after 10 minutes and that dictation is free.
 - Aborting the upstream request when the client goes away (needs the `enable_request_signal` flag).
 - Deploy config: real D1 id, custom domain, secrets (`wrangler secret put`), spend alarms on Azure.

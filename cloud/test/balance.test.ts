@@ -152,6 +152,45 @@ describe("Balance plans and Paddle's event order", () => {
     periodEnd: T0 + (n + 1) * 30 * DAY,
   });
 
+  it("takes back a refunded plan period's unused seconds and ends it, once", async () => {
+    const b = balance();
+    await b.startPlan("txn_1:pri_pro_monthly", period(0), T0);
+    await b.settle("r1", HOUR, T0);
+    expect(await b.takeBackPlan("refund:adj_1:txnitm_1", "txn_1:pri_pro_monthly", 1, T0)).toBe(7 * HOUR);
+    expect(await b.takeBackPlan("refund:adj_1:txnitm_1", "txn_1:pri_pro_monthly", 1, T0)).toBe(0);
+    expect(await b.account(0, T0)).toMatchObject({ balance: { planSecondsLeft: 0, planPeriodEnd: 0 } });
+    // A late retry of the refunded payment does not start the period again.
+    expect(await b.startPlan("txn_1:pri_pro_monthly", period(0), T0)).toBe(false);
+  });
+
+  it("takes nothing for a refunded period that is no longer current", async () => {
+    const b = balance();
+    await b.startPlan("txn_1:pri_pro_monthly", period(0), T0);
+    await b.startPlan("txn_2:pri_pro_monthly", period(1), T0 + 30 * DAY);
+    expect(await b.takeBackPlan("refund:adj_1:txnitm_1", "txn_1:pri_pro_monthly", 1, T0 + 30 * DAY)).toBe(0);
+    expect(await b.account(0, T0 + 30 * DAY)).toMatchObject({ balance: { planSecondsLeft: 8 * HOUR } });
+  });
+
+  it("lowers every remaining month of an annual plan by a partial refund's share, and ends it at the whole", async () => {
+    const b = balance();
+    const start = Date.UTC(2026, 0, 1);
+    const annual = {
+      subscriptionId: "sub_1",
+      monthlySeconds: 8 * HOUR,
+      periodStart: start,
+      periodEnd: Date.UTC(2027, 0, 1),
+    };
+    await b.startPlan("txn_y:pri_pro_annual", annual, start);
+    expect(await b.takeBackPlan("refund:adj_1:txnitm_y", "txn_y:pri_pro_annual", 0.25, start)).toBe(2 * HOUR);
+    const nextMonth = Date.UTC(2026, 1, 1);
+    expect(await b.account(0, nextMonth)).toMatchObject({ balance: { planSecondsLeft: 6 * HOUR } });
+    // A second refund's share is of the original hours: 0.75 more is the whole, so the plan ends.
+    expect(await b.takeBackPlan("refund:adj_2:txnitm_y", "txn_y:pri_pro_annual", 0.75, nextMonth)).toBe(6 * HOUR);
+    expect(await b.account(0, Date.UTC(2026, 2, 1))).toMatchObject({
+      balance: { planSecondsLeft: 0, planPeriodEnd: 0 },
+    });
+  });
+
   it("ignores a late retry of an older period of the same subscription", async () => {
     const b = balance();
     expect(await b.startPlan("txn_2", period(1), T0 + 30 * DAY)).toBe(true);

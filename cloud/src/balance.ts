@@ -48,6 +48,8 @@ interface AccountRow extends Record<string, SqlStorageValue> {
   /** The sum of `packs.seconds_left`. */
   pack_seconds: number;
   plan_subscription_id: string | null;
+  /** The ledger ref of the payment that started the current period. */
+  plan_ref: string | null;
   plan_monthly_seconds: number;
   plan_seconds_left: number;
   plan_period_start: number;
@@ -61,6 +63,7 @@ const SCHEMA = `
 CREATE TABLE IF NOT EXISTS account (
   id INTEGER PRIMARY KEY CHECK (id = 1),
   plan_subscription_id TEXT,
+  plan_ref TEXT,
   plan_monthly_seconds INTEGER NOT NULL DEFAULT 0,
   plan_seconds_left INTEGER NOT NULL DEFAULT 0,
   plan_period_start INTEGER NOT NULL DEFAULT 0,
@@ -197,6 +200,39 @@ export class Balance extends DurableObject<Env> {
   }
 
   /**
+   * Takes back a refunded plan payment once per `ref`. `share` (of the money) of the period's monthly seconds comes off
+   * every month that is left, so an annual plan stays smaller too; this month's cut comes from its unused seconds,
+   * never below zero. When the shares reach the whole, the period ends. Only the current period has seconds to take:
+   * an older one has already reset or ended. A later subscription event that ends the plan finds nothing more to take.
+   */
+  takeBackPlan(ref: string, planRef: string, share: number, now: number): number {
+    return this.ctx.storage.transactionSync(() => {
+      if (this.has(ref)) return 0;
+      const row = this.row(now);
+      let taken = 0;
+      if (row.plan_ref === planRef && row.plan_window_end !== 0) {
+        // The share is of the hours the payment bought, so several partial refunds add up as their money does.
+        const bought = this.sql
+          .exec<{ plan_seconds: number }>("SELECT plan_seconds FROM ledger WHERE ref = ?", planRef)
+          .one().plan_seconds;
+        const monthly = Math.max(0, row.plan_monthly_seconds - Math.floor(bought * share));
+        taken = Math.min(row.plan_seconds_left, row.plan_monthly_seconds - monthly);
+        if (monthly === 0) {
+          this.sql.exec("UPDATE account SET plan_monthly_seconds = 0, plan_seconds_left = 0, plan_window_end = 0");
+        } else {
+          this.sql.exec(
+            "UPDATE account SET plan_monthly_seconds = ?, plan_seconds_left = plan_seconds_left - ?",
+            monthly,
+            taken,
+          );
+        }
+      }
+      this.record(ref, "refund", now, -taken, 0);
+      return taken;
+    });
+  }
+
+  /**
    * Starts a paid plan period once per `ref` (the Paddle transaction). The monthly hours reset now; an annual period
    * resets them again each month (`row`). Unused plan hours do not carry over. A late retry of an older period of the
    * same subscription, or any period of a canceled one, changes nothing.
@@ -207,9 +243,10 @@ export class Balance extends DurableObject<Env> {
       const row = this.row(now);
       if (row.plan_subscription_id === plan.subscriptionId && plan.periodEnd <= row.plan_period_end) return false;
       this.sql.exec(
-        `UPDATE account SET plan_subscription_id = ?, plan_monthly_seconds = ?, plan_seconds_left = ?,
+        `UPDATE account SET plan_subscription_id = ?, plan_ref = ?, plan_monthly_seconds = ?, plan_seconds_left = ?,
            plan_period_start = ?, plan_period_end = ?, plan_window_end = ?`,
         plan.subscriptionId,
+        ref,
         plan.monthlySeconds,
         plan.monthlySeconds,
         plan.periodStart,

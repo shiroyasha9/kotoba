@@ -24,6 +24,9 @@ async function sign(body: string, ts: number, secret = SECRET): Promise<string> 
 
 const PACK_TXN = "txn_01kotobapack0000000000000001";
 const PRO_SUB = "sub_01kotobapro00000000000000001";
+const PRO_TXN = "txn_01kotobapro00000000000000001";
+const PACK_ITEM = "txnitm_01kotobapack0000000000000001";
+const PRO_ITEM = "txnitm_01kotobapro00000000000000001";
 
 /**
  * The fixture as Paddle would send it, for `userId`, with a fresh event id when `eventId` is set. `renames` swaps ids
@@ -133,7 +136,7 @@ describe("POST /billing/paddle", () => {
     expect(await account(h, token)).toMatchObject({ plan: null, plan_seconds_left: 0 });
 
     const renewal = own(pro, "evt_pro_2");
-    renewal.data.id = "txn_01kotobapro00000000000000002"; // A new payment.
+    renewal.data.id = `${PRO_TXN}-2`; // A new payment.
     renewal.data.billing_period = { starts_at: "2026-10-25T06:00:00.000000Z", ends_at: "2026-11-25T06:00:00.000000Z" };
     await deliver(h, JSON.stringify(renewal));
     expect(await account(h, token)).toMatchObject({ plan: "pro", plan_seconds_left: 28800 });
@@ -179,6 +182,26 @@ describe("POST /billing/paddle", () => {
     // A second partial refund takes another quarter, not more.
     await deliver(h, partial("adj_partial_2", "evt_refund_partial_2"));
     expect(await account(h, token)).toMatchObject({ pack_seconds: 18000 });
+  });
+
+  it("ends a refunded Pro period and takes back its unused plan seconds, with no subscription event", async () => {
+    const h = harness();
+    const { token, userId } = await signIn(h, { trialSeconds: 0 });
+    const renames = { [PRO_TXN]: "txn_pro_refund", [PRO_SUB]: "sub_pro_refund" };
+    await deliver(h, payload(pro, userId, "evt_pro_refund_txn", renames));
+    expect((await h.fetch("/v1/transcribe", dictation(token, speech(10), 10))).status).toBe(200);
+    const body = JSON.parse(
+      payload(refund, userId, "evt_pro_refund", {
+        ...renames,
+        [PACK_TXN]: "txn_pro_refund",
+        [PACK_ITEM]: PRO_ITEM,
+        adj_01kotobarefund000000000000001: "adj_pro_refund",
+      }),
+    );
+    body.data.subscription_id = "sub_pro_refund";
+    body.data.items[0].amount = "400";
+    expect(await (await deliver(h, JSON.stringify(body))).json()).toMatchObject({ outcome: "refund:28790" });
+    expect(await account(h, token)).toMatchObject({ plan: null, plan_seconds_left: 0, seconds_left: 0 });
   });
 
   it("asks Paddle to send a refund again when it comes before its purchase", async () => {

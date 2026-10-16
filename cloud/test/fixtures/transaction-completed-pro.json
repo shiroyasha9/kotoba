@@ -7,11 +7,16 @@
     "id": "txn_01kotobapro00000000000000001",
     "status": "completed",
     "customer_id": "ctm_01kotobacustomer000000000001",
-    "custom_data": { "kotoba_user_id": "{{user}}" },
+    "custom_data": {
+      "kotoba_user_id": "{{user}}"
+    },
     "origin": "web",
     "collection_mode": "automatic",
     "subscription_id": "sub_01kotobapro00000000000000001",
-    "billing_period": { "starts_at": "2026-10-17T06:00:00.000000Z", "ends_at": "2026-11-17T06:00:00.000000Z" },
+    "billing_period": {
+      "starts_at": "2026-10-17T06:00:00.000000Z",
+      "ends_at": "2026-11-17T06:00:00.000000Z"
+    },
     "currency_code": "USD",
     "created_at": "2026-10-17T05:59:10.000000Z",
     "updated_at": "2026-10-17T06:00:00.000000Z",
@@ -23,9 +28,15 @@
           "product_id": "pro_01kotobapro0000000000000001",
           "description": "kotoba Cloud Pro, monthly",
           "type": "standard",
-          "billing_cycle": { "interval": "month", "frequency": 1 },
+          "billing_cycle": {
+            "interval": "month",
+            "frequency": 1
+          },
           "trial_period": null,
-          "unit_price": { "amount": "400", "currency_code": "USD" },
+          "unit_price": {
+            "amount": "400",
+            "currency_code": "USD"
+          },
           "status": "active"
         },
         "quantity": 1,
@@ -33,7 +44,30 @@
       }
     ],
     "details": {
-      "totals": { "subtotal": "400", "tax": "0", "total": "400", "grand_total": "400", "currency_code": "USD" }
+      "totals": {
+        "subtotal": "400",
+        "tax": "0",
+        "total": "400",
+        "grand_total": "400",
+        "currency_code": "USD"
+      },
+      "line_items": [
+        {
+          "id": "txnitm_01kotobapro00000000000000001",
+          "price_id": "pri_pro_monthly",
+          "quantity": 1,
+          "totals": {
+            "subtotal": "400",
+            "tax": "0",
+            "discount": "0",
+            "total": "400"
+          },
+          "product": {
+            "id": "pro_01kotobapro0000000000000001",
+            "name": "kotoba Cloud Pro"
+          }
+        }
+      ]
     }
   }
 }

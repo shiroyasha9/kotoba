@@ -10,8 +10,8 @@ import { decodeHex } from "./session";
  *   renewal too, so renewals need no other event.
  * - `subscription.*` (created, updated, paused, resumed, canceled): kept in D1; status `canceled` or `paused` ends the
  *   plan hours now. A resume brings no hours back: the next `transaction.completed` does.
- * - `adjustment.created|updated`, an approved refund or chargeback of a pack: takes back what is left of the pack's
- *   seconds (a share of them for a partial refund), never below zero. Adjustments carry no `custom_data`, so the user
+ * - `adjustment.created|updated`, an approved refund or chargeback: takes back the refunded share of a pack's or a Pro
+ *   period's unused seconds, never below zero (`takeBackRefund`). Adjustments carry no `custom_data`, so the user
  *   comes from `purchases`.
  * Paddle retries a notification until it gets a 200 and does not keep the order. The `paddle_events` check only saves
  * work: the writes themselves are idempotent (the Balance ledger by transaction and price, `purchases` by key,
@@ -193,10 +193,12 @@ interface PurchaseRow {
 }
 
 /**
- * An approved refund or chargeback takes back from each refunded pack the same share of its seconds as of its money
- * (all of them for a full refund), from what is left of that pack (`Balance.takeBackPack`). Shares of several partial
- * refunds add up to at most the whole, as Paddle never refunds more than was paid. Tax and proration lines take
- * nothing; Pro refunds take nothing here, as Paddle ends the subscription by its own events.
+ * An approved refund or chargeback takes back the refunded share (the refund's money over the line's total; all of it
+ * for a full refund) of what it bought, never below zero: of a pack's seconds, from what is left of that pack
+ * (`Balance.takeBackPack`); of a Pro payment, from that period's unused plan seconds, and a full refund ends the period
+ * (`Balance.takeBackPlan`). A refund of a renewal leaves the subscription active, so this cannot wait for a
+ * subscription event. Shares of several partial refunds add up to at most the whole, as Paddle never refunds more than
+ * was paid. Tax and proration lines take nothing.
  */
 async function takeBackRefund(env: Env, adjustment: Adjustment, now: number): Promise<string> {
   if (adjustment.action !== "refund" && adjustment.action !== "chargeback") return "ignored";
@@ -210,15 +212,16 @@ async function takeBackRefund(env: Env, adjustment: Adjustment, now: number): Pr
   if (results.length === 0) return NO_PURCHASE;
   const takes = adjustment.items.map((item) => {
     const purchase = results.find((row) => row.line_item_id === item.item_id);
-    if (purchase?.kind !== "pack" || (item.type !== "full" && item.type !== "partial")) return 0;
-    const share = item.amount === null ? 1 : Number(item.amount) / Number(purchase.amount_total);
-    if (!Number.isFinite(share)) return 0;
-    return env.BALANCE.getByName(purchase.user_id).takeBackPack(
-      `refund:${adjustment.id}:${item.item_id}`,
-      `${adjustment.transaction_id}:${purchase.price_id}`,
-      Math.floor(purchase.seconds_granted * Math.min(1, share)),
-      now,
-    );
+    if (!purchase || (item.type !== "full" && item.type !== "partial")) return 0;
+    const ratio =
+      item.type === "full" || item.amount === null ? 1 : Number(item.amount) / Number(purchase.amount_total);
+    if (!Number.isFinite(ratio)) return 0;
+    const share = Math.min(1, ratio);
+    const ref = `refund:${adjustment.id}:${item.item_id}`;
+    const bought = `${adjustment.transaction_id}:${purchase.price_id}`;
+    const balance = env.BALANCE.getByName(purchase.user_id);
+    if (purchase.kind === "pro") return balance.takeBackPlan(ref, bought, share, now);
+    return balance.takeBackPack(ref, bought, Math.floor(purchase.seconds_granted * share), now);
   });
   const taken = (await Promise.all(takes)).reduce((sum, seconds) => sum + seconds, 0);
   return `refund:${taken}`;
