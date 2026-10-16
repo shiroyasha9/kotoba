@@ -9,7 +9,7 @@ Done before this plan: History window, usage tracker, audio retention, per-app m
 - Ideas 2, 3 and 4 are already built (phase 2.6, commit `83d76c2`), with tests and manual rows. Section 1 lists what is left: the owner's manual test, and three small optional gaps.
 - Story 32 is mostly built: readback after paste, "Fix Last Dictation…", Suggestions. Left: the live readback check on the owner's apps, history mining, the one-time Wispr history seed, and an "Add to kotoba Dictionary" system service. Section 2.
 - Idea 5 (rank and cap terms) is a precondition of idea 1, because context terms share the route's 100-term cap. Build it first. Below the cap it changes nothing, so the risk "it drops a needed term" applies only past 100 terms. Section 3.
-- Story 34 and idea 1 (context) need the owner's privacy decision. Section 4 gives five options. Recommendation: off by default; when on, send only identifier-shaped tokens from the active Claude Code or Codex session, the repo name and the branch, as keyterms. Never send screen text to the speech model.
+- Story 34 and idea 1 (context) have their own research in `docs/research/context-awareness.md`; section 4 here gives only its build-order touch points.
 - Follow-ups (section 5): Cmd-F in the Dictionary search (S), the `GeneralModel` parameter cleanup (quality #17, S), "Fix Dictation…" from a History row with "Add Selected Word" (S, no custom text view), and recovery of audio files that have no History row (S-M). The orphan recovery needs one fix first: Delete removes the row before the file, so a failed file removal leaves an orphan the owner wanted gone.
 - Section 6 gives a build order in three waves, with the files of each item, so parallel agents do not edit the same file.
 
@@ -73,49 +73,10 @@ Today `PersonalDictionary.keyterms` (`KotobaCore/Sources/KotobaCore/PersonalDict
 
 ## 4. Story 34 and idea 1: context awareness
 
-The owner parked this. It is the one item with a real privacy trade-off, so this section lays out the options. Nothing here is built.
+Its own research: `docs/research/context-awareness.md` (agent `context-research`). That file holds the options, the privacy decision, the design and the bench. This plan keeps only what the build order needs.
 
-### 4.1 Why it matters
-
-The main error class is identifiers. A short, relevant term list helps a lot and a long list hurts (`beyond-wispr.md` section 3: context biasing cut biased-word WER by up to 88% relative; bias lists degrade past about 100 phrases). The owner dictates mostly to Claude Code and Codex in cmux (210 of 275 bench clips).
-
-### 4.2 Options
-
-| Option | What leaves the Mac | Value for this owner | Cost |
-|---|---|---|---|
-| A. Off (today) | Dictionary terms only | none | none |
-| B. Local evidence only | Nothing new. Context makes a corrected word a strong learning candidate when it is a repo identifier | Low-med: better learning, no accuracy gain on the first dictation | S |
-| C. Session and repo terms as keyterms | Up to about 30 identifier-shaped tokens per dictation (for example `TermRanking`, `order_id`, `auth.ts`, `--strict`), the repo name and the branch, inside the speech request | High: targets the main error class | M |
-| D. Selected text at chord-down | Identifier tokens from the selection as keyterms (C's filter); or the selected text itself to the cleanup LLM for cleanup dictations only | Med in editors and browsers; terminals rarely expose a selection | S-M |
-| E. Window text or screen OCR | Free text from the screen | Low-med; VoiceInk's OCR on every recording is a known latency fault (spec, Approach) | Reject |
-
-Recommendation: C, off by default, with one switch "Use words from your coding session". Add D's keyterm part later under the same switch. Keep free text out of the speech request in all options. Send selected text to the cleanup LLM only behind its own switch, and only if the owner asks.
-
-### 4.3 Design for option C
-
-- Behaviour: with the switch on and the front app in Code mode, kotoba adds the terms of the current coding session to the request. History shows the terms sent with each dictation ("Sent words: …"), as Superwhisper does, so the owner can see what left the Mac.
-- Sources, read at chord-down, off the hot path (`beyond-wispr.md` 3.1):
-  1. The newest session file by modification time: `~/.claude/projects/<folder>/<session>.jsonl` and `~/.codex/sessions/<year>/<month>/<day>/<file>.jsonl`. One `stat` per project folder.
-  2. The repo: its name, and the branch from `.git/HEAD` (one small file read).
-  3. Identifier tokens from the last 32 KB of that session file: camelCase, snake_case, dotted file names, `--flags`, ranked by count.
-  4. Optional later: file names from `git ls-files`, cached by repo and HEAD. It needs a `Process` spawn (10-50 ms, estimate), so it waits for evidence that the session tokens are not enough.
-- Secret filter, before any token can leave: drop tokens that match the key shapes in `scripts/privacy.sh` (`sk-`, `xai-`, `ghp_`, `AKIA`, `AIza`, `xox`), long hex or base64 runs (20 or more characters), email addresses, URLs, absolute paths, and tokens over 50 characters (the route limit). Drop tokens that are only digits.
-- Seam: a new port `ContextSource` in `DictationPipeline.Ports`: `func terms(for app: FrontApp?) async -> [String]`. The pipeline starts it as a task at chord-down (only with the switch on and Code mode). At the stop it takes the result only if it is ready, and never waits. `TermRanking` (section 3) puts context terms first, within the same limit. The token extractor and the secret filter are pure (`ContextTerms.swift` in KotobaCore). The App adapter (`App/SessionContext.swift`) does the file reads. The record keeps the sent context terms (a new nullable `context_terms` column in `dictations`; see the migration note in section 6). A retry sends the kept terms again.
-- Tests: `ContextTermsTests.swift`: the token shapes; every secret shape is dropped; the cap. Pipeline tests with `FakeContextSource`: a source that never answers gives a request with dictionary terms only, and the stop-to-paste time does not change (`ManualClock`); a ready source puts its terms first; with the switch off the source is never called; Writing mode never calls it; the record keeps the sent terms; a retry sends the kept terms.
-- Cost: at chord-down, in a task: tens of `stat` calls, one 32 KB read, one tokenise, one small read of `.git/HEAD` (about 1-3 ms in all, estimate; measure with a signpost). Stop path: 0 ms, because the pipeline never waits. The request grows by about 1-2 KB. The effect of a longer phrase list on MAI latency is unknown; the bench in 4.4 measures it. Idle: no watcher, no timer, no task. No framework at launch.
-- Permissions: kotoba is not sandboxed. `~/.claude/` and `~/.codex/` are not in Apple's protected list ("Documents, Downloads, Desktop, iCloud Drive, and network volumes", https://support.apple.com/guide/security/secddd1d86a6/web), so no prompt is expected. A repo inside Documents or Desktop would trigger a TCC prompt when kotoba reads `.git/HEAD`: kotoba then skips the branch.
-- Limits: two agents in two repos at once can make kotoba pick the wrong session (the newest file wins). cmux's focused pane is not known without its socket (`beyond-wispr.md` question 4).
-- Size: M (C), plus S for the History column and the switch.
-
-### 4.4 Measure before turning it on
-
-A bench run: the kotoba-bench-v1 cmux clips with session terms from the matching Claude Code session, against the dictionary only. Clips map to sessions by time. About 1.3 h of audio, so about $0.15 per pass and about 10 minutes. It needs the owner's go. Gate: term recall goes up and WER does not go up.
-
-### 4.5 Privacy notes
-
-- Session files hold whole conversations, which can hold secrets. kotoba reads them in memory, keeps only filtered tokens, and never logs them (`privacy: .private`).
-- The terms go to the chosen speech route (OpenRouter by default, then Microsoft). They are words such as file and symbol names, not sentences. Some are still private (client names in a branch, internal product names).
-- The switch is off by default (spec story 34). The History column shows the owner what was sent.
+- Depends on section 3: context terms share the route's 100-term cap, so they go through `TermRanking` (context terms first, within the limit). Build section 3 first.
+- Likely touch points: a new port in `KotobaCore/Sources/KotobaCore/PipelineInterface.swift` (`DictationPipeline.Ports`), `PipelineRecording.swift` (start the read at chord-down), `TranscriptDelivery.swift` and `Settings.request(for:)` (take the terms only if ready, never wait), `Store.swift` and `KotobaStorage/Sources/KotobaStorage/HistoryStore.swift` (if the record keeps the sent terms: a new column), a new pure extractor in KotobaCore and a new App adapter, a switch in `App/Settings/ModesPane.swift` or `GeneralPane.swift`, and `App/History/HistoryView.swift` (if History shows the sent terms). `context-awareness.md` is the authority on these.
 
 ## 5. Small follow-ups
 
@@ -174,16 +135,16 @@ Files each item touches (N = new file):
 | 3 Rank and cap | S-M | N `KotobaCore/Sources/KotobaCore/TermRanking.swift`, N `TermHits.swift` + tests, `PersonalDictionary.swift`, `PipelineInterface.swift` (`request(for:)`), `DictationPipeline.swift` (`updateTermUse`), `KotobaStorage/Sources/KotobaStorage/DictionaryStore.swift` (`term_use`), `App/Settings/DictionaryModel.swift`, `App/Settings/DictionaryPane.swift` (pin, "not sent"), `App/SettingsController.swift` |
 | 2.2b History mining | M | N `KotobaCore/Sources/KotobaCore/NearMissMiner.swift` + tests, `DictionaryStore.swift`, `App/SettingsController.swift` |
 | 2.2c Wispr seed | S-M | `KotobaStorage/Sources/KotobaStorage/WisprFlowImport.swift`, `App/Settings/DictionaryModel.swift`, `App/Settings/DictionaryPane.swift` |
-| 4 Context (C) | M-L | N `KotobaCore/Sources/KotobaCore/ContextTerms.swift` + tests, `PipelineInterface.swift` (port), `PipelineRecording.swift` (start at chord-down), `TranscriptDelivery.swift`, `Store.swift` (record field), `HistoryStore.swift` (column), N `App/SessionContext.swift`, `App/Settings/ModesPane.swift` or `GeneralPane.swift` (switch), `App/History/HistoryView.swift`, `App/AppDelegate.swift` |
+| 4 Context | see `context-awareness.md` | Likely: `PipelineInterface.swift`, `PipelineRecording.swift`, `TranscriptDelivery.swift`, `Store.swift`, `HistoryStore.swift`, `ModesPane.swift` or `GeneralPane.swift`, `HistoryView.swift`, `AppDelegate.swift`, plus new files |
 | 1 Gap A shortcut | M | `App/HotkeyChords.swift`, `KotobaCore/Sources/KotobaCore/HotkeyClassifier.swift`, `App/HotkeyTap.swift`, `App/ChordRecorder.swift`, `App/Settings/GeneralPane.swift` |
 
 Waves:
 - Wave 1, after Insights lands (it owns `SettingsWindow.swift`, `SettingsController.swift`, `DictionaryStore.swift` and `Snapshots.swift` now). Four agents in parallel: 5.1, 5.2, 5.3, and 5.4 (spike first). Shared files: `App/AppDelegate.swift` (5.3 and 5.4 each add one call; the second agent rebases on the first) and `docs/testing/phase2-manual.md` (append rows only; each agent takes a row-number block: 5.1 from 400, 5.3 from 410, 5.4 from 420; update the numbers to the free ones at start).
 - Wave 2: 3 (rank and cap) alone in the dictionary files, with 2.2d (service) in parallel (no shared file but `AppDelegate.swift`, one line). 2.2a (live readback check) runs any time; it is the owner's time.
-- Wave 3: 2.2b and 2.2c in sequence (both edit `DictionaryStore.swift` and the Dictionary pane). Then 4 after the owner's privacy decision and the bench go; it needs 3's ranking. Gap A only if the owner asks, and after 5.2 (both edit `GeneralPane.swift`).
+- Wave 3: 2.2b and 2.2c in sequence (both edit `DictionaryStore.swift` and the Dictionary pane). Then 4, as `context-awareness.md` decides; it needs 3's ranking. Gap A only if the owner asks, and after 5.2 (both edit `GeneralPane.swift`).
 
 Notes:
-- Migrations (`AGENTS.md`): `term_use` (3) is a new table in `dictionary.sqlite`; `context_terms` (4) is a new column in `dictations`. Per-app modes is not pushed yet. If its schema change is still unpushed when 4 starts, 4 changes nothing in that migration and adds its own step from the last pushed shape, or the lead pushes modes first.
+- Migrations (`AGENTS.md`): `term_use` (3) is a new table in `dictionary.sqlite`; if 4 keeps the sent terms, that is a new column in `dictations`. Per-app modes is not pushed yet. If its schema change is still unpushed when 4 starts, 4 changes nothing in that migration and adds its own step from the last pushed shape, or the lead pushes modes first.
 - Line limits: `DictionaryPane.swift` 368, `App/Readback.swift` 393, `App/IndicatorPanel.swift` 395, `DictionaryStore.swift` 341, `HotkeyClassifier.swift` 320. An item that grows one of them past 350 moves a whole concern out first.
 - Every item reports its measured cost (`AGENTS.md`, No patchwork): `make memory` for idle footprint, and the latency marks for anything near the stop.
 
@@ -191,8 +152,8 @@ Notes:
 
 Owner decisions, each with a recommendation.
 
-1. Context awareness (section 4): which option, and on or off by default? Recommendation: option C, off by default, only in Code mode, with the sent words shown in History. Never send screen text or selected text to the speech model.
-2. May the bench in 4.4 run (about $0.15, about 10 minutes, the owner's clips through MAI via OpenRouter)? And the list-size bench in section 3 (about $0.50, about 15 minutes)? Recommendation: yes to both, before turning context on.
+1. Context awareness: see the questions in `docs/research/context-awareness.md`.
+2. May the list-size bench in section 3 run (25, 50 and 100 terms on kotoba-bench-v1 through MAI via OpenRouter, about $0.50, about 15 minutes)? Recommendation: yes, before the cap changes from 100.
 3. Orphan audio (5.4): transcribe orphans at once into Recovered (as a quit does), or only list them in History for a manual Retry? Recommendation: transcribe at once; it matches the quit rule and costs cents.
 4. Pins in the Dictionary (section 3): add a star per term? Recommendation: yes, it is the owner's guard against ranking.
 5. Wispr history seed (2.2c): read Wispr's `History` table once for word pairs? Recommendation: yes, as pending suggestions only, from a clone, with the text dropped after.
