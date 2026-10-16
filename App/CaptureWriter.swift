@@ -18,6 +18,8 @@ final class CaptureWriter: @unchecked Sendable {
         var finished: CheckedContinuation<RecordedAudio, Never>?
         /// Ends a stop that waits for audio from a vanished device; cancelled when the file closes.
         var fallback: Task<Void, Never>?
+        /// The file closed and the thread ended: a rate switch that comes now has nothing to wait for.
+        var isClosed = false
     }
 
     private static let chunkFrames = 4_800
@@ -69,23 +71,6 @@ final class CaptureWriter: @unchecked Sendable {
         self.events = events
         self.levels = levels
         self.readPosition = readPosition
-    }
-
-    /// The FLAC file of a recording, in `outputFormat`. Orphan recovery writes the same file (`OrphanAudioRecovery`).
-    static func makeFile(at url: URL) throws -> AVAudioFile {
-        try AVAudioFile(
-            forWriting: url,
-            settings: [
-                AVFormatIDKey: kAudioFormatFLAC, AVSampleRateKey: outputFormat.sampleRate,
-                AVNumberOfChannelsKey: outputFormat.channelCount,
-            ],
-            commonFormat: .pcmFormatInt16,
-            interleaved: true
-        )
-    }
-
-    static func duration(ofFrames frames: AVAudioFramePosition) -> Duration {
-        .seconds(Double(frames) / outputFormat.sampleRate)
     }
 
     func start() {
@@ -142,16 +127,23 @@ final class CaptureWriter: @unchecked Sendable {
         }
     }
 
-    /// The mic input was rebuilt at a new sample rate. Returns once audio at the old rate is written.
+    /// The mic input was rebuilt at a new sample rate. Returns once audio at the old rate is written, or at once when
+    /// the capture has ended: a cancel can close the file while the rebuild waits here (`AudioCapture.rebuildInput`).
     func switchSampleRate(to sampleRate: Double) async {
         await withCheckedContinuation { continuation in
-            control.withLock { control in
+            let isClosed = control.withLock { control in
+                guard !control.isClosed else { return true }
                 control.pendingSampleRate = sampleRate
                 control.rateSwitched = continuation
                 // A new mic is open: its loss is reported again.
                 control.hasReportedInputLoss = false
+                return false
             }
-            ring.wake.signal()
+            if isClosed {
+                continuation.resume()
+            } else {
+                ring.wake.signal()
+            }
         }
     }
 
@@ -267,12 +259,20 @@ final class CaptureWriter: @unchecked Sendable {
         }
     }
 
+    /// A rate switch that came after this iteration's check is resumed here; without it the rebuild that asked would
+    /// wait for ever and no later route change would rebuild the input.
     private func close() -> RecordedAudio {
-        control.withLock { $0.fallback }?.cancel()
+        let (fallback, rateSwitched) = control.withLock { control in
+            control.isClosed = true
+            defer { (control.pendingSampleRate, control.rateSwitched) = (nil, nil) }
+            return (control.fallback, control.rateSwitched)
+        }
+        fallback?.cancel()
         drain()
         flushConverter()
         file.close()
         events.finish()
+        rateSwitched?.resume()
         return RecordedAudio(
             file: fileURL, duration: Self.duration(ofFrames: framesWritten), isIncomplete: hasLostAudio)
     }
@@ -292,9 +292,26 @@ final class CaptureWriter: @unchecked Sendable {
     }
 }
 
-// MARK: - Conversion and time
+// MARK: - File, conversion and time
 
 extension CaptureWriter {
+    /// The FLAC file of a recording, in `outputFormat`. Orphan recovery writes the same file (`OrphanAudioRecovery`).
+    static func makeFile(at url: URL) throws -> AVAudioFile {
+        try AVAudioFile(
+            forWriting: url,
+            settings: [
+                AVFormatIDKey: kAudioFormatFLAC, AVSampleRateKey: outputFormat.sampleRate,
+                AVNumberOfChannelsKey: outputFormat.channelCount,
+            ],
+            commonFormat: .pcmFormatInt16,
+            interleaved: true
+        )
+    }
+
+    static func duration(ofFrames frames: AVAudioFramePosition) -> Duration {
+        .seconds(Double(frames) / outputFormat.sampleRate)
+    }
+
     private static func makeConversion(sampleRate: Double) throws -> Conversion {
         let resampled = (Double(chunkFrames) * outputFormat.sampleRate / sampleRate).rounded(.up)
         let outputFrames = AVAudioFrameCount(resampled) + 64
