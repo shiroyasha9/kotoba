@@ -97,7 +97,8 @@ struct AccessibilityStep: View {
     var body: some View {
         StepText(
             "kotoba needs Accessibility to notice \(StatusText.dictationChord) in every app and to paste your text. "
-                + "kotoba does not read your screen or your typing."
+                + "kotoba reads only the text field it pasted into, and only when “Learn from my edits” is on, "
+                + "to learn your corrections. It never reads your screen."
         )
         if model.readiness.isAccessibilityAllowed {
             StatusLine("Accessibility allowed", .good).padding(.top, 8)
