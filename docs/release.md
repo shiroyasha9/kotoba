@@ -56,5 +56,7 @@ Before a release that ships the Writing mode (per-app modes, `docs/research/per-
 - kotoba has no Dock icon, so Sparkle's alert for a scheduled check opens behind other windows. As a gentle
   reminder, the menu bar icon shows a dot and the menu item reads "Install Update…" until the user looks at the
   alert (`App/Updater.swift`).
-- Debug builds (`make build`) do not start the updater and hide "Check for Updates…" and the Updates section, so a
-  development build is never replaced by a release (`Updater.forThisBuild()`).
+- Debug builds (`make build`) are a separate install, "kotoba Dev" (`tech.teensy.kotoba.dev`, `App/Install.swift`).
+  They do not start the updater and hide "Check for Updates…" and the Updates section, so a development build is
+  never replaced by a release (`Updater.forThisBuild()`). `scripts/verify-release.sh` checks that the release keeps
+  `tech.teensy.kotoba`.

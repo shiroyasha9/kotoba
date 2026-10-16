@@ -5,12 +5,16 @@
 #
 # Without RUN=1 the script only prints the database path and the query. With RUN=1 it opens the database read-only
 # (`sqlite3 -readonly`) and runs that one SELECT; nothing is written.
+# The release app's database by default; DEV=1 reads the development build's (kotoba-dev, App/Install.swift).
 # Usage: make latency            # show the query
 #        make latency RUN=1      # run it
+#        make latency RUN=1 DEV=1
 #        KOTOBA_DB=/path/to/kotoba.sqlite make latency RUN=1
 set -euo pipefail
 
-DB=${KOTOBA_DB:-$HOME/Library/Application Support/kotoba/kotoba.sqlite}
+folder=kotoba
+[[ ${DEV:-} == 1 ]] && folder=kotoba-dev
+DB=${KOTOBA_DB:-$HOME/Library/Application Support/$folder/kotoba.sqlite}
 P50_GATE_MS=1000
 P90_GATE_MS=1500
 

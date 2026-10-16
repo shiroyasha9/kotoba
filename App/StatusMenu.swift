@@ -84,13 +84,16 @@ struct MenuModel {
         menu.addItem(.action("History…", target: target, action: #selector(StatusMenuActions.openHistory)))
         menu.addItem(
             .action("Settings…", target: target, action: #selector(StatusMenuActions.openSettings), keyEquivalent: ","))
-        menu.addItem(.action("About kotoba", target: target, action: #selector(StatusMenuActions.showAbout)))
+        menu.addItem(
+            .action("About \(Install.displayName)", target: target, action: #selector(StatusMenuActions.showAbout)))
         if let updates {
             menu.addItem(Self.updateItem(updates, target: target))
         }
         menu.addItem(.separator())
         menu.addItem(
-            NSMenuItem(title: "Quit kotoba", action: #selector(NSApplication.terminate(_:)), keyEquivalent: "q"))
+            NSMenuItem(
+                title: "Quit \(Install.displayName)", action: #selector(NSApplication.terminate(_:)), keyEquivalent: "q"
+            ))
     }
 
     private func topItems(target: StatusMenuActions?) -> [NSMenuItem] {

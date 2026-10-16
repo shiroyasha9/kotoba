@@ -1,7 +1,10 @@
+import Foundation
 import os
 
 public enum Log {
-    public static let subsystem = "tech.teensy.kotoba"
+    /// The app's bundle id, so the release (`tech.teensy.kotoba`) and a development build (`tech.teensy.kotoba.dev`)
+    /// log apart (App/Install.swift). Package tests log under their runner's id.
+    public static let subsystem = Bundle.main.bundleIdentifier ?? "kotoba"
     static let pipeline = Logger(subsystem: subsystem, category: "pipeline")
     /// One line per dictation with the latency offsets; the providers add one line per upload.
     public static let latency = Logger(subsystem: subsystem, category: "latency")

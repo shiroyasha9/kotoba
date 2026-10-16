@@ -4,14 +4,10 @@ import Sparkle
 /// Updates…". Started at launch so a check that comes due starts on time; it does no other work at idle.
 @MainActor
 final class Updater: NSObject {
-    /// The updater for a release build. A Debug build (`make build`) gets none: the owner's development app is never
+    /// The updater for the release install. A development build (`make build`, `Install`) gets none: it is never
     /// offered a release, and the menu item and the Updates section hide.
     static func forThisBuild() -> Updater? {
-        #if DEBUG
-            nil
-        #else
-            Updater()
-        #endif
+        Install.isRelease ? Updater() : nil
     }
 
     /// A scheduled check found an update. kotoba has no Dock icon, so Sparkle's alert opens behind other windows;

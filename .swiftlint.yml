@@ -112,6 +112,26 @@ custom_rules:
     excluded_match_kinds: [comment, doccomment, string]
     message: "Read and save keys through KeyVault, so a saved key always replaces the copy the router reads."
     severity: error
+  # A development build is a second install (App/Install.swift): every name it must not share with the release
+  # derives from the bundle id there. A bundle id written anywhere else would point a dev build at release data.
+  per_install_ids:
+    name: "Per-install names: bundle id"
+    excluded: ["App/Install\\.swift"]
+    regex: "tech\\.teensy\\.kotoba(?:\\.dev)?(?![.\\w])"
+    match_kinds: [string]
+    message: "Take the bundle id, Keychain service or log subsystem from `Install` (App/) or `Log.subsystem` (packages), so a development build never shares the release's names."
+    severity: error
+  per_install_locations:
+    name: "Per-install names: data folder and Keychain service"
+    excluded:
+      - "App/AppFiles\\.swift"
+      - "App/KeychainStore\\.swift"
+      # Reads Wispr Flow's folder, not kotoba's.
+      - "KotobaStorage/Sources/KotobaStorage/WisprFlowImport\\.swift"
+    regex: "\\b(?:applicationSupportDirectory|kSecAttrService|suiteName)\\b"
+    excluded_match_kinds: [comment, doccomment, string]
+    message: "Name kotoba's files through `AppFiles` and its keys through `KeychainStore`, so a development build keeps its own data folder and Keychain item (App/Install.swift). No UserDefaults suite: the standard domain follows the bundle id."
+    severity: error
   url_session_construction:
     name: "URLSession construction"
     regex: "\\bURLSession\\s*\\("

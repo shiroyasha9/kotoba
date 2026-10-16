@@ -6,6 +6,7 @@ DERIVED     := build/DerivedData
 # Several agents can run `make check` at once: `AGENT=<name>` gives each its own build folders.
 CHECK_DERIVED := build/DerivedData-check$(if $(AGENT),-$(AGENT))
 SCRATCH = $(if $(AGENT),--scratch-path $(1)/.build-$(AGENT))
+DEBUG_APP = $(1)/Build/Products/Debug/kotoba.app
 SWIFT_SRC   := App KotobaCore/Sources KotobaCore/Tests KotobaCore/Package.swift \
                KotobaProviders/Sources KotobaProviders/Tests KotobaProviders/Package.swift \
                KotobaStorage/Sources KotobaStorage/Tests KotobaStorage/Package.swift
@@ -20,11 +21,14 @@ gen:
 XCODEBUILD = xcodebuild -project $(PROJECT) -scheme $(SCHEME) -configuration Debug \
 	-destination 'platform=macOS,arch=arm64' -quiet build
 
+# A Debug build is its own install (App/Install.swift); each build checks it does not carry the release's identity.
 build: gen
 	$(XCODEBUILD) -derivedDataPath $(DERIVED)
+	scripts/check-dev-install.sh $(call DEBUG_APP,$(DERIVED))
 
 build-check: gen
 	$(XCODEBUILD) -derivedDataPath $(CHECK_DERIVED)
+	scripts/check-dev-install.sh $(call DEBUG_APP,$(CHECK_DERIVED))
 
 # Tests build first, then run under a hard limit: a hung test (an await that never resumes) fails
 # the run after TEST_LIMIT seconds instead of blocking every agent. Pass FILTER=<name> for one test.
@@ -62,14 +66,14 @@ check: privacy format-lint lint build-check test
 # Renders the registered views (App/Snapshots.swift) to PNGs, light and dark, offscreen: no screen capture, no TCC.
 SNAPSHOTS := build/snapshots$(if $(AGENT),-$(AGENT))
 snapshots: build-check
-	$(CHECK_DERIVED)/Build/Products/Debug/kotoba.app/Contents/MacOS/kotoba --snapshots $(SNAPSHOTS)
+	$(call DEBUG_APP,$(CHECK_DERIVED))/Contents/MacOS/kotoba --snapshots $(SNAPSHOTS)
 
 # System checks (docs/spec.md, "Testing Decisions"): run by hand against the running app, not part of `check`.
 memory:
 	scripts/memory.sh
 
 latency:
-	RUN=$(RUN) scripts/latency.sh
+	RUN=$(RUN) DEV=$(DEV) scripts/latency.sh
 
 # Release (docs/release.md): `make dmg` builds, notarizes and staples the app and the DMG; `make appcast` writes the
 # Sparkle feed for that DMG. Everything lands in build/release/; nothing is uploaded.

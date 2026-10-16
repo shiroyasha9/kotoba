@@ -23,7 +23,7 @@
 
 ## Logging and latency
 
-- Log with `os.Logger`, subsystem `tech.teensy.kotoba`, one category per module (`Log.pipeline`). Transcripts and keys are logged `privacy: .private`; never log an API key.
+- Log with `os.Logger`, subsystem `Log.subsystem` (the bundle id: `tech.teensy.kotoba`, or `tech.teensy.kotoba.dev` for a Debug build), one category per module (`Log.pipeline`). Transcripts and keys are logged `privacy: .private`; never log an API key.
 - Each `LatencyMark` (keyDown, firstAudioBuffer, stop, uploadStart, response, pasteSent) is recorded in the dictation's `LatencyLog` as an offset from key-down, emitted as a signpost on `Log.signposter` (points of interest), logged as one line on `Log.latency`, and stored in the `latency_marks` table that `make latency` reads. A new hot-path step gets a mark.
 
 ## Layout

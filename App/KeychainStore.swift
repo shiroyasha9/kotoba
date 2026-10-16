@@ -3,8 +3,8 @@ import KotobaProviders
 import Security
 import Synchronization
 
-/// One provider's API key as a generic password in the login keychain (service `tech.teensy.kotoba`, account = the
-/// route, e.g. "openrouter"). The item's access list names this app's Developer ID signature, so the key stays
+/// One provider's API key as a generic password in the login keychain (service `Install.keychainService`, account =
+/// the route, e.g. "openrouter"). The item's access list names this app's Developer ID signature, so the key stays
 /// readable across rebuilds. What the Keychain holds is cached after the first look, a missing key included: every
 /// save and delete goes through this store (`KeyVault` has one per account), so the cache stays true. A key added
 /// outside kotoba (Keychain Access) shows after a relaunch.
@@ -26,7 +26,7 @@ final class KeychainStore: APIKeySource {
 
     private let cached = Mutex(Cached.unknown)
 
-    init(account: String, service: String = "tech.teensy.kotoba") {
+    init(account: String, service: String = Install.keychainService) {
         self.service = service
         self.account = account
     }

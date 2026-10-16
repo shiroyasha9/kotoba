@@ -45,6 +45,16 @@ else
   bad "version $version ($build) does not match project.yml"
 fi
 
+# The release identity never changes: Sparkle, TCC grants, UserDefaults and the Keychain item hang on it. Debug
+# builds use their own (scripts/check-dev-install.sh).
+release=tech.teensy.kotoba
+id=$(plist CFBundleIdentifier) name=$(plist CFBundleDisplayName)
+if [[ $id == "$release" && $name == kotoba ]]; then
+  ok "release identity: $name ($id)"
+else
+  bad "identity $name ($id) is not the release's: kotoba ($release)"
+fi
+
 [[ -n $(plist SUPublicEDKey) && -n $(plist SUFeedURL) ]] && ok "Sparkle feed and public key set" ||
   bad "SUFeedURL or SUPublicEDKey missing"
 

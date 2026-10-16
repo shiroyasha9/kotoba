@@ -89,7 +89,7 @@ The app is open-source (Apache-2.0) and distributed as a notarized DMG on GitHub
 - kotoba licence: Apache-2.0.
 
 ### Platform and UI
-- Minimum macOS 26. Bundle ID `tech.teensy.kotoba`. Signed with the owner's Developer ID (team 7U6G55576W), notarized. Every development build is signed with the same identity so TCC permissions and Keychain access survive rebuilds.
+- Minimum macOS 26. Bundle ID `tech.teensy.kotoba`; Debug builds are a separate install, `tech.teensy.kotoba.dev` ("kotoba Dev"), with their own settings, data and keys (`App/Install.swift`). Signed with the owner's Developer ID (team 7U6G55576W), notarized. Every development build is signed with the same identity so TCC permissions and Keychain access survive rebuilds.
 - AppKit `NSStatusItem` for the menu bar; the recording indicator is an AppKit panel using `NSGlassEffectView`.
 - SwiftUI only for windows that open on demand (Settings, History). Measured 2026-10-15 (`docs/research/memory-spike.md`): status item + glass panel + prepared engine idles at about 17 MB; a SwiftUI window adds about 15 MB that stays after close. The owner accepts SwiftUI for these windows for now; AppKit replacement is a later option if memory matters.
 - No WebKit, no SwiftData, no local speech models. `NSSupportsAutomaticTermination` off.

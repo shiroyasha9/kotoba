@@ -48,7 +48,7 @@ final class StatusBarItem: NSObject, NSMenuDelegate {
 
     private static func glyph(_ name: String) -> NSImage? {
         let image = NSImage(named: name)
-        image?.accessibilityDescription = "kotoba"
+        image?.accessibilityDescription = Install.displayName
         return image
     }
 

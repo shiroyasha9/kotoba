@@ -6,9 +6,9 @@ UI text in this list is the text in the code at the phase 2 gate (2026-10-15). I
 
 ## Setup (once per machine; repeat step 3 if a new build loses Accessibility)
 
-1. Build: `make build`. Open: `open build/DerivedData/Build/Products/Debug/kotoba.app`.
+1. Build: `make build`. Quit the release kotoba first: with the same modifier chord, both apps dictate. Open: `open build/DerivedData/Build/Products/Debug/kotoba.app`. This is **kotoba Dev**, a separate install with its own settings, history (`~/Library/Application Support/kotoba-dev/`) and API keys.
 2. Click **Allow** on the Microphone prompt.
-3. System Settings > Privacy & Security > Accessibility: turn **kotoba** on. If it is already on, turn it off and on again.
+3. System Settings > Privacy & Security > Accessibility: turn **kotoba Dev** on. If it is already on, turn it off and on again.
 4. kotoba menu > **Model: …** > **MAI-Transcribe-2 (OpenRouter)**. Then kotoba menu > **Set API Key…**: Settings opens on **Providers**. **API keys** > OpenRouter: paste the key > **Save**.
 
 ## Happy paths
@@ -179,7 +179,7 @@ Rows from each agent's phase 2.5 work. The numbers continue the list above.
 
 | # | Do this | Expect | Result |
 |---|---|---|---|
-| 101 | First launch on a clean user (or `defaults delete tech.teensy.kotoba onboarding.completed` with permissions reset) | No Microphone or Accessibility prompt at launch; the onboarding window opens | |
+| 101 | First launch on a clean user (or `defaults delete tech.teensy.kotoba.dev onboarding.completed` with permissions reset) | No Microphone or Accessibility prompt at launch; the onboarding window opens | |
 | 102 | Open the menu while setup is not complete | First line "Finish Setting Up kotoba…" with a subtitle that names the first missing thing; the menu bar icon shows the waveform with "!" | |
 | 103 | Click "Finish Setting Up kotoba…" | Onboarding opens on that step | |
 | 104 | Allow Accessibility in onboarding, then tap ⌃⌥⌘ at once | The hotkey works at once, not after 5 s | |
@@ -194,7 +194,7 @@ Rows from each agent's phase 2.5 work. The numbers continue the list above.
 
 | # | Do this | Expect | Result |
 |---|---|---|---|
-| 111 | Fresh setup: run `defaults delete tech.teensy.kotoba onboarding.completed`, remove kotoba's Microphone and Accessibility grants, open kotoba | "Welcome to kotoba" opens, centred, on Welcome; no Microphone or Accessibility prompt shows before its step | |
+| 111 | Fresh setup: run `defaults delete tech.teensy.kotoba.dev onboarding.completed`, remove kotoba Dev's Microphone and Accessibility grants, open kotoba | "Welcome to kotoba" opens, centred, on Welcome; no Microphone or Accessibility prompt shows before its step | |
 | 112 | Microphone step: click **Allow Microphone**, then **Allow** in the prompt | "Microphone allowed" with a checkmark; the window moves to Accessibility by itself in about 1 s | |
 | 113 | Microphone step, deny instead | "Microphone access is off."; **Open System Settings** opens Privacy & Security > Microphone | |
 | 114 | Turn kotoba on there | The step turns green and moves on without a click | |
@@ -302,7 +302,7 @@ Rows from each agent's phase 2.5 work. The numbers continue the list above.
 | 188 | Dictate, fix a word, and within 1 s start the next dictation | The recording pill shows (no learned-word pill); the fixed word shows in Suggestions | |
 | 189 | Dictate, change nothing for 60 s | No pill; nothing is learned | |
 | 190 | Dictate, then rewrite the whole sentence | Nothing is learned | |
-| 191 | Instruments > Points of Interest (subsystem tech.teensy.kotoba) during 180 | "readback open" once per paste and "readback read" once after each typing pause; no readback interval between dictations | |
+| 191 | Instruments > Points of Interest (subsystem tech.teensy.kotoba.dev) during 180 | "readback open" once per paste and "readback read" once after each typing pause; no readback interval between dictations | |
 | 192 | Settings > Dictionary: turn **Learn from my edits** off; repeat 180 | No pill; nothing is learned; Instruments shows no "readback open" interval | |
 
 ### User-set chords (phase 2.6)
@@ -399,7 +399,7 @@ Rows from each agent's phase 2.5 work. The numbers continue the list above.
 | 298 | Start a dictation, then look at **Paste Again** in History while it records and transcribes | **Paste Again** is dimmed until the dictation ends | |
 | 299 | Turn Wi-Fi off, dictate, turn Wi-Fi on before the network retry, then in History select the “Not transcribed” row > **Retry** | The pill shows “Saved dictation recovered”; the row changes to “Recovered” with its text | |
 | 300 | Press Esc during a dictation and let Undo run out; in History select the “Cancelled” row > **Retry** | The audio is sent; the row changes to “Recovered” with its text | |
-| 301 | Select two rows, press Delete; click **Delete** in the dialog | “Delete 2 Dictations?”; the rows are gone, and their audio files are gone from `~/Library/Application Support/kotoba/audio` | |
+| 301 | Select two rows, press Delete; click **Delete** in the dialog | “Delete 2 Dictations?”; the rows are gone, and their audio files are gone from `~/Library/Application Support/kotoba-dev/audio` | |
 | 302 | Scroll History with more than 200 dictations | Older rows load as you reach the end; no pause | |
 | 303 | Close History, then open it again | It opens at the same size and place, with the search cleared | |
 | 304 | With no OpenRouter credit, dictate (“Refused” row); add credit, then select the row > **Retry** | The row changes to “Recovered” with its text | |
