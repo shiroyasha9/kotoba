@@ -1,3 +1,4 @@
+import Foundation
 import Synchronization
 
 /// The text steps a live dictation and a retry share: transcribe with the dictionary terms, remove a submit phrase,
@@ -8,6 +9,8 @@ struct TranscriptionSteps: Sendable {
         /// What the provider heard, without a submit phrase and before replacements; the cleaner gets this.
         let raw: String
         let text: String
+        /// When the answer came: its ledger entry's time, which the cleanup's entry takes too.
+        let answeredAt: Date
         /// It ended with a submit phrase: a live dictation sends Return after the paste; a retry never does.
         var submits = false
         /// The upload's moments, when the route measured them.
@@ -24,7 +27,7 @@ struct TranscriptionSteps: Sendable {
 
     let provider: any TranscriptionProvider
     let cleaner: (any TextCleaner)?
-    /// Dates each billed answer in the usage ledger, and times the cleanup deadline.
+    /// Dates each speech answer in the usage ledger, and times the cleanup deadline.
     let clock: any PipelineClock
     /// Where a cleanup answer that came after its deadline is billed.
     let store: any Store
@@ -41,12 +44,12 @@ struct TranscriptionSteps: Sendable {
         // Matched on what the owner said, before the replacements, so a rule can neither make nor break the phrase.
         let (raw, submits) = settings.isSubmitPhraseOn ? SubmitPhrase.split(heard) : (heard, false)
         let transcribed = Transcribed(
-            raw: raw, text: settings.dictionary.applyReplacements(to: raw), submits: submits,
+            raw: raw, text: settings.dictionary.applyReplacements(to: raw), answeredAt: clock.date, submits: submits,
             network: transcript.network)
         let words = DictationRecord.wordCount(of: transcribed.text)
         record.usage.append(
             UsageEntry(
-                time: clock.date, dictation: record.id, kind: .speech, model: transcript.model,
+                time: transcribed.answeredAt, dictation: record.id, kind: .speech, model: transcript.model,
                 audio: transcript.usage.audio, deliveredWords: words, spokenWords: words,
                 cost: transcript.usage.cost, app: record.app))
         guard !heard.isEmpty else { throw ProviderError.emptyTranscript }
@@ -56,16 +59,17 @@ struct TranscriptionSteps: Sendable {
 
     /// Sets the record's cleaned text with replacements applied, or nil when there is no cleaner, it failed or it
     /// answered no words: the raw transcript is used then, and the cleanup is not retried. An answer's usage goes to
-    /// the record, empty or not. The replacements run once, on the cleaner's output, so a rule such as
-    /// "kotoba" -> "kotoba.app" does not grow twice.
+    /// the record, empty or not, dated with the transcript's answer: its word change counts on the same day as the
+    /// words it changes, even when it comes after midnight. The replacements run once, on the cleaner's output, so a
+    /// rule such as "kotoba" -> "kotoba.app" does not grow twice.
     @discardableResult
     /// `deadline` bounds a live cleanup, whose paste waits on it; a retry passes nil, so its cleanup waits for the
     /// cleaner's own timeout.
     func clean(
-        _ raw: String, in mode: AppMode, into record: inout DictationRecord, settings: DictationPipeline.Settings,
-        deadline: Duration?
+        _ transcribed: Transcribed, in mode: AppMode, into record: inout DictationRecord,
+        settings: DictationPipeline.Settings, deadline: Duration?
     ) async -> CleanupMiss? {
-        switch await cleaned(raw, in: mode, record: &record, settings: settings, deadline: deadline) {
+        switch await cleaned(transcribed, in: mode, record: &record, settings: settings, deadline: deadline) {
         case .success(let text):
             record.cleanedText = text
             return nil
@@ -76,10 +80,11 @@ struct TranscriptionSteps: Sendable {
     }
 
     private func cleaned(
-        _ raw: String, in mode: AppMode, record: inout DictationRecord, settings: DictationPipeline.Settings,
-        deadline: Duration?
+        _ transcribed: Transcribed, in mode: AppMode, record: inout DictationRecord,
+        settings: DictationPipeline.Settings, deadline: Duration?
     ) async -> Result<String, CleanupMiss> {
         let id = record.id
+        let raw = transcribed.raw
         guard let cleaner else {
             Log.pipeline.error("Cleanup \(id.rawValue): no cleaner, using the raw transcript")
             return .failure(.failed)
@@ -89,7 +94,7 @@ struct TranscriptionSteps: Sendable {
         let request: @Sendable () async throws -> CleanedText = {
             try await cleaner.clean(raw, vocabulary: terms, mode: mode)
         }
-        switch await answer(to: request, for: record, deadline: deadline) {
+        switch await answer(to: request, for: record, at: transcribed.answeredAt, deadline: deadline) {
         case .answered(.success(let answer)):
             cleaned = answer
         case .answered(.failure(let error)):
@@ -107,7 +112,8 @@ struct TranscriptionSteps: Sendable {
             ? 0 : DictationRecord.wordCount(of: replaced) - DictationRecord.wordCount(of: record.transcript ?? "")
         record.usage.append(
             UsageEntry(
-                time: clock.date, dictation: id, kind: .cleanup, model: cleaned.model, deliveredWords: change,
+                time: transcribed.answeredAt, dictation: id, kind: .cleanup, model: cleaned.model,
+                deliveredWords: change,
                 cost: cleaned.cost, app: record.app))
         guard !text.isEmpty else {
             Log.pipeline.error("Cleanup \(id.rawValue) answered no words, using the raw transcript")
@@ -122,9 +128,10 @@ struct TranscriptionSteps: Sendable {
     }
 
     /// The cleaner's answer, or `.tooSlow` when `deadline` passes first on the pipeline clock. The request is not
-    /// cancelled: a late answer was billed, so its cost goes to the ledger when it comes, with no words delivered.
+    /// cancelled: a late answer was billed, so its cost goes to the ledger when it comes, with no words delivered,
+    /// dated `time` (its transcript's answer).
     private func answer(
-        to request: @escaping @Sendable () async throws -> CleanedText, for record: DictationRecord,
+        to request: @escaping @Sendable () async throws -> CleanedText, for record: DictationRecord, at time: Date,
         deadline: Duration?
     ) async -> Answer {
         guard let deadline else {
@@ -136,7 +143,7 @@ struct TranscriptionSteps: Sendable {
         }
         let first = FirstOf<Answer>()
         let timer = work.schedule(at: clock.now + deadline) { first.settle(.tooSlow) }
-        work.track { [clock, store, id = record.id, app = record.app] in
+        work.track { [store, id = record.id, app = record.app] in
             let result: Result<CleanedText, any Error>
             do {
                 result = .success(try await request())
@@ -147,7 +154,7 @@ struct TranscriptionSteps: Sendable {
             do {
                 try await store.addUsage([
                     UsageEntry(
-                        time: clock.date, dictation: id, kind: .cleanup, model: late.model, deliveredWords: 0,
+                        time: time, dictation: id, kind: .cleanup, model: late.model, deliveredWords: 0,
                         cost: late.cost, app: app)
                 ])
             } catch {

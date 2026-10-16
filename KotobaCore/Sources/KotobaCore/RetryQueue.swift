@@ -104,7 +104,7 @@ public actor RetryQueue {
             let transcribed = try await steps.transcribe(&record, settings: settings)
             if let mode = record.output.cleanupMode {
                 // No paste waits on a retry: no deadline.
-                await steps.clean(transcribed.raw, in: mode, into: &record, settings: settings, deadline: nil)
+                await steps.clean(transcribed, in: mode, into: &record, settings: settings, deadline: nil)
             }
             record.status = .recovered
             record.needsSetup = nil

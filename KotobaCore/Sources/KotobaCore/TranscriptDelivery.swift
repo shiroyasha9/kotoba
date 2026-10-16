@@ -81,7 +81,7 @@ struct TranscriptDelivery: Sendable {
                 await beforeCleanup()
                 mark(.cleanStart, at: clock.now)
                 cleanupMiss = await steps.clean(
-                    transcribed.raw, in: mode, into: &record, settings: job.settings,
+                    transcribed, in: mode, into: &record, settings: job.settings,
                     deadline: job.settings.cleanupDeadline)
                 mark(.cleanResponse, at: clock.now)
             }

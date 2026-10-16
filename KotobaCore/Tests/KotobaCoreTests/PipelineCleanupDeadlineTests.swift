@@ -46,6 +46,26 @@ struct PipelineCleanupDeadlineTests {
         let cleanup = await world.store.ledger.filter { $0.kind == .cleanup }
         #expect(cleanup.map(\.cost) == [.reported(Decimal(string: "0.0004") ?? 0)])
         #expect(cleanup.map(\.deliveredWords) == [0])
+        // Dated with its transcript, 5 s before it came: a day's figures never get half a dictation.
+        let speech = await world.store.ledger.filter { $0.kind == .speech }
+        #expect(cleanup.map(\.time) == speech.map(\.time))
+    }
+
+    /// A cleanup row takes its transcript's time, so its word change falls on the same day as the words it changes,
+    /// also when the answer comes after midnight.
+    @Test func aCleanupEntryIsDatedWithItsTranscript() async throws {
+        let pipeline = world.makePipeline(cleaner: cleaner, modes: ModeRules())
+
+        await pipeline.cleanupTap()
+        await pipeline.tap(world)
+        #expect(await eventually { await gate.hasWaiters })
+        world.clock.advance(by: .seconds(4))
+        await gate.open()
+        await pipeline.settle()
+
+        let ledger = await world.store.ledger
+        #expect(ledger.map(\.kind) == [.speech, .cleanup])
+        #expect(ledger.map(\.time) == [world.clock.date - 4, world.clock.date - 4])
     }
 
     @Test func aCleanupBeforeTheDeadlineIsPasted() async {
