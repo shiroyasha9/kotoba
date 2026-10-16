@@ -68,9 +68,9 @@ Two more numbers from the capture path (built-in mic, from the commit that moved
 
 **Get technical words right**
 
-- A personal dictionary for names and technical words, sent to the speech model as hints (up to 100 words), plus replacement rules that run on every transcript.
+- A personal dictionary for names and technical words, sent to the speech model as hints, plus replacement rules that run on every transcript. The model takes up to 100 words. When your list is longer, kotoba sends the words you star first, then the words you use most, and marks the words it did not send. Press ⌘F to search the list.
 - One-click import of your Wispr Flow dictionary, including the corrections Wispr learned.
-- Learns from your edits: when you fix a word right after a paste, kotoba adds it to your dictionary and shows it with Undo. Less certain fixes go to Suggestions. For apps it cannot read, such as terminals, use "Fix Last Dictation…".
+- Learns from your edits: when you fix a word right after a paste, kotoba adds it to your dictionary and shows it with Undo. Less certain fixes go to Suggestions. For apps it cannot read, such as terminals, use "Fix Last Dictation…" in the menu, or "Fix Dictation…" on any dictation in History. To add a word that kotoba got right, select it in that window and click "Add Selected Word".
 
 **Cleanup and per-app modes**
 
@@ -81,9 +81,10 @@ Two more numbers from the capture path (built-in mic, from the commit that moved
 **Never lose a dictation**
 
 - A failed dictation keeps its audio and retries by itself when the network returns. Results land in "Recovered Dictations" in the menu.
+- If kotoba stops during a recording (a crash or a force quit), it finds the audio at the next launch and transcribes it into "Recovered Dictations". Nothing is pasted.
 - History: every dictation by day, with search, Copy, Paste Again, Retry and Delete.
 - kotoba keeps audio for 1, 7 or 30 days or forever (7 by default for new installs); the text stays. Audio that was never transcribed is never deleted automatically.
-- "Paste Last Dictation" and "Copy Last Dictation" in the menu.
+- "Paste Last Dictation" and "Copy Last Dictation" in the menu. You can also set a shortcut for Paste Last Dictation in Settings > General. It has no default, so it never takes a shortcut from another app.
 
 **See what you dictate**
 
