@@ -116,7 +116,7 @@ export function sttVariants(dict: DictionaryEntry[]): SttVariant[] {
 }
 
 /** Listed OpenRouter price per audio second, used only for dry-run estimates (the probe measures the real rate). */
-const LISTED_USD_PER_SEC: Record<string, number> = {
+export const LISTED_USD_PER_SEC: Record<string, number> = {
 	[GROK]: 0.1 / 3600,
 	// The models API shows `0.1` with no unit; Microsoft's price is $0.10 per audio hour.
 	[MAI]: 0.1 / 3600,

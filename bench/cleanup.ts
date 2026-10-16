@@ -71,10 +71,14 @@ Can you open the auth.ts file and check why login fails when I pass --debug?`;
 /** Which of kotoba's mode prompts a cleanup run sends (`--prompt`). */
 export type CleanupPrompt = "code" | "writing";
 
+const WRITING_SUFFIX = "+writing";
+
 /** A Writing row has its own variant, so a report never mixes it with the Code rows of the same model. */
 export function variantKey(model: string, prompt: CleanupPrompt): string {
-	return prompt === "writing" ? `${model}+writing` : model;
+	return prompt === "writing" ? `${model}${WRITING_SUFFIX}` : model;
 }
+
+export const isWritingVariant = (key: string) => key.endsWith(WRITING_SUFFIX);
 
 /**
  * Where a Writing run's clips were dictated: the Writing apps of kotoba's `ModeRules.standard` (chat, mail, notes).

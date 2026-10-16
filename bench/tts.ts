@@ -1,12 +1,11 @@
-// TTS pass: each (text, voice) pair through OpenRouter's /audio/speech. The
-// PCM body streams to tts/<clip>.pcm, one raw JSONL row per HTTP attempt.
+// TTS pass for the synthetic benches (hinglish/, writing/): each (text, voice) pair through OpenRouter's
+// /audio/speech. The PCM body streams to tts/<clip>.pcm, one raw JSONL row per HTTP attempt.
 
 import { mkdir } from "node:fs/promises";
 import { join } from "node:path";
 import { $ } from "bun";
-import { type Clip, paths } from "../data.ts";
-import { API, type Budget, type CallSink, authHeaders, loggedCall, readJsonl, retryAfter, runCalls } from "../openrouter.ts";
-import { type BenchText, TEXTS } from "./texts.ts";
+import { type Clip, paths } from "./data.ts";
+import { API, type Budget, type CallSink, authHeaders, loggedCall, readJsonl, retryAfter, runCalls } from "./openrouter.ts";
 
 export const TTS_MODEL = "google/gemini-3.8-flash-lite-tts";
 /** Gemini prebuilt voices (OpenRouter `supported_voices`): two female, one male. */
@@ -20,47 +19,48 @@ const USD_PER_AUDIO_SEC = (25 * 6) / 1e6;
 const USD_PER_INPUT_TOKEN = 0.5 / 1e6;
 /** Planning guess for speech length before any audio exists. */
 const WORDS_PER_SEC = 2.5;
+/** TTS requests in flight, at most. */
+export const TTS_CONCURRENCY = 8;
 /** Gemini TTS PCM: 16-bit little-endian mono at 24 kHz (Gemini speech-generation docs). */
 const PCM_RATE = 24000;
 
-export type HinglishPaths = ReturnType<typeof hinglishPaths>;
+export type TtsPaths = ReturnType<typeof ttsPaths>;
 
-export function hinglishPaths(dataDir: string) {
+export function ttsPaths(dataDir: string) {
 	const p = paths(dataDir);
 	const ttsRaw = join(p.results, "tts-raw.jsonl");
 	return { ...p, ttsRaw, ttsDir: join(p.results, "tts"), rawFiles: [...p.rawFiles, ttsRaw] };
 }
 
-export type HinglishClip = Clip & { text: BenchText; voice: string };
+/** A clip the TTS speaks: `text.spoken` in `voice`, written to `wavPath`. */
+export type SpokenClip = Clip & { text: { spoken: string }; voice: string };
 
-/** Every text in every voice, as harness clips; the reference is the text's expected transcript. */
-export function hinglishClips(p: HinglishPaths): HinglishClip[] {
-	return TEXTS.flatMap((text) =>
-		VOICES.map((voice) => {
-			const id = `${text.id}-${voice.toLowerCase()}`;
-			return {
-				transcriptEntityId: id,
-				timestamp: null,
-				app: null,
-				url: null,
-				duration: null,
-				numWords: null,
-				e2eLatency: null,
-				clientNetworkLatency: null,
-				asrText: null,
-				formattedText: null,
-				editedText: text.reference,
-				pastedText: null,
-				id,
-				wavPath: join(p.clips, `${id}.wav`),
-				reference: text.reference,
-				refSource: "edited" as const,
-				refField: "editedText" as const,
-				text,
-				voice,
-			};
-		}),
-	);
+/** A harness clip for a synthetic text: no Wispr fields; the reference is the text's expected transcript. */
+export function spokenClip<T extends { spoken: string }>(
+	p: TtsPaths,
+	c: { id: string; app: string | null; reference: string; text: T; voice: string },
+): Clip & { text: T; voice: string } {
+	return {
+		transcriptEntityId: c.id,
+		timestamp: null,
+		app: c.app,
+		url: null,
+		duration: null,
+		numWords: null,
+		e2eLatency: null,
+		clientNetworkLatency: null,
+		asrText: null,
+		formattedText: null,
+		editedText: c.reference,
+		pastedText: null,
+		id: c.id,
+		wavPath: join(p.clips, `${c.id}.wav`),
+		reference: c.reference,
+		refSource: "edited",
+		refField: "editedText",
+		text: c.text,
+		voice: c.voice,
+	};
 }
 
 export type TtsRow = {
@@ -88,11 +88,18 @@ export type TtsRow = {
 
 const estimateUsd = (audioSec: number, chars: number) => audioSec * USD_PER_AUDIO_SEC + (chars / 3) * USD_PER_INPUT_TOKEN;
 
-export const plannedSec = (c: HinglishClip) => c.text.spoken.split(/\s+/).length / WORDS_PER_SEC;
-export const plannedUsd = (c: HinglishClip) => estimateUsd(plannedSec(c), c.text.spoken.length);
+export const plannedSec = (c: SpokenClip) => c.text.spoken.split(/\s+/).length / WORDS_PER_SEC;
+export const plannedUsd = (c: SpokenClip) => estimateUsd(plannedSec(c), c.text.spoken.length);
 
 async function durationSec(file: string): Promise<number> {
 	return Number((await $`ffprobe -v error -show_entries format=duration -of csv=p=0 ${file}`.text()).trim());
+}
+
+/** Fails unless the TTS model is listed by the free speech models endpoint. */
+export async function confirmTtsModel(): Promise<void> {
+	const res = await fetch(`${API}/models?output_modalities=speech`);
+	const ids = new Set(((await res.json()) as { data: { id: string }[] }).data.map((m) => m.id));
+	if (!ids.has(TTS_MODEL)) throw new Error(`TTS model not available on OpenRouter: ${TTS_MODEL}`);
 }
 
 /** Generation stats, polled: they show up a moment after the response (free GET). */
@@ -110,7 +117,7 @@ async function generationStats(id: string): Promise<{ cost: number | null; body:
 }
 
 /** `stats` polls /generation for the real cost (up to 21 s); off once the probe shows TTS generations are not listed there. */
-export async function synthesize(p: HinglishPaths, sink: CallSink, clip: HinglishClip, stats = true): Promise<TtsRow> {
+export async function synthesize(p: TtsPaths, sink: CallSink, clip: SpokenClip, stats = true): Promise<TtsRow> {
 	const pcm = join(p.ttsDir, `${clip.id}.pcm`);
 	const body = JSON.stringify({
 		model: TTS_MODEL,
@@ -182,7 +189,7 @@ export async function synthesize(p: HinglishPaths, sink: CallSink, clip: Hinglis
 }
 
 /** Clip ids with a successful TTS row and a WAV on disk. */
-export async function synthesized(p: HinglishPaths, clips: HinglishClip[]): Promise<Set<string>> {
+export async function synthesized(p: TtsPaths, clips: SpokenClip[]): Promise<Set<string>> {
 	const ok = new Set((await readJsonl<TtsRow>(p.ttsRaw)).filter((r) => r.ok).map((r) => r.clipId));
 	const done = new Set<string>();
 	for (const c of clips) if (ok.has(c.id) && (await Bun.file(c.wavPath).exists())) done.add(c.id);
@@ -194,8 +201,8 @@ export async function synthesized(p: HinglishPaths, clips: HinglishClip[]): Prom
  * clip runs alone; the rest start only when their projected cost fits the cap.
  */
 export async function runTts(
-	p: HinglishPaths,
-	clips: HinglishClip[],
+	p: TtsPaths,
+	clips: SpokenClip[],
 	budget: Budget,
 	concurrency: number,
 	dryRun: boolean,

@@ -1,6 +1,6 @@
 // Builds results/report.md from the raw JSONL files only.
 
-import { CLEANUP_MODELS, type CleanupRow, cleanupSets, writingClips } from "./cleanup.ts";
+import { CLEANUP_MODELS, type CleanupRow, cleanupSets, isWritingVariant, writingClips } from "./cleanup.ts";
 import {
 	type AudioInfo,
 	BENCH_SEED,
@@ -24,10 +24,10 @@ export function percentile(values: number[], p: number): number | null {
 	return sorted[Math.max(0, Math.ceil(p * sorted.length) - 1)]!;
 }
 
-const fmtMs = (v: number | null) => (v === null ? "-" : `${Math.round(v)}`);
+export const fmtMs = (v: number | null) => (v === null ? "-" : `${Math.round(v)}`);
 const fmtPct = (num: number, den: number) => (den ? `${((100 * num) / den).toFixed(1)}%` : "-");
-const fmtUsd = (v: number) => `$${v.toFixed(4)}`;
-const ist = (iso: string) =>
+export const fmtUsd = (v: number) => `$${v.toFixed(4)}`;
+export const ist = (iso: string) =>
 	new Date(iso).toLocaleString("en-GB", { timeZone: "Asia/Kolkata", dateStyle: "medium", timeStyle: "medium" });
 
 export function table(head: string[], rows: (string | number)[][]): string {
@@ -40,10 +40,10 @@ export function table(head: string[], rows: (string | number)[][]): string {
 }
 
 type ClipErrors = { errors: number; words: number };
-type Scored = { errors: number; words: number; hits: number; terms: number; n: number; perClip: ClipErrors[] };
+export type Scored = { errors: number; words: number; hits: number; terms: number; n: number; perClip: ClipErrors[] };
 
 /** Corpus WER and term recall of `hyp(clip)` over `clips`; clips without a hypothesis are left out and counted. */
-function score(clips: Clip[], hyp: (c: Clip) => string | null | undefined, terms: string[], ref = (c: Clip) => c.reference): Scored {
+export function score(clips: Clip[], hyp: (c: Clip) => string | null | undefined, terms: string[], ref = (c: Clip) => c.reference): Scored {
 	const s: Scored = { errors: 0, words: 0, hits: 0, terms: 0, n: 0, perClip: [] };
 	for (const c of clips) {
 		const h = hyp(c);
@@ -80,8 +80,8 @@ function werCi(perClip: ClipErrors[], rounds = 2000): [number, number] | null {
 	return lo === null || hi === null ? null : [lo, hi];
 }
 
-const werCell = (s: Scored, of: number) => `${fmtPct(s.errors, s.words)} (${s.n}/${of})`;
-const termCell = (s: Scored) => `${fmtPct(s.hits, s.terms)} (${s.hits}/${s.terms})`;
+export const werCell = (s: Scored, of: number) => `${fmtPct(s.errors, s.words)} (${s.n}/${of})`;
+export const termCell = (s: Scored) => `${fmtPct(s.hits, s.terms)} (${s.hits}/${s.terms})`;
 
 export async function writeReport(p: Paths, clips: Clip[], dict: DictionaryEntry[]): Promise<string> {
 	const terms = dictionaryTerms(dict);
@@ -228,29 +228,28 @@ export async function writeReport(p: Paths, clips: Clip[], dict: DictionaryEntry
 	const best = bestSttVariant(clips, ok);
 	const sources = [...new Set([...cleanupRows.map((r) => r.sttVariant), ...(best ? [best] : [])])];
 	const sets = cleanupSets(clips);
-	const isWriting = (key: string) => key.endsWith("+writing");
 	const writing = writingClips(clips);
 	const cleanupSetsShown = [
 		{
 			title: `edited subset (n=${sets.edited.length}, noisy), reference = editedText`,
 			set: sets.edited,
 			ref: (c: Clip) => c.reference,
-			shows: (key: string) => !isWriting(key),
+			shows: (key: string) => !isWritingVariant(key),
 		},
 		{
 			title: `seeded sample (n=${sets.sample.length}), reference = pastedText (proxy: matches Wispr's accepted output)`,
 			set: sets.sample,
 			ref: (c: Clip) => c.pastedText ?? "",
-			shows: (key: string) => !isWriting(key),
+			shows: (key: string) => !isWritingVariant(key),
 		},
 		// The Writing prompt's acceptance set (docs/research/per-app-modes.md, question 3); shown once it has rows.
-		...(cleanupRows.some((r) => isWriting(r.variant))
+		...(cleanupRows.some((r) => isWritingVariant(r.variant))
 			? [
 					{
 						title: `clips from Writing apps (n=${writing.length}), Writing prompt, reference = edited or pasted text`,
 						set: writing,
 						ref: (c: Clip) => c.reference,
-						shows: isWriting,
+						shows: isWritingVariant,
 					},
 				]
 			: []),

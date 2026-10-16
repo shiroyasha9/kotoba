@@ -3,6 +3,8 @@
 // them as Hindi), English words in Latin. `reference` is the expected
 // transcript: romanized Hinglish for set H, Devanagari for set D.
 
+import { type SpokenClip, type TtsPaths, VOICES, spokenClip } from "../tts.ts";
+
 export type TextSet = "hinglish" | "hindi";
 
 export type BenchText = { id: string; set: TextSet; spoken: string; reference: string };
@@ -202,3 +204,12 @@ export const TEXTS: BenchText[] = [
 		"यह फ़ैसला जल्दबाज़ी में नहीं लेना चाहिए। पहले सभी लोगों की राय सुनते हैं, फिर मिलकर तय करेंगे कि आगे क्या करना है।",
 	),
 ];
+
+export type HinglishClip = SpokenClip & { text: BenchText };
+
+/** Every text in every voice, as harness clips; the reference is the text's expected transcript. */
+export function hinglishClips(p: TtsPaths): HinglishClip[] {
+	return TEXTS.flatMap((text) =>
+		VOICES.map((voice) => spokenClip(p, { id: `${text.id}-${voice.toLowerCase()}`, app: null, reference: text.reference, text, voice })),
+	);
+}

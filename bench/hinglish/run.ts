@@ -5,10 +5,11 @@
 import { parseArgs } from "node:util";
 import { fail, intArg } from "../cli.ts";
 import { type AudioInfo, prepareAudio, seededSample } from "../data.ts";
-import { API, Budget, confirmModels, okRowsByVariant, readJsonl, runCalls, spentUsd } from "../openrouter.ts";
-import { GROK, MAI, type SttRow, runVariants, transcribe } from "../stt.ts";
+import { Budget, confirmModels, okRowsByVariant, readJsonl, runCalls, spentUsd } from "../openrouter.ts";
+import { GROK, LISTED_USD_PER_SEC, MAI, type SttRow, runVariants, transcribe } from "../stt.ts";
+import { TTS_CONCURRENCY, confirmTtsModel, plannedSec, runTts, synthesized, ttsPaths } from "../tts.ts";
 import { writeHinglishReport } from "./report.ts";
-import { type HinglishClip, TTS_MODEL, hinglishClips, hinglishPaths, plannedSec, runTts, synthesized } from "./tts.ts";
+import { type HinglishClip, hinglishClips } from "./texts.ts";
 import { LATENCY_CLIPS, VARIANTS } from "./variants.ts";
 
 /** Default cap on all spend recorded in this bench's raw files, across runs. `--cap` sets a per-run cap instead. */
@@ -16,9 +17,6 @@ const COST_CAP_USD = 1.5;
 const PASSES = ["tts", "stt", "latency", "report"] as const;
 type Pass = (typeof PASSES)[number];
 
-/** TTS requests in flight, at most. */
-const TTS_CONCURRENCY = 8;
-const LISTED_STT_USD_PER_SEC = 0.1 / 3600;
 
 const { values } = parseArgs({
 	args: Bun.argv.slice(2),
@@ -42,18 +40,11 @@ const dryRun = values["dry-run"];
 if (!values.data) fail("set KOTOBA_HINGLISH_DATA or pass --data DIR");
 const runs = (pass: Pass) => !only || only === pass;
 
-const p = hinglishPaths(values.data);
+const p = ttsPaths(values.data);
 const all = hinglishClips(p);
 const clips = limit ? all.slice(0, limit) : all;
 console.log(`data: ${p.dataDir}`);
 console.log(`clips: ${clips.length} of ${all.length} (${new Set(clips.map((c) => c.text.id)).size} texts)`);
-
-/** Fails unless the TTS model is listed by the free speech models endpoint. */
-async function confirmTtsModel(): Promise<void> {
-	const res = await fetch(`${API}/models?output_modalities=speech`);
-	const ids = new Set(((await res.json()) as { data: { id: string }[] }).data.map((m) => m.id));
-	if (!ids.has(TTS_MODEL)) throw new Error(`TTS model not available on OpenRouter: ${TTS_MODEL}`);
-}
 
 /** Sequential pass on seeded Hinglish clips, the variant order reversed on every other clip; rows go to latency-raw.jsonl. */
 async function runLatency(voiced: HinglishClip[], audio: Map<string, AudioInfo>, budget: Budget): Promise<void> {
@@ -104,7 +95,7 @@ if (only !== "report") {
 		const audioSec = sec * VARIANTS.length * (1 + LATENCY_CLIPS / clips.length);
 		console.log(
 			`\nSTT plan: ${VARIANTS.map((v) => v.key).join(", ")}; ${calls} calls, ~${(audioSec / 60).toFixed(0)} min audio, ` +
-				`~$${(audioSec * LISTED_STT_USD_PER_SEC).toFixed(3)} at listed price (accuracy pass + ${LATENCY_CLIPS}-clip latency pass)`,
+				`~$${(audioSec * LISTED_USD_PER_SEC[MAI]!).toFixed(3)} at listed price (accuracy pass + ${LATENCY_CLIPS}-clip latency pass)`,
 		);
 	} else if (!budget.exceeded && voiced.length && (runs("stt") || runs("latency"))) {
 		const audio = await prepareAudio(p, voiced);

@@ -13,8 +13,8 @@ import {
 	werDirect,
 	werRomanized,
 } from "./score.ts";
-import type { TextSet } from "./texts.ts";
-import { type HinglishClip, type HinglishPaths, TTS_MODEL, TTS_STYLE, type TtsRow, VOICES } from "./tts.ts";
+import { TTS_MODEL, TTS_STYLE, type TtsPaths, type TtsRow, VOICES } from "../tts.ts";
+import type { HinglishClip, TextSet } from "./texts.ts";
 import { LATENCY_CLIPS, VARIANTS } from "./variants.ts";
 
 const pct = (v: number | null) => (v === null ? "-" : `${(100 * v).toFixed(1)}%`);
@@ -27,7 +27,7 @@ const SET_NAMES: Record<TextSet, string> = {
 	hindi: "Set D: Hindi (Devanagari reference)",
 };
 
-export async function writeHinglishReport(p: HinglishPaths, clips: HinglishClip[]): Promise<string> {
+export async function writeHinglishReport(p: TtsPaths, clips: HinglishClip[]): Promise<string> {
 	const [ttsRows, sttRows, latRows] = await Promise.all([
 		readJsonl<TtsRow>(p.ttsRaw),
 		readJsonl<SttRow>(p.sttRaw),
