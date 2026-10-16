@@ -13,7 +13,7 @@ final class IndicatorPanel {
 
     /// Called when the owner clicks the pill's button.
     var onAction: ((PillAction) -> Void)?
-    /// A click on the recording pill, or on the idle pill with "Always" (`IndicatorPlacement.isClickATap`): AppDelegate
+    /// A click on the recording pill, or on the idle pill with "Always" (`IndicatorPlacement.click`): AppDelegate
     /// sends it as a chord tap.
     var onTap: (() -> Void)?
     /// The pointer held (true) or released (false) the Undo pill. The pipeline owns the Undo window, so

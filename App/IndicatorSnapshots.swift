@@ -28,7 +28,9 @@ extension IndicatorPanel {
         var snapshots = [
             Snapshot(name: "indicator-drag") { PillStandIn(content: .init(), anchor: nil) },
             Snapshot(name: "indicator-idle-bottomCenter") {
-                PillStandIn(content: .idle(isClickable: true), anchor: .bottomCenter)
+                PillStandIn(content: .idle(click: .startsDictation), anchor: .bottomCenter)
+            } check: { view in
+                (view as? PillStandIn).flatMap { accessibilityProblem(of: $0.pill, content: $0.pill.content) }
             },
         ]
         var contents = samples.flatMap(snapshotRows).compactMap { row in
@@ -45,12 +47,41 @@ extension IndicatorPanel {
                     Snapshot(name: "indicator-\(name)-\(anchor.rawValue)") {
                         PillStandIn(content: content, anchor: anchor, level: level)
                     } check: { view in
-                        (view as? PillStandIn)?.pill.isTextTruncated == true
-                            ? "the pill text \"\(content.text)\" is cut off" : nil
+                        guard let pill = (view as? PillStandIn)?.pill else { return nil }
+                        if pill.isTextTruncated { return "the pill text \"\(content.text)\" is cut off" }
+                        return accessibilityProblem(of: pill, content: content)
                     })
             }
         }
         return snapshots
+    }
+
+    /// What VoiceOver gets from the pill, or nil when it is right: the pill's click as one button with its label, and
+    /// the action's button beside it, not inside; a press on each runs the same path as a click.
+    private static func accessibilityProblem(of pill: IndicatorPillView, content: IndicatorPillView.Content) -> String?
+    {
+        let children = pill.accessibilityChildren() ?? []
+        let buttons = children.compactMap { $0 as? NSAccessibilityProtocol }.filter {
+            $0.accessibilityRole() == .button
+        }
+        let label = content.click.map(StatusText.pillClickLabel)
+        let taps = buttons.filter { !($0 is NSView) }
+        guard taps.map({ $0.accessibilityLabel() }) == (label.map { [$0] } ?? []) else {
+            return "VoiceOver gets \(taps.count) click buttons, not one \"\(label ?? "none")\""
+        }
+        var clicks = 0
+        pill.onClick = { clicks += 1 }
+        if let tap = taps.first, !tap.accessibilityPerformPress() || clicks != 1 {
+            return "a VoiceOver press on \"\(label ?? "")\" does not click the pill"
+        }
+        guard let action = content.action, pill.layout == .horizontal else { return nil }
+        guard let button = buttons.first(where: { $0 is NSView && $0.accessibilityLabel() == action.title }) else {
+            return "VoiceOver gets no \"\(action.title)\" button beside the pill's click"
+        }
+        var pressed: PillAction?
+        pill.onAction = { pressed = $0 }
+        return button.accessibilityPerformPress() && pressed == action
+            ? nil : "a VoiceOver press on \"\(action.title)\" does not run its action"
     }
 
     /// A long built-in mic name, the widest "No sound" text.

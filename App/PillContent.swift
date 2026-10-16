@@ -31,11 +31,9 @@ extension PillNotice {
 
 extension IndicatorPillView.Content {
     /// The small round pill at idle with "Show indicator: Always". A click on it starts a dictation; where it does not
-    /// (`IndicatorPlacement.isClickATap`), a development build gives way to the release app and the help tag says why.
-    static func idle(isClickable: Bool) -> Self {
-        Self(
-            toolTip: isClickable ? StatusText.idlePillHelp : StatusText.yieldsToRelease, isRound: true,
-            isClickable: isClickable)
+    /// (`IndicatorPlacement.click`), a development build gives way to the release app and the help tag says why.
+    static func idle(click: PillClick?) -> Self {
+        Self(toolTip: click == nil ? StatusText.yieldsToRelease : StatusText.idlePillHelp, isRound: true, click: click)
     }
 
     init(_ notice: PillNotice, color: NSColor = .controlAccentColor) {
@@ -58,11 +56,11 @@ extension IndicatorPanel {
         let text = state.statusText(context) ?? ""
         let action = state.pillAction(context)
         let isAlways = visibility == .always
-        let isClickable = IndicatorPlacement.isClickATap(
+        let click = IndicatorPlacement.click(
             in: state, showsIdlePill: isAlways, isYielding: context.isYielding)
         switch state {
         case .idle:
-            return isAlways ? .idle(isClickable: isClickable) : nil
+            return isAlways ? .idle(click: click) : nil
         case .recording(let isLong, let isSilent, let isCleaned):
             // Only a plain "Listening" pill stands vertical at an edge; the others carry more words.
             let isPlain = !isLong && !isSilent && !context.isSecureInputOn
@@ -79,7 +77,7 @@ extension IndicatorPanel {
             // No sound is a warning with its fix on the button; it clears when sound arrives, so no timer.
             return .init(
                 text: text, color: isSilent ? .systemOrange : .systemRed, symbol: isCleaned ? cleanupSymbol : nil,
-                toolTip: toolTip, showsMeter: true, isCompact: isPlain, isClickable: isClickable, action: action)
+                toolTip: toolTip, showsMeter: true, isCompact: isPlain, click: click, action: action)
         case .transcribing:
             return .init(text: text, color: .systemBlue, showsSpinner: true, isCompact: true)
         case .cleaning:

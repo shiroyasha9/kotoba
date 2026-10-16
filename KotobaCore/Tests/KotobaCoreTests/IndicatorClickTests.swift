@@ -7,7 +7,7 @@ struct IndicatorClickTests {
     struct Row: Sendable, CustomTestStringConvertible {
         let state: DictationState
         let showsIdlePill: Bool
-        let isTap: Bool
+        let click: PillClick?
 
         var testDescription: String { "\(state), idle pill: \(showsIdlePill)" }
     }
@@ -15,30 +15,32 @@ struct IndicatorClickTests {
     static let id = DictationID()
 
     static let rows: [Row] = [
-        Row(state: .recording(isLong: false), showsIdlePill: false, isTap: true),
-        Row(state: .recording(isLong: false), showsIdlePill: true, isTap: true),
-        Row(state: .recording(isLong: true), showsIdlePill: false, isTap: true),
-        Row(state: .recording(isLong: false, isSilent: true), showsIdlePill: false, isTap: true),
-        Row(state: .idle, showsIdlePill: true, isTap: true),
-        Row(state: .idle, showsIdlePill: false, isTap: false),
-        Row(state: .transcribing, showsIdlePill: true, isTap: false),
-        Row(state: .undoable, showsIdlePill: true, isTap: false),
-        Row(state: .failed(id), showsIdlePill: true, isTap: false),
-        Row(state: .copied(id), showsIdlePill: false, isTap: false),
+        Row(state: .recording(isLong: false), showsIdlePill: false, click: .stopsDictation),
+        Row(state: .recording(isLong: false), showsIdlePill: true, click: .stopsDictation),
+        Row(state: .recording(isLong: true), showsIdlePill: false, click: .stopsDictation),
+        Row(state: .recording(isLong: false, isSilent: true), showsIdlePill: false, click: .stopsDictation),
+        Row(state: .idle, showsIdlePill: true, click: .startsDictation),
+        Row(state: .idle, showsIdlePill: false, click: nil),
+        Row(state: .transcribing, showsIdlePill: true, click: nil),
+        Row(state: .undoable, showsIdlePill: true, click: nil),
+        Row(state: .failed(id), showsIdlePill: true, click: nil),
+        Row(state: .copied(id), showsIdlePill: false, click: nil),
     ]
 
+    /// The recording pill's click stops the dictation and the idle pill's starts one; VoiceOver's press says which.
     @Test(arguments: rows)
     func aClickIsATapOnlyOnTheRecordingAndIdlePills(_ row: Row) {
         #expect(
-            IndicatorPlacement.isClickATap(in: row.state, showsIdlePill: row.showsIdlePill, isYielding: false)
-                == row.isTap)
+            IndicatorPlacement.click(in: row.state, showsIdlePill: row.showsIdlePill, isYielding: false) == row.click)
     }
 
     /// A development build that gives way to the release app starts nothing from its idle pill, but a click still stops
     /// its own recording.
     @Test func whileYieldingOnlyARecordingPillIsATap() {
-        #expect(!IndicatorPlacement.isClickATap(in: .idle, showsIdlePill: true, isYielding: true))
-        #expect(IndicatorPlacement.isClickATap(in: .recording(isLong: false), showsIdlePill: true, isYielding: true))
+        #expect(IndicatorPlacement.click(in: .idle, showsIdlePill: true, isYielding: true) == nil)
+        #expect(
+            IndicatorPlacement.click(in: .recording(isLong: false), showsIdlePill: true, isYielding: true)
+                == .stopsDictation)
     }
 
     /// The click's events are the chord tap's: down and up at one instant. The first starts a dictation, the second

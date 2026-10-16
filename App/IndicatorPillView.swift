@@ -41,8 +41,8 @@ final class IndicatorPillView: NSView {
         var isCompact = false
         /// The small round idle pill.
         var isRound = false
-        /// A click on the pill (not its button) is a chord tap.
-        var isClickable = false
+        /// What a click on the pill (not its button) does, as a chord tap; nil: nothing.
+        var click: PillClick?
         var action: PillAction?
         var timer: PillTimer?
     }
@@ -69,10 +69,14 @@ final class IndicatorPillView: NSView {
             }
             // Interactive glass answers the pointer, so a clickable pill looks like one.
             if #available(macOS 27, *) {
-                glass.effectIsInteractive = content.isClickable
+                glass.effectIsInteractive = content.click != nil
             }
             updateColors()
             applyLayout()
+            // The click button comes and goes with the state; VoiceOver reads the pill's children again.
+            if content.click != oldValue.click {
+                NSAccessibility.post(element: self, notification: .layoutChanged)
+            }
         }
     }
     var layout = Layout.horizontal {
@@ -99,6 +103,7 @@ final class IndicatorPillView: NSView {
     private let symbolView = NSImageView()
     private let label = NSTextField(labelWithString: "")
     private let actionButton = FirstClickHostingView(rootView: PillButton())
+    private lazy var tapElement = PillTapElement(pill: self)
     private let spinner = NSProgressIndicator()
     private let roundIcon = NSImageView()
     private var pressStart: NSPoint?
@@ -107,6 +112,9 @@ final class IndicatorPillView: NSView {
     override init(frame: NSRect) {
         super.init(frame: frame)
         dot.symbolConfiguration = .init(pointSize: 10, weight: .regular)
+        // The text says the state; VoiceOver would read the dot as "Circle" and the symbol by its name.
+        dot.setAccessibilityElement(false)
+        symbolView.setAccessibilityElement(false)
         symbolView.symbolConfiguration = .init(textStyle: .body)
         label.font = .systemFont(ofSize: NSFont.systemFontSize, weight: .medium)
         label.textColor = .labelColor
@@ -207,30 +215,14 @@ final class IndicatorPillView: NSView {
 
     // MARK: Accessibility
 
-    /// The round idle pill that a click starts a dictation from: VoiceOver reads it as one button, its waveform part of
-    /// it. Other pills are no element, so VoiceOver reads their text and button directly.
-    private var isIdleButton: Bool { content.isRound && content.isClickable }
-
-    override func isAccessibilityElement() -> Bool {
-        isIdleButton
-    }
-
-    override func accessibilityRole() -> NSAccessibility.Role? {
-        isIdleButton ? .button : super.accessibilityRole()
-    }
-
-    override func accessibilityLabel() -> String? {
-        isIdleButton ? StatusText.idlePillLabel : super.accessibilityLabel()
-    }
-
+    /// The pill's click for VoiceOver: a button beside the pill's text and its action button, never around them, so
+    /// "Choose Mic…" stays its own button with its own press. The waveform of the round idle pill is then left out: the
+    /// button says what it does.
     override func accessibilityChildren() -> [Any]? {
-        isIdleButton ? [] : super.accessibilityChildren()
-    }
-
-    override func accessibilityPerformPress() -> Bool {
-        guard isIdleButton else { return false }
-        onClick?()
-        return true
+        let children = super.accessibilityChildren() ?? []
+        guard let click = content.click else { return children }
+        tapElement.setAccessibilityLabel(StatusText.pillClickLabel(click))
+        return [tapElement] + children.filter { $0 as AnyObject !== roundIcon && $0 as AnyObject !== roundIcon.cell }
     }
 
     // MARK: Mouse
@@ -285,40 +277,10 @@ final class IndicatorPillView: NSView {
     override func mouseUp(with event: NSEvent) {
         if isDragging {
             onDragEnded?(NSEvent.mouseLocation)
-        } else if pressStart != nil, content.isClickable {
+        } else if pressStart != nil, content.click != nil {
             onClick?()
         }
         pressStart = nil
         isDragging = false
-    }
-}
-
-/// The pill's action button. The pill's panel never becomes key, and AppKit draws a `.glass` button's title
-/// dimmed in a window that is not key, too faint to read on the dark pill; SwiftUI's `controlActiveState`
-/// draws it as in the key window.
-private struct PillButton: View {
-    var title = ""
-    var onClick: () -> Void = {}
-    @Environment(\.colorScheme) private var colorScheme
-
-    var body: some View {
-        let button = Button(title, action: onClick)
-            .buttonStyle(.glass)
-            .controlSize(.small)
-            .environment(\.controlActiveState, .key)
-        // Offscreen the window server's glass treatment is missing, so in dark the title draws near black; on
-        // screen it draws in the label color, which the dark snapshot takes instead. Light draws right as is.
-        if Snapshots.isRunning, colorScheme == .dark {
-            button.foregroundStyle(Color(nsColor: .labelColor))
-        } else {
-            button
-        }
-    }
-}
-
-/// Acts on the first click in a window that is not key, so a pill action works without activating kotoba.
-private final class FirstClickHostingView: NSHostingView<PillButton> {
-    override func acceptsFirstMouse(for event: NSEvent?) -> Bool {
-        true
     }
 }

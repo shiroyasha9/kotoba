@@ -8,6 +8,12 @@ public enum IndicatorAnchor: String, CaseIterable, Sendable {
     case right
 }
 
+/// What a click on the indicator pill does: the chord tap it stands for.
+public enum PillClick: Sendable, Equatable {
+    case startsDictation
+    case stopsDictation
+}
+
 /// A point in AppKit screen coordinates (origin bottom left). KotobaCore cannot import
 /// CoreGraphics, so the app converts to and from `NSPoint`.
 public struct ScreenPoint: Sendable, Equatable {
@@ -122,14 +128,14 @@ public enum IndicatorPlacement {
         return IndicatorAnchor.allCases.min { distance(to: $0) < distance(to: $1) } ?? .bottomCenter
     }
 
-    /// A click on the pill (not its button) is a chord tap: it stops a recording, and with "Show indicator: Always" it
-    /// starts one from the idle pill, unless a development build gives way to the release app (`InstallYield`).
-    /// Elsewhere it does nothing.
-    public static func isClickATap(in state: DictationState, showsIdlePill: Bool, isYielding: Bool) -> Bool {
+    /// What a click on the pill (not its button) does, as a chord tap: it stops a recording, and with "Show indicator:
+    /// Always" it starts one from the idle pill, unless a development build gives way to the release app
+    /// (`InstallYield`). Nil elsewhere: the click does nothing. VoiceOver names the pill's press after it.
+    public static func click(in state: DictationState, showsIdlePill: Bool, isYielding: Bool) -> PillClick? {
         switch state {
-        case .recording: true
-        case .idle: showsIdlePill && !isYielding
-        default: false
+        case .recording: .stopsDictation
+        case .idle: showsIdlePill && !isYielding ? .startsDictation : nil
+        default: nil
         }
     }
 
