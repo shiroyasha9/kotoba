@@ -385,7 +385,7 @@ Rows from each agent's phase 2.5 work. The numbers continue the list above.
 | 275 | AirPods as the system default input, no mic in your order; play a video, then dictate | kotoba records from the built-in mic; the video audio does not drop to call quality | |
 | 276 | Unplug or turn off the mic in use during a recording | The recording goes on with the next mic (your order, then the system default); no crash | |
 
-### History (phase 3; a pane of the main window since 0.2.2)
+### History (phase 3; a pane of the main window since 0.3.0)
 
 | # | Do this | Expect | Result |
 |---|---|---|---|
@@ -604,7 +604,7 @@ The offscreen snapshots (`make snapshots`) show two things that may not happen i
 | 446 | With Paste Last on ⌃⌘V, record right ⌘ for “Dictate” | Refused: “⌃⌘V includes right ⌘, so it would start a dictation.” Dictate keeps its shortcut | |
 | 447 | Click the ⓧ next to ⌃⌘V; quit and reopen kotoba Dev | It shows **Off** after the restart; ⌃⌘V reaches the app again | |
 
-## Main window (0.2.2)
+## Main window (0.3.0)
 
 One window for Home, History, Insights, Usage and the settings. Rows 470-479 use kotoba Dev with the release kotoba quit.
 

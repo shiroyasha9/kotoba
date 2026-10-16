@@ -45,15 +45,12 @@ struct HistoryView: View {
 
     @ViewBuilder private var content: some View {
         if let error = model.loadError {
-            ContentUnavailableView(
-                "History Unavailable", systemImage: "exclamationmark.triangle", description: Text(error))
+            EmptyState("History Unavailable", systemImage: "exclamationmark.triangle", description: error)
         } else if model.rows.isEmpty, model.isLoaded {
             if model.search.isEmpty {
-                ContentUnavailableView(
-                    "No Dictations Yet", systemImage: "waveform",
-                    description: Text("Tap \(StatusText.dictationChord) to dictate. Each dictation appears here."))
+                EmptyState.noDictations(chord: HotkeyChords.shared.dictation)
             } else {
-                ContentUnavailableView.search(text: model.search)
+                NoSearchResults(search: model.search)
             }
         } else {
             list
@@ -66,7 +63,7 @@ struct HistoryView: View {
                 Section(day.title) {
                     ForEach(day.rows) { record in
                         HistoryRow(
-                            record: record, icon: model.icon(for: record.app),
+                            record: record, icon: model.apps.icon(of: record.app),
                             isRetryable: model.retryable.contains(record.id),
                             isSending: model.activity.inFlight.contains(record.id))
                     }

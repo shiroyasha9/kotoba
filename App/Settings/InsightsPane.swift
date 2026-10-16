@@ -14,10 +14,9 @@ extension Pane {
 }
 
 /// How the owner dictates: speaking speed, streak, time saved, words, learned words and top apps. Built with each
-/// main window; it reads the usage ledger and the dictionary when the pane appears, and while it is shown after
-/// each write to either and when the day changes, so nothing runs at idle.
+/// main window; it reads the usage ledger and the dictionary while the pane is shown (`PaneReader`): when it appears,
+/// after each write to either and when the day changes, so nothing runs at idle.
 @MainActor
-@Observable
 final class InsightsModel {
     struct Figures: Equatable {
         var history: DictationInsights
@@ -28,91 +27,22 @@ final class InsightsModel {
     /// The typing speed "Time saved" compares with, in words per minute.
     static let typingSpeed = 40
 
-    private(set) var figures: Figures?
-    private(set) var isLoadFailed = false
-    /// Each top app's name and icon by bundle ID, looked up once for the model's life, not at each read or draw.
-    private(set) var names: [String: String] = [:]
-    private(set) var icons: [String: NSImage] = [:]
+    let reader: PaneReader<Figures>
+    let apps = InstalledApps()
 
-    /// The figures at a date. Nil for snapshots, which set the figures themselves.
-    @ObservationIgnored private let read: (@MainActor (_ now: Date) async throws -> Figures)?
-    /// The read in progress; a write during it asks for one more read after it, so a burst of writes costs at most two
-    /// reads.
-    @ObservationIgnored private var reading: Task<Void, Never>?
-    @ObservationIgnored private var isReadDue = false
-    @ObservationIgnored private var isShown = false
-
+    /// `read` gives the figures at a date.
     init(read: @escaping @MainActor (_ now: Date) async throws -> Figures) {
-        self.read = read
+        reader = PaneReader("insights") { try await read(.now) }
     }
 
     /// For snapshots: fixed figures and no store.
     init(figures: Figures) {
-        read = nil
-        self.figures = figures
-        readApps()
+        reader = PaneReader(value: figures)
     }
 
-    /// The pane appeared, or the owner asked to try again.
-    func show() {
-        isShown = true
-        reload()
-    }
-
-    func hide() {
-        isShown = false
-        reading?.cancel()
-        reading = nil
-    }
-
-    /// The ledger or the dictionary was written, or the day changed: a shown pane reads again; a hidden one reads when
-    /// it appears.
+    /// The ledger or the dictionary was written: a shown pane reads again.
     func storeChanged() {
-        guard isShown else { return }
-        reload()
-    }
-
-    private func reload() {
-        guard let read else { return }
-        guard reading == nil else {
-            isReadDue = true
-            return
-        }
-        reading = Task {
-            repeat {
-                isReadDue = false
-                do {
-                    let loaded = try await read(.now)
-                    // `hide()` cancelled it; a newer read may already be running.
-                    guard !Task.isCancelled else { return }
-                    isLoadFailed = false
-                    // Most writes change no figure (a dictation's first save has no answer yet): no redraw then.
-                    guard loaded != figures else { continue }
-                    figures = loaded
-                    readApps()
-                } catch {
-                    guard !Task.isCancelled else { return }
-                    Log.app.error("Cannot read insights: \(error)")
-                    isLoadFailed = true
-                }
-            } while isReadDue && !Task.isCancelled
-            // A cancelled read was already replaced by `hide()`, maybe by a newer one: leave that handle alone.
-            if !Task.isCancelled { reading = nil }
-        }
-    }
-
-    /// A row keeps the app's name from its newest dictation; an app kept without one gets its installed name.
-    private func readApps() {
-        for app in figures?.history.apps.map(\.app) ?? [] {
-            if let name = app.name, names[app.bundleID] != name {
-                names[app.bundleID] = name
-            } else if app.name == nil, names[app.bundleID] == nil {
-                names[app.bundleID] = InstalledApp.name(of: app.bundleID) ?? "Unknown app"
-            }
-            if icons[app.bundleID] == nil {
-                icons[app.bundleID] = InstalledApp.icon(of: app.bundleID)
-            }
-        }
+        reader.changed()
     }
 }
 
@@ -120,43 +50,29 @@ private struct InsightsPane: View {
     let model: InsightsModel
 
     var body: some View {
-        Form {
-            Section {
-                PaneHeader(pane: .insights)
-            }
-            if model.isLoadFailed {
-                Section {
-                    LabeledContent {
-                        Button("Try Again", action: model.show)
-                    } label: {
-                        Text("Couldn’t read your dictation history.")
-                    }
-                }
-            } else if let figures = model.figures {
+        Group {
+            if model.reader.isLoadFailed {
+                EmptyState.loadFailed(retry: model.reader.show)
+            } else if let figures = model.reader.value {
                 if figures.history.dictations == 0 {
-                    Section {
-                        ContentUnavailableView(
-                            "No Insights Yet", systemImage: "chart.line.uptrend.xyaxis",
-                            description: Text(
-                                "Your speaking speed, streak and top apps appear here after your first dictation."))
-                    }
+                    EmptyState(
+                        "No Insights Yet", systemImage: "chart.line.uptrend.xyaxis",
+                        description: "Your speaking speed, streak and top apps appear here after your first dictation.")
                 } else {
-                    highlights(figures.history)
-                    words(figures.history)
-                    learned(figures.learned)
-                    apps(figures.history)
+                    Form {
+                        highlights(figures.history)
+                        words(figures.history)
+                        learned(figures.learned)
+                        apps(figures.history)
+                    }
+                    .formStyle(.grouped)
                 }
+            } else {
+                // Before the first read: a view that appears, so the read starts.
+                Color.clear
             }
         }
-        .formStyle(.grouped)
-        .onAppear(perform: model.show)
-        .onDisappear(perform: model.hide)
-        // Today, the streak and the chart move at midnight; the task ends when the pane goes.
-        .task {
-            for await _ in NotificationCenter.default.notifications(named: .NSCalendarDayChanged) {
-                model.storeChanged()
-            }
-        }
+        .reads(through: model.reader)
     }
 
     private func highlights(_ insights: DictationInsights) -> some View {
@@ -223,19 +139,7 @@ private struct InsightsPane: View {
         if !insights.apps.isEmpty {
             Section("Top Apps") {
                 ForEach(insights.apps, id: \.app.bundleID) { row in
-                    LabeledContent {
-                        Text(StatusText.counted(row.words, "word"))
-                    } label: {
-                        Label {
-                            Text(model.names[row.app.bundleID] ?? "Unknown app")
-                        } icon: {
-                            if let icon = model.icons[row.app.bundleID] {
-                                Image(nsImage: icon).resizable().frame(width: 20, height: 20)
-                            } else {
-                                Image(systemName: "app.dashed")
-                            }
-                        }
-                    }
+                    AppWordsRow(row: row, apps: model.apps)
                 }
             }
         }

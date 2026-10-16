@@ -13,8 +13,8 @@ extension Pane {
     }
 }
 
-/// How much the owner dictates and what it costs, this month and in the last 30 days. Built with each Settings
-/// window; it reads the usage ledger when the pane appears and after each history write while it is shown (three
+/// How much the owner dictates and what it costs, this month and in the last 30 days. Built with each main window;
+/// it reads the usage ledger while the pane is shown (`PaneReader`: when it appears and after each history write; three
 /// SQLite statements per period), so nothing runs at idle.
 @MainActor
 @Observable
@@ -39,98 +39,31 @@ final class UsageModel {
     }
 
     var period = Period.thisMonth
-    private(set) var summaries: [Period: UsageSummary] = [:]
-    private(set) var isLoadFailed = false
-    /// Each top app's name and icon by bundle ID, read once per load, not at each draw.
-    private(set) var names: [String: String] = [:]
-    private(set) var icons: [String: NSImage] = [:]
+    @ObservationIgnored let reader: PaneReader<[Period: UsageSummary]>
+    @ObservationIgnored let apps = InstalledApps()
 
-    /// The answers from `start` on. Nil for snapshots, which set the summaries themselves.
-    @ObservationIgnored private let read: (@MainActor (_ start: Date) async throws -> UsageSummary)?
-    /// The read in progress; a history write during it asks for one more read after it, so a burst of writes costs
-    /// at most two reads.
-    @ObservationIgnored private var reading: Task<Void, Never>?
-    @ObservationIgnored private var isReadDue = false
-    @ObservationIgnored private var isShown = false
-
+    /// `read` gives the answers from a date on.
     init(read: @escaping @MainActor (_ start: Date) async throws -> UsageSummary) {
-        self.read = read
+        reader = PaneReader("usage") {
+            let now = Date.now
+            var loaded: [Period: UsageSummary] = [:]
+            for period in Period.allCases {
+                loaded[period] = try await read(period.start(at: now))
+            }
+            return loaded
+        }
     }
 
     /// For snapshots: fixed summaries and no store.
     init(summaries: [Period: UsageSummary]) {
-        read = nil
-        self.summaries = summaries
-        readApps()
+        reader = PaneReader(value: summaries)
     }
 
-    var summary: UsageSummary? { summaries[period] }
+    var summary: UsageSummary? { reader.value?[period] }
 
-    /// The pane appeared, or the owner asked to try again.
-    func show() {
-        isShown = true
-        reload()
-    }
-
-    func hide() {
-        isShown = false
-        reading?.cancel()
-        reading = nil
-    }
-
-    /// A dictation was saved or deleted: a shown pane reads again; a hidden one reads when it appears.
+    /// A dictation was saved or deleted: a shown pane reads again.
     func historyChanged() {
-        guard isShown else { return }
-        reload()
-    }
-
-    private func reload() {
-        guard read != nil else { return }
-        guard reading == nil else {
-            isReadDue = true
-            return
-        }
-        reading = Task {
-            repeat {
-                isReadDue = false
-                await load()
-            } while isReadDue && !Task.isCancelled
-            // A cancelled read was already replaced by `hide()`, maybe by a newer one: leave that handle alone.
-            if !Task.isCancelled { reading = nil }
-        }
-    }
-
-    private func load() async {
-        guard let read else { return }
-        let now = Date.now
-        var loaded: [Period: UsageSummary] = [:]
-        do {
-            for period in Period.allCases {
-                loaded[period] = try await read(period.start(at: now))
-            }
-        } catch {
-            guard !Task.isCancelled else { return }
-            Log.app.error("Cannot read usage: \(error)")
-            isLoadFailed = true
-            return
-        }
-        // `hide()` cancelled it; a newer read may already be running.
-        guard !Task.isCancelled else { return }
-        isLoadFailed = false
-        summaries = loaded
-        readApps()
-    }
-
-    /// A row keeps the app's name from its newest dictation; an app kept without one gets its installed name.
-    private func readApps() {
-        var names: [String: String] = [:]
-        var icons: [String: NSImage] = [:]
-        for app in summaries.values.flatMap(\.apps).map(\.app) where names[app.bundleID] == nil {
-            names[app.bundleID] = app.name ?? InstalledApp.name(of: app.bundleID) ?? "Unknown app"
-            icons[app.bundleID] = InstalledApp.icon(of: app.bundleID)
-        }
-        self.names = names
-        self.icons = icons
+        reader.changed()
     }
 }
 
@@ -138,46 +71,36 @@ private struct UsagePane: View {
     @Bindable var model: UsageModel
 
     var body: some View {
-        Form {
-            Section {
-                PaneHeader(pane: .usage)
+        VStack(spacing: 0) {
+            // Centered above the numbers, as the period switch in System Settings > Battery.
+            Picker("Period", selection: $model.period) {
+                ForEach(UsageModel.Period.allCases, id: \.self) { Text($0.title).tag($0) }
             }
-            Section {
-            } header: {
-                // Centered above the numbers, as the period switch in System Settings > Battery.
-                Picker("Period", selection: $model.period) {
-                    ForEach(UsageModel.Period.allCases, id: \.self) { Text($0.title).tag($0) }
-                }
-                .pickerStyle(.segmented)
-                .labelsHidden()
-                .fixedSize()
-                .frame(maxWidth: .infinity)
-            }
-            if model.isLoadFailed {
-                Section {
-                    LabeledContent {
-                        Button("Try Again", action: model.show)
-                    } label: {
-                        Text("Couldn’t read your dictation history.")
-                    }
-                }
+            .pickerStyle(.segmented)
+            .labelsHidden()
+            .fixedSize()
+            .padding(.top, 20)
+            if model.reader.isLoadFailed {
+                EmptyState.loadFailed(retry: model.reader.show)
             } else if let summary = model.summary {
                 if summary.dictations == 0 && summary.cost == 0 {
-                    Section {
-                        ContentUnavailableView(
-                            Self.emptyTitle(model.period), systemImage: "chart.bar",
-                            description: Text("Your words, audio and spend appear here after you dictate."))
-                    }
+                    EmptyState(
+                        Self.emptyTitle(model.period), systemImage: "chart.bar",
+                        description: "Your words, audio and spend appear here after you dictate.")
                 } else {
-                    totals(summary)
-                    models(summary)
-                    apps(summary)
+                    Form {
+                        totals(summary)
+                        models(summary)
+                        apps(summary)
+                    }
+                    .formStyle(.grouped)
                 }
+            } else {
+                // Before the first read.
+                Spacer()
             }
         }
-        .formStyle(.grouped)
-        .onAppear(perform: model.show)
-        .onDisappear(perform: model.hide)
+        .reads(through: model.reader)
     }
 
     private func totals(_ summary: UsageSummary) -> some View {
@@ -229,19 +152,7 @@ private struct UsagePane: View {
         if !summary.apps.isEmpty {
             Section("Top Apps") {
                 ForEach(summary.apps, id: \.app.bundleID) { row in
-                    LabeledContent {
-                        Text(StatusText.counted(row.words, "word"))
-                    } label: {
-                        Label {
-                            Text(model.names[row.app.bundleID] ?? "Unknown app")
-                        } icon: {
-                            if let icon = model.icons[row.app.bundleID] {
-                                Image(nsImage: icon).resizable().frame(width: 20, height: 20)
-                            } else {
-                                Image(systemName: "app.dashed")
-                            }
-                        }
-                    }
+                    AppWordsRow(row: row, apps: model.apps)
                 }
             }
         }

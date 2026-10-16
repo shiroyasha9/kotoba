@@ -162,9 +162,6 @@ private struct GeneralPane: View {
 
     var body: some View {
         Form {
-            Section {
-                PaneHeader(pane: .general)
-            }
             Section("Shortcuts") {
                 LabeledContent {
                     ChordRecorder(chords: model.chords, role: .dictation)

@@ -24,15 +24,11 @@ private struct HomePane: View {
                 hero
                 status
             }
-            if model.isLoadFailed {
+            if model.reader.isLoadFailed {
                 Section {
-                    LabeledContent {
-                        Button("Try Again", action: model.show)
-                    } label: {
-                        Text("Couldn’t read your dictation history.")
-                    }
+                    EmptyState.loadFailed(retry: model.reader.show)
                 }
-            } else if let figures = model.figures {
+            } else if let figures = model.reader.value {
                 if figures.insights.dictations > 0 {
                     activity(figures.insights)
                 }
@@ -41,14 +37,8 @@ private struct HomePane: View {
             shortcuts
         }
         .formStyle(.grouped)
-        .onAppear(perform: model.show)
-        .onDisappear(perform: model.hide)
-        // Today and the streak move at midnight; the task ends when the pane goes.
-        .task {
-            for await _ in NotificationCenter.default.notifications(named: .NSCalendarDayChanged) {
-                model.historyChanged()
-            }
-        }
+        .reads(through: model.reader)
+        .onAppear(perform: model.readiness.refresh)
     }
 
     private var hero: some View {
@@ -161,15 +151,11 @@ private struct HomePane: View {
     private func recent(_ records: [DictationRecord]) -> some View {
         Section {
             if records.isEmpty {
-                ContentUnavailableView(
-                    "No Dictations Yet", systemImage: "waveform",
-                    description: Text("Tap \(model.chords.dictation.title) to dictate. Each dictation appears here.")
-                )
-                .frame(maxWidth: .infinity)
+                EmptyState.noDictations(chord: model.chords.dictation)
             } else {
                 ForEach(records) { record in
                     HStack(alignment: .top) {
-                        HistoryRow(record: record, icon: model.icon(for: record.app))
+                        HistoryRow(record: record, icon: model.apps.icon(of: record.app))
                         Button("Copy", systemImage: "doc.on.doc") { model.copy(record) }
                             .labelStyle(.iconOnly)
                             .buttonStyle(.borderless)
@@ -182,7 +168,7 @@ private struct HomePane: View {
         } header: {
             header("Recent Dictations", link: "Show All", opening: .history)
         } footer: {
-            if model.figures?.hasLastDictation == true {
+            if model.reader.value?.hasLastDictation == true {
                 HStack {
                     Spacer()
                     Button("Fix Last Dictation…", action: model.fixLast)

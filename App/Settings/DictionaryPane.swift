@@ -29,14 +29,10 @@ private struct DictionaryPane: View {
         // A list in a group box with Add and Delete at its foot, as in System Settings > General > Login Items: a list
         // this long needs the list's own selection and lazy rows, which a grouped form has not.
         VStack(alignment: .leading) {
-            // The pane's own switch sits in its header box, as the Bluetooth switch does in System Settings.
+            // The pane's own switch sits in a box above the list, as the Bluetooth switch does in System Settings.
             GroupBox {
-                VStack(alignment: .leading) {
-                    PaneHeader(pane: .dictionary)
-                    Divider()
-                    LearnFromEditsToggle()
-                }
-                .frame(maxWidth: .infinity, alignment: .leading)
+                LearnFromEditsToggle()
+                    .frame(maxWidth: .infinity, alignment: .leading)
             }
             words
         }
@@ -120,17 +116,15 @@ private struct DictionaryPane: View {
 
     @ViewBuilder private var emptyState: some View {
         if search.isEmpty {
-            ContentUnavailableView {
-                Label("No Words Yet", systemImage: "character.book.closed")
-            } description: {
-                Text(
-                    "Add names and terms the speech model should know, or fix a word it always gets wrong. "
-                        + "You can also import from Wispr Flow.")
-            } actions: {
+            EmptyState(
+                title: "No Words Yet", systemImage: "character.book.closed",
+                description: "Add names and terms the speech model should know, or fix a word it always gets wrong. "
+                    + "You can also import from Wispr Flow."
+            ) {
                 Button("Add Word…", action: add)
             }
         } else {
-            ContentUnavailableView.search(text: search)
+            NoSearchResults(search: search)
         }
     }
 

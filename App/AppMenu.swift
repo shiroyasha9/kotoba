@@ -119,7 +119,7 @@ extension AppDelegate: StatusMenuActions {
     }
 
     func openSettings() {
-        mainWindow.show(selecting: .general)
+        mainWindow.showSettings()
     }
 
     func showAbout() {

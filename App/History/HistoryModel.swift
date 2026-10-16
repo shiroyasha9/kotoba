@@ -72,7 +72,7 @@ final class HistoryModel {
     @ObservationIgnored private var isLoadingMore = false
     /// The search the loaded rows match; nil until a read succeeds.
     @ObservationIgnored private var loadedSearch: String?
-    @ObservationIgnored private var icons: [String: NSImage?] = [:]
+    @ObservationIgnored let apps = InstalledApps()
 
     init(source: Source?) {
         self.source = source
@@ -254,15 +254,6 @@ final class HistoryModel {
     }
 
     // MARK: Display
-
-    /// The app's icon from its bundle, read once per app while the window is open; nil when it is not installed.
-    func icon(for app: DictationApp?) -> NSImage? {
-        guard let app else { return nil }
-        if let icon = icons[app.bundleID] { return icon }
-        let icon = InstalledApp.icon(of: app.bundleID)
-        icons[app.bundleID] = icon
-        return icon
-    }
 
     private static func days(of rows: [DictationRecord]) -> [Day] {
         let calendar = Calendar.current

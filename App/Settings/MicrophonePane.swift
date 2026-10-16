@@ -191,9 +191,6 @@ private struct MicrophonePane: View {
     var body: some View {
         Form {
             Section {
-                PaneHeader(pane: .microphones)
-            }
-            Section {
                 if let warning = model.warning {
                     Label {
                         Text(StatusText.title(warning))

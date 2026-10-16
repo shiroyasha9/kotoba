@@ -139,9 +139,6 @@ private struct SpeechPane: View {
     var body: some View {
         Form {
             Section {
-                PaneHeader(pane: .speech)
-            }
-            Section {
                 Picker("Speech model", selection: $model.route) {
                     ForEach(TranscriptionRoute.allCases.filter { !$0.isAdvanced }, id: \.self) { route in
                         Text(route.title).tag(route)

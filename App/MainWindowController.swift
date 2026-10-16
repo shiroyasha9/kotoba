@@ -115,6 +115,11 @@ final class MainWindowController {
         window.show(panes(), selecting: pane)
     }
 
+    /// "Settings…": the settings pane the window shows, else General.
+    func showSettings() {
+        show(selecting: window.shownPane?.isSetting == true ? nil : .general)
+    }
+
     private func panes() -> [Pane] {
         let home = HomeModel(readiness: readiness, chords: .shared, source: homeSource)
         self.home = home

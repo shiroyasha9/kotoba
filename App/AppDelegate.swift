@@ -147,8 +147,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         return store
     }
 
-    /// Opening kotoba again while it runs (Spotlight, Raycast, Finder, `open -a`) shows the main window in front. macOS sends
-    /// the reopen with an activation, and with no window kotoba would be active and show nothing.
+    /// Opening kotoba again while it runs (Spotlight, Raycast, Finder, `open -a`) shows the main window in front. macOS
+    /// sends the reopen with an activation, and with no window kotoba would be active and show nothing.
     func applicationShouldHandleReopen(_ sender: NSApplication, hasVisibleWindows flag: Bool) -> Bool {
         mainWindow.show()
         return false

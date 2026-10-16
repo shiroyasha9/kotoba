@@ -3,7 +3,7 @@ import Observation
 import SwiftUI
 
 /// One page of the main window. To add a pane, add its case to `PaneID` (the case order is the sidebar order) with
-/// its title, symbol, color and summary, write `extension Pane { static func name(…) -> Self }` in its own file and add
+/// its title, symbol and color, write `extension Pane { static func name(…) -> Self }` in its own file and add
 /// it to the list in `MainWindowController`.
 struct Pane: Identifiable {
     let id: PaneID
@@ -68,21 +68,6 @@ enum PaneID: String, Hashable, CaseIterable {
         }
     }
 
-    /// The line under the pane's title at the top of the pane.
-    var summary: String {
-        switch self {
-        case .home: "Whether kotoba is ready, how to dictate, and your latest dictations."
-        case .history: "Every dictation, with its app and when you spoke it."
-        case .insights: "How fast you speak, how much you dictate, and what kotoba learned."
-        case .usage: "How much you dictate, and what it costs."
-        case .general: "Your shortcuts, how kotoba starts, and what it shows while you dictate."
-        case .speech: "The speech model that turns your voice into text, and its key."
-        case .dictionary: "Names and terms kotoba should know, and words to replace."
-        case .modes: "How kotoba cleans up text in each app."
-        case .microphones: "The mic kotoba records from, and how to test it."
-        }
-    }
-
     /// The sidebar's second group, under the "Settings" header.
     var isSetting: Bool {
         switch self {
@@ -120,22 +105,6 @@ struct PaneIcon: View {
     }
 }
 
-/// The first box of a pane: its icon, title and what it does, as at the top of a System Settings pane.
-struct PaneHeader: View {
-    let pane: PaneID
-
-    var body: some View {
-        HStack {
-            PaneIcon(pane: pane, size: 40)
-            VStack(alignment: .leading) {
-                Text(pane.title).font(.headline)
-                Text(pane.summary).foregroundStyle(.secondary)
-            }
-        }
-        .accessibilityElement(children: .combine)
-    }
-}
-
 /// The main window: Home, History, Insights, Usage and the settings in one sidebar. Built when the owner opens it and
 /// released when they close it, with every pane model; while it is closed it costs nothing but SwiftUI's loaded
 /// runtime. SwiftUI is used only for on-demand windows (docs/spec.md, Platform and UI).
@@ -152,6 +121,9 @@ final class MainWindow: NSObject, NSWindowDelegate, NSMenuItemValidation {
     /// The panes of the open window; a pane the window was built without (History when the history did not open) is
     /// never selected.
     private var paneIDs: Set<PaneID> = []
+
+    /// The pane the open window shows; nil while it is closed.
+    var shownPane: PaneID? { window == nil ? nil : selection.id }
 
     /// Shows the window, building it with `panes` when it is not open. `id` picks the pane to show; nil keeps the
     /// pane already shown, or Home.
@@ -183,13 +155,13 @@ final class MainWindow: NSObject, NSWindowDelegate, NSMenuItemValidation {
         // frame.
         window?.setFrameAutosaveName("")
         window = nil
-        selection.id = nil
+        selection.reset(to: nil)
         onClose()
     }
 
     private func makeWindow(panes: [Pane]) -> NSWindow {
         paneIDs = Set(panes.map(\.id))
-        selection.id = .home
+        selection.reset(to: .home)
         // The window title follows the pane, as in System Settings.
         let window = Self.window(
             showing: MainView(panes: panes, selection: selection) { [weak self] title in self?.window?.title = title })
@@ -204,25 +176,63 @@ final class MainWindow: NSObject, NSWindowDelegate, NSMenuItemValidation {
     }
 
     /// The window and its content, toolbar included; the snapshot run draws the same window.
-    private static func window(showing view: MainView) -> NSWindow {
+    static func window(showing view: MainView) -> NSWindow {
         let window = NSWindow(contentViewController: NSHostingController(rootView: view))
         window.title = Install.displayName
         window.styleMask = [.titled, .closable, .miniaturizable, .resizable, .fullSizeContentView]
+        window.toolbarStyle = .unified
         window.isReleasedWhenClosed = false
         return window
     }
 }
 
-/// The pane the sidebar shows; the window sets it to open on a pane.
+/// The pane the sidebar shows, and the panes shown before and after it for Back and Forward, as in System Settings.
 @MainActor
 @Observable
-private final class Selection {
-    var id: Pane.ID?
+final class Selection {
+    /// Each change by the owner (the sidebar, a pane's link, the menu) goes on the Back list.
+    var id: Pane.ID? {
+        didSet {
+            guard let oldValue, oldValue != id else { return }
+            if isMovingInHistory {
+                isMovingInHistory = false
+            } else {
+                back.append(oldValue)
+                forward.removeAll()
+            }
+        }
+    }
     /// Edit > Find… requests; the shown pane gets them as `findRequests`.
     var findRequests = 0
+    private(set) var back: [Pane.ID] = []
+    private(set) var forward: [Pane.ID] = []
+    @ObservationIgnored private var isMovingInHistory = false
+
+    func goBack() {
+        guard let id, let previous = back.popLast() else { return }
+        forward.append(id)
+        isMovingInHistory = true
+        self.id = previous
+    }
+
+    func goForward() {
+        guard let id, let next = forward.popLast() else { return }
+        back.append(id)
+        isMovingInHistory = true
+        self.id = next
+    }
+
+    /// A new window starts with no Back or Forward.
+    func reset(to id: Pane.ID?) {
+        isMovingInHistory = true
+        self.id = id
+        isMovingInHistory = false
+        back.removeAll()
+        forward.removeAll()
+    }
 }
 
-private struct MainView: View {
+struct MainView: View {
     let panes: [Pane]
     @Bindable var selection: Selection
     let onTitle: (String) -> Void
@@ -251,6 +261,21 @@ private struct MainView: View {
             .navigationSplitViewColumnWidth(min: 160, ideal: 190, max: 240)
             // System Settings keeps its sidebar: no toggle to hide it.
             .toolbar(removing: .sidebarToggle)
+            // Back and Forward on every pane, as in System Settings. They also keep the toolbar on panes with no items
+            // of their own: such a pane got a 32 pt title bar, and History's 52 pt toolbar moved the traffic lights,
+            // the sidebar and the title (owner, 2026-10-16).
+            .toolbar {
+                ToolbarItemGroup(placement: .navigation) {
+                    Button("Back", systemImage: "chevron.backward", action: selection.goBack)
+                        .help("Show the previous pane")
+                        .keyboardShortcut("[", modifiers: .command)
+                        .disabled(selection.back.isEmpty)
+                    Button("Forward", systemImage: "chevron.forward", action: selection.goForward)
+                        .help("Show the next pane")
+                        .keyboardShortcut("]", modifiers: .command)
+                        .disabled(selection.forward.isEmpty)
+                }
+            }
         } detail: {
             if let pane = shown {
                 pane.content()
@@ -286,51 +311,4 @@ struct OpenPaneAction {
 
 extension EnvironmentValues {
     @Entry var openPane = OpenPaneAction { _ in }
-}
-
-// MARK: - Snapshots
-
-extension MainWindow {
-    /// One pane at the size of the window's detail column, for `make snapshots`. Each pane's file registers its own
-    /// snapshots with this. The sidebar and the toolbar (title, search field) need the real window: the sidebar's
-    /// selection and vibrancy do not render offscreen, so they are not in the image.
-    /// `height` above the window's 600 shows a pane that scrolls in the window in full.
-    static func snapshot(of pane: Pane, named name: String, height: CGFloat = 600) -> Snapshot {
-        Snapshot(name: name) {
-            let view = Snapshots.hostingView(pane.content().frame(width: 760, height: height))
-            view.setFrameSize(NSSize(width: 760, height: height))
-            return view
-        }
-    }
-
-    /// The whole window content (sidebar and pane) at the default size, for `make snapshots`. It stops the run when
-    /// the content is taller or wider than the window: on 2026-10-15 a pane that grew past the window pushed the
-    /// sidebar rows above its top and the footer below its bottom, so the window looked empty. The sidebar's
-    /// selection and vibrancy do not render offscreen (the selected row is a dark block); the layout check does not
-    /// depend on them. `isFramed` draws the real window instead, title bar and toolbar included (a pane's toolbar
-    /// buttons and search field); its macOS 26 glass sidebar draws blank offscreen.
-    static func windowSnapshot(of panes: [Pane], selecting id: Pane.ID, named name: String, isFramed: Bool = false)
-        -> Snapshot
-    {
-        let overflow: @MainActor (NSView) -> String? = { content in
-            content.subviews.first { $0.frame != content.bounds }.map {
-                "the window content is \($0.frame), the window is \(content.bounds)"
-            }
-        }
-        let view: @MainActor () -> MainView = {
-            let selection = Selection()
-            selection.id = id
-            return MainView(panes: panes, selection: selection)
-        }
-        guard isFramed else {
-            return Snapshots.fixedWindow(named: name, size: defaultSize, check: overflow, view)
-        }
-        return Snapshots.window(named: name, contentSize: defaultSize) {
-            let window = window(showing: view())
-            window.title = id.title
-            return window
-        } check: {
-            overflow($0)
-        }
-    }
 }

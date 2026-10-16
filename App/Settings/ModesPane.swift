@@ -256,9 +256,6 @@ private struct ModesPane: View {
     var body: some View {
         Form {
             Section {
-                PaneHeader(pane: .modes)
-            }
-            Section {
                 if model.isCleanupKeyMissing {
                     LabeledContent {
                         Button("Add Key…", action: model.addKey)

@@ -98,10 +98,17 @@ extension Pane {
         named name: String,
         isFramed: Bool = false
     ) -> Snapshot {
+        MainWindow.windowSnapshot(
+            of: samplePanes(suggestions: suggestions, history: selected), selecting: id, named: name,
+            isFramed: isFramed)
+    }
+
+    /// Every pane with sample data; `history` selects that History sample row.
+    private static func samplePanes(suggestions: [DictionarySuggestion] = [], history selected: Int = 0) -> [Pane] {
         let rows = HistoryController.sampleRows()
         let history = HistoryModel(rows: rows)
         history.selection = [rows[selected].id]
-        let panes: [Pane] = [
+        return [
             .home(.sample),
             .history(history),
             .general(.sample()),
@@ -112,6 +119,43 @@ extension Pane {
             .usage(.sample),
             .insights(.sample),
         ]
-        return MainWindow.windowSnapshot(of: panes, selecting: id, named: name, isFramed: isFramed)
+    }
+
+    /// Each pane with an empty state, on a new install, at the default size and wide: the state sits in the centre of
+    /// the space it gets.
+    static func emptyWindowSnapshots() -> [Snapshot] {
+        let wide = NSSize(width: 1_440, height: 900)
+        let ids: [PaneID] = [.home, .history, .insights, .usage, .dictionary]
+        return ids.flatMap { id in
+            [("", MainWindow.defaultSize), ("-wide", wide)].map { suffix, size in
+                MainWindow.windowSnapshot(
+                    of: emptyPanes(), selecting: id, named: "window-empty-\(id.rawValue)\(suffix)", size: size)
+            }
+        }
+    }
+
+    /// Every pane of a new install: no key, no dictations, no words.
+    private static func emptyPanes() -> [Pane] {
+        [
+            .home(.sampleNew),
+            .history(HistoryModel(rows: [])),
+            .general(.sample()),
+            .dictionary(sampleModel(PersonalDictionary())),
+            .modes(ModesModel(source: .sample())),
+            .microphones(MicrophoneModel(source: .sample()) {}),
+            .speech(.sample(route: .openRouterMAI, azureEndpoint: "")),
+            .usage(.empty),
+            .insights(.empty),
+        ]
+    }
+
+    /// One window switched Home, History, General, Insights in turn, drawn at each step: the toolbar, traffic lights
+    /// and window frame stay where they were on Home.
+    static func switchSnapshots() -> [Snapshot] {
+        let path: [PaneID] = [.home, .history, .general, .insights]
+        return path.indices.map { end in
+            MainWindow.switchSnapshot(
+                of: samplePanes(), through: Array(path[...end]), named: "window-switch-\(path[end].rawValue)")
+        }
     }
 }

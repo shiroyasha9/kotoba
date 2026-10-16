@@ -39,6 +39,8 @@ enum Snapshots {
         Pane.homeSnapshots,
         Pane.historySnapshots,
         Pane.windowSnapshots,
+        Pane.switchSnapshots,
+        Pane.emptyWindowSnapshots,
     ]
 
     private static let padding: CGFloat = 16

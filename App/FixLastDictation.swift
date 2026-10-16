@@ -262,9 +262,9 @@ struct FixLastDictationView: View {
 
     private var empty: some View {
         VStack {
-            ContentUnavailableView(
+            EmptyState(
                 "No Dictation to Fix Yet", systemImage: "text.badge.checkmark",
-                description: Text("Dictate something, then open this window again."))
+                description: "Dictate something, then open this window again.")
             HStack {
                 Spacer()
                 Button("Close", action: close).keyboardShortcut(.defaultAction)
