@@ -13,6 +13,7 @@ Native macOS menu-bar dictation: tap a chord, speak, tap again, the cloud transc
 - `make readme-images`: renders the README's screenshots (`Pane.readmeSnapshots`, the whole window content with sample data, the release's name and icon, the sidebar selection and "on" switches drawn as in the active app) in macOS's default blue accent and copies them to `docs/images/`. Look at them before you commit.
 - `make test`: all package tests (KotobaCore, KotobaProviders, KotobaStorage), each package under a hard limit (`TEST_LIMIT`, default 120 s; `scripts/timeout.pl` kills the whole process group). `FILTER=<test name>` runs one test. A test that hangs is a bug: give every awaited fake event a bound, never wait on the wall clock.
 - `make gen`: regenerates `Kotoba.xcodeproj` from `project.yml`. Edit `project.yml`; the project, `App/Info.plist` and `App/Kotoba.entitlements` are generated.
+- `make latency-log` (`DEV=1`, `LAST=2d`, `FROM=<saved log>`): the latency gate and the stop path split from the unified log, with no database read (`make latency RUN=1` reads the app database and needs the owner's go). `bun run latency` in `bench/` probes the route's server time (`docs/research/latency-pass.md`).
 - `bench/`: provider benchmark (bun, TypeScript), see `bench/README.md`. Runs against paid APIs need the owner's explicit go.
 
 ## Module boundaries

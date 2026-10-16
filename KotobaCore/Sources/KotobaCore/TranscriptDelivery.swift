@@ -91,7 +91,7 @@ struct TranscriptDelivery: Sendable {
                 let isAsked = transcribed.submits ? true : await isSubmitRequested()
                 if isAsked { submitted = await submit(job: job, latency: &latency) }
             }
-            Log.latency.info("\(job.id.rawValue) \(latency.summary, privacy: .public)")
+            Self.log(latency, of: job, model: record.model)
         }
         record.latency = latency
         // The answers' ledger entries go with this save. A crash between the answer and here (at most the cleanup and
@@ -162,6 +162,17 @@ struct TranscriptDelivery: Sendable {
             await clipboard.copy(text)
             return (.copied, nil)
         }
+    }
+
+    /// One notice line per transcribed dictation. Notice, not info: the system keeps notice lines on disk, so
+    /// `make latency-log` reads them from `log show`.
+    private static func log(_ latency: LatencyLog, of job: Job, model: String?) {
+        Log.latency.notice(
+            """
+            \(job.id.rawValue) model=\(model ?? UsageEntry.unknownModel, privacy: .public) \
+            audioMs=\(Int(job.audio.duration / .milliseconds(1)), privacy: .public) \
+            \(latency.summary, privacy: .public)
+            """)
     }
 
     /// The system measured these moments and hands them over only with the answer, so they are recorded without a

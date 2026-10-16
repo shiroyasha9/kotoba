@@ -7,6 +7,7 @@
     "hinglish": "bun --env-file=\"$KOTOBA_ENV_FILE\" hinglish/run.ts",
     "writing": "bun --env-file=\"$KOTOBA_ENV_FILE\" writing/run.ts",
     "termcap": "bun --env-file=\"$KOTOBA_ENV_FILE\" termcap/run.ts",
+    "latency": "bun --env-file=\"$KOTOBA_ENV_FILE\" latency/run.ts",
     "review": "bun review/server.ts",
     "typecheck": "tsc --noEmit",
     "test": "bun test"

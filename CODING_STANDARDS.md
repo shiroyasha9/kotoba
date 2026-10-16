@@ -24,7 +24,7 @@
 ## Logging and latency
 
 - Log with `os.Logger`, subsystem `Log.subsystem` (the bundle id: `tech.teensy.kotoba`, or `tech.teensy.kotoba.dev` for a Debug build), one category per module (`Log.pipeline`). Transcripts and keys are logged `privacy: .private`; never log an API key.
-- Each hot-path `LatencyMark` (keyDown, firstAudioBuffer, stop, uploadStart, response, pasteSent) is recorded in the dictation's `LatencyLog` as an offset from key-down, emitted as a signpost on `Log.signposter` (points of interest), logged as one line on `Log.latency`, and stored in the `latency_marks` table that `make latency` reads. A new hot-path step gets a mark.
+- Each hot-path `LatencyMark` (keyDown, firstAudioBuffer, stop, uploadStart, response, pasteSent) is recorded in the dictation's `LatencyLog` as an offset from key-down, emitted as a signpost on `Log.signposter` (points of interest), logged as one notice line on `Log.latency` (with the model and the audio length; `make latency-log` reads it from `log show`), and stored in the `latency_marks` table that `make latency` reads. A new hot-path step gets a mark.
 - The network marks (connected, uploadSent, firstByte) come from the system's URLSession metrics through the provider's `Transcript.network`, after the answer. They get no signpost (it would sit at the wrong moment), and the pipeline never waits for them: when the metrics come late, the marks are left out. A new mark name is a new row value, not a schema change.
 
 ## Layout
