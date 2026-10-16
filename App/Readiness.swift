@@ -267,16 +267,3 @@ final class SetupFlow {
         return false
     }
 }
-
-/// A selector target for an observer API with no block form, such as a distributed notification's immediate delivery.
-private final class NotificationRelay: NSObject, Sendable {
-    private let onReceive: @Sendable () -> Void
-
-    init(_ onReceive: @escaping @Sendable () -> Void) {
-        self.onReceive = onReceive
-    }
-
-    @objc func received(_ notification: Notification) {
-        onReceive()
-    }
-}

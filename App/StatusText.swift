@@ -179,7 +179,7 @@ extension DictationState {
         case .recovered: "Saved dictation recovered"
         case .copied: "Copied. Press ⌘V to paste."
         case .audioCut: "Pasted what was saved. Disk full?"
-        case .clipboardNotKept: "Pasted. Old clipboard too large to keep"
+        case .clipboardNotKept: "Pasted. Old clipboard too large to keep."
         case .idle, .recording, .transcribing, .cleaning, .undoable, .failed, .needsSetup, .rejected, .captureFailed,
             .nothingRecorded, .audioNotSaved:
             nil

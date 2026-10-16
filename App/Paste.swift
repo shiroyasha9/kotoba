@@ -93,19 +93,19 @@ struct CGEventPaster: Paster {
             _ = CGEvent(keyboardEventSource: shared.source, virtualKey: CGKeyCode(kVK_ANSI_V), keyDown: true)
         }
     }
-    @MainActor private static var layoutObserver: (any NSObjectProtocol)?
+    @MainActor private static var layoutObserver: NotificationRelay?
 
-    /// Looks up the key code now and again whenever the keyboard layout changes.
+    /// Looks up the key code now and again whenever the keyboard layout changes, also while another app is in front
+    /// (the owner switches layouts there), so a paste never sends the old layout's key.
     @MainActor
     static func trackKeyboardLayout() {
         refreshKeyCode()
-        layoutObserver = DistributedNotificationCenter.default().addObserver(
-            forName: Notification.Name(kTISNotifySelectedKeyboardInputSourceChanged as String),
-            object: nil,
-            queue: .main
-        ) { _ in
-            MainActor.assumeIsolated { refreshKeyCode() }
-        }
+        let relay = NotificationRelay { Task { @MainActor in refreshKeyCode() } }
+        DistributedNotificationCenter.default().addObserver(
+            relay, selector: #selector(NotificationRelay.received),
+            name: Notification.Name(kTISNotifySelectedKeyboardInputSourceChanged as String), object: nil,
+            suspensionBehavior: .deliverImmediately)
+        layoutObserver = relay
     }
 
     @MainActor

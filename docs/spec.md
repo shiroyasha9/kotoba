@@ -134,7 +134,7 @@ The app is open-source (Apache-2.0) and distributed as a notarized DMG on GitHub
 - MAI-Transcribe-2 is public preview; its $0.10/h price is a promotion until 2026-12-31.
 
 ### Paste
-- Snapshot all pasteboard types and the changeCount at chord-down (off the hot path); before writing, take a new snapshot only if the changeCount changed since. Write the transcript marked transient/concealed, post Cmd-V via CGEvent, restore after about 1.0 s only if the pasteboard did not change since. No fixed pre-paste sleep. A new paste never waits for a previous restore. A clipboard over 64 MB is not kept (lead, 2026-10-17): the snapshot stops reading at the limit, the dictation still pastes, nothing is restored, and the pill says "Pasted. Old clipboard too large to keep".
+- Snapshot all pasteboard types and the changeCount at chord-down (off the hot path); before writing, take a new snapshot only if the changeCount changed since. Write the transcript marked transient/concealed, post Cmd-V via CGEvent, restore after about 1.0 s only if the pasteboard did not change since. No fixed pre-paste sleep. A new paste never waits for a previous restore. A clipboard over 64 MB is not kept (lead, 2026-10-17): the snapshot stops reading at the limit, the dictation still pastes, nothing is restored, and the pill says "Pasted. Old clipboard too large to keep.".
 - AX value insertion is not used as the main path (Electron apps report false success).
 
 ### Wispr Flow import (phase 2)
