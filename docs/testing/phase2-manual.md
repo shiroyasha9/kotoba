@@ -152,8 +152,8 @@ UI text in this list is the text in the code at the phase 2 gate (2026-10-15). I
 | 90 | Turn Wi-Fi off, dictate, turn Wi-Fi on | Indicator "Failed - retry from the menu"; no text lost; **Retry Failed Dictations (1)** sends it; it appears under **Recovered (1)**; a click copies it; the clipboard was not changed automatically | |
 | 91 | Quit kotoba during an upload, open it again | The dictation appears under **Recovered** | |
 | 92 | Quit kotoba Dev (**Quit kotoba Dev** or Cmd-Q) during a recording, open it again | Nothing is lost: the dictation is transcribed at launch and appears under **Recovered** | |
-| 93 | Tap twice fast (empty recording) | No paste; "Failed - retry from the menu" | |
-| 94 | **Retry Failed Dictations** for that empty recording | It is tried one more time; empty again, it shows "Refused - check the key or credits" and is not retried after that | |
+| 93 | Tap the chord, say nothing, tap again within 1 s | No paste; the pill says “No speech heard”, not “Couldn’t reach OpenRouter”; no Dock badge, nothing waits for a retry | |
+| 94 | In **History**, retry that dictation | It is sent once more; empty again, it stays “No speech heard” and is not retried by itself | |
 | 95 | Use a key with no credits (or a refused request) | "Refused - check the key or credits"; the audio is kept; it is not retried | |
 
 ## Audio devices

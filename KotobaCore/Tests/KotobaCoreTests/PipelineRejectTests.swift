@@ -112,26 +112,25 @@ struct PipelineRejectTests {
         #expect(await world.store.records.map(\.transcript) == ["ship it", "ship it"])
     }
 
-    /// The provider answers with no words; the pipeline decides it heard no speech.
+    /// The provider answers with no words (a short tap, silence); the pipeline decides it heard no speech. The same
+    /// audio gets the same answer, so it is not queued: the pill says no speech, not that the route was unreachable.
+    /// The audio is kept, and History's Retry can still send it.
     @Test(arguments: ["", " \n "])
-    func anEmptyTranscriptGetsOneRetryThenIsRejected(heard: String) async throws {
+    func anEmptyTranscriptIsRejectedAtOnce(heard: String) async throws {
         let world = FakeWorld(transcript: heard)
         let pipeline = world.makePipeline()
 
         await pipeline.dictate(world)
-        let failed = try #require(await world.store.records.first)
-        #expect(failed.status == .failed)
-        #expect(failed.rejectReason == nil)
-        #expect(failed.transcript == nil)
-        #expect(await pipeline.state == .failed(failed.id))
-        #expect(await world.paster.pasteCount == 0)
-        await pipeline.retryPending()
         let rejected = try #require(await world.store.records.first)
         #expect(rejected.status == .rejected)
         #expect(rejected.rejectReason == .emptyTranscript)
+        #expect(rejected.transcript == nil)
+        #expect(rejected.isRetryable)
+        #expect(await pipeline.state == .rejected(rejected.id, .emptyTranscript))
+        #expect(await world.paster.pasteCount == 0)
         await pipeline.retryPending()
 
-        #expect(await world.provider.requests.count == 2)
+        #expect(await world.provider.requests.count == 1)
     }
 
     /// A stop before the first buffer wrote no frames: nothing to send, so no request, no Retry and no "audio saved".
@@ -173,14 +172,16 @@ struct PipelineRejectTests {
         #expect(await world.provider.requests.isEmpty)
     }
 
-    /// An answer with no words is billed: each try is a ledger entry with no words and its cost.
+    /// An answer with no words is billed: each try (the dictation, then the owner's retry from History) is a ledger
+    /// entry with no words and its cost.
     @Test func anEmptyTranscriptKeepsTheCostOfEachTry() async throws {
         let world = FakeWorld(transcript: "")
         await world.provider.charge(.reported(Decimal(5) / 100_000), audio: .seconds(2))
         let pipeline = world.makePipeline()
 
         await pipeline.dictate(world)
-        await pipeline.retryPending()
+        let id = try #require(await world.store.records.first?.id)
+        await pipeline.retry([id])
 
         let rejected = try #require(await world.store.records.first)
         #expect(rejected.status == .rejected)

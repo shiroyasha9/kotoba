@@ -190,16 +190,16 @@ extension DictationRecord {
     }
 
     /// Records a failed request: `.failed` (retried), with `needsSetup` when only a setting can help,
-    /// or `.rejected` when the same request cannot succeed. An empty transcript gets one retry
-    /// before it counts as rejected. Errors that are not `ProviderError` count as transient.
-    mutating func markFailed(by error: any Error, onRetry: Bool = false) {
+    /// or `.rejected` when the same request cannot succeed, an empty transcript included: the same audio gets the
+    /// same answer. Errors that are not `ProviderError` count as transient.
+    mutating func markFailed(by error: any Error) {
         let providerError = error as? ProviderError
         needsSetup = providerError?.setupItem
         switch providerError?.recovery ?? .transient {
         case .transient, .needsSetup:
             status = .failed
         case .permanent:
-            status = providerError == .emptyTranscript && !onRetry ? .failed : .rejected
+            status = .rejected
         }
         rejectReason = status == .rejected ? providerError?.rejectReason : nil
     }

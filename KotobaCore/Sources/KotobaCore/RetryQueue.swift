@@ -111,7 +111,7 @@ public actor RetryQueue {
             record.recoveredAt = clock.date
         } catch {
             Log.pipeline.error("Retry \(record.id.rawValue) on \(record.model ?? "no answer") failed: \(error)")
-            record.markFailed(by: error, onRetry: true)
+            record.markFailed(by: error)
         }
         return record
     }

@@ -143,7 +143,7 @@ public enum ProviderError: Error, Sendable, Equatable {
 
 /// Why a dictation was rejected.
 public enum RejectReason: String, Sendable {
-    /// The route heard no speech, twice, or the recording has no audio to send.
+    /// The route heard no speech, or the recording has no audio to send.
     case emptyTranscript
     case other
 }
