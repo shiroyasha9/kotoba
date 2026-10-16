@@ -64,6 +64,7 @@ Two more numbers from the capture path (built-in mic, from the commit that moved
 - Press Return while you dictate to stop, paste and press Return in one step. Or end with "press enter": kotoba pastes the text without the phrase, then presses Return.
 - Text goes into the focused app (terminals, editors, browsers, chat), and your clipboard comes back after the paste. kotoba marks the paste as transient, so clipboard managers skip it.
 - A small indicator shows what kotoba is doing and the mic level. It warns when the mic hears nothing, and when secure input is on. Show it only while you dictate or all the time (then a click starts and stops a dictation). Drag it to the bottom center or to the left or right edge.
+- A short sound when dictation starts and stops: choose Nylon, Low or Steel in Settings > General, or turn sounds off.
 - kotoba sits in the Dock and in the menu bar. Hide either one in Settings > General: with "Show in Dock" off, kotoba is in the Dock only while one of its windows is open. Right-click the Dock icon for the menu bar menu; its badge counts the dictations that wait for a retry.
 - Choose your microphone and the order in which kotoba prefers them. When AirPods are your output, kotoba records from the built-in mic, so your music does not drop to call quality.
 
@@ -152,7 +153,9 @@ A setup window walks you through three steps, then lets you try a dictation:
 
 1. **Microphone.** Allow microphone access when macOS asks.
 2. **Accessibility.** Turn on kotoba in System Settings > Privacy & Security > Accessibility. kotoba needs it to notice the shortcut in every app and to paste your text.
-3. **OpenRouter key.** Create a key at [openrouter.ai](https://openrouter.ai) and paste it. You pay OpenRouter for the audio you send.
+3. **OpenRouter key.** Create a key at [openrouter.ai](https://openrouter.ai) and paste it. You pay OpenRouter for the audio you send. Once saved, the key shows masked, with Change… and Remove.
+
+When Wispr Flow is installed, an optional step imports its dictionary. Each step waits for you to click Continue.
 
 The last step has a switch to open kotoba at login, on by default. You can change it later in Settings > General.
 
