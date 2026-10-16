@@ -129,6 +129,7 @@ final class SettingsWindow: NSObject, NSWindowDelegate, NSMenuItemValidation {
     /// Shows the window, building it with `panes` when it is not open. `id` picks the pane to show; nil keeps the
     /// pane already shown, or the first one.
     func show(_ panes: @autoclosure () -> [SettingsPane], selecting id: SettingsPane.ID? = nil) {
+        WindowFront.activate()
         let window = window ?? makeWindow(panes: panes())
         self.window = window
         if let id {

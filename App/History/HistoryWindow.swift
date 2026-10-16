@@ -31,6 +31,7 @@ final class HistoryController: NSObject, NSWindowDelegate {
     }
 
     func show() {
+        WindowFront.activate()
         let window = window ?? makeWindow()
         self.window = window
         WindowFront.show(window)

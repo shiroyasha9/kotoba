@@ -42,6 +42,7 @@ final class OnboardingController: NSObject, NSWindowDelegate {
 
     /// Shows the window on `step`; nil resumes where the owner closed it, or starts at Welcome.
     func show(step: OnboardingStep? = nil) {
+        WindowFront.activate()
         let resumed = UserDefaults.standard.string(forKey: Key.step).flatMap(OnboardingStep.init)
         let model =
             model

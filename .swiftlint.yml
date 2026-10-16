@@ -144,7 +144,7 @@ custom_rules:
     excluded: ["App/WindowFront\\.swift"]
     regex: "\\b(NSApp|NSApplication\\.shared)\\.activate\\(|\\bmakeKeyAndOrderFront\\("
     excluded_match_kinds: [comment, doccomment, string]
-    message: "Bring a window to the front with `WindowFront.show(window)`: macOS can refuse the activation request, and then only `orderFrontRegardless` keeps the window in front of the other app."
+    message: "Call `WindowFront.activate()` first in the click handler (before building the window or an `await`), then `WindowFront.show(window)`: macOS can refuse a late activation request, and then only `orderFrontRegardless` keeps the window in front of the other app."
     severity: error
   # CODING_STANDARDS.md "User-facing text" rules 3, 5 and 8, on UI strings in App/ only: strings on a line that
   # builds UI (Text(, Button(, NSMenuItem(title:, .toolTip = …) and every string in App/StatusText.swift.

@@ -54,6 +54,7 @@ final class FixLastDictationController: NSObject, NSWindowDelegate {
 
     /// Shows the window with the last dictation. An open window keeps the owner's edit.
     func show() {
+        WindowFront.activate()
         if window != nil, case .last = fixing {
             present()
             return
@@ -71,6 +72,7 @@ final class FixLastDictationController: NSObject, NSWindowDelegate {
     /// Shows the window with one History row's text. An open window for the same dictation keeps the owner's edit;
     /// another dictation takes its place.
     func show(_ record: DictationRecord) {
+        WindowFront.activate()
         opening?.cancel()
         opening = nil
         if window != nil, fixing?.id == record.id {
