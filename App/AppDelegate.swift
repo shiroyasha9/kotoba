@@ -30,6 +30,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         modes: AppDefaults.modeRules
     )
     lazy var indicator = IndicatorPanel()
+    let cues = SoundCues()
     lazy var fixWindow = FixLastDictationController(
         last: { [weak self] in await self?.lastDictation?.record() },
         dictionary: { [weak self] in self?.mainWindow.dictionary })
@@ -63,9 +64,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         routeSettings: routeSettings, vault: vault, router: router, microphones: microphones, audio: audio,
         readiness: readiness, finishSetup: { [weak self] in self?.setup.finishSetup() },
         fixLast: { [weak self] in self?.fixWindow.show() },
-        makeGeneral: { [routeSettings, indicator, updater, weak self] in
+        makeGeneral: { [routeSettings, indicator, cues, updater, weak self] in
             GeneralModel(
-                settings: routeSettings, indicator: indicator, updater: updater,
+                settings: routeSettings, indicator: indicator, cues: cues, updater: updater,
                 audio: self.flatMap { app in
                     app.store.map { .live(requests: app.audioRequests.continuation, store: $0) }
                 }
@@ -260,13 +261,13 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         if case .recording = newState {
             if !wasRecording {
                 isSecureInputOn = IsSecureEventInputEnabled()
-                playCue("DictationStart")
+                cues.play(.start)
             }
             hotkeys.setRecordingShown(true)
         } else {
             hotkeys.setRecordingShown(false)
             if wasRecording, newState == .transcribing {
-                playCue("DictationStop")
+                cues.play(.stop)
             }
         }
         updateIcon()
@@ -276,13 +277,6 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         default: break
         }
         indicator.show(newState, context: statusContext)
-    }
-
-    /// `name` is a sound in App/Sounds, made by design/sounds. Never a system sound: each one is also a choice of alert
-    /// sound (Tink is the default), so the cue would sound like the focused app's beep.
-    private func playCue(_ name: String) {
-        guard AppDefaults.areSoundCuesOn else { return }
-        NSSound(named: NSSound.Name(name))?.play()
     }
 
     /// One serial consumer keeps the events in order; it runs off the main actor so a busy UI

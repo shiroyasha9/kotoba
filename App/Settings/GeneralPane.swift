@@ -12,8 +12,8 @@ extension Pane {
 }
 
 /// The General pane's settings: the dictation, cleanup and Paste Last shortcuts and the cleanup model, the spoken
-/// Return phrase, launch at login, sounds, the indicator's position and visibility, how long audio is kept, and
-/// automatic update checks. Each change applies at once.
+/// Return phrase, launch at login, sounds and their voice, the indicator's position and visibility, how long audio is
+/// kept, and automatic update checks. Each change applies at once.
 @MainActor
 @Observable
 final class GeneralModel {
@@ -43,6 +43,7 @@ final class GeneralModel {
     struct Backing {
         var loginItem: LoginItem
         var soundCues: Setting<Bool>
+        var cueVoice: Setting<CueVoice>
         var indicatorAnchor: Setting<IndicatorAnchor>
         var indicatorVisibility: Setting<IndicatorVisibility>
         var submitPhrase: Setting<Bool>
@@ -51,11 +52,19 @@ final class GeneralModel {
 
         /// `submitPhraseChanged` hands a new submit phrase setting to the pipeline.
         static func live(
-            indicator: IndicatorPanel, updater: Updater?, submitPhraseChanged: @escaping @MainActor (Bool) -> Void
+            indicator: IndicatorPanel, cues: SoundCues, updater: Updater?,
+            submitPhraseChanged: @escaping @MainActor (Bool) -> Void
         ) -> Self {
             Self(
                 loginItem: .live,
                 soundCues: Setting(read: { AppDefaults.areSoundCuesOn }, write: { AppDefaults.areSoundCuesOn = $0 }),
+                // A new voice plays its start cue once, so the owner hears the choice.
+                cueVoice: Setting(
+                    read: { cues.voice },
+                    write: {
+                        cues.voice = $0
+                        cues.play(.start)
+                    }),
                 indicatorAnchor: Setting(read: { indicator.anchor }, write: { indicator.anchor = $0 }),
                 indicatorVisibility: Setting(read: { indicator.visibility }, write: { indicator.visibility = $0 }),
                 submitPhrase: Setting(
@@ -81,6 +90,10 @@ final class GeneralModel {
 
     var areSoundsOn: Bool {
         didSet { backing.soundCues.write(areSoundsOn) }
+    }
+
+    var cueVoice: CueVoice {
+        didSet { backing.cueVoice.write(cueVoice) }
     }
 
     var indicatorAnchor: IndicatorAnchor {
@@ -111,12 +124,13 @@ final class GeneralModel {
 
     /// Reads the current values. `submitPhraseChanged` hands a new submit phrase setting to the pipeline.
     convenience init(
-        settings: TranscriptionSettings, indicator: IndicatorPanel, updater: Updater?, audio: AudioRetentionModel?,
-        submitPhraseChanged: @escaping @MainActor (Bool) -> Void
+        settings: TranscriptionSettings, indicator: IndicatorPanel, cues: SoundCues, updater: Updater?,
+        audio: AudioRetentionModel?, submitPhraseChanged: @escaping @MainActor (Bool) -> Void
     ) {
         self.init(
             settings: settings, chords: .shared, audio: audio,
-            backing: .live(indicator: indicator, updater: updater, submitPhraseChanged: submitPhraseChanged))
+            backing: .live(
+                indicator: indicator, cues: cues, updater: updater, submitPhraseChanged: submitPhraseChanged))
     }
 
     private init(
@@ -130,6 +144,7 @@ final class GeneralModel {
         isLaunchAtLoginOn = backing.loginItem.isOn()
         loginProblem = backing.loginItem.problem()
         areSoundsOn = backing.soundCues.read()
+        cueVoice = backing.cueVoice.read()
         indicatorAnchor = backing.indicatorAnchor.read()
         indicatorVisibility = backing.indicatorVisibility.read()
         isSubmitPhraseOn = backing.submitPhrase.read()
@@ -151,7 +166,8 @@ final class GeneralModel {
         GeneralModel(
             settings: .inMemory(), chords: HotkeyChords(defaults: nil), audio: .sample(),
             backing: Backing(
-                loginItem: loginItem, soundCues: .fixed(true), indicatorAnchor: .fixed(.bottomCenter),
+                loginItem: loginItem, soundCues: .fixed(true), cueVoice: .fixed(.nylon),
+                indicatorAnchor: .fixed(.bottomCenter),
                 indicatorVisibility: .fixed(.whileDictating), submitPhrase: .fixed(true),
                 checksForUpdates: .fixed(true)))
     }
@@ -210,6 +226,10 @@ private struct GeneralPane: View {
             }
             Section("Feedback") {
                 Toggle("Play a sound when dictation starts and stops", isOn: $model.areSoundsOn)
+                Picker("Sound", selection: $model.cueVoice) {
+                    ForEach(CueVoice.allCases, id: \.self) { Text($0.title).tag($0) }
+                }
+                .disabled(!model.areSoundsOn)
                 Picker("Indicator position", selection: $model.indicatorAnchor) {
                     ForEach(IndicatorAnchor.allCases, id: \.self) { Text($0.title).tag($0) }
                 }

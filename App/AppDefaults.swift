@@ -6,6 +6,7 @@ import KotobaCore
 enum AppDefaults {
     enum Key: String {
         case soundCues
+        case cueVoice = "sound.cueVoice"
         case dictationChord = "hotkey.dictationChord"
         case cleanupChord = "hotkey.cleanupChord"
         case pasteLastChord = "hotkey.pasteLastChord"
@@ -32,6 +33,12 @@ enum AppDefaults {
     static var areSoundCuesOn: Bool {
         get { UserDefaults.standard.bool(forKey: Key.soundCues.rawValue) }
         set { UserDefaults.standard.set(newValue, forKey: Key.soundCues.rawValue) }
+    }
+
+    /// The instrument of the cues (`SoundCues`, which saves it). Nylon until the owner picks another.
+    static var cueVoice: CueVoice {
+        get { CueVoice(storedValue: UserDefaults.standard.string(forKey: Key.cueVoice.rawValue)) }
+        set { UserDefaults.standard.set(newValue.rawValue, forKey: Key.cueVoice.rawValue) }
     }
 
     /// "press enter" or "press return" as the last words sends Return after the paste. On by default.

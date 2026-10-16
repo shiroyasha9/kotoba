@@ -1,6 +1,7 @@
-// Writes kotoba's two sound cues, DictationStart.caf and DictationStop.caf, into App/Sounds.
-// Needs bun and afconvert (ships with macOS). Run from anywhere: bun generator/cues.ts
-// `bun generator/cues.ts --all <folder>` writes every voice in `voices` there instead, for the owner to compare.
+// Writes kotoba's sound cues into App/Sounds: for each voice in `voices`, <voice>-DictationStart.caf and
+// <voice>-DictationStop.caf (the names `CueVoice.soundName` reads). The owner picks the voice in General.
+// Needs bun and afconvert (ships with macOS). Run from anywhere: bun generator/cues.ts [folder]
+// A folder argument writes them there instead.
 //
 // The cues are kotoba's own: every file in /System/Library/Sounds is also a choice of system alert sound (Tink is the
 // default one, "Boop"), so a cue taken from there can sound exactly like the alert beep of the focused app.
@@ -27,15 +28,15 @@ type Voice = {
   tone: number;
 };
 
+// The cases of `CueVoice`.
 const voices = {
-  // The app's cues: E3 to B3, a soft nylon pluck.
+  // The default: E3 to B3, a soft nylon pluck.
   nylon: { low: 164.81, high: 246.94, decay: 0.2, pluck: 1_200, tone: 1_400 },
   // A fifth lower, A2 to E3, for more bass.
   low: { low: 110, high: 164.81, decay: 0.22, pluck: 900, tone: 1_000 },
   // E3 to B3 with a brighter, longer-ringing steel string.
   steel: { low: 164.81, high: 246.94, decay: 0.25, pluck: 4_000, tone: 3_000 },
 } satisfies Record<string, Voice>;
-const appVoice: keyof typeof voices = "nylon";
 
 /** A fixed seed, so a run writes the same files. */
 function random(seed: number): () => number {
@@ -58,11 +59,11 @@ function lowPass(samples: Float32Array, hz: number) {
 
 /** Karplus-Strong: a delay line one period long, filled with low-passed noise, averaged and damped each period. */
 function pluck(out: Float32Array, hz: number, at: number, voice: Voice, noise: () => number) {
-  // The two-point average delays the loop by half a sample.
-  const period = Math.max(2, Math.round(rate / hz - 0.5));
+  // Each sample comes back as the average of itself and the next, one period later: a loop of period - 0.5 samples.
+  const period = Math.max(2, Math.round(rate / hz + 0.5));
   const line = new Float32Array(period).map(noise);
   lowPass(line, voice.pluck);
-  const loss = Math.exp(-(period + 0.5) / rate / voice.decay);
+  const loss = Math.exp(-(period - 0.5) / rate / voice.decay);
   const start = Math.round(at * rate);
   for (let i = start, k = 0; i < out.length; i++, k = (k + 1) % period) {
     const next = (k + 1) % period;
@@ -108,25 +109,20 @@ function wav(samples: Float32Array): Uint8Array {
   return new Uint8Array(view.buffer);
 }
 
-async function write(voice: Voice, outDir: string, prefix: string) {
+async function write(name: string, voice: Voice, outDir: string) {
   mkdirSync(outDir, { recursive: true });
   const cues = { DictationStart: [voice.low, voice.high], DictationStop: [voice.high, voice.low] };
   const work = mkdtempSync(join(tmpdir(), "kotoba-cues-"));
   try {
-    for (const [name, notes] of Object.entries(cues)) {
-      const source = join(work, `${name}.wav`);
+    for (const [cue, notes] of Object.entries(cues)) {
+      const source = join(work, `${cue}.wav`);
       writeFileSync(source, wav(render(notes, voice)));
-      await $`afconvert -f caff -d LEI16 ${source} ${join(outDir, `${prefix}${name}.caf`)}`;
+      await $`afconvert -f caff -d LEI16 ${source} ${join(outDir, `${name}-${cue}.caf`)}`;
     }
   } finally {
     rmSync(work, { recursive: true });
   }
 }
 
-const all = process.argv.indexOf("--all");
-if (all >= 0) {
-  const outDir = resolve(process.argv[all + 1] ?? ".");
-  for (const [name, voice] of Object.entries(voices)) await write(voice, outDir, `${name}-`);
-} else {
-  await write(voices[appVoice], join(import.meta.dir, "..", "..", "..", "App", "Sounds"), "");
-}
+const outDir = process.argv[2] ? resolve(process.argv[2]) : join(import.meta.dir, "..", "..", "..", "App", "Sounds");
+for (const [name, voice] of Object.entries(voices)) await write(name, voice, outDir);
