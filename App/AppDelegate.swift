@@ -81,9 +81,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         })
 
     func applicationDidFinishLaunching(_ notification: Notification) {
-        // A second copy of this install never records, pastes or bills beside the first.
-        guard !handOverToRunningCopy() else { return }
-        // Then, so the Dock icon comes before any window (story 35).
+        // First, so the Dock icon comes before any window (story 35).
         DockAndMenuBar.shared.start()
         let launch = DockAndMenuBar.launch()
         // A recording file made after this is never taken for an orphan (`OrphanAudio`).
