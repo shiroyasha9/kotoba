@@ -56,10 +56,11 @@ enum AppDefaults {
         (UserDefaults.standard.object(forKey: Key.audioRetention.rawValue) as? Int).flatMap(AudioRetention.init)
     }
 
-    /// The per-app modes (story 29). A new install gets `ModeRules.standard`.
+    /// The per-app modes (story 29), saved as the owner's changes to `ModeRules.standard`, so apps a later build adds
+    /// to the standard lists reach every owner. A new install has no changes.
     static var modeRules: ModeRules {
-        get { decoded(at: .modes, or: .standard) }
-        set { encode(newValue, at: .modes) }
+        get { decoded(at: .modes, or: ModeChanges()).applied(to: .standard) }
+        set { encode(ModeChanges(newValue, over: .standard), at: .modes) }
     }
 
     /// A setting kept as JSON at `key`. A missing value, or one this build cannot read (logged), gives `fallback`, so a

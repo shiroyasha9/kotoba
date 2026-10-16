@@ -156,7 +156,7 @@ Later, in order of value: custom instructions per mode; Paste Raw (already in th
 3. Esc keeps the app and the mode of the Esc.
 4. The bench runs the Writing prompt (`bun run bench --only cleanup --prompt writing`: 28 clips from Writing apps in kotoba-bench-v1, 84 calls, about $0.03); `docs/release.md` holds the release gate.
 5. The Modes pane says when cleanup has no OpenRouter key, with "Add Key…", and looks up apps only when it shows (3-9 ms for the standard lists, measured).
-6. The saved rules stay the whole list, not changes over `ModeRules.standard`: what the pane shows is what is saved. So apps added to the standard lists in a later build reach only owners who never edited the list.
+6. The app saves only the owner's changes to `ModeRules.standard` (`ModeChanges`: added or moved apps, removed standard apps, other apps, the toggles), so apps a later build adds to the standard lists reach owners who edited the list too (lead decision).
 
 ## Unresolved questions (phase A)
 
