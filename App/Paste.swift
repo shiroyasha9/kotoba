@@ -139,7 +139,8 @@ struct CGEventPaster: Paster {
         keyUp.post(tap: .cghidEventTap)
     }
 
-    /// Finds the key that types `character` in the current layout with no modifiers.
+    /// Finds the key that types `character` in the current layout while ⌘ is held: the paste is ⌘V, and a layout such
+    /// as "Dvorak - QWERTY ⌘" switches to QWERTY keys under ⌘, so its base-layer "v" key would send ⌘. instead.
     @MainActor
     private static func keyCode(for character: Character) -> CGKeyCode? {
         guard
@@ -157,7 +158,7 @@ struct CGEventPaster: Paster {
                     layout,
                     keyCode,
                     UInt16(kUCKeyActionDisplay),
-                    0,
+                    UInt32((cmdKey >> 8) & 0xFF),
                     UInt32(LMGetKbdType()),
                     OptionBits(kUCKeyTranslateNoDeadKeysBit),
                     &deadKeyState,
