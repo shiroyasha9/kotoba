@@ -16,3 +16,10 @@ if [[ -z $id || -z $name || $id == "$release" || $name == kotoba ]]; then
     "bundle id and display name (project.yml, Kotoba target, configs: Debug)." >&2
   exit 1
 fi
+# Its own Dock icon (story 35): the owner tells kotoba Dev from the release in the Dock and in ⌘-Tab.
+icon=$(plist CFBundleIconName)
+if [[ -z $icon || $icon == AppIcon ]]; then
+  print -r -- "check-dev-install: $app shows the release's icon (\"$icon\"). Debug builds use AppIconDev" \
+    "(project.yml, Kotoba target, configs: Debug: ASSETCATALOG_COMPILER_APPICON_NAME)." >&2
+  exit 1
+fi

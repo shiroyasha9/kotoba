@@ -40,7 +40,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     var pipeline: DictationPipeline?
     var store: HistoryStore?
     var state: DictationState = .idle
-    var pendingCount = 0
+    /// Dictations that wait for a retry: the menu's Retry item, the icon's dot and the Dock badge.
+    var pendingCount = 0 {
+        didSet { DockAndMenuBar.shared.waitingCount = pendingCount }
+    }
     /// A dictation was pasted or copied, so "Fix Last Dictation…" has something to fix.
     var hasLastDictation = false
     /// The last dictation was cleaned up, so "Paste Last Without Cleanup" has the raw transcript.
@@ -76,13 +79,15 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         })
 
     func applicationDidFinishLaunching(_ notification: Notification) {
+        // First, so the Dock icon comes before any window (story 35).
+        let launch = DockAndMenuBar.shared.start()
         // A recording file made after this is never taken for an orphan (`OrphanAudio`).
         let launchedAt = Date.now
         CGEventPaster.trackKeyboardLayout()
         FrontAppObserver.track()
         CGEventPaster.warmUp()
-        NSApp.mainMenu = .hiddenMain()
-        statusItem = StatusBarItem(target: self) { [weak self] in self?.menuModel() }
+        MainMenu(hasUpdater: updater != nil).install()
+        statusItem = DockAndMenuBar.shared.attach(StatusBarItem(target: self) { [weak self] in self?.menuModel() })
         updater?.onWaitingUpdateChange = { [weak self] in self?.updateIcon() }
         guard let store = openHistory() else { return }
         let pipeline = DictationPipeline(
@@ -109,11 +114,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
         observe(pipeline)
         observeReadiness()
-        setup.showOnboardingIfNew()
+        let dictionaryRead = Task { await mainWindow.loadDictionary(into: pipeline) }
+        openWindow(at: launch, after: dictionaryRead)
         setup.watchGrants()
         watchReleaseApp()
         Task {
-            await mainWindow.loadDictionary(into: pipeline)
+            await dictionaryRead.value
             // Audio left with no row (a crash during a recording) joins this launch's retry.
             await OrphanAudioRecovery.run(in: AppFiles.audio, store: store, launchedAt: launchedAt)
             await pipeline.retryPending()
@@ -146,13 +152,6 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         settings.audioRetention = AppDefaults.chooseAudioRetention(hadDictations: store.hadDictationsAtOpen)
         mainWindow.history = store
         return store
-    }
-
-    /// Opening kotoba again while it runs (Spotlight, Raycast, Finder, `open -a`) shows the main window in front. macOS
-    /// sends the reopen with an activation, and with no window kotoba would be active and show nothing.
-    func applicationShouldHandleReopen(_ sender: NSApplication, hasVisibleWindows flag: Bool) -> Bool {
-        mainWindow.show()
-        return false
     }
 
     /// Quit waits until a live recording or an open Undo window is saved, so no audio is lost.

@@ -53,7 +53,7 @@ Before a release that ships the Writing mode (per-app modes, `docs/research/per-
   `Autoupdate`, `Updater.app` and XPC services with the Developer ID, hardened runtime and a secure timestamp;
   notarization rejects the upstream signatures. `scripts/verify-release.sh` checks each of them.
 - kotoba is not sandboxed, so Sparkle's XPC services are not used. They stay in the framework, signed.
-- kotoba has no Dock icon, so Sparkle's alert for a scheduled check opens behind other windows. As a gentle
+- kotoba is not the active app when a scheduled check ends, so Sparkle's alert opens behind other windows. As a gentle
   reminder, the menu bar icon shows a dot and the menu item reads "Install Update…" until the user looks at the
   alert (`App/Updater.swift`).
 - Debug builds (`make build`) are a separate install, "kotoba Dev" (`tech.teensy.kotoba.dev`, `App/Install.swift`).

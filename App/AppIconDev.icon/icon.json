@@ -1,0 +1,118 @@
+{
+  "fill-specializations": [
+    {
+      "value": {
+        "linear-gradient": [
+          "srgb:0.23137,0.50980,0.96471,1.00000",
+          "srgb:0.11373,0.30588,0.84706,1.00000"
+        ]
+      }
+    },
+    {
+      "appearance": "dark",
+      "value": {
+        "linear-gradient": [
+          "srgb:0.11765,0.22745,0.54118,1.00000",
+          "srgb:0.04314,0.10196,0.27059,1.00000"
+        ]
+      }
+    }
+  ],
+  "groups": [
+    {
+      "layers": [
+        {
+          "fill-specializations": [
+            {
+              "value": {
+                "solid": "srgb:0.10588,0.11765,0.14118,1.00000"
+              }
+            },
+            {
+              "appearance": "dark",
+              "value": {
+                "solid": "srgb:0.10588,0.11765,0.14118,1.00000"
+              }
+            }
+          ],
+          "image-name": "dev-letters.svg",
+          "name": "letters"
+        },
+        {
+          "fill-specializations": [
+            {
+              "value": {
+                "solid": "srgb:1.00000,0.69020,0.12549,1.00000"
+              }
+            },
+            {
+              "appearance": "dark",
+              "value": {
+                "solid": "srgb:1.00000,0.69020,0.12549,1.00000"
+              }
+            }
+          ],
+          "image-name": "dev-band.svg",
+          "name": "band"
+        }
+      ],
+      "name": "Dev",
+      "translucency": {
+        "enabled": false,
+        "value": 0
+      }
+    },
+    {
+      "layers": [
+        {
+          "fill-specializations": [
+            {
+              "value": {
+                "solid": "srgb:1.00000,0.69020,0.12549,1.00000"
+              }
+            },
+            {
+              "appearance": "dark",
+              "value": {
+                "solid": "srgb:1.00000,0.69020,0.12549,1.00000"
+              }
+            }
+          ],
+          "image-name": "caret.svg",
+          "name": "caret"
+        },
+        {
+          "fill-specializations": [
+            {
+              "value": {
+                "solid": "srgb:1.00000,1.00000,1.00000,1.00000"
+              }
+            },
+            {
+              "appearance": "dark",
+              "value": {
+                "solid": "srgb:0.93333,0.94118,0.95686,1.00000"
+              }
+            }
+          ],
+          "image-name": "wave.svg",
+          "name": "wave"
+        }
+      ],
+      "name": "Mark",
+      "shadow": {
+        "kind": "neutral",
+        "opacity": 0.5
+      },
+      "translucency": {
+        "enabled": false,
+        "value": 0
+      }
+    }
+  ],
+  "supported-platforms": {
+    "squares": [
+      "macOS"
+    ]
+  }
+}

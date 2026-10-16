@@ -76,7 +76,9 @@ extension IndicatorPanel {
     }
 
     /// A borderless, non-activating, clear panel that floats on every Space, for the pill and its drop targets.
-    /// `content` fills `frame`; the window is `shadowMargin` larger, and its clear margin lets clicks through.
+    /// `content` fills `frame`; the window is `shadowMargin` larger, and its clear margin lets clicks through. It stays
+    /// when kotoba is hidden (⌘H, or Hide Others in another app): a panel that can hide unhides every kotoba window when
+    /// it is ordered in (docs/research/dock-app.md). It is not in the Window menu.
     static func makeFloatingPanel(holding content: NSView, frame: NSRect) -> NSPanel {
         let panel = NSPanel(
             contentRect: windowFrame(around: frame), styleMask: [.borderless, .nonactivatingPanel], backing: .buffered,
@@ -92,6 +94,8 @@ extension IndicatorPanel {
         panel.backgroundColor = .clear
         panel.hasShadow = false
         panel.isReleasedWhenClosed = false
+        panel.canHide = false
+        panel.isExcludedFromWindowsMenu = true
         return panel
     }
 }

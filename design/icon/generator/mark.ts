@@ -6,6 +6,10 @@ export type Palette = { bg1: string; bg2: string; wave: string; caret: string };
 
 export const LIGHT: Palette = { bg1: "#FAFAF7", bg2: "#E6E8E3", wave: "#1B1E24", caret: "#E8553D" };
 export const DARK: Palette = { bg1: "#20232A", bg2: "#0F1115", wave: "#EEF0F4", caret: "#FF6B4A" };
+// kotoba Dev (the Debug build): blue, with an amber "DEV" band, so the Dock and ⌘-Tab tell it from the release.
+export const DEV_LIGHT: Palette = { bg1: "#3B82F6", bg2: "#1D4ED8", wave: "#FFFFFF", caret: "#FFB020" };
+export const DEV_DARK: Palette = { bg1: "#1E3A8A", bg2: "#0B1A45", wave: "#EEF0F4", caret: "#FFB020" };
+export const DEV_BAND = { band: "#FFB020", letters: "#1B1E24" };
 
 const r1 = (n: number) => Math.round(n * 100) / 100;
 
@@ -44,9 +48,19 @@ export const appIconSVG = (p: Palette) =>
     `<defs><linearGradient id="bg" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="${p.bg1}"/><stop offset="1" stop-color="${p.bg2}"/></linearGradient></defs>` +
       `<rect width="1024" height="1024" fill="url(#bg)"/>${iconWave(p.wave)}${iconCaret(p.caret)}`,
   );
+// The Dev band: a strip across the bottom, and "DEV" drawn as strokes (no fonts), centred under the mark.
+const DEV_BAND_Y = 800;
+const DEV_LETTERS =
+  "M362 862V974H392C432 974 452 948 452 918C452 888 432 862 392 862Z" + "M552 862H482V974H552M482 918H540" + "M582 862L622 974L662 862";
+export const devBand = (col: string) => `<rect y="${DEV_BAND_Y}" width="1024" height="${1024 - DEV_BAND_Y}" fill="${col}"/>`;
+export const devLetters = (col: string) => `<path d="${DEV_LETTERS}" ${stroke(col, 30)}/>`;
+export const devAppIconSVG = (p: Palette) => appIconSVG(p).replace("</svg>", `${devBand(DEV_BAND.band)}${devLetters(DEV_BAND.letters)}</svg>`);
+
 // Icon Composer foreground layers: transparent canvas, black shapes; icon.json sets the colours per appearance.
 export const waveLayerSVG = () => svg(1024, iconWave("#000000"));
 export const caretLayerSVG = () => svg(1024, iconCaret("#000000"));
+export const devBandLayerSVG = () => svg(1024, devBand("#000000"));
+export const devLettersLayerSVG = () => svg(1024, devLetters("#000000"));
 
 // ---------- menu-bar template glyph, 18 x 18 pt, black on transparent ----------
 const GLYPH_WAVE = `${waveD([

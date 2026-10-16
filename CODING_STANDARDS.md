@@ -43,7 +43,8 @@
 
 ## Windows and text entry
 
-- kotoba is `LSUIElement` (no Dock icon, no visible menu bar), but it keeps a hidden main menu with the standard File > Close and Edit menu (Undo, Redo, Cut, Copy, Paste, Select All, Find > Find…). Without it, Cmd-W and Cmd-X/C/V/A/Z do nothing in any text field and macOS beeps. Never remove it; a new window with text entry needs no extra wiring.
+- kotoba is a Dock app by default (story 35); with "Show in Dock" off it is an agent with no visible menu bar while no window is open. `App/MainMenu.swift` builds one main menu for both: the kotoba app menu first (About, Settings…, Hide, Quit ⌘Q), then File > Close, the Edit menu (Undo, Redo, Cut, Copy, Paste, Select All, Find > Find…), Window and Help. Without it, Cmd-W and Cmd-X/C/V/A/Z do nothing in any text field and macOS beeps. Never remove it; a new window with text entry needs no extra wiring.
+- Only `DockAndMenuBar` sets the activation policy (lint `activation_policy`). A window that the owner opens goes through `WindowFront`, so it counts as open for "Show in Dock" off.
 - Every new window or pane with a text field gets a manual test row in `docs/testing/phase2-manual.md` for Cmd-V and Cmd-A, because snapshots and unit tests cannot catch a missing responder action.
 
 ## User-facing text

@@ -116,9 +116,13 @@ enum Snapshots {
                 }
             }
             // The menu as text, one line per item, so a review can diff its words.
-            for (name, model) in MenuModel.samples() {
-                try model.text().write(
-                    to: folder.appending(path: "menu-\(name).txt"), atomically: true, encoding: .utf8)
+            // The Dock icon's menu is the ready menu bar menu without Quit; the main menu is the release's.
+            let menus =
+                MenuModel.samples().map { ($0.name, $0.model.text()) }
+                + MenuModel.samples().prefix(1).map { ("dock", $0.model.text(for: .dock)) }
+                + [("main", MainMenu(hasUpdater: true).menu.outline())]
+            for (name, text) in menus {
+                try text.write(to: folder.appending(path: "menu-\(name).txt"), atomically: true, encoding: .utf8)
                 written += 1
             }
         } catch {

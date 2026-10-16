@@ -12,7 +12,7 @@ Cloud speech-to-text through the owner's own API key costs about $0.10 per hour 
 
 ## Solution
 
-A native macOS menu-bar dictation app, kotoba. The owner taps a chord, speaks, taps again, and the text appears in the focused app within about one second. Transcription runs in the cloud with the owner's own keys, stored in the Keychain. There are no accounts and no telemetry. The app is small in memory, starts capturing at the instant of the key press, never loses a dictation, and improves technical accuracy through a personal dictionary sent to the model as keyterms.
+A native macOS dictation app, kotoba, in the Dock and the menu bar. The owner taps a chord, speaks, taps again, and the text appears in the focused app within about one second. Transcription runs in the cloud with the owner's own keys, stored in the Keychain. There are no accounts and no telemetry. The app is small in memory, starts capturing at the instant of the key press, never loses a dictation, and improves technical accuracy through a personal dictionary sent to the model as keyterms.
 
 The app is open-source (Apache-2.0) and distributed as a notarized DMG on GitHub Releases once the MVP passes its gates.
 
@@ -68,7 +68,12 @@ The app is open-source (Apache-2.0) and distributed as a notarized DMG on GitHub
 34. As a developer, I want optional context awareness (selected or nearby text sent as context), off by default, so that I choose the privacy trade-off.
 
 ### App shell and distribution
-35. As a user, I want a menu-bar app with no Dock icon, so that it stays out of the way.
+35. As a user, I want kotoba in the Dock and in the menu bar by default, with a setting to hide either one but not both, so that it stays as far out of the way as I want and I can always reach it. An update turns the Dock icon on too (owner, 2026-10-16).
+35a. As a user with "Show in Dock" off, I want kotoba in the Dock only while one of its windows is open (the main window, onboarding, Fix Dictation; not the indicator or a menu), so that ⌘-Tab and the menu bar work while I use a window, and kotoba keeps dictating from the menu bar when I close it.
+35b. As a user, I want a launch from Finder, Spotlight or `open` to show the main window and a launch at login to show none, and a Dock click or a second open to show the main window, so that I can always get back in, even with an icon hidden. Onboarding comes first until it is done.
+35c. As a user, I want the Dock icon's right-click menu to offer the menu bar menu's items, so that I reach them with the menu bar icon hidden.
+35d. As a user, I want the Dock icon to show the number of dictations that wait for a retry, and no badge at zero, so that I see a failed dictation without opening a menu.
+35e. As the owner, I want kotoba Dev to have its own Dock icon, so that I can tell it from the release.
 36. As a user, I want launch at login, so that dictation is always available.
 37. As a user, I want onboarding that grants Microphone, Accessibility and Input Monitoring permissions and explains each, so that setup works the first time.
 38. As a user, I want permissions to survive app updates, so that I do not re-grant them after each release.
@@ -90,7 +95,7 @@ The app is open-source (Apache-2.0) and distributed as a notarized DMG on GitHub
 
 ### Platform and UI
 - Minimum macOS 26. Bundle ID `tech.teensy.kotoba`; Debug builds are a separate install, `tech.teensy.kotoba.dev` ("kotoba Dev"), with their own settings, data and keys (`App/Install.swift`). Signed with the owner's Developer ID (team 7U6G55576W), notarized. Every development build is signed with the same identity so TCC permissions and Keychain access survive rebuilds.
-- AppKit `NSStatusItem` for the menu bar; the recording indicator is an AppKit panel using `NSGlassEffectView`.
+- kotoba is a Dock app by default ("Show in Dock", General). The Info.plist keeps `LSUIElement`, and the first step of the launch sets the `.regular` policy from the setting (`App/DockAndMenuBar.swift`, the only caller of `setActivationPolicy`), so no launch shows a Dock icon by mistake; a change applies at once, without a relaunch. The AppKit `NSStatusItem` menu bar icon has its own setting; the two cannot both be off. The main menu has the kotoba app menu first (About, Settings…, Hide, Quit). The recording indicator is an AppKit panel using `NSGlassEffectView`; it never activates kotoba and never hides with it (`canHide` off).
 - SwiftUI only for windows that open on demand: the main window (one sidebar with Home, History, Insights, Usage and the settings; since 0.3.0), onboarding and Fix Last Dictation. Measured 2026-10-15 (`docs/research/memory-spike.md`): status item + glass panel + prepared engine idles at about 17 MB; a SwiftUI window adds about 15 MB that stays after close. The owner accepts SwiftUI for these windows for now; AppKit replacement is a later option if memory matters.
 - No WebKit, no SwiftData, no local speech models. `NSSupportsAutomaticTermination` off.
 

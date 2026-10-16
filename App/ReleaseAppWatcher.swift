@@ -2,9 +2,9 @@ import AppKit
 import KotobaCore
 
 /// Tells a development build when the release app runs (`InstallYield`). NSWorkspace posts no launch or quit
-/// notification for an `LSUIElement` app such as kotoba, so this observes `NSWorkspace.runningApplications` with KVO,
-/// which changes on the main run loop when any app launches or quits. Nothing runs at idle, and the release install
-/// observes nothing.
+/// notification for an `LSUIElement` app, and kotoba launches as one (and stays one with "Show in Dock" off), so this
+/// observes `NSWorkspace.runningApplications` with KVO, which changes on the main run loop when any app launches or
+/// quits. Nothing runs at idle, and the release install observes nothing.
 @MainActor
 final class ReleaseAppWatcher {
     private var yield = InstallYield(isRelease: Install.isRelease)

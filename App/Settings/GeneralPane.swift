@@ -12,8 +12,8 @@ extension Pane {
 }
 
 /// The General pane's settings: the dictation, cleanup and Paste Last shortcuts and the cleanup model, the spoken
-/// Return phrase, launch at login, sounds and their voice, the indicator's position and visibility, how long audio is
-/// kept, and automatic update checks. Each change applies at once.
+/// Return phrase, launch at login, the Dock and menu bar icons, sounds and their voice, the indicator's position and
+/// visibility, how long audio is kept, and automatic update checks. Each change applies at once.
 @MainActor
 @Observable
 final class GeneralModel {
@@ -42,6 +42,8 @@ final class GeneralModel {
     /// A new setting is one field here, one property below, and one line in `live` and `sample()`.
     struct Backing {
         var loginItem: LoginItem
+        var showsInDock: Setting<Bool>
+        var showsMenuBarIcon: Setting<Bool>
         var soundCues: Setting<Bool>
         var cueVoice: Setting<CueVoice>
         var indicatorAnchor: Setting<IndicatorAnchor>
@@ -57,6 +59,12 @@ final class GeneralModel {
         ) -> Self {
             Self(
                 loginItem: .live,
+                showsInDock: Setting(
+                    read: { DockAndMenuBar.shared.presence.showsInDock },
+                    write: { DockAndMenuBar.shared.setShowsInDock($0) }),
+                showsMenuBarIcon: Setting(
+                    read: { DockAndMenuBar.shared.presence.showsMenuBarIcon },
+                    write: { DockAndMenuBar.shared.setShowsMenuBarIcon($0) }),
                 soundCues: Setting(read: { AppDefaults.areSoundCuesOn }, write: { AppDefaults.areSoundCuesOn = $0 }),
                 // A new voice plays its start cue once, so the owner hears the choice.
                 cueVoice: Setting(
@@ -87,6 +95,17 @@ final class GeneralModel {
     private(set) var isLaunchAtLoginOn: Bool
     /// Shown under the toggle when System Settings must approve, or the change failed.
     private(set) var loginProblem: LaunchAtLogin.Problem?
+
+    var showsInDock: Bool {
+        didSet { backing.showsInDock.write(showsInDock) }
+    }
+
+    var showsMenuBarIcon: Bool {
+        didSet { backing.showsMenuBarIcon.write(showsMenuBarIcon) }
+    }
+
+    /// The Dock icon and the menu bar icon cannot both be off: the toggle of the one that is left is disabled.
+    var presence: AppPresence { AppPresence(showsInDock: showsInDock, showsMenuBarIcon: showsMenuBarIcon) }
 
     var areSoundsOn: Bool {
         didSet { backing.soundCues.write(areSoundsOn) }
@@ -143,6 +162,8 @@ final class GeneralModel {
         cleanupModel = settings.cleanupModel
         isLaunchAtLoginOn = backing.loginItem.isOn()
         loginProblem = backing.loginItem.problem()
+        showsInDock = backing.showsInDock.read()
+        showsMenuBarIcon = backing.showsMenuBarIcon.read()
         areSoundsOn = backing.soundCues.read()
         cueVoice = backing.cueVoice.read()
         indicatorAnchor = backing.indicatorAnchor.read()
@@ -160,14 +181,14 @@ final class GeneralModel {
 
     /// Fixed values for snapshots: no UserDefaults, Login Items, indicator or updater is read. `loginItem` stands
     /// in for the system.
-    static func sample(loginItem: LoginItem = .init(isOn: { true }, problem: { nil }, change: { _ in nil }))
-        -> GeneralModel
-    {
+    static func sample(
+        loginItem: LoginItem = .init(isOn: { true }, problem: { nil }, change: { _ in nil }), showsInDock: Bool = true
+    ) -> GeneralModel {
         GeneralModel(
             settings: .inMemory(), chords: HotkeyChords(defaults: nil), audio: .sample(),
             backing: Backing(
-                loginItem: loginItem, soundCues: .fixed(true), cueVoice: .fixed(.nylon),
-                indicatorAnchor: .fixed(.bottomCenter),
+                loginItem: loginItem, showsInDock: .fixed(showsInDock), showsMenuBarIcon: .fixed(true),
+                soundCues: .fixed(true), cueVoice: .fixed(.nylon), indicatorAnchor: .fixed(.bottomCenter),
                 indicatorVisibility: .fixed(.whileDictating), submitPhrase: .fixed(true),
                 checksForUpdates: .fixed(true)))
     }
@@ -224,6 +245,21 @@ private struct GeneralPane: View {
                     }
                 }
             }
+            Section {
+                Toggle(isOn: $model.showsInDock) {
+                    Text("Show in Dock")
+                    Text("When off, kotoba is in the Dock only while one of its windows is open.")
+                }
+                .disabled(!model.presence.canHideDockIcon)
+                Toggle("Show in menu bar", isOn: $model.showsMenuBarIcon)
+                    .disabled(!model.presence.canHideMenuBarIcon)
+            } header: {
+                Text("Dock and Menu Bar")
+            } footer: {
+                if !model.presence.canHideDockIcon || !model.presence.canHideMenuBarIcon {
+                    Text("kotoba keeps the Dock icon or the menu bar icon, so you can always open it.")
+                }
+            }
             Section("Feedback") {
                 Toggle("Play a sound when dictation starts and stops", isOn: $model.areSoundsOn)
                 Picker("Sound", selection: $model.cueVoice) {
@@ -257,7 +293,9 @@ private struct GeneralPane: View {
 extension Pane {
     static func generalSnapshots() -> [Snapshot] {
         [
-            MainWindow.snapshot(of: .general(.sample()), named: "settings-general", height: 1_080),
+            MainWindow.snapshot(of: .general(.sample()), named: "settings-general", height: 1_200),
+            MainWindow.snapshot(
+                of: .general(.sample(showsInDock: false)), named: "settings-general-dock-off", height: 1_240),
             loginFailureSnapshot(),
         ]
     }
@@ -275,7 +313,7 @@ extension Pane {
                 }))
         model.setLaunchAtLogin(true)
         var snapshot = MainWindow.snapshot(
-            of: .general(model), named: "settings-general-login-failed", height: 1_140)
+            of: .general(model), named: "settings-general-login-failed", height: 1_260)
         snapshot.check = { _ in
             guard changes == 1, model.loginProblem == .failed, !model.isLaunchAtLoginOn else {
                 return "A failed launch-at-login change made \(changes) calls and kept no note"

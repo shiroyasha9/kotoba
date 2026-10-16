@@ -75,8 +75,15 @@ struct MenuModel {
         }
     }
 
+    /// The menu bar icon's menu, or the Dock icon's right-click menu (story 35), which has the same items but Quit: the
+    /// Dock adds its own.
+    enum Place {
+        case menuBar
+        case dock
+    }
+
     /// Builds the whole menu into `menu`, replacing its items.
-    func build(into menu: NSMenu, target: StatusMenuActions?) {
+    func build(into menu: NSMenu, target: StatusMenuActions?, for place: Place = .menuBar) {
         menu.removeAllItems()
         for item in topItems(target: target) + [.separator()] + settingItems(target: target) + [.separator()] {
             menu.addItem(item)
@@ -89,6 +96,7 @@ struct MenuModel {
         if let updates {
             menu.addItem(Self.updateItem(updates, target: target))
         }
+        guard place == .menuBar else { return }
         menu.addItem(.separator())
         menu.addItem(
             NSMenuItem(
@@ -230,12 +238,19 @@ struct MenuModel {
         ]
     }
 
-    /// The menu as text, one item per line (submenu items indented, subtitles after "·"), for snapshot runs.
-    func text() -> String {
+    /// The menu as text (`NSMenu.outline`), for snapshot runs.
+    func text(for place: Place = .menuBar) -> String {
         let menu = NSMenu()
         menu.autoenablesItems = false
-        build(into: menu, target: nil)
-        return Self.lines(of: menu, depth: 0).joined(separator: "\n") + "\n"
+        build(into: menu, target: nil, for: place)
+        return menu.outline()
+    }
+}
+
+extension NSMenu {
+    /// One item per line (submenu items indented, subtitles after "·", then the key equivalent), for snapshot runs.
+    func outline() -> String {
+        Self.lines(of: self, depth: 0).joined(separator: "\n") + "\n"
     }
 
     private static func lines(of menu: NSMenu, depth: Int) -> [String] {
@@ -244,10 +259,20 @@ struct MenuModel {
             guard !item.isSeparatorItem else { return [indent + "---"] }
             var line = indent + item.title
             if let subtitle = item.subtitle { line += " · " + subtitle }
+            if !item.keyEquivalent.isEmpty { line += " " + shortcut(of: item) }
             if item.state == .on { line += " [on]" }
             if !item.isEnabled { line += " (disabled)" }
             if let submenu = item.submenu { return [line + " ▸"] + lines(of: submenu, depth: depth + 1) }
             return [line]
         }
+    }
+
+    /// "⌥⌘H", as the menu draws it.
+    private static func shortcut(of item: NSMenuItem) -> String {
+        let flags = item.keyEquivalentModifierMask
+        let symbols: [(NSEvent.ModifierFlags, String)] = [
+            (.control, "⌃"), (.option, "⌥"), (.shift, "⇧"), (.command, "⌘"),
+        ]
+        return symbols.filter { flags.contains($0.0) }.map(\.1).joined() + item.keyEquivalent.uppercased()
     }
 }

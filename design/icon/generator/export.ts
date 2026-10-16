@@ -6,10 +6,16 @@ import { join } from "node:path";
 import { $ } from "bun";
 import {
   DARK,
+  DEV_BAND,
+  DEV_DARK,
+  DEV_LIGHT,
   LIGHT,
   type Palette,
   appIconSVG,
   caretLayerSVG,
+  devAppIconSVG,
+  devBandLayerSVG,
+  devLettersLayerSVG,
   glyphAttentionSVG,
   glyphCaretOffSVG,
   glyphIdleSVG,
@@ -29,6 +35,8 @@ const src = dir("source");
 const sources: Record<string, string> = {
   "app-icon-light.svg": appIconSVG(LIGHT),
   "app-icon-dark.svg": appIconSVG(DARK),
+  "app-icon-dev-light.svg": devAppIconSVG(DEV_LIGHT),
+  "app-icon-dev-dark.svg": devAppIconSVG(DEV_DARK),
   "layer-wave.svg": waveLayerSVG(),
   "layer-caret.svg": caretLayerSVG(),
   "menubar-idle.svg": glyphIdleSVG(),
@@ -68,28 +76,45 @@ const srgb = (hex: string) => {
 };
 const fillSpec = (light: string, dark: string) => [{ value: { solid: srgb(light) } }, { appearance: "dark", value: { solid: srgb(dark) } }];
 const bg = (p: Palette) => ({ "linear-gradient": [srgb(p.bg1), srgb(p.bg2)] });
-const icon = dir("AppIcon.icon");
-const assets = dir("AppIcon.icon", "Assets");
-writeFileSync(join(assets, "caret.svg"), caretLayerSVG());
-writeFileSync(join(assets, "wave.svg"), waveLayerSVG());
-writeFileSync(
-  join(icon, "icon.json"),
-  json({
-    "fill-specializations": [{ value: bg(LIGHT) }, { appearance: "dark", value: bg(DARK) }],
-    groups: [
-      {
-        layers: [
-          { "fill-specializations": fillSpec(LIGHT.caret, DARK.caret), "image-name": "caret.svg", name: "caret" },
-          { "fill-specializations": fillSpec(LIGHT.wave, DARK.wave), "image-name": "wave.svg", name: "wave" },
-        ],
-        name: "Mark",
-        shadow: { kind: "neutral", opacity: 0.5 },
-        translucency: { enabled: false, value: 0 },
-      },
+const mark = (light: Palette, dark: Palette) => ({
+  layers: [
+    { "fill-specializations": fillSpec(light.caret, dark.caret), "image-name": "caret.svg", name: "caret" },
+    { "fill-specializations": fillSpec(light.wave, dark.wave), "image-name": "wave.svg", name: "wave" },
+  ],
+  name: "Mark",
+  shadow: { kind: "neutral", opacity: 0.5 },
+  translucency: { enabled: false, value: 0 },
+});
+// AppIcon.icon for the release; AppIconDev.icon for kotoba Dev, the Debug build (project.yml), with the "DEV" band.
+for (const [name, light, dark, isDev] of [
+  ["AppIcon.icon", LIGHT, DARK, false],
+  ["AppIconDev.icon", DEV_LIGHT, DEV_DARK, true],
+] as const) {
+  const icon = dir(name);
+  const assets = dir(name, "Assets");
+  writeFileSync(join(assets, "caret.svg"), caretLayerSVG());
+  writeFileSync(join(assets, "wave.svg"), waveLayerSVG());
+  const dev = {
+    layers: [
+      { "fill-specializations": fillSpec(DEV_BAND.letters, DEV_BAND.letters), "image-name": "dev-letters.svg", name: "letters" },
+      { "fill-specializations": fillSpec(DEV_BAND.band, DEV_BAND.band), "image-name": "dev-band.svg", name: "band" },
     ],
-    "supported-platforms": { squares: ["macOS"] },
-  }),
-);
+    name: "Dev",
+    translucency: { enabled: false, value: 0 },
+  };
+  if (isDev) {
+    writeFileSync(join(assets, "dev-band.svg"), devBandLayerSVG());
+    writeFileSync(join(assets, "dev-letters.svg"), devLettersLayerSVG());
+  }
+  writeFileSync(
+    join(icon, "icon.json"),
+    json({
+      "fill-specializations": [{ value: bg(light) }, { appearance: "dark", value: bg(dark) }],
+      groups: isDev ? [dev, mark(light, dark)] : [mark(light, dark)],
+      "supported-platforms": { squares: ["macOS"] },
+    }),
+  );
+}
 
 // ---------- menu-bar template images: vector PDF at 18 x 18 pt ----------
 const glyphs: Record<string, string> = { MenuBarIdle: "menubar-idle", MenuBarListening: "menubar-caret-off", MenuBarAttention: "menubar-attention" };
@@ -114,6 +139,7 @@ for (const file of Object.values(glyphs))
   for (const px of [16, 18, 32, 36]) await $`rsvg-convert -w ${px} -h ${px} ${join(src, `${file}.svg`)} -o ${join(pv, `${file}-${px}.png`)}`;
 const ictool = "/Applications/Xcode.app/Contents/Applications/Icon Composer.app/Contents/Executables/ictool";
 if (existsSync(ictool))
-  for (const r of ["Default", "Dark", "ClearLight", "TintedDark"])
-    await $`${ictool} ${icon} --export-image --output-file ${join(pv, `icon-composer-${r}.png`)} --platform macOS --rendition ${r} --width 512 --height 512 --scale 1`.nothrow();
+  for (const name of ["AppIcon", "AppIconDev"])
+    for (const r of ["Default", "Dark", "ClearLight", "TintedDark"])
+      await $`${ictool} ${join(root, `${name}.icon`)} --export-image --output-file ${join(pv, `${name}-${r}.png`)} --platform macOS --rendition ${r} --width 512 --height 512 --scale 1`.nothrow();
 console.log("exported to", root);

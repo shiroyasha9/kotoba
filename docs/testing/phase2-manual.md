@@ -636,3 +636,26 @@ Layout and copy pass over the main window. Snapshots cannot show the toolbar's g
 | 702 | On **Home**, look at a row with “No text” | It has no copy icon; its time lines up with the other rows’ times. With no dictations, **Recent Dictations** has no **Show All** | |
 | 703 | General > **Shortcuts**: set a cleanup shortcut that is not the default | The ⓧ and the reset arrow sit left of the shortcut; the right edges of the Dictate, Clean up and Paste last shortcuts line up | |
 | 704 | Dictionary: compare the **Learn from my edits** switch with a switch in General | Same size | |
+
+## Dock app (story 35, kotoba Dev)
+
+Rows 520-535 use kotoba Dev with the release kotoba quit, so Dev keeps its hotkey. Read the Dock switches and the launch kind with `log stream --predicate 'subsystem == "tech.teensy.kotoba.dev"'` (“Dock icon shown”, “Launched by the owner”).
+
+| # | Do this | Expect | Result |
+|---|---|---|---|
+| 520 | Quit kotoba Dev. Open it from Finder (“Show in Dock” on, the default) | The blue Dev icon with the “DEV” band appears in the Dock once, with no flash. The menu bar shows kotoba Dev, File, Edit, Window, Help; kotoba Dev holds About, Settings…, Hide kotoba Dev, Hide Others, Show All and Quit kotoba Dev ⌘Q. The main window opens | |
+| 521 | Settings > General: turn **Show in Dock** off | The Dock icon stays while the window is open. Close the window: the Dock icon goes, kotoba Dev stays in the menu bar, and a dictation still pastes | |
+| 522 | With **Show in Dock** off: menu > **Settings…** | The Dock icon and kotoba Dev’s menus appear with the window, with no ⌘-Tab. ⌘-Tab lists kotoba Dev. Close the window: the icon goes | |
+| 523 | With **Show in Dock** off and the main window open, choose **Fix Last Dictation…**, then close the main window, then the Fix window | The Dock icon stays until the Fix window closes | |
+| 524 | With **Show in Dock** off and no window open: menu > **About kotoba Dev**, close the panel, click another app | The Dock icon shows with the About panel and goes when you click the other app | |
+| 525 | With **Show in Dock** off and the main window open: turn **Show in Dock** on, then off | On: nothing changes (the icon is there). Off: the icon stays until the window closes. The window stays in front and key; ⌘A and ⌘V work in a text field | |
+| 526 | Turn **Show in menu bar** off | The menu bar icon goes; **Show in Dock** is dimmed, and the footer says why. Turn it on again: the icon comes back in the same place | |
+| 527 | Turn **Show in Dock** off | **Show in menu bar** is dimmed, with the footer | |
+| 528 | With **Show in Dock** on and the menu bar icon off, close all windows; click the Dock icon. Minimize the window, then click the Dock icon again | The main window opens; the minimized window comes back | |
+| 529 | Right-click the Dock icon. Pick another microphone. With TextEdit in front, right-click the Dock icon and choose **Paste Last Dictation** | The menu has the menu bar menu’s items and the Dock’s own Options and Quit, but no second Quit. The mic changes. The text goes into TextEdit | |
+| 530 | Turn Wi-Fi off, dictate twice, turn Wi-Fi on | The Dock icon shows the badge 1, then 2; it goes when the retries are sent | |
+| 531 | **Show in Dock** on, TextEdit in front: dictate with the chord, then with a click on the idle pill (“Show indicator: Always”) | Both paste into TextEdit. kotoba Dev never becomes the active app (TextEdit keeps the menu bar) | |
+| 532 | Open the main window, then press ⌥⌘H in TextEdit. Dictate | The pill shows; the main window stays hidden; the text goes into TextEdit | |
+| 533 | Start a recording, then choose kotoba Dev > **Quit kotoba Dev** (⌘Q) | Quit waits; the audio is in History after the next launch | |
+| 534 | Turn **Open kotoba when you log in** on. Log out and in | The Dock icon is there; no window opens. The log says “Launched at login” | |
+| 535 | Run the release app and kotoba Dev together | Two Dock icons: the release icon and the blue Dev icon. Dev gives way (its menu says so) | |

@@ -18,6 +18,8 @@ enum AppDefaults {
         case audioRetention = "history.audioRetention"
         case modes = "modes.rules"
         case mainWindowPane = "mainWindow.pane"
+        case showsInDock = "app.showsInDock"
+        case showsMenuBarIcon = "app.showsMenuBarIcon"
     }
 
     /// The values a setting has until the owner changes it, registered once at launch (`main.swift`) before anything
@@ -27,6 +29,9 @@ enum AppDefaults {
             Key.soundCues.rawValue: true,
             Key.submitPhrase.rawValue: true,
             Key.learnsFromEdits.rawValue: true,
+            // On for an update too (owner, 2026-10-16): kotoba becomes a Dock app.
+            Key.showsInDock.rawValue: true,
+            Key.showsMenuBarIcon.rawValue: true,
         ])
     }
 
@@ -70,6 +75,19 @@ enum AppDefaults {
     static var lastPane: PaneID? {
         get { UserDefaults.standard.string(forKey: Key.mainWindowPane.rawValue).flatMap(PaneID.init) }
         set { UserDefaults.standard.set(newValue?.rawValue, forKey: Key.mainWindowPane.rawValue) }
+    }
+
+    /// "Show in Dock" and "Show in menu bar" (story 35).
+    static var presence: AppPresence {
+        get {
+            AppPresence(
+                showsInDock: UserDefaults.standard.bool(forKey: Key.showsInDock.rawValue),
+                showsMenuBarIcon: UserDefaults.standard.bool(forKey: Key.showsMenuBarIcon.rawValue))
+        }
+        set {
+            UserDefaults.standard.set(newValue.showsInDock, forKey: Key.showsInDock.rawValue)
+            UserDefaults.standard.set(newValue.showsMenuBarIcon, forKey: Key.showsMenuBarIcon.rawValue)
+        }
     }
 
     /// The per-app modes (story 29), saved as the owner's changes to `ModeRules.standard`, so apps a later build adds

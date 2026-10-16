@@ -18,6 +18,16 @@ final class StatusBarItem: NSObject, NSMenuDelegate {
         }
     }
 
+    /// "Show in menu bar" (`DockAndMenuBar`). A hidden icon does not blink.
+    var isShown: Bool {
+        get { item.isVisible }
+        set {
+            guard newValue != item.isVisible else { return }
+            item.isVisible = newValue
+            showIcon()
+        }
+    }
+
     /// One blink phase, about half a second each, as a text caret blinks.
     private static let blinkPhase = Duration.milliseconds(530)
 
@@ -62,6 +72,7 @@ final class StatusBarItem: NSObject, NSMenuDelegate {
             item.button?.image = Self.attention
         case .listening:
             item.button?.image = Self.idle
+            guard item.isVisible else { return }
             blink = Task { [weak self] in
                 var isCaretOn = true
                 while true {

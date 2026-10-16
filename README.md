@@ -8,7 +8,7 @@
 <h1 align="center">kotoba</h1>
 
 <p align="center">
-  Menu-bar dictation for macOS. Tap a shortcut, speak, tap again, and kotoba pastes your words into the app you are using.
+  Dictation for macOS, in your Dock and menu bar. Tap a shortcut, speak, tap again, and kotoba pastes your words into the app you are using.
 </p>
 
 <p align="center">
@@ -64,6 +64,7 @@ Two more numbers from the capture path (built-in mic, from the commit that moved
 - Press Return while you dictate to stop, paste and press Return in one step. Or end with "press enter": kotoba pastes the text without the phrase, then presses Return.
 - Text goes into the focused app (terminals, editors, browsers, chat), and your clipboard comes back after the paste. kotoba marks the paste as transient, so clipboard managers skip it.
 - A small indicator shows what kotoba is doing and the mic level. It warns when the mic hears nothing, and when secure input is on. Show it only while you dictate or all the time (then a click starts and stops a dictation). Drag it to the bottom center or to the left or right edge.
+- kotoba sits in the Dock and in the menu bar. Hide either one in Settings > General: with "Show in Dock" off, kotoba is in the Dock only while one of its windows is open. Right-click the Dock icon for the menu bar menu; its badge counts the dictations that wait for a retry.
 - Choose your microphone and the order in which kotoba prefers them. When AirPods are your output, kotoba records from the built-in mic, so your music does not drop to call quality.
 
 **Get technical words right**
@@ -141,7 +142,7 @@ Requires macOS 26 or later.
 
 1. Download the latest `kotoba-<version>.dmg` from [Releases](https://github.com/shiroyasha9/kotoba/releases).
 2. Open it and drag kotoba to Applications.
-3. Open kotoba from Applications. It appears in the menu bar, not in the Dock.
+3. Open kotoba from Applications. It appears in the Dock and in the menu bar; hide either one in Settings > General.
 
 The app is signed with a Developer ID and notarized by Apple.
 

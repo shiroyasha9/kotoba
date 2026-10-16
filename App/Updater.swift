@@ -10,7 +10,7 @@ final class Updater: NSObject {
         Install.isRelease ? Updater() : nil
     }
 
-    /// A scheduled check found an update. kotoba has no Dock icon, so Sparkle's alert opens behind other windows;
+    /// A scheduled check found an update. kotoba is not the active app, so Sparkle's alert opens behind other windows;
     /// the menu bar icon shows a dot and the menu offers "Install Update…" until the user looks at the alert.
     private(set) var hasWaitingUpdate = false {
         didSet {

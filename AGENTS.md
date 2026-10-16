@@ -17,7 +17,7 @@ Native macOS menu-bar dictation: tap a chord, speak, tap again, the cloud transc
 ## Module boundaries
 
 - `KotobaCore/`: pure Swift package. `DictationPipeline` (actor) takes hotkey events and drives six ports: `AudioSource`, `TranscriptionProvider`, `Paster`, `Pasteboard`, `PipelineClock`, `Store`. Every decision lives here: tap vs hold, Esc, the 10-minute warning, retry queue, clipboard restore rules, latency marks. Imports Foundation, os and Synchronization only (lint-enforced).
-- `App/`: AppKit menu-bar app (`LSUIElement`). Thin adapters that implement the ports with AVAudioEngine, CGEventTap, NSPasteboard, URLSession, SQLite and the Keychain, plus the indicator panel and on-demand windows.
+- `App/`: AppKit app in the Dock and the menu bar (`LSUIElement` at launch; `DockAndMenuBar` owns the activation policy). Thin adapters that implement the ports with AVAudioEngine, CGEventTap, NSPasteboard, URLSession, SQLite and the Keychain, plus the indicator panel and on-demand windows.
 - `spikes/`: throwaway experiments, outside `make check`.
 
 ## Rules

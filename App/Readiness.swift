@@ -154,9 +154,11 @@ final class SetupFlow {
         self.openSpeechSettings = openSpeechSettings
     }
 
-    /// First launch: onboarding opens until the owner clicks Done, unless kotoba is set up already.
-    func showOnboardingIfNew() {
-        guard !OnboardingController.isComplete, !readiness.isComplete else { return }
+    /// Onboarding opens at launch until the owner clicks Done, unless kotoba is set up already (`AppPresence.window`).
+    var needsOnboarding: Bool { !OnboardingController.isComplete && !readiness.isComplete }
+
+    /// Onboarding where the owner left it, or at Welcome.
+    func showOnboarding() {
         onboarding.show()
     }
 
