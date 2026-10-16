@@ -153,19 +153,21 @@ struct KeyStep: View {
         StepText("kotoba sends your audio to \(provider), which turns it into text.")
         PriceLine(route: model.route)
             .font(.callout)
-        // Hidden once a key is saved, unless the provider refused it: Change… is then the next thing to do, and a second
-        // key button would compete with it.
-        if !model.keyChecks.isSaved(model.account) || model.keyChecks.status[model.account] == .checked(.invalid) {
-            Button("Get a Key at \(provider)…") { model.open(model.account.keysPage) }
-                .padding(.top, 4)
-        }
         KeyField(account: model.account, keyChecks: model.keyChecks, fieldWidth: 280)
+            .padding(.top, 4)
         result
             .font(.callout)
             .frame(minHeight: 34, alignment: .top)
-        Button("Use xAI or Azure Instead…", action: model.openSpeechSettings)
-            .buttonStyle(.link)
-            .font(.callout)
+        // The links sit below the field and its result, so a link that goes away moves nothing the pointer is on.
+        HStack(spacing: 16) {
+            // Gone once a key is saved, unless the provider refused it: Change… is then the next thing to do.
+            if !model.keyChecks.isSaved(model.account) || model.keyChecks.status[model.account] == .checked(.invalid) {
+                Button("Get a Key at \(provider)…") { model.open(model.account.keysPage) }
+            }
+            Button("Use xAI or Azure Instead…", action: model.openSpeechSettings)
+        }
+        .buttonStyle(.link)
+        .font(.callout)
     }
 
     /// The shared check result after a save here; with none, what `Readiness` knows about a key saved before.
