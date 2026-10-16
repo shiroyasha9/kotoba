@@ -19,10 +19,10 @@ public enum PolishModel: String, CaseIterable, Sendable {
     /// The hosts to try in order, with no other host after them; nil lets OpenRouter pick. DeepSeek without an order
     /// went to 11 hosts in the bench, at 1.0 to 8.6 s p50 each; these three answered in about 1 s, and all three keep
     /// no data (`GET /endpoints/zdr`, 2026-10-17).
-    var hostOrder: [String]? {
+    var hosts: ChatRouting.Hosts {
         switch self {
-        case .deepSeekFlash: ["together", "primeintellect", "inference-net"]
-        case .geminiFlashLite: nil
+        case .deepSeekFlash: .order(["together", "primeintellect", "inference-net"])
+        case .geminiFlashLite: .any
         }
     }
 }
@@ -61,43 +61,29 @@ public final class OpenRouterPolisher: TextPolisher {
 
     private func polish(_ text: String, with model: PolishModel) async throws -> PolishedText {
         let label = "polish \(model.rawValue)"
-        let reply = try await connection.send(
-            baseURL.appending(path: "chat/completions"), contentType: "application/json", label: label,
-            body: .data(try Self.requestBody(text, model: model)))
-        let body = try ProviderHTTP.decode(SuccessBody.self, from: reply, label: label)
-        let choice = body.choices.first
-        // OpenRouter's normalized reason: "stop" when the model ended the text, "length" or "content_filter" when the
-        // text was cut.
-        let isComplete = choice?.finishReason == "stop"
-        if !isComplete {
-            ProviderHTTP.log.error(
-                "\(label, privacy: .public) ended with \(choice?.finishReason ?? "no reason", privacy: .public)")
-        }
+        let answer = try await ChatAnswer.send(
+            Self.request(text, model: model), on: connection, at: baseURL, label: label)
         return PolishedText(
-            text: choice?.message.content ?? "", model: model.rawValue, cost: body.usage?.cost(of: model),
-            isComplete: isComplete)
+            text: answer.text, model: model.rawValue, cost: answer.usage?.cost(of: model),
+            isComplete: answer.isComplete)
     }
 
-    /// Non-streaming: the text is pasted whole, so only the total time counts. `max_tokens` is about three times the
-    /// longest bench input (924 words), so a real answer never reaches it.
-    static func requestBody(_ text: String, model: PolishModel) throws -> Data {
-        var body = RequestBody(
-            model: model.rawValue,
-            messages: [
-                .init(role: "system", content: systemPrompt),
-                .init(role: "user", content: "<text>\n\(escaped(text))\n</text>"),
-            ],
-            provider: .init(order: model.hostOrder))
+    /// The output limit follows the text, from the bench's 4,096 (`ChatRequest.maxTokens(rewriting:floor:)`).
+    static func request(_ text: String, model: PolishModel) -> ChatRequest {
+        var body = ChatRequest(
+            model: model.rawValue, system: systemPrompt, user: "<text>\n\(escaped(text))\n</text>", rewriting: text,
+            floor: 4_096)
+        body.provider.hosts = model.hosts
         // The switches from bench/polish/run.ts and docs/research/polish.md, section 4.
         switch model {
         case .deepSeekFlash:
-            body.reasoning = .init(effort: "none")
+            body.reasoning = .effort("none")
             body.temperature = 0
         case .geminiFlashLite:
             // Reasoning is mandatory for this model; "minimal" is its lowest effort. It ignores a temperature.
-            body.reasoning = .init(effort: "minimal")
+            body.reasoning = .effort("minimal")
         }
-        return try ProviderHTTP.encode(body)
+        return body
     }
 
     /// The text is data inside <text> tags: a closing tag in it must not end that block early. Every closing-tag form
@@ -161,74 +147,6 @@ public final class OpenRouterPolisher: TextPolisher {
         </example>
         </examples>
         """
-}
-
-private struct RequestBody: Encodable {
-    struct Message: Encodable {
-        var role: String
-        var content: String
-    }
-
-    struct Reasoning: Encodable {
-        var effort: String
-    }
-
-    enum CodingKeys: String, CodingKey {
-        case model
-        case stream
-        case maxTokens = "max_tokens"
-        case messages
-        case reasoning
-        case temperature
-        case provider
-    }
-
-    var model: String
-    var stream = false
-    var maxTokens = 4096
-    var messages: [Message]
-    var reasoning: Reasoning?
-    var temperature: Double?
-    var provider: PolishRouting
-}
-
-/// Zero data retention always; for DeepSeek, its hosts in order and no other.
-private struct PolishRouting: Encodable {
-    private enum CodingKeys: String, CodingKey {
-        case zdr
-        case order
-        case allowFallbacks = "allow_fallbacks"
-    }
-
-    var order: [String]?
-
-    func encode(to encoder: any Encoder) throws {
-        var container = encoder.container(keyedBy: CodingKeys.self)
-        try container.encode(true, forKey: .zdr)
-        if let order {
-            try container.encode(order, forKey: .order)
-            try container.encode(false, forKey: .allowFallbacks)
-        }
-    }
-}
-
-private struct SuccessBody: Decodable {
-    var choices: [PolishChoice]
-    var usage: OpenRouterUsage?
-}
-
-private struct PolishChoice: Decodable {
-    struct Message: Decodable {
-        var content: String?
-    }
-
-    enum CodingKeys: String, CodingKey {
-        case message
-        case finishReason = "finish_reason"
-    }
-
-    var message: Message
-    var finishReason: String?
 }
 
 extension OpenRouterUsage {

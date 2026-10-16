@@ -55,6 +55,26 @@ struct PipelineCleanupTests {
         #expect(await world.paster.pasted == ["Open kotoba.app."])
     }
 
+    /// Audit #5: an answer cut at the token limit is partial, so the raw transcript pastes, and the answer is billed
+    /// with no words.
+    @Test func aCutCleanupPastesTheRawTranscript() async throws {
+        let world = FakeWorld(transcript: "um open the auth dot ts file and then run the tests")
+        let cleaner = FakeTextCleaner(
+            result: .success("Open the auth.ts file and"), cost: .reported(1), isComplete: false)
+        let pipeline = world.makePipeline(cleaner: cleaner)
+
+        await pipeline.cleanupTap()
+        await pipeline.tap(world)
+        await pipeline.settle()
+
+        let record = try #require(await world.store.records.first)
+        #expect(await world.paster.pasted == ["um open the auth dot ts file and then run the tests"])
+        #expect(record.cleanedText == nil)
+        #expect(await pipeline.state == .cleanupFailed(record.id))
+        let cleanup = try #require(await world.store.ledger.first { $0.kind == .cleanup })
+        #expect(cleanup.deliveredWords == 0 && cleanup.cost == .reported(1))
+    }
+
     @Test func failedCleanupPastesTheReplacedRawTranscript() async {
         let world = FakeWorld(transcript: "open pie torch docs")
         let dictionary = PersonalDictionary(rules: [ReplacementRule(find: "pie torch", replacement: "PyTorch")])
@@ -210,13 +230,15 @@ actor FakeTextCleaner: TextCleaner {
     private let result: Result<String, any Error>
     private let gate: Gate?
     private let cost: Cost?
+    private let isComplete: Bool
     private(set) var requests: [Request] = []
     private(set) var warmUps = 0
 
-    init(result: Result<String, any Error>, gate: Gate? = nil, cost: Cost? = nil) {
+    init(result: Result<String, any Error>, gate: Gate? = nil, cost: Cost? = nil, isComplete: Bool = true) {
         self.result = result
         self.gate = gate
         self.cost = cost
+        self.isComplete = isComplete
     }
 
     func warmUp() async {
@@ -226,7 +248,7 @@ actor FakeTextCleaner: TextCleaner {
     func clean(_ transcript: String, vocabulary: [String], mode: AppMode) async throws -> CleanedText {
         requests.append(Request(transcript: transcript, vocabulary: vocabulary, mode: mode))
         await gate?.pass()
-        return CleanedText(text: try result.get(), model: "fake/cleaner", cost: cost)
+        return CleanedText(text: try result.get(), model: "fake/cleaner", cost: cost, isComplete: isComplete)
     }
 }
 

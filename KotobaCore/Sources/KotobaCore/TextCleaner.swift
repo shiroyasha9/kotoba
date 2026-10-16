@@ -19,10 +19,14 @@ public struct CleanedText: Sendable, Equatable {
     public var model: String
     /// The reported cost, else an estimate from the model's list price; nil when neither is known.
     public var cost: Cost?
+    /// The model ended the text itself; false when the answer was cut at the token limit or filtered, so the text is
+    /// partial and the raw transcript is pasted instead.
+    public var isComplete: Bool
 
-    public init(text: String, model: String, cost: Cost?) {
+    public init(text: String, model: String, cost: Cost?, isComplete: Bool = true) {
         self.text = text
         self.model = model
         self.cost = cost
+        self.isComplete = isComplete
     }
 }

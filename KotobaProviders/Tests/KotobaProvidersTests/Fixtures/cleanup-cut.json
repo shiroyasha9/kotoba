@@ -1,0 +1,12 @@
+{
+  "id": "gen-4",
+  "provider": "Google",
+  "model": "google/gemini-3.5-flash-lite",
+  "choices": [
+    {
+      "finish_reason": "length",
+      "message": { "role": "assistant", "content": "Can you open auth.ts and check why" }
+    }
+  ],
+  "usage": { "prompt_tokens": 412, "completion_tokens": 2048, "total_tokens": 2460, "cost": 0.0052 }
+}

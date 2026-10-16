@@ -8,10 +8,6 @@ public enum CleanupModel: String, CaseIterable, Sendable {
     case qwenCerebras = "qwen/qwen3.8-27b"
     case claudeHaiku = "anthropic/claude-haiku-5.5"
 
-    /// Every cleanup model has a zero-data-retention endpoint on OpenRouter (GET /api/v1/endpoints/zdr on
-    /// 2026-10-15: Google for Gemini and Haiku, Cerebras for Qwen), so every request sends `provider.zdr`.
-    var hasZeroDataRetention: Bool { true }
-
     public var title: String {
         switch self {
         case .geminiFlashLite: "Gemini 3.5 Flash-Lite"
@@ -54,28 +50,17 @@ public final class OpenRouterCleaner: TextCleaner {
     public func clean(_ transcript: String, vocabulary: [String], mode: AppMode) async throws -> CleanedText {
         let model = settings.cleanupModel
         let label = "cleanup \(model.rawValue) \(mode.rawValue)"
-        // A few KB of JSON: sent from memory, no temp file.
-        let request = try Self.requestBody(transcript, vocabulary: vocabulary, mode: mode, model: model)
-        let reply = try await connection.send(
-            baseURL.appending(path: "chat/completions"), contentType: "application/json", label: label,
-            body: .data(request))
-        let body = try ProviderHTTP.decode(SuccessBody.self, from: reply, label: label)
-        let text = body.choices.first?.message.content ?? ""
-        return CleanedText(text: text, model: model.rawValue, cost: body.usage?.cost(of: model))
+        let request = Self.request(transcript, vocabulary: vocabulary, mode: mode, model: model)
+        let answer = try await ChatAnswer.send(request, on: connection, at: baseURL, label: label)
+        return CleanedText(
+            text: answer.text, model: model.rawValue, cost: answer.usage?.cost(of: model), isComplete: answer.isComplete
+        )
     }
 
-    /// Non-streaming: the cleaned text is pasted whole, so only the total time counts.
-    static func requestBody(
-        _ transcript: String, vocabulary: [String], mode: AppMode, model: CleanupModel
-    ) throws -> Data {
-        var body = RequestBody(
-            model: model.rawValue,
-            messages: [
-                .init(role: "system", content: systemPrompt(vocabulary: vocabulary, mode: mode)),
-                .init(role: "user", content: "<transcript>\n\(escaped(transcript))\n</transcript>"),
-            ],
-            provider: .init(zdr: model.hasZeroDataRetention)
-        )
+    static func request(_ transcript: String, vocabulary: [String], mode: AppMode, model: CleanupModel) -> ChatRequest {
+        var body = ChatRequest(
+            model: model.rawValue, system: systemPrompt(vocabulary: vocabulary, mode: mode),
+            user: "<transcript>\n\(escaped(transcript))\n</transcript>", rewriting: transcript, floor: 2_048)
         // The switches per model from bench/cleanup.ts (each model's `reasoning` entry in GET /models).
         switch model {
         case .geminiFlashLite:
@@ -85,12 +70,12 @@ public final class OpenRouterCleaner: TextCleaner {
         case .qwenCerebras:
             body.reasoning = .off
             body.temperature = 0
-            body.provider.pinned = "cerebras"
+            body.provider.hosts = .only("cerebras")
         case .claudeHaiku:
             // No endpoint lists `temperature` for Haiku 5.5, so it is not sent.
             body.reasoning = .off
         }
-        return try ProviderHTTP.encode(body)
+        return body
     }
 
     /// The transcript is data inside <transcript> tags: a dictated closing tag must not end that block early. Every
@@ -209,84 +194,6 @@ public final class OpenRouterCleaner: TextCleaner {
     }
 }
 
-private struct RequestBody: Encodable {
-    struct Message: Encodable {
-        var role: String
-        var content: String
-    }
-
-    enum CodingKeys: String, CodingKey {
-        case model
-        case stream
-        case maxTokens = "max_tokens"
-        case messages
-        case reasoning
-        case temperature
-        case provider
-    }
-
-    var model: String
-    var stream = false
-    var maxTokens = 2048
-    var messages: [Message]
-    var reasoning: Reasoning?
-    var temperature: Double?
-    var provider: ProviderRouting
-}
-
-/// `{"effort": ...}` or `{"enabled": false}`.
-private enum Reasoning: Encodable {
-    case effort(String)
-    case off
-
-    private enum CodingKeys: String, CodingKey {
-        case effort
-        case enabled
-    }
-
-    func encode(to encoder: any Encoder) throws {
-        var container = encoder.container(keyedBy: CodingKeys.self)
-        switch self {
-        case .effort(let effort): try container.encode(effort, forKey: .effort)
-        case .off: try container.encode(false, forKey: .enabled)
-        }
-    }
-}
-
-/// OpenRouter provider routing: zero data retention, and for Qwen a pin to one provider with no fallback.
-private struct ProviderRouting: Encodable {
-    private enum CodingKeys: String, CodingKey {
-        case zdr
-        case only
-        case allowFallbacks = "allow_fallbacks"
-    }
-
-    var zdr: Bool
-    var pinned: String?
-
-    init(zdr: Bool) {
-        self.zdr = zdr
-    }
-
-    func encode(to encoder: any Encoder) throws {
-        var container = encoder.container(keyedBy: CodingKeys.self)
-        try container.encode(zdr, forKey: .zdr)
-        if let pinned {
-            try container.encode([pinned], forKey: .only)
-            try container.encode(false, forKey: .allowFallbacks)
-        }
-    }
-}
-
-private struct SuccessBody: Decodable {
-    struct Choice: Decodable {
-        var message: ReplyMessage
-    }
-
-    var choices: [Choice]
-    var usage: OpenRouterUsage?
-}
-
 extension OpenRouterUsage {
     /// The charged cost, else an estimate from the token counts.
     func cost(of model: CleanupModel) -> Cost? {
@@ -294,8 +201,4 @@ extension OpenRouterUsage {
         guard let promptTokens, let completionTokens else { return nil }
         return PriceList.estimate(model, inputTokens: promptTokens, outputTokens: completionTokens)
     }
-}
-
-private struct ReplyMessage: Decodable {
-    var content: String?
 }

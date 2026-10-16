@@ -19,7 +19,7 @@ struct TranscriptionSteps: Sendable {
 
     /// Why a cleanup gave no text; the raw transcript is used then.
     enum CleanupMiss: Error {
-        /// No cleaner, an error, or an answer with no words.
+        /// No cleaner, an error, an answer with no words, or a cut answer.
         case failed
         /// No answer within `Settings.cleanupDeadline`.
         case tooSlow
@@ -65,10 +65,10 @@ struct TranscriptionSteps: Sendable {
         return transcribed
     }
 
-    /// Sets the record's cleaned text with replacements applied, or nil when there is no cleaner, it failed or it
-    /// answered no words: the raw transcript is used then, and the cleanup is not retried. An answer's usage goes to
-    /// the record, empty or not, dated with the transcript's answer: its word change counts on the same day as the
-    /// words it changes, even when it comes after midnight. The replacements run once, on the cleaner's output, so a
+    /// Sets the record's cleaned text with replacements applied, or nil when there is no cleaner, it failed, it
+    /// answered no words or its answer was cut (`CleanedText.isComplete`): the raw transcript is used then, and the
+    /// cleanup is not retried. An answer's usage goes to the record, empty or not, dated with the transcript's answer:
+    /// its word change counts on the same day as the words it changes, even when it comes after midnight. The replacements run once, on the cleaner's output, so a
     /// rule such as "kotoba" -> "kotoba.app" does not grow twice.
     /// `deadline` bounds a live cleanup, whose paste waits on it; a retry passes nil, so its cleanup waits for the
     /// cleaner's own timeout.
@@ -115,18 +115,20 @@ struct TranscriptionSteps: Sendable {
             return .failure(.tooSlow)
         }
         let text = cleaned.text.trimmingCharacters(in: .whitespacesAndNewlines)
-        let replaced = settings.dictionary.applyReplacements(to: text)
+        // An answer that did not end on its own is partial: pasting it would drop the end of what the owner said.
+        let replaced = cleaned.isComplete && !text.isEmpty ? settings.dictionary.applyReplacements(to: text) : nil
         // A used cleanup replaces the transcript's words with its own.
-        let change =
-            text.isEmpty
-            ? 0 : DictationRecord.wordCount(of: replaced) - DictationRecord.wordCount(of: record.transcript ?? "")
+        let change = replaced.map {
+            DictationRecord.wordCount(of: $0) - DictationRecord.wordCount(of: record.transcript ?? "")
+        }
         record.usage.append(
             UsageEntry(
                 time: transcribed.answeredAt, dictation: id, kind: .cleanup, model: cleaned.model,
-                deliveredWords: change,
+                deliveredWords: change ?? 0,
                 cost: cleaned.cost, app: record.app))
-        guard !text.isEmpty else {
-            Log.pipeline.error("Cleanup \(id.rawValue) answered no words, using the raw transcript")
+        guard let replaced else {
+            let answered = cleaned.isComplete ? "no words" : "a text that did not end on its own"
+            Log.pipeline.error("Cleanup \(id.rawValue) answered \(answered), using the raw transcript")
             return .failure(.failed)
         }
         return .success(replaced)
