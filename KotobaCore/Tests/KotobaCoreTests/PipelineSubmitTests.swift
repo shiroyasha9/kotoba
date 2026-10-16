@@ -256,8 +256,11 @@ struct PipelineSubmitTests {
 
     // MARK: Front app at stop
 
-    @Test func anotherFrontAppAtPasteGetsTheTextButNoReturn() async throws {
-        let world = FakeWorld(transcript: "Fix the login bug. Press enter.")
+    /// The owner went to another app while the text was on its way: it is never pasted (or submitted) there; it
+    /// stays on the clipboard and the pill says so.
+    @Test(arguments: ["Fix the login bug. Press enter.", "Fix the login bug."])
+    func anotherFrontAppAtPasteGetsNothingAndTheTextIsCopied(transcript: String) async throws {
+        let world = FakeWorld(transcript: transcript)
         let gate = Gate()
         await world.provider.hold(at: gate)
         let pipeline = world.makePipeline()
@@ -268,11 +271,33 @@ struct PipelineSubmitTests {
         #expect(await eventually { await gate.hasWaiters })
         await gate.open()
         await pipeline.settle()
+        world.clock.advance(by: .seconds(30))
+        await pipeline.settle()
+
+        #expect(await world.paster.keystrokes == [])
+        #expect(await world.pasteboard.text == "Fix the login bug.")
+        #expect(await world.pasteboard.isTransient == false)
+        let record = try #require(await world.store.records.first)
+        #expect(record.status == .copied)
+        #expect(await pipeline.state == .copied(record.id))
+    }
+
+    /// With no front app known at the stop there is nothing to compare: the text pastes.
+    @Test func anUnknownFrontAppAtTheStopStillPastes() async {
+        let world = FakeWorld(transcript: "Fix the login bug.")
+        world.frontApp.activate(nil)
+        let pipeline = world.makePipeline()
+        let gate = Gate()
+        await world.provider.hold(at: gate)
+
+        await pipeline.tap(world)
+        await pipeline.tap(world)
+        world.frontApp.activate(200)
+        #expect(await eventually { await gate.hasWaiters })
+        await gate.open()
+        await pipeline.settle()
 
         #expect(await world.paster.pasted == ["Fix the login bug."])
-        #expect(await world.paster.keystrokes == [.commandV])
-        let record = try #require(await world.store.records.first)
-        #expect(await pipeline.state == .returnSkipped(record.id))
     }
 
     @Test func theSameFrontAppAtPasteGetsTheReturn() async {

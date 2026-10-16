@@ -152,6 +152,13 @@ struct TranscriptDelivery: Sendable {
         let (snapshot, readyAt) = await job.clipboard.value
         Self.mark(.snapshotReady, at: readyAt, of: job, in: &latency)
         await beforePaste()
+        // The owner went to another app after the stop (a late answer): the text never goes there, it waits on the
+        // clipboard (lead, 2026-10-17). With no app known at the stop, or now, nothing says it changed.
+        if let atStop = job.frontAppAtStop, let now = frontApp(), now.processID != atStop.processID {
+            Log.pipeline.info("Not pasted: the front app changed after the stop; the text is on the clipboard")
+            await clipboard.copy(text)
+            return (.copied, nil)
+        }
         let write = await clipboard.writeTransient(text, over: snapshot)
         do {
             try await paster.sendPaste()

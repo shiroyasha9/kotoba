@@ -66,7 +66,8 @@ public enum DictationState: Sendable, Equatable {
     case cleanupTooSlow(DictationID)
     /// Pasted, but the submit Return was not sent: another app came to the front after the stop.
     case returnSkipped(DictationID)
-    /// Paste was not allowed, so the transcript is on the clipboard.
+    /// The transcript is on the clipboard, not pasted: paste was not allowed, or another app came to the front after
+    /// the stop.
     case copied(DictationID)
     /// A retry transcribed a queued dictation; the menu lists it under Recovered.
     case recovered(DictationID)
