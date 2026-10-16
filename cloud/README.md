@@ -61,12 +61,14 @@ the `code`, not the message.
 | 400 | `invalid_email` | `/auth/start` email is not an address | Show the message |
 | 400 | `code_invalid` | Wrong or malformed sign-in code | Let the person try again |
 | 400 | `code_expired` | Code too old, used up (5 wrong tries) or never sent | Ask for a new code |
-| 400 | `bad_audio` | Not FLAC, or the upstream cannot read it | Do not retry this recording |
+| 400 | `bad_audio` | Not FLAC, the upstream cannot read it, or the upstream heard more audio than the bytes can hold at the lowest allowed bitrate (a muted microphone or a crafted file; the hold is paid, no text) | Do not retry this recording |
 | 401 | `signed_out` | No token, bad or expired token, or "Sign out everywhere" ended it | Delete the token, show sign-in; keep the recording queued |
 | 401 | `bad_signature` | Paddle webhook signature check failed | (Paddle only) |
 | 402 | `out_of_hours` | No hours left | Keep the recording queued; show Buy Hours and Use My Own Key |
+| 402 | `not_enough_hours` | Some hours are left, but fewer than this recording's hold | Same as `out_of_hours`; the app should have caught it with `covered_bytes` |
+| 411 | `length_required` | No `Content-Length` | Bug |
 | 413 | `audio_too_long` | Over `MAX_AUDIO_SECONDS` (1,200 s) | Do not retry |
-| 413 | `audio_too_large` | Over `MAX_AUDIO_BYTES` (32 MiB) | Do not retry |
+| 413 | `audio_too_large` | Over `MAX_AUDIO_BYTES` (32 MiB), or more bytes than `Content-Length` | Do not retry |
 | 415 | `unsupported_media_type` | `Content-Type` is not `audio/flac` | Bug |
 | 429 | `rate_limited` | Too many dictations a minute (30 per user) or sign-in tries (10 a minute per IP; one code per email each 30 s) | Retry after `Retry-After` seconds |
 | 501 | `not_implemented` | `/v1/cleanup` | Use the app's own cleanup route |
@@ -76,7 +78,8 @@ the `code`, not the message.
 | 504 | `upstream_timeout` | No answer in `UPSTREAM_TIMEOUT_MS` (120 s, upload included) | Retry |
 | 500 | `internal` | A bug in the relay | Retry with backoff |
 
-A failed dictation costs nothing: the hold is released and only a 200 is paid for.
+A failed dictation costs nothing: the hold is released and the global meter gets its seconds back. Only a 200 (and
+the `bad_audio` case above) is paid for.
 
 ### `POST /auth/start`
 
@@ -97,7 +100,9 @@ Body `{"email": "me@example.com", "code": "123456"}`. Makes the account on first
 }
 ```
 
-The token is opaque: keep it in the Keychain, send it as `Authorization: Bearer <token>`. It lives 180 days.
+The token is opaque: keep it in the Keychain, send it as `Authorization: Bearer <token>`. It lives 180 days and
+slides: a `200` answer to a token older than 30 days carries a fresh one in `X-Kotoba-Token` (its expiry in
+`X-Kotoba-Token-Expires`). Replace the stored token with it. "Sign out everywhere" ends old and fresh tokens alike.
 
 ### `POST /v1/transcribe`
 
@@ -107,8 +112,8 @@ The body is the recording, the same FLAC bytes the app sends today (16 kHz mono)
 |---|---|
 | `Authorization` | `Bearer <token>` |
 | `Content-Type` | `audio/flac` |
-| `Content-Length` | The body length. URLSession sets it for a `Data` or file upload; with it, an over-size body is refused before any upstream call |
-| `X-Kotoba-Audio-Seconds` | The recording length as the app measured it, decimal, for example `12.48` |
+| `Content-Length` | Required (`411` without it). The body length; URLSession sets it for a `Data` or file upload. The hold comes from it |
+| `X-Kotoba-Audio-Seconds` | Optional hint: the recording length as the app measured it, for example `12.48`. Never used for money |
 | `X-Kotoba-Language` | Optional. A language code such as `en`; leave it out for auto-detect |
 | `X-Kotoba-Phrases` | Optional. Dictionary terms: base64url (padding optional) of a UTF-8 JSON array of strings; at most 200 terms of 1-100 characters |
 
@@ -123,7 +128,8 @@ Answer `200`:
   "plan_seconds_left": 0,
   "pack_seconds": 3587,
   "plan_period_end": null,
-  "plan_resets_at": null
+  "plan_resets_at": null,
+  "covered_bytes": 21522000
 }
 ```
 
@@ -131,10 +137,23 @@ The balance fields are the balance after this dictation is paid. The payment run
 an estimate; `GET /v1/account` has the settled numbers. Update the hours shown in the app from this response; no
 polling is needed.
 
-Metering: the user pays Azure's own `durationMilliseconds`, rounded up to whole seconds, at least 1. When Azure gives
-no duration, the FLAC header's length is used, then `X-Kotoba-Audio-Seconds`. Plan hours are spent first, then pack
-hours. A dictation starts when any time is left; if it runs over, the rest is free (at most one dictation's worth) and
-the balance stops at 0. Balances are prepaid, so no one can owe money.
+Metering. The client's claims (STREAMINFO, `X-Kotoba-Audio-Seconds`) never set a price:
+
+1. **Hold:** the most the body can hold, `ceil(Content-Length / MIN_AUDIO_BYTES_PER_SECOND)` seconds (6,000 B/s,
+   at least 1, at most `MAX_AUDIO_SECONDS`). The owner's 16 kHz speech recordings run 13-17 KB/s (n = 24), so the
+   hold is about 2.5 times the real length.
+2. **Authorize:** the dictation starts only when the seconds not yet held cover the whole hold; else `402`
+   (`out_of_hours` at zero, `not_enough_hours` otherwise). This runs in parallel with the upload and answers in a few
+   milliseconds, so a refusal reaches the app while it still uploads.
+3. **Pay:** Azure's own `durationMilliseconds`, rounded up to whole seconds, at most the hold. With no duration from
+   Azure, the hold is paid. Plan hours first, then pack hours (oldest pack first). No balance goes below zero. A
+   dictation is free only when its payment fails after the response (see "Stubbed").
+
+**Before upload:** every balance in a response carries `covered_bytes`, the largest recording the balance covers now
+(`seconds_left x 6,000`, at most `MAX_AUDIO_BYTES`; all of `MAX_AUDIO_BYTES` from 1,200 s left). It does not
+subtract dictations still in flight, so two at once can still get `not_enough_hours`. The app compares the recording's file size with it while it
+records (to warn when the balance runs out mid-dictation) and before it uploads; when the file is larger, it shows
+"Out of kotoba Cloud hours" with Buy Hours and Use My Own Key and keeps the recording, with no upload.
 
 ### `GET /v1/account`
 
@@ -148,7 +167,8 @@ the balance stops at 0. Balances are prepaid, so no one can owe money.
   "plan_seconds_left": 27000,
   "pack_seconds": 3600,
   "plan_period_end": "2026-11-17T06:00:00.000Z",
-  "plan_resets_at": "2026-11-17T06:00:00.000Z"
+  "plan_resets_at": "2026-11-17T06:00:00.000Z",
+  "covered_bytes": 33554432
 }
 ```
 
@@ -169,7 +189,8 @@ Not built. Answer `501 not_implemented`.
 Paddle Billing notifications only. The `Paddle-Signature` header (`ts=…;h1=…`, HMAC-SHA256 of `ts:raw body` with the
 notification secret) must match and `ts` must be within `PADDLE_TOLERANCE_SECONDS` (5 s, as Paddle's SDKs do). Answer
 `200 {"ok": true, "outcome": "<what it did>"}` for every verified event, also one it cannot place, so Paddle stops
-retrying; `401 bad_signature` otherwise.
+retrying; `401 bad_signature` otherwise. One exception: a refund for a purchase not yet recorded (Paddle does not keep
+the order) gets `409 {"ok": false, "outcome": "no_purchase"}`, so Paddle sends it again.
 
 The checkout (a web page, not built) must pass `customData: {"kotoba_user_id": "<user id>"}` to `Paddle.Checkout.open()`.
 Paddle copies it to the transaction and to the subscription. `PADDLE_PRICES` in `wrangler.jsonc` maps each Paddle price
@@ -180,7 +201,8 @@ id to what it sells (INR prices are overrides on the same ids):
 | `transaction.completed`, pack price | Adds `seconds x quantity` pack seconds, once per transaction and price |
 | `transaction.completed`, Pro price | Starts the paid period from `billing_period` with 8 h for each month of it; each renewal does this again. An older period of the same subscription changes nothing |
 | `subscription.created` / `updated` / `paused` / `resumed` / `canceled` | Kept in D1; an event older than the stored one changes nothing |
-| Any of those with status `paused` or `canceled` | Ends that subscription's plan hours now; pack hours stay. After a cancel, no late period of that subscription can start |
+| Any of those with status `paused` or `canceled` | Ends that subscription's plan hours now; pack hours stay. After a cancel, no late period of that subscription can start. A resume brings no hours back; the next `transaction.completed` does |
+| `adjustment.created` / `updated`, an approved `refund` or `chargeback` of a pack | Takes back the refunded share of that pack's seconds (all of them for a full refund), only from what is left of that pack, never below zero; used hours are not a debt. The user comes from `purchases` (adjustments carry no `custom_data`) |
 
 A cancel at the period end keeps the hours: Paddle sends `subscription.canceled` on the date it takes effect.
 
@@ -189,10 +211,11 @@ A cancel at the period end keeps the hours: Paddle sends `subscription.canceled`
 - Per user: 30 dictations a minute (Workers rate limiting binding, `TRANSCRIBE_LIMITER`).
 - Per client IP: 10 sign-in calls a minute (`AUTH_LIMITER`); per email: one code each 30 s, 5 wrong tries per code,
   and a new code keeps the tries count.
-- Per request: at most 32 MiB and 1,200 s of audio. The FLAC header's length wins over the client's header. Without
-  `Content-Length` the relay counts bytes as they stream and stops at the limit.
-- All users: `GLOBAL_DAILY_CAP_SECONDS` a UTC day (200 h, about USD 20 at USD 0.10/h). Past it, every dictation gets
-  `service_paused`.
+- Per request: at most 32 MiB and 1,200 s of audio; `Content-Length` is required, and the relay stops a body that
+  sends more. A STREAMINFO or header length over 1,200 s is refused early (claims can refuse, never discount).
+- All users: `GLOBAL_DAILY_CAP_SECONDS` a UTC day (200 h, about USD 20 at USD 0.10/h). Each dictation reserves its
+  hold at the gate; a refused or failed one gives it back, and a paid one is corrected to Azure's duration. Past the
+  cap, every dictation gets `service_paused`.
 - The relay sets the model (`MAI-Transcribe-2`); no client can pick a costlier one.
 - Logs hold user id, seconds and outcome only: no audio, no text.
 
@@ -203,15 +226,15 @@ check, the daily cap and the rate limit run in parallel with the upstream reques
 response. So on the critical path the relay adds one hop, the token check (AES-GCM, no storage read) and the streamed
 multipart.
 
-Measured locally on 2026-10-17 at 02:55 IST, Apple M3 Pro, `bun run latency 200`: 200 pairs per size after 20 warm-up
+Measured locally on 2026-10-17 at 03:05 IST (after the billing fixes), Apple M3 Pro, `bun run latency 200`: 200 pairs per size after 20 warm-up
 pairs, each pair the same dictation sent straight to the fake Azure and through `wrangler dev` (the real
 `AzureTranscriber`) to the same fake Azure, in alternating order. Overhead is the paired difference, in ms:
 
 | Audio | Body | Direct p50 / p90 | Relay p50 / p90 | **Overhead p50 / p90** |
 |---|---|---|---|---|
-| 2 s | 36 KB | 0.1 / 0.2 | 3.0 / 3.5 | **2.8 / 3.4** |
-| 10 s | 180 KB | 0.2 / 0.2 | 3.4 / 4.5 | **3.3 / 4.3** |
-| 30 s | 540 KB | 0.2 / 0.3 | 4.9 / 6.9 | **4.7 / 6.6** |
+| 2 s | 36 KB | 0.1 / 0.2 | 3.0 / 3.6 | **2.9 / 3.5** |
+| 10 s | 180 KB | 0.2 / 0.2 | 3.5 / 4.9 | **3.3 / 4.7** |
+| 30 s | 540 KB | 0.2 / 0.4 | 5.1 / 6.8 | **4.8 / 6.6** |
 
 This is the relay's own CPU and local-hop cost in workerd, with no network. It is not the production number.
 
@@ -235,17 +258,18 @@ Measure before launch (paired with the BYOK route, n >= 50, from an Indian home 
 - `/v1/cleanup` (Gemini through the relay).
 - Real Azure: `AzureTranscriber` is written to Microsoft's REST reference and tested against a fake fetch and the local
   stand-in, never against Azure.
-- Refunds (`adjustment.*` events) and `transaction.payment_failed`: ignored.
+- Pro refunds (Paddle's own subscription events end the plan) and `transaction.payment_failed`: ignored.
 - A retry when `settle` fails after a response: the hold lapses after 10 minutes and that dictation is free.
 - Aborting the upstream request when the client goes away (needs the `enable_request_signal` flag).
 - Deploy config: real D1 id, custom domain, secrets (`wrangler secret put`), spend alarms on Azure.
 
 ## Unresolved questions
 
-1. Session tokens live 180 days with no refresh. Is that right, or should `/v1/account` hand out a fresh token?
-2. Is "the last dictation can overshoot by up to 20 minutes for free" acceptable, or must a dictation stop at 0?
-3. Does the app's AVAudioFile FLAC writer set the STREAMINFO sample count? If not, the relay trusts
-   `X-Kotoba-Audio-Seconds` for the length check and holds 1,200 s per dictation.
-4. When a paused subscription resumes, must plan hours come back at once, or only with the next payment
-   (`transaction.completed`), as now?
-5. Should a refund take back unused pack hours automatically?
+1. `MIN_AUDIO_BYTES_PER_SECOND` (6,000) rests on 24 of the owner's recordings. A quiet room or another microphone may
+   compress better; a real recording below the floor gets `bad_audio`. Measure on more microphones before launch.
+2. A crafted file of up to 32 MiB at a very low bitrate holds at most 1,200 s but can make Azure transcribe more (up
+   to about 5,600 s at 6,000 B/s). The user pays the hold and gets no text, so there is nothing to gain, but we pay
+   Azure; only the rate limit and the daily cap bound it. Cutting the stream at 1,200 s needs a FLAC frame reader.
+   Is that exposure acceptable for v1?
+3. The hold is about 2.5 times a dictation's length, so a user with 10 minutes left cannot send a 5-minute recording.
+   Is that trade-off acceptable, or should the app split long recordings?
