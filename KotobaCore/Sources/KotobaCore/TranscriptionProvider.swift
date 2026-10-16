@@ -34,7 +34,8 @@ public struct Transcript: Sendable, Equatable {
     /// The route's model identifier this request used, stored with the dictation so the latency report can split
     /// by model. It comes from the provider's answer, so a model switch during the request cannot mislabel it.
     public var model: String
-    /// When the request left and the answer started, from the system's network metrics; nil when the route has none.
+    /// When the request left and the answer started, from the system's network metrics; nil when they did not come
+    /// before the answer, or lack those moments (a failed request, a test stub).
     public var network: NetworkTiming?
 
     public init(text: String, usage: TranscriptionUsage, model: String, network: NetworkTiming? = nil) {
@@ -45,8 +46,8 @@ public struct Transcript: Sendable, Equatable {
     }
 }
 
-/// The moments of one upload, on the pipeline clock, so `make latency` can split the network wait into upload and
-/// server time. The system measures them and hands them over after the answer; the pipeline records them as marks.
+/// The moments of one upload on `ContinuousClock` (the clock `SystemClock` uses), so `make latency` can split the
+/// network wait into upload and server time. The system measures them and hands them over after the answer; the pipeline records them as marks.
 public struct NetworkTiming: Sendable, Equatable {
     /// The upload opened its own connection, which was ready (TLS done) here; nil when it reused the warmed one.
     public var connected: ContinuousClock.Instant?

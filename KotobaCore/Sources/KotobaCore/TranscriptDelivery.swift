@@ -65,7 +65,7 @@ struct TranscriptDelivery: Sendable {
         }
         mark(.response, at: clock.now)
         if case .success(let transcribed) = result, let network = transcribed.network {
-            Self.record(network, of: job, in: &latency)
+            Self.recordNetwork(network, of: job, in: &latency)
         }
         await savedPending
 
@@ -161,7 +161,7 @@ struct TranscriptDelivery: Sendable {
 
     /// The system measured these moments and hands them over only with the answer, so they are recorded without a
     /// signpost: one emitted now would sit at the wrong moment in Instruments.
-    private static func record(_ network: NetworkTiming, of job: Job, in latency: inout LatencyLog) {
+    private static func recordNetwork(_ network: NetworkTiming, of job: Job, in latency: inout LatencyLog) {
         if let connected = network.connected { latency.record(.connected, offset: connected - job.keyDown) }
         latency.record(.uploadSent, offset: network.uploadSent - job.keyDown)
         latency.record(.firstByte, offset: network.firstByte - job.keyDown)

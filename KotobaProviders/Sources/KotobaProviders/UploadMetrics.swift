@@ -25,14 +25,13 @@ final class UploadMetrics: NSObject, URLSessionTaskDelegate, Sendable {
     func urlSession(_ session: URLSession, task: URLSessionTask, didFinishCollecting metrics: URLSessionTaskMetrics) {
         // Runs before `upload` returns, so on the stop path: date arithmetic, a log line, and an interface lookup only
         // when the local address changed.
-        let now = ContinuousClock.now
-        let wall = Date()
+        let moment = (wall: Date(), now: ContinuousClock.now)
         guard let last = metrics.transactionMetrics.last else { return }
-        let connected = last.isReusedConnection ? nil : last.secureConnectionEndDate ?? last.connectEndDate
         measured.withLock {
             $0 = Self.timing(
-                requestEnd: last.requestEndDate, responseStart: last.responseStartDate, connected: connected,
-                wall: wall, now: now)
+                requestEnd: last.requestEndDate, responseStart: last.responseStartDate,
+                isReused: last.isReusedConnection,
+                connected: last.secureConnectionEndDate ?? last.connectEndDate, at: moment)
         }
         let interface = last.localAddress.flatMap(interfaces.name(holding:)) ?? "unknown"
         Log.latency.notice(
@@ -49,15 +48,20 @@ final class UploadMetrics: NSObject, URLSessionTaskDelegate, Sendable {
         )
     }
 
-    /// The metrics' wall-clock dates moved onto the pipeline clock: `now` and `wall` are the same moment on each.
-    /// Nil without both request end and response start (a failed or cancelled request).
+    /// The metrics' wall-clock dates moved onto `ContinuousClock`: `moment` is one instant read on both clocks.
+    /// `connected` (TLS done, else TCP connected) counts only for a new connection. Nil without both request end and
+    /// response start (a failed or cancelled request).
     static func timing(
-        requestEnd: Date?, responseStart: Date?, connected: Date?, wall: Date, now: ContinuousClock.Instant
+        requestEnd: Date?, responseStart: Date?, isReused: Bool, connected: Date?,
+        at moment: (wall: Date, now: ContinuousClock.Instant)
     ) -> NetworkTiming? {
         guard let requestEnd, let responseStart else { return nil }
-        func instant(_ date: Date) -> ContinuousClock.Instant { now - .seconds(wall.timeIntervalSince(date)) }
+        func instant(_ date: Date) -> ContinuousClock.Instant {
+            moment.now - .seconds(moment.wall.timeIntervalSince(date))
+        }
         return NetworkTiming(
-            connected: connected.map(instant), uploadSent: instant(requestEnd), firstByte: instant(responseStart))
+            connected: isReused ? nil : connected.map(instant), uploadSent: instant(requestEnd),
+            firstByte: instant(responseStart))
     }
 
     /// The name of the interface whose address is `address` (the connection's local address): `en0` for Wi-Fi, a

@@ -2,10 +2,12 @@
 # Latency gate report (docs/spec.md, "Gates"): p50 and p90 from the stop (`stop` mark: the second chord key-down in
 # tap mode, the key-up in hold mode) to Cmd-V sent (`pasteSent` mark), per model, for pasted dictations with 10-20 s
 # of audio, cleanup-chord dictations left out. Gate: p50 <= 1000 ms, p90 <= 1500 ms for every model.
-# Under each model, the same time split at the provider's network marks (`NetworkTiming`): stop to `uploadSent` (body
-# build and upload until the last byte went to the network stack), `uploadSent` to `firstByte` (the part of the body
-# still in the kernel's buffer, plus the server), `firstByte` to `pasteSent` (the answer's body and the paste), and
-# how many uploads opened a new connection (`connected` mark) instead of reusing the key-down warm-up.
+# Under each model, the same time split at the provider's network marks (`NetworkTiming`), over uploads that reused the
+# key-down warm-up: stop to `uploadSent` (body build and upload until the last byte went to the network stack),
+# `uploadSent` to `firstByte` (the part of the body still in the kernel's buffer, plus the server), `firstByte` to
+# `pasteSent` (the answer's body and decode, the replacements, the pending-row save, the clipboard snapshot, the chord
+# release in tap mode, the paste). Uploads that opened a new connection after the stop (`connected` mark) are counted
+# apart, with their stop to `uploadSent` (connect and TLS included).
 #
 # Without RUN=1 the script only prints the database path and the query. With RUN=1 it opens the database read-only
 # (`sqlite3 -readonly`) and runs that one SELECT; nothing is written.
@@ -23,8 +25,9 @@ P50_GATE_MS=1000
 P90_GATE_MS=1500
 
 # One row per model, step and value, sorted by model, step, then value for the percentile step. Step 1: stop to Cmd-V
-# sent (the gate); 2-4: the network split; 5: 1 when the upload opened a new connection, else 0. Steps 2-5 exist only
-# for dictations with network marks (a route without metrics, or a dictation from before the marks, has none).
+# sent (the gate); 2-4: the network split of warm uploads; 5: 1 when the upload opened a new connection, else 0; 6: stop
+# to `uploadSent` of those new connections. Steps 2-6 exist only for dictations with network marks (a route without
+# metrics, or a dictation from before the marks, has none).
 QUERY=$(cat <<'SQL'
 WITH marks AS MATERIALIZED (
   SELECT coalesce(d.model, 'unknown') AS model,
@@ -41,12 +44,16 @@ WITH marks AS MATERIALIZED (
     AND NOT EXISTS (SELECT 1 FROM latency_marks AS c WHERE c.dictation_id = d.id AND c.mark = 'cleanStart')
   GROUP BY d.id
   HAVING stop_ms IS NOT NULL AND paste_ms IS NOT NULL
+), timed AS (
+  -- A connection ready before the stop was opened early, so its upload counts as warm.
+  SELECT *, coalesce(connected_ms > stop_ms, 0) AS is_cold FROM marks WHERE sent_ms IS NOT NULL AND first_ms IS NOT NULL
 )
 SELECT model, 1 AS step, paste_ms - stop_ms AS ms FROM marks
-UNION ALL SELECT model, 2, sent_ms - stop_ms FROM marks WHERE sent_ms IS NOT NULL
-UNION ALL SELECT model, 3, first_ms - sent_ms FROM marks WHERE sent_ms IS NOT NULL AND first_ms IS NOT NULL
-UNION ALL SELECT model, 4, paste_ms - first_ms FROM marks WHERE first_ms IS NOT NULL
-UNION ALL SELECT model, 5, connected_ms IS NOT NULL FROM marks WHERE sent_ms IS NOT NULL
+UNION ALL SELECT model, 2, sent_ms - stop_ms FROM timed WHERE NOT is_cold
+UNION ALL SELECT model, 3, first_ms - sent_ms FROM timed WHERE NOT is_cold
+UNION ALL SELECT model, 4, paste_ms - first_ms FROM timed WHERE NOT is_cold
+UNION ALL SELECT model, 5, is_cold FROM timed
+UNION ALL SELECT model, 6, sent_ms - stop_ms FROM timed WHERE is_cold
 ORDER BY model, step, ms;
 SQL
 )
@@ -74,9 +81,11 @@ sqlite3 -readonly -batch -noheader -separator '|' "$DB" "$QUERY" |
         p50, p50gate, (p50 <= p50gate ? "PASS" : "FAIL"), p90, p90gate, (p90 <= p90gate ? "PASS" : "FAIL")
       if (p50 > p50gate || p90 > p90gate) failed = 1
     } else if (step == 5) {
-      printf "  new connection: %d of %d uploads (the others reused the key-down warm-up)\n", sum, n
+      printf "  new connection after the stop: %d of %d uploads\n", sum, n
+    } else if (step == 6) {
+      printf "    stop to uploadSent with connect and TLS: p50 %d ms, p90 %d ms\n", p50, p90
     } else {
-      if (step == 2) printf "  network split, %d dictations with network marks:\n", n
+      if (step == 2) printf "  network split, %d uploads on the warmed connection:\n", n
       printf "    %s: p50 %d ms, p90 %d ms\n", name[step], p50, p90
     }
   }

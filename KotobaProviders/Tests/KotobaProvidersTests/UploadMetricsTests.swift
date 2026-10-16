@@ -12,7 +12,8 @@ struct UploadMetricsTests {
     @Test func metricsDatesLandOnThePipelineClockAtTheSameDistanceFromNow() throws {
         let timing = try #require(
             UploadMetrics.timing(
-                requestEnd: wall - 0.6, responseStart: wall - 0.05, connected: wall - 0.7, wall: wall, now: now))
+                requestEnd: wall - 0.6, responseStart: wall - 0.05, isReused: false, connected: wall - 0.7,
+                at: (wall, now)))
 
         #expect(magnitude(timing.uploadSent - (now - .milliseconds(600))) < .microseconds(1))
         #expect(magnitude(timing.firstByte - (now - .milliseconds(50))) < .microseconds(1))
@@ -22,17 +23,20 @@ struct UploadMetricsTests {
 
     @Test func aReusedConnectionHasNoConnectedMoment() throws {
         let timing = try #require(
-            UploadMetrics.timing(requestEnd: wall - 0.6, responseStart: wall, connected: nil, wall: wall, now: now))
+            UploadMetrics.timing(
+                requestEnd: wall - 0.6, responseStart: wall, isReused: true, connected: wall - 0.7, at: (wall, now)))
 
         #expect(timing.connected == nil)
     }
 
     @Test func aRequestWithNoAnswerHasNoTiming() {
         #expect(
-            UploadMetrics.timing(requestEnd: wall - 0.6, responseStart: nil, connected: nil, wall: wall, now: now)
+            UploadMetrics.timing(
+                requestEnd: wall - 0.6, responseStart: nil, isReused: false, connected: nil, at: (wall, now))
                 == nil)
         #expect(
-            UploadMetrics.timing(requestEnd: nil, responseStart: nil, connected: nil, wall: wall, now: now) == nil)
+            UploadMetrics.timing(
+                requestEnd: nil, responseStart: nil, isReused: false, connected: nil, at: (wall, now)) == nil)
     }
 
     @Test func theLoopbackAddressIsOnTheLoopbackInterface() {
@@ -40,7 +44,7 @@ struct UploadMetricsTests {
         #expect(UploadMetrics.interface(holding: "::1") == "lo0")
     }
 
-    @Test func theRememberedInterfaceChangesWithTheAddress() {
+    @Test func theMemoAnswersLikeTheLookupAsTheAddressChanges() {
         let memo = InterfaceMemo()
         #expect(memo.name(holding: "127.0.0.1") == "lo0")
         #expect(memo.name(holding: "127.0.0.1") == "lo0")
