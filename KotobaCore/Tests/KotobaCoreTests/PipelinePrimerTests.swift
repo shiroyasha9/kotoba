@@ -182,4 +182,19 @@ struct PipelinePrimerTests {
         #expect(await world.provider.primes == 0)
         #expect(await world.paster.pasted == ["direct route"])
     }
+
+    /// Transcribe Again sends kept audio, not a new dictation: no primer and no primer timer.
+    @Test func transcribeAgainSendsNoPrimer() async throws {
+        let world = FakeWorld(transcript: "again")
+        let pipeline = world.makePipeline()
+        await pipeline.dictate(world)
+        let id = try #require(await world.store.records.first?.id)
+        let interval = DictationPipeline.Settings(audioDirectory: URL(filePath: "/tmp")).primerInterval
+
+        #expect(await pipeline.transcribeAgain(id))
+        world.clock.advance(by: interval * 2)
+        await pipeline.settle()
+
+        #expect(await world.provider.primes == 1)
+    }
 }
