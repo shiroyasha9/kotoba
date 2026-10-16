@@ -48,7 +48,7 @@ kotoba is a native, open-source alternative to Wispr Flow, built for developers 
 - **Fast.** Your words appear about one second after you stop. The speech round trip is 902 ms at the median.
 - **Accurate on technical words.** Add names and terms to your dictionary, and kotoba spells them your way. On 62 real dictations, kotoba had a word error rate of 3.3% (Wispr Flow 6.0%) and got 84.6% of technical terms exactly right (Wispr Flow 50.0%).
 - **Private.** kotoba needs no account and sends no telemetry. Your audio goes only to the speech service you choose, with your own key.
-- **Cheap and light.** There is no subscription: you pay OpenRouter about $0.10 per hour of audio. kotoba uses 15.9 MB of memory at idle.
+- **Cheap and light.** There is no subscription: you pay OpenRouter about $0.10 per hour of audio. kotoba uses 15.9 MB of memory at idle with no window open.
 
 How these were measured is under [Numbers](#numbers).
 
