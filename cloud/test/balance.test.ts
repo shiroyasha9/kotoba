@@ -1,10 +1,9 @@
 import { env } from "cloudflare:workers";
 import { describe, expect, it } from "vitest";
 import { HOLD_MS, windowEnd } from "../src/balance";
-import { T0 } from "./helpers";
+import { DAY, T0 } from "./helpers";
 
 const HOUR = 3600;
-const DAY = 86_400_000;
 
 function balance() {
   return env.BALANCE.getByName(`u_${crypto.randomUUID()}`);
@@ -38,14 +37,45 @@ describe("Balance", () => {
     expect(await b.account(0, T0)).toMatchObject({ ok: true, balance: { packSeconds: 100 } });
   });
 
-  it("holds the last seconds for one dictation at a time, until the hold is settled, released or lapses", async () => {
+  it("takes a hold only when the seconds not yet held cover it", async () => {
     const b = balance();
     await b.addPack("p", 30, T0);
-    expect(await b.authorize("r1", 60, 0, T0)).toMatchObject({ ok: true });
-    expect(await b.authorize("r2", 5, 0, T0)).toEqual({ ok: false, reason: "out_of_hours" });
+    expect(await b.authorize("r0", 31, 0, T0)).toEqual({ ok: false, reason: "not_enough_hours" });
+    expect(await b.authorize("r1", 20, 0, T0)).toMatchObject({ ok: true });
+    expect(await b.authorize("r2", 15, 0, T0)).toEqual({ ok: false, reason: "not_enough_hours" });
     await b.release("r1");
-    expect(await b.authorize("r3", 60, 0, T0)).toMatchObject({ ok: true });
-    expect(await b.authorize("r4", 5, 0, T0 + HOLD_MS)).toMatchObject({ ok: true });
+    expect(await b.authorize("r3", 30, 0, T0)).toMatchObject({ ok: true });
+    // Seconds are left, but all are held.
+    expect(await b.authorize("r4", 1, 0, T0)).toEqual({ ok: false, reason: "not_enough_hours" });
+    // An unsettled hold lapses.
+    expect(await b.authorize("r5", 30, 0, T0 + HOLD_MS)).toMatchObject({ ok: true });
+  });
+
+  it("settles at most the hold", async () => {
+    const b = balance();
+    await b.addPack("p", 100, T0);
+    await b.authorize("r1", 10, 0, T0);
+    expect(await b.settle("r1", 50, T0)).toMatchObject({ secondsLeft: 90 });
+  });
+
+  it("takes back only what is left of the refunded pack, once, never below zero", async () => {
+    const b = balance();
+    await b.addPack("txn_a:pri_pack_5h", 100, T0);
+    await b.authorize("r1", 70, 0, T0);
+    await b.settle("r1", 70, T0);
+    await b.addPack("txn_b:pri_pack_5h", 100, T0 + 1);
+    // Pack A has 30 left; pack B is untouched.
+    expect(await b.takeBackPack("refund:adj_1:txnitm_a", "txn_a:pri_pack_5h", 100, T0)).toBe(30);
+    expect(await b.takeBackPack("refund:adj_1:txnitm_a", "txn_a:pri_pack_5h", 100, T0)).toBe(0);
+    expect(await b.account(0, T0)).toMatchObject({ ok: true, balance: { packSeconds: 100 } });
+    // Older packs are spent first.
+    await b.settle("r2", 40, T0);
+    expect(await b.takeBackPack("refund:adj_2:txnitm_b", "txn_b:pri_pack_5h", 100, T0)).toBe(60);
+  });
+
+  it("is out of hours only at zero", async () => {
+    const b = balance();
+    expect(await b.authorize("r1", 1, 0, T0)).toEqual({ ok: false, reason: "out_of_hours" });
   });
 
   it("rejects a session generation after sign out everywhere", async () => {

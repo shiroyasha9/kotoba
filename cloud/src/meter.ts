@@ -2,9 +2,9 @@ import { DurableObject } from "cloudflare:workers";
 
 /**
  * Audio seconds of all users in one UTC day (one object per day, named `YYYY-MM-DD`). A bug or a stolen token cannot
- * spend more than GLOBAL_DAILY_CAP_SECONDS a day: past the cap every dictation gets `service_paused`. One call per
- * dictation, at the gate, in parallel with the upstream request; it counts the expected length, not the billed one,
- * which is near enough for a safety cap.
+ * spend more than GLOBAL_DAILY_CAP_SECONDS a day: past the cap every dictation gets `service_paused`. A dictation
+ * reserves its hold (the byte-count bound) at the gate, in parallel with the upstream request; the Worker gives it back
+ * when another gate refuses or the upstream fails, and corrects it to the upstream's own duration after a success.
  */
 export class GlobalMeter extends DurableObject<Env> {
   private readonly sql: SqlStorage;
@@ -18,12 +18,17 @@ export class GlobalMeter extends DurableObject<Env> {
   }
 
   /** Counts `seconds` and returns true while the day is under `cap`; past it, counts nothing and returns false. */
-  charge(cap: number, seconds: number): boolean {
+  reserve(cap: number, seconds: number): boolean {
     return (
       this.sql
         .exec("UPDATE meter SET seconds = seconds + ? WHERE seconds < ? RETURNING seconds", seconds, cap)
         .toArray().length > 0
     );
+  }
+
+  /** Adds `delta` (negative to give seconds back), never below zero. */
+  adjust(delta: number): void {
+    this.sql.exec("UPDATE meter SET seconds = MAX(0, seconds + ?)", delta);
   }
 }
 

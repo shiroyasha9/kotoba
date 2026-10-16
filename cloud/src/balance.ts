@@ -1,11 +1,16 @@
 import { DurableObject } from "cloudflare:workers";
+import { numberVar } from "./errors";
 
 /**
  * One Balance object per user (named by user id) holds the hours: SQLite storage, single-threaded, so every change is
- * atomic. Plan hours (Pro, reset each month) are spent before pack hours (never expire). A dictation first takes a
- * hold for its expected length (`authorize`, in parallel with the upstream request), then pays its real length after
- * the response (`settle`). A hold blocks a second dictation from spending the same last seconds; an unsettled hold
- * lapses after HOLD_MS. Every method takes `now` (ms) from the Worker, so tests control the clock.
+ * atomic. Plan hours (Pro, reset each month) are spent before pack hours (never expire). Each pack (and the trial)
+ * keeps its own seconds left, spent oldest first, so a refund takes back only what is left of that pack. A dictation
+ * first takes a
+ * hold for the most it can cost (`authorize`, in parallel with the upstream request; the Worker derives it from the
+ * byte count, never from the client's claims), then pays its real length, at most the hold, after the response
+ * (`settle`). A hold is taken only when the seconds not yet held cover it, so no balance goes below zero and no
+ * dictation is free. An unsettled hold lapses after HOLD_MS. Every method takes `now` (ms) from the Worker, so tests
+ * control the clock.
  */
 export const HOLD_MS = 10 * 60 * 1000;
 /** `use` rows only guard a settle against a repeat; after this long they go. Credits stay for good. */
@@ -23,7 +28,9 @@ export interface BalanceSnapshot {
 }
 
 type Refusal<R extends string> = { ok: false; reason: R };
-export type Authorization = { ok: true; balance: BalanceSnapshot } | Refusal<"signed_out" | "out_of_hours">;
+export type Authorization =
+  | { ok: true; balance: BalanceSnapshot }
+  | Refusal<"signed_out" | "out_of_hours" | "not_enough_hours">;
 export type AccountReply = { ok: true; balance: BalanceSnapshot } | Refusal<"signed_out">;
 
 export interface Plan {
@@ -35,9 +42,10 @@ export interface Plan {
   periodEnd: number;
 }
 
-type LedgerKind = "trial" | "pack" | "plan" | "plan_end" | "use";
+type LedgerKind = "trial" | "pack" | "plan" | "plan_end" | "use" | "refund";
 
 interface AccountRow extends Record<string, SqlStorageValue> {
+  /** The sum of `packs.seconds_left`. */
   pack_seconds: number;
   plan_subscription_id: string | null;
   plan_monthly_seconds: number;
@@ -52,7 +60,6 @@ interface AccountRow extends Record<string, SqlStorageValue> {
 const SCHEMA = `
 CREATE TABLE IF NOT EXISTS account (
   id INTEGER PRIMARY KEY CHECK (id = 1),
-  pack_seconds INTEGER NOT NULL DEFAULT 0,
   plan_subscription_id TEXT,
   plan_monthly_seconds INTEGER NOT NULL DEFAULT 0,
   plan_seconds_left INTEGER NOT NULL DEFAULT 0,
@@ -71,6 +78,12 @@ CREATE TABLE IF NOT EXISTS ledger (
   absorbed_seconds INTEGER NOT NULL DEFAULT 0
 );
 CREATE INDEX IF NOT EXISTS ledger_kind_at ON ledger (kind, at);
+CREATE TABLE IF NOT EXISTS packs (
+  ref TEXT PRIMARY KEY,
+  at INTEGER NOT NULL,
+  granted INTEGER NOT NULL,
+  seconds_left INTEGER NOT NULL
+);
 CREATE TABLE IF NOT EXISTS holds (
   request_id TEXT PRIMARY KEY,
   seconds INTEGER NOT NULL,
@@ -108,7 +121,7 @@ export class Balance extends DurableObject<Env> {
     return { ok: true, balance: snapshot(row) };
   }
 
-  /** Holds `seconds` for one dictation when any time is left. A long last dictation may overshoot; `settle` absorbs it. */
+  /** Holds `seconds` for one dictation when the seconds not yet held cover them all. */
   authorize(requestId: string, seconds: number, generation: number, now: number): Authorization {
     return this.ctx.storage.transactionSync(() => {
       const row = this.row(now);
@@ -116,7 +129,8 @@ export class Balance extends DurableObject<Env> {
       this.sql.exec("DELETE FROM holds WHERE expires_at <= ?", now);
       const held = this.sql.exec<{ held: number }>("SELECT COALESCE(SUM(seconds), 0) AS held FROM holds").one().held;
       const balance = snapshot(row);
-      if (balance.secondsLeft - held <= 0) return { ok: false, reason: "out_of_hours" } as const;
+      if (balance.secondsLeft <= 0) return { ok: false, reason: "out_of_hours" } as const;
+      if (balance.secondsLeft - held < seconds) return { ok: false, reason: "not_enough_hours" } as const;
       this.sql.exec(
         "INSERT OR REPLACE INTO holds (request_id, seconds, expires_at) VALUES (?, ?, ?)",
         requestId,
@@ -127,18 +141,21 @@ export class Balance extends DurableObject<Env> {
     });
   }
 
-  /** Pays a dictation's real length: plan seconds first, then pack seconds. Runs once per request id. */
+  /**
+   * Pays a dictation's real length, at most its hold: plan seconds first, then pack seconds. Runs once per request id.
+   * Returns the balance after.
+   */
   settle(requestId: string, seconds: number, now: number): BalanceSnapshot {
     return this.ctx.storage.transactionSync(() => {
       const row = this.row(now);
-      this.sql.exec("DELETE FROM holds WHERE request_id = ?", requestId);
+      const hold = this.sql
+        .exec<{ seconds: number }>("DELETE FROM holds WHERE request_id = ? RETURNING seconds", requestId)
+        .toArray()[0];
       if (this.has(requestId)) return snapshot(row);
+      if (hold) seconds = Math.min(seconds, hold.seconds);
       const { fromPlan, fromPack } = spend(row.plan_seconds_left, row.pack_seconds, seconds);
-      this.sql.exec(
-        "UPDATE account SET plan_seconds_left = plan_seconds_left - ?, pack_seconds = pack_seconds - ?",
-        fromPlan,
-        fromPack,
-      );
+      this.sql.exec("UPDATE account SET plan_seconds_left = plan_seconds_left - ?", fromPlan);
+      this.spendPacks(fromPack);
       this.record(requestId, "use", now, -fromPlan, -fromPack, seconds - fromPlan - fromPack);
       this.sql.exec("DELETE FROM ledger WHERE kind = 'use' AND at < ?", now - USE_ROWS_KEPT_MS);
       return snapshot(this.row(now));
@@ -153,6 +170,23 @@ export class Balance extends DurableObject<Env> {
   /** Adds pack seconds once per `ref` (a Paddle transaction and price). Returns false for a repeat. */
   addPack(ref: string, seconds: number, now: number): boolean {
     return this.ctx.storage.transactionSync(() => this.addPackSeconds(ref, "pack", seconds, now));
+  }
+
+  /**
+   * Takes back up to `seconds` of the pack `packRef` once per `ref`: only what is left of that pack, never below zero
+   * (used hours are not a debt). Returns the seconds taken back.
+   */
+  takeBackPack(ref: string, packRef: string, seconds: number, now: number): number {
+    return this.ctx.storage.transactionSync(() => {
+      if (this.has(ref)) return 0;
+      const pack = this.sql
+        .exec<{ seconds_left: number }>("SELECT seconds_left FROM packs WHERE ref = ?", packRef)
+        .toArray()[0];
+      const taken = Math.min(seconds, pack?.seconds_left ?? 0);
+      this.sql.exec("UPDATE packs SET seconds_left = seconds_left - ? WHERE ref = ?", taken, packRef);
+      this.record(ref, "refund", now, 0, -taken);
+      return taken;
+    });
   }
 
   /**
@@ -197,9 +231,25 @@ export class Balance extends DurableObject<Env> {
 
   private addPackSeconds(ref: string, kind: LedgerKind, seconds: number, now: number): boolean {
     if (this.has(ref)) return false;
-    this.sql.exec("UPDATE account SET pack_seconds = pack_seconds + ?", seconds);
+    this.sql.exec("INSERT INTO packs (ref, at, granted, seconds_left) VALUES (?, ?, ?, ?)", ref, now, seconds, seconds);
     this.record(ref, kind, now, 0, seconds);
     return true;
+  }
+
+  /** Spends `seconds` of pack time, oldest pack first. The caller checked they are there. */
+  private spendPacks(seconds: number): void {
+    let rest = seconds;
+    const packs = this.sql
+      .exec<{ ref: string; seconds_left: number }>(
+        "SELECT ref, seconds_left FROM packs WHERE seconds_left > 0 ORDER BY at, ref",
+      )
+      .toArray();
+    for (const pack of packs) {
+      if (rest === 0) break;
+      const take = Math.min(rest, pack.seconds_left);
+      this.sql.exec("UPDATE packs SET seconds_left = seconds_left - ? WHERE ref = ?", take, pack.ref);
+      rest -= take;
+    }
   }
 
   private record(ref: string, kind: LedgerKind, now: number, planSeconds: number, packSeconds: number, absorbed = 0) {
@@ -220,7 +270,11 @@ export class Balance extends DurableObject<Env> {
 
   /** The account row at `now`; first resets the plan's monthly hours when a new month of the period has begun. */
   private row(now: number): AccountRow {
-    const row = this.sql.exec<AccountRow>("SELECT * FROM account WHERE id = 1").one();
+    const row = this.sql
+      .exec<AccountRow>(
+        "SELECT *, (SELECT COALESCE(SUM(seconds_left), 0) FROM packs) AS pack_seconds FROM account WHERE id = 1",
+      )
+      .one();
     if (row.plan_window_end === 0 || now < row.plan_window_end) return row;
     if (now >= row.plan_period_end) {
       this.sql.exec("UPDATE account SET plan_seconds_left = 0, plan_window_end = 0");
@@ -236,10 +290,38 @@ function planEndRef(subscriptionId: string): string {
   return `end:${subscriptionId}`;
 }
 
-/** Plan seconds first, then pack seconds; what neither covers is absorbed (the last dictation's overshoot). */
+/** Plan seconds first, then pack seconds. What neither covers (a plan period that ended mid-dictation) is absorbed. */
 export function spend(planSeconds: number, packSeconds: number, seconds: number) {
   const fromPlan = Math.min(seconds, planSeconds);
   return { fromPlan, fromPack: Math.min(seconds - fromPlan, packSeconds) };
+}
+
+/**
+ * The hold of a dictation: the most seconds `bytes` of FLAC can hold at the lowest bitrate the relay bills in full,
+ * at least 1, at most `maxSeconds`. Never the client's claims.
+ */
+export function holdFor(bytes: number, limits: AudioLimits): number {
+  return Math.min(limits.maxSeconds, Math.max(1, Math.ceil(bytes / limits.minBytesPerSecond)));
+}
+
+/** The largest body whose hold `secondsLeft` covers: what the app may upload without a `not_enough_hours`. */
+export function coveredBytes(secondsLeft: number, limits: AudioLimits): number {
+  if (secondsLeft >= limits.maxSeconds) return limits.maxBytes;
+  return Math.min(limits.maxBytes, Math.max(0, secondsLeft) * limits.minBytesPerSecond);
+}
+
+export interface AudioLimits {
+  maxBytes: number;
+  maxSeconds: number;
+  minBytesPerSecond: number;
+}
+
+export function audioLimits(env: Env): AudioLimits {
+  return {
+    maxBytes: numberVar(env, "MAX_AUDIO_BYTES"),
+    maxSeconds: numberVar(env, "MAX_AUDIO_SECONDS"),
+    minBytesPerSecond: numberVar(env, "MIN_AUDIO_BYTES_PER_SECOND"),
+  };
 }
 
 /** The balance after paying `seconds`, as `settle` will leave it. */

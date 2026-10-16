@@ -2,10 +2,28 @@ import { exports } from "cloudflare:workers";
 import { encodeBase64Url } from "hono/utils/encode";
 import { describe, expect, it } from "vitest";
 import { readStreamInfo } from "../src/flac";
-import { AzureTranscriber, type TranscribeInput, type Transcriber, type Transcript } from "../src/upstream";
-import { account, bearer, dictation, errorCode, flac, harness, signIn } from "./helpers";
+import {
+  AzureTranscriber,
+  type TranscribeInput,
+  type Transcriber,
+  type Transcript,
+  UpstreamError,
+} from "../src/upstream";
+import {
+  account,
+  bearer,
+  DAY,
+  dictation,
+  errorCode,
+  flac,
+  harness,
+  holdOf,
+  meterSeconds,
+  signIn,
+  speech,
+} from "./helpers";
 
-/** Records each call and how it ended; answers after `release()` when `hold` is set. */
+/** Records each call and how it ended. */
 class RecordingTranscriber implements Transcriber {
   calls: { input: Omit<TranscribeInput, "audio">; bytes: number; aborted: boolean }[] = [];
   constructor(private readonly reply: Partial<Transcript> = {}) {}
@@ -30,7 +48,7 @@ describe("POST /v1/transcribe", () => {
     const upstream = new RecordingTranscriber({ durationMs: 12_300 });
     const h = harness(() => upstream);
     const { token } = await signIn(h);
-    const audio = flac(12.3, 50_000);
+    const audio = speech(12.3);
     const response = await h.fetch("/v1/transcribe", dictation(token, audio, 12.3, { "X-Kotoba-Language": "en" }));
     expect(response.status).toBe(200);
     const body = await response.json<{ text: string; billed_seconds: number; seconds_left: number }>();
@@ -46,58 +64,89 @@ describe("POST /v1/transcribe", () => {
     const { token } = await signIn(h);
     const phrases = ["kotoba", "Wispr Flow", "नमस्ते"];
     const header = encodeBase64Url(new TextEncoder().encode(JSON.stringify(phrases)).buffer);
-    const response = await h.fetch("/v1/transcribe", dictation(token, flac(2), 2, { "X-Kotoba-Phrases": header }));
+    const response = await h.fetch("/v1/transcribe", dictation(token, speech(2), 2, { "X-Kotoba-Phrases": header }));
     expect(response.status).toBe(200);
     expect(upstream.calls[0]?.input.phrases).toEqual(phrases);
   });
 
-  it("falls back to the declared length when the FLAC header has no sample count", async () => {
-    const upstream = new RecordingTranscriber({ durationMs: undefined });
+  it("holds a bound from the byte count, not the length the client claims", async () => {
+    const upstream = new RecordingTranscriber({ durationMs: 12_000 });
     const h = harness(() => upstream);
-    const { token } = await signIn(h);
-    const response = await h.fetch("/v1/transcribe", dictation(token, flac(0), 4.2));
-    expect(await response.json()).toMatchObject({ billed_seconds: 5 });
+    const { token } = await signIn(h, { trialSeconds: 20 });
+    // About 12 s of speech, but STREAMINFO and the header both say 1 s.
+    const audio = flac(1, 180_000);
+    const response = await h.fetch("/v1/transcribe", dictation(token, audio, 1));
+    expect([response.status, await errorCode(response)]).toEqual([402, "not_enough_hours"]);
+    expect(upstream.calls.at(-1)?.aborted).toBe(true);
+    expect((await account(h, token)).seconds_left).toBe(20);
   });
 
-  it("answers out_of_hours and aborts the upstream request when no time is left", async () => {
+  it("refuses a dictation the balance cannot cover, and out_of_hours at zero", async () => {
+    const upstream = new RecordingTranscriber();
+    const h = harness(() => upstream);
+    const { token } = await signIn(h, { trialSeconds: 30 });
+    expect(holdOf(speech(10))).toBe(26);
+    expect((await h.fetch("/v1/transcribe", dictation(token, speech(10), 10))).status).toBe(200);
+    // The app can tell before it uploads: the balance covers 20 s x 6,000 bytes, less than this recording.
+    expect(await account(h, token)).toMatchObject({ seconds_left: 20, covered_bytes: 120_000 });
+    expect(speech(10).byteLength).toBeGreaterThan(120_000);
+    const refused = await h.fetch("/v1/transcribe", dictation(token, speech(10), 10));
+    expect([refused.status, await errorCode(refused)]).toEqual([402, "not_enough_hours"]);
+    expect(upstream.calls.at(-1)?.aborted).toBe(true);
+    expect((await h.fetch("/v1/transcribe", dictation(token, speech(2), 2))).status).toBe(200);
+    expect((await account(h, token)).seconds_left).toBe(18);
+
+    const { token: empty } = await signIn(h, { trialSeconds: 0 });
+    const none = await h.fetch("/v1/transcribe", dictation(empty, speech(2), 2));
+    expect([none.status, await errorCode(none)]).toEqual([402, "out_of_hours"]);
+  });
+
+  it("pays the hold when the upstream gives no duration", async () => {
+    const h = harness(() => new RecordingTranscriber({ durationMs: undefined }));
+    const { token } = await signIn(h);
+    const audio = speech(4);
+    const response = await h.fetch("/v1/transcribe", dictation(token, audio, 4));
+    expect(await response.json()).toMatchObject({ billed_seconds: holdOf(audio) });
+  });
+
+  it("never charges more than the hold, and gives no text when the upstream heard more than the bytes can hold", async () => {
+    const h = harness(() => new RecordingTranscriber({ durationMs: 100_000 }));
+    const { token } = await signIn(h);
+    const audio = speech(2);
+    const response = await h.fetch("/v1/transcribe", dictation(token, audio, 2));
+    expect([response.status, await errorCode(response)]).toEqual([400, "bad_audio"]);
+    expect((await account(h, token)).seconds_left).toBe(3600 - holdOf(audio));
+  });
+
+  it("needs Content-Length, so the hold can come from the byte count", async () => {
     const upstream = new RecordingTranscriber();
     const h = harness(() => upstream);
     const { token } = await signIn(h);
-    const first = await h.fetch("/v1/transcribe", dictation(token, flac(1200), 1200));
-    expect(first.status).toBe(200);
-    for (let i = 0; i < 2; i++) {
-      expect((await h.fetch("/v1/transcribe", dictation(token, flac(1200), 1200))).status).toBe(200);
-    }
-    expect((await account(h, token)).seconds_left).toBe(0);
-    const refused = await h.fetch("/v1/transcribe", dictation(token, flac(5), 5));
-    expect(refused.status).toBe(402);
-    expect(await errorCode(refused)).toBe("out_of_hours");
-    expect(upstream.calls.at(-1)?.aborted).toBe(true);
-  });
-
-  it("lets the last dictation overshoot, and never goes below zero", async () => {
-    const h = harness(() => new RecordingTranscriber());
-    const { token } = await signIn(h);
-    for (const seconds of [1200, 1200, 1190]) {
-      expect((await h.fetch("/v1/transcribe", dictation(token, flac(seconds), seconds))).status).toBe(200);
-    }
-    expect((await account(h, token)).seconds_left).toBe(10);
-    // 10 s left: a 20-minute dictation still goes through, and the rest is absorbed.
-    expect((await h.fetch("/v1/transcribe", dictation(token, flac(1200), 1200))).status).toBe(200);
-    expect(await account(h, token)).toMatchObject({ seconds_left: 0, pack_seconds: 0 });
+    const audio = speech(2);
+    const stream = new ReadableStream<Uint8Array>({
+      start(controller) {
+        controller.enqueue(audio);
+        controller.close();
+      },
+    });
+    const request = dictation(token, audio, 2);
+    const { "Content-Length": _, ...headers } = request.headers;
+    const response = await h.fetch("/v1/transcribe", { ...request, headers, body: stream });
+    expect([response.status, await errorCode(response)]).toEqual([411, "length_required"]);
+    expect(upstream.calls).toHaveLength(0);
   });
 
   it("refuses a request with no token, a damaged token or a revoked session", async () => {
     const h = harness();
     const { token } = await signIn(h);
-    const none = await h.fetch("/v1/transcribe", { method: "POST", body: flac(1) });
+    const none = await h.fetch("/v1/transcribe", { method: "POST", body: speech(1) });
     expect(none.status).toBe(401);
-    const damaged = await h.fetch("/v1/transcribe", dictation(`${token.slice(0, -4)}AAAA`, flac(1), 1));
+    const damaged = await h.fetch("/v1/transcribe", dictation(`${token.slice(0, -4)}AAAA`, speech(1), 1));
     expect(await errorCode(damaged)).toBe("signed_out");
 
     const out = await h.fetch("/v1/sign-out-everywhere", { method: "POST", ...bearer(token) });
     expect(out.status).toBe(204);
-    const revoked = await h.fetch("/v1/transcribe", dictation(token, flac(1), 1));
+    const revoked = await h.fetch("/v1/transcribe", dictation(token, speech(1), 1));
     expect(revoked.status).toBe(401);
     expect((await h.fetch("/v1/account", bearer(token))).status).toBe(401);
     // An ended token cannot end the new sessions again.
@@ -108,13 +157,16 @@ describe("POST /v1/transcribe", () => {
     const upstream = new RecordingTranscriber();
     const h = harness(() => upstream);
     const { token } = await signIn(h);
-    const wav = await h.fetch("/v1/transcribe", dictation(token, flac(1), 1, { "Content-Type": "audio/wav" }));
+    const wav = await h.fetch("/v1/transcribe", dictation(token, speech(1), 1, { "Content-Type": "audio/wav" }));
     expect([wav.status, await errorCode(wav)]).toEqual([415, "unsupported_media_type"]);
-    const noSeconds = await h.fetch("/v1/transcribe", dictation(token, flac(1), 0));
-    expect(await errorCode(noSeconds)).toBe("bad_request");
+    const badSeconds = await h.fetch(
+      "/v1/transcribe",
+      dictation(token, speech(1), 1, { "X-Kotoba-Audio-Seconds": "x" }),
+    );
+    expect(await errorCode(badSeconds)).toBe("bad_request");
     const notFlac = await h.fetch("/v1/transcribe", dictation(token, new Uint8Array(100), 1));
     expect([notFlac.status, await errorCode(notFlac)]).toEqual([400, "bad_audio"]);
-    const badPhrases = await h.fetch("/v1/transcribe", dictation(token, flac(1), 1, { "X-Kotoba-Phrases": "%%%" }));
+    const badPhrases = await h.fetch("/v1/transcribe", dictation(token, speech(1), 1, { "X-Kotoba-Phrases": "%%%" }));
     expect(await errorCode(badPhrases)).toBe("bad_request");
     expect(upstream.calls).toHaveLength(0);
   });
@@ -123,78 +175,86 @@ describe("POST /v1/transcribe", () => {
     const upstream = new RecordingTranscriber();
     const h = harness(() => upstream);
     const { token } = await signIn(h);
-    const declaredLong = await h.fetch("/v1/transcribe", dictation(token, flac(5), 1201));
+    const declaredLong = await h.fetch("/v1/transcribe", dictation(token, speech(5), 1201));
     expect([declaredLong.status, await errorCode(declaredLong)]).toEqual([413, "audio_too_long"]);
-    // The header says 5 s, the file says 25 minutes: the file wins.
+    // The header says 5 s, the file says 25 minutes: either claim of too long is enough to refuse.
     const fileLong = await h.fetch("/v1/transcribe", dictation(token, flac(1500), 5));
     expect(await errorCode(fileLong)).toBe("audio_too_long");
-    expect(upstream.calls).toHaveLength(0);
-    // A Content-Length over the limit is refused before the upstream starts.
-    const request = dictation(token, flac(5, 5000), 5);
-    const large = await h.fetch(
-      "/v1/transcribe",
-      { ...request, headers: { ...request.headers, "Content-Length": "5042" } },
-      { MAX_AUDIO_BYTES: "4000" },
-    );
+    const large = await h.fetch("/v1/transcribe", dictation(token, speech(5), 5), { MAX_AUDIO_BYTES: "4000" });
     expect([large.status, await errorCode(large)]).toEqual([413, "audio_too_large"]);
     expect(upstream.calls).toHaveLength(0);
-  });
-
-  it("stops a body without Content-Length once it passes the size limit", async () => {
-    const upstream = new RecordingTranscriber();
-    const h = harness(() => upstream);
-    const { token } = await signIn(h);
-    const audio = flac(5, 9000);
-    const stream = new ReadableStream<Uint8Array>({
-      start(controller) {
-        for (let i = 0; i < audio.length; i += 1000) controller.enqueue(audio.slice(i, i + 1000));
-        controller.close();
-      },
-    });
-    const response = await h.fetch(
-      "/v1/transcribe",
-      { ...dictation(token, audio, 5), body: stream },
-      {
-        MAX_AUDIO_BYTES: "4000",
-      },
-    );
-    expect([response.status, await errorCode(response)]).toEqual([413, "audio_too_large"]);
-    expect((await account(h, token)).seconds_left).toBe(3600);
   });
 
   it("pauses every user once the global daily cap is reached", async () => {
     const h = harness(() => new RecordingTranscriber());
     const { token } = await signIn(h);
     const overrides = { GLOBAL_DAILY_CAP_SECONDS: "30" };
-    h.clock.now += 10 * 86_400_000; // A day no other test in this file used.
-    expect((await h.fetch("/v1/transcribe", dictation(token, flac(40), 40), overrides)).status).toBe(200);
-    const paused = await h.fetch("/v1/transcribe", dictation(token, flac(1), 1), overrides);
+    h.clock.now += 10 * DAY; // A day no other test in this file used.
+    expect((await h.fetch("/v1/transcribe", dictation(token, speech(40), 40), overrides)).status).toBe(200);
+    const paused = await h.fetch("/v1/transcribe", dictation(token, speech(1), 1), overrides);
     expect([paused.status, await errorCode(paused)]).toEqual([503, "service_paused"]);
     // A new UTC day has a new meter.
-    h.clock.now += 86_400_000;
-    const nextDay = await h.fetch("/v1/transcribe", dictation(token, flac(1), 1), overrides);
+    h.clock.now += DAY;
+    const nextDay = await h.fetch("/v1/transcribe", dictation(token, speech(1), 1), overrides);
     expect(nextDay.status).toBe(200);
+  });
+
+  it("gives the global meter back when a gate refuses, so refused requests cannot use up the cap", async () => {
+    const h = harness(() => new RecordingTranscriber());
+    h.clock.now += 20 * DAY;
+    const overrides = { GLOBAL_DAILY_CAP_SECONDS: "30" };
+    const { token: broke } = await signIn(h, { trialSeconds: 0 });
+    for (let i = 0; i < 2; i++) {
+      const refused = await h.fetch("/v1/transcribe", dictation(broke, speech(10), 10), overrides);
+      expect(await errorCode(refused)).toBe("out_of_hours");
+    }
+    expect(await meterSeconds(h.clock.now)).toBe(0);
+    const { token } = await signIn(h);
+    expect((await h.fetch("/v1/transcribe", dictation(token, speech(2), 2), overrides)).status).toBe(200);
+  });
+
+  it("counts the byte bound on the global meter, then corrects it to the upstream's duration", async () => {
+    let meterDuringCall = -1;
+    const h = harness(() => ({
+      async transcribe(input, signal) {
+        for await (const _ of input.audio);
+        await scheduler.wait(20);
+        meterDuringCall = await meterSeconds(h.clock.now);
+        signal.throwIfAborted();
+        return { text: "hi", durationMs: 12_000 };
+      },
+    }));
+    h.clock.now += 30 * DAY;
+    const { token } = await signIn(h);
+    // STREAMINFO and the header claim 1 s; the bytes can hold 30 s.
+    const audio = flac(1, 180_000);
+    expect((await h.fetch("/v1/transcribe", dictation(token, audio, 1))).status).toBe(200);
+    expect(meterDuringCall).toBe(holdOf(audio));
+    expect(await meterSeconds(h.clock.now)).toBe(12);
   });
 
   it("limits dictations a minute per user", async () => {
     const h = harness(() => new RecordingTranscriber());
     const { token } = await signIn(h);
     const statuses: number[] = [];
-    for (let i = 0; i < 31; i++) statuses.push((await h.fetch("/v1/transcribe", dictation(token, flac(1), 1))).status);
+    for (let i = 0; i < 31; i++)
+      statuses.push((await h.fetch("/v1/transcribe", dictation(token, speech(1), 1))).status);
     expect(statuses.slice(0, 30).every((s) => s === 200)).toBe(true);
     expect(statuses[30]).toBe(429);
   });
 
-  it("does not charge when the upstream fails", async () => {
+  it("does not charge the user or the global meter when the upstream fails", async () => {
     const h = harness(() => ({
       transcribe: async () => {
-        throw new (await import("../src/upstream")).UpstreamError("failed", "Azure 500");
+        throw new UpstreamError("failed", "Azure 500");
       },
     }));
+    h.clock.now += 40 * DAY;
     const { token } = await signIn(h);
-    const response = await h.fetch("/v1/transcribe", dictation(token, flac(3), 3));
+    const response = await h.fetch("/v1/transcribe", dictation(token, speech(3), 3));
     expect([response.status, await errorCode(response)]).toEqual([502, "upstream_failed"]);
     expect((await account(h, token)).seconds_left).toBe(3600);
+    expect(await meterSeconds(h.clock.now)).toBe(0);
   });
 
   it("answers 501 for cleanup, which is not built yet", async () => {

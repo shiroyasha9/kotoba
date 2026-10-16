@@ -33,6 +33,9 @@
     // "console" prints sign-in codes to the wrangler dev log. No real mailer exists yet.
     "MAILER": "console",
     "MAX_AUDIO_BYTES": "33554432",
+    // The lowest FLAC bitrate billed in full. A dictation holds its bytes / this many seconds, so a client cannot claim a
+    // shorter length than it sends. The owner's 16 kHz speech recordings run 13-17 KB/s (n = 24, 2026-10-17).
+    "MIN_AUDIO_BYTES_PER_SECOND": "6000",
     "MAX_AUDIO_SECONDS": "1200",
     // Covers the upload too: 32 MB at 5 Mbit/s takes about 51 s.
     "UPSTREAM_TIMEOUT_MS": "120000",

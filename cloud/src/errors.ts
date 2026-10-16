@@ -8,6 +8,8 @@ export type ErrorCode =
   | "code_expired"
   | "signed_out"
   | "out_of_hours"
+  | "not_enough_hours"
+  | "length_required"
   | "audio_too_large"
   | "audio_too_long"
   | "bad_audio"
