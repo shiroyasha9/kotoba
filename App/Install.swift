@@ -8,6 +8,8 @@ import Foundation
 /// themselves. Lint flags these names anywhere else (`per_install_ids` and `per_install_locations` in .swiftlint.yml).
 enum Install {
     static let releaseBundleID = "tech.teensy.kotoba"
+    /// The release's `APP_DISPLAY_NAME` in project.yml.
+    static let releaseDisplayName = "kotoba"
 
     static let bundleID: String = {
         guard let id = Bundle.main.bundleIdentifier else { preconditionFailure("kotoba runs without its app bundle") }

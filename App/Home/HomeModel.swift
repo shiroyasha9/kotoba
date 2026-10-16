@@ -28,11 +28,29 @@ final class HomeModel {
         var finishSetup: @MainActor () -> Void
     }
 
+    /// The name and icon at the top of Home.
+    struct Identity {
+        var name: String
+        var icon: NSImage
+
+        /// This install's: "kotoba Dev" and the DEV icon in a development build.
+        @MainActor static var running: Self {
+            Self(name: Install.displayName, icon: NSApplication.shared.applicationIconImage)
+        }
+
+        /// The release's, for the README images: a development build carries the release icon too (`AppIcon`).
+        @MainActor static var release: Self {
+            guard let icon = NSImage(named: "AppIcon") else { preconditionFailure("The build has no release icon") }
+            return Self(name: Install.releaseDisplayName, icon: icon)
+        }
+    }
+
     static let recentCount = 5
 
     /// Observed: a grant or a saved key changes the status line at once.
     let readiness: Readiness
     let chords: HotkeyChords
+    let identity: Identity
     let reader: PaneReader<Figures>
     let apps = InstalledApps()
     private let source: Source?
@@ -42,14 +60,16 @@ final class HomeModel {
     init(readiness: Readiness, chords: HotkeyChords, source: Source) {
         self.readiness = readiness
         self.chords = chords
+        identity = .running
         self.source = source
         reader = PaneReader("Home") { try await source.read(.now) }
     }
 
     /// For snapshots: fixed figures, no store.
-    init(readiness: Readiness, chords: HotkeyChords, figures: Figures) {
+    init(readiness: Readiness, chords: HotkeyChords, figures: Figures, identity: Identity = .running) {
         self.readiness = readiness
         self.chords = chords
+        self.identity = identity
         source = nil
         reader = PaneReader(value: figures)
     }

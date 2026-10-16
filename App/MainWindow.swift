@@ -86,6 +86,11 @@ extension EnvironmentValues {
     /// Goes up by one each time the owner chooses Edit > Find… in the main window. A pane with a search field focuses
     /// it on each change.
     @Entry var findRequests = 0
+
+    /// Set only by the README snapshots: the sidebar draws its selected row and its labels with explicit colors.
+    /// Offscreen, the list's own selection draws as a black block over its label, and the glass's text treatment
+    /// leaves the labels near black in dark (docs/research/native-ui.md): the window server applies both.
+    @Entry var drawsSidebarColors = false
 }
 
 /// A pane's symbol, white on a rounded square of the pane's color, as in the System Settings sidebar. Custom: SwiftUI
@@ -212,6 +217,7 @@ final class Selection {
 struct MainView: View {
     let panes: [Pane]
     @Bindable var selection: Selection
+    @Environment(\.drawsSidebarColors) private var drawsSidebarColors
     /// Gets each pane the window shows.
     let onShow: (PaneID) -> Void
 
@@ -228,12 +234,15 @@ struct MainView: View {
 
     var body: some View {
         NavigationSplitView {
-            List(selection: $selection.id) {
+            List(selection: drawsSidebarColors ? .constant(nil) : $selection.id) {
                 Section {
                     rows(panes.filter { !$0.id.isSetting })
                 }
-                Section("Settings") {
+                Section {
                     rows(panes.filter(\.id.isSetting))
+                } header: {
+                    Text("Settings")
+                        .modifier(SidebarColor(color: .secondaryLabelColor))
                 }
             }
             .navigationSplitViewColumnWidth(min: 160, ideal: 190, max: 240)
@@ -271,11 +280,33 @@ struct MainView: View {
 
     private func rows(_ panes: [Pane]) -> some View {
         ForEach(panes) { pane in
+            let isSelected = drawsSidebarColors && pane.id == selection.id
             Label {
                 Text(pane.title)
+                    .modifier(SidebarColor(color: isSelected ? .alternateSelectedControlTextColor : .labelColor))
             } icon: {
                 PaneIcon(pane: pane.id)
             }
+            .listRowBackground(
+                isSelected
+                    // The source list's emphasized selection, inset from the sidebar's edges.
+                    ? RoundedRectangle(cornerRadius: 8, style: .continuous)
+                        .fill(Color(nsColor: .selectedContentBackgroundColor))
+                        .padding(.horizontal, 10) : nil)
+        }
+    }
+}
+
+/// An explicit text color in the README snapshots (`drawsSidebarColors`); the system's own style everywhere else.
+private struct SidebarColor: ViewModifier {
+    let color: NSColor
+    @Environment(\.drawsSidebarColors) private var drawsColor
+
+    func body(content: Content) -> some View {
+        if drawsColor {
+            content.foregroundStyle(Color(nsColor: color))
+        } else {
+            content
         }
     }
 }

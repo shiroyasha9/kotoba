@@ -12,7 +12,7 @@ SWIFT_SRC   := App KotobaCore/Sources KotobaCore/Tests KotobaCore/Package.swift 
                KotobaStorage/Sources KotobaStorage/Tests KotobaStorage/Package.swift
 SWIFTFORMAT := xcrun swift-format
 
-.PHONY: gen build build-check test lint lint-files format format-lint privacy check snapshots memory latency \
+.PHONY: gen build build-check test lint lint-files format format-lint privacy check snapshots readme-images memory latency \
 	release dmg appcast
 
 gen:
@@ -67,6 +67,13 @@ check: privacy format-lint lint build-check test
 SNAPSHOTS := build/snapshots$(if $(AGENT),-$(AGENT))
 snapshots: build-check
 	$(call DEBUG_APP,$(CHECK_DERIVED))/Contents/MacOS/kotoba --snapshots $(SNAPSHOTS)
+
+# The README's screenshots (`Pane.readmeSnapshots`) in macOS's default blue accent, not this Mac's (-AppleAccentColor 4
+# sets it for this run only), copied to docs/images.
+README_SHOTS := build/readme-images$(if $(AGENT),-$(AGENT))
+readme-images: build-check
+	$(call DEBUG_APP,$(CHECK_DERIVED))/Contents/MacOS/kotoba --snapshots $(README_SHOTS) -AppleAccentColor 4
+	cp $(README_SHOTS)/readme-*.png docs/images/
 
 # System checks (docs/spec.md, "Testing Decisions"): run by hand against the running app, not part of `check`.
 memory:

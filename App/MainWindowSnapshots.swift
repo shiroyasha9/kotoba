@@ -26,11 +26,6 @@ extension MainWindow {
     static func windowSnapshot(
         of panes: [Pane], selecting id: Pane.ID, named name: String, size: NSSize = defaultSize, isFramed: Bool = false
     ) -> Snapshot {
-        let overflow: @MainActor (NSView) -> String? = { content in
-            content.subviews.first { $0.frame != content.bounds }.map {
-                "the window content is \($0.frame), the window is \(content.bounds)"
-            }
-        }
         let selection = { Selection(panes: panes, showing: id) }
         guard isFramed else {
             return Snapshots.fixedWindow(named: name, size: size, check: overflow) {
@@ -44,6 +39,26 @@ extension MainWindow {
             return window
         } check: {
             overflow($0)
+        }
+    }
+
+    /// The README images (`Pane.readmeSnapshots`, `make readme-images`): the whole window content at one size, as
+    /// `windowSnapshot` draws it, with the sidebar's selected row and labels in explicit colors (`drawsSidebarColors`).
+    /// `isScrolledToEnd` shows the end of a pane that scrolls; 610 pt high, General's end then starts at a section.
+    static func readmeSnapshot(
+        of panes: [Pane], selecting id: Pane.ID, named name: String, isScrolledToEnd: Bool = false
+    ) -> Snapshot {
+        Snapshots.fixedWindow(named: name, size: NSSize(width: 960, height: 610), check: overflow) {
+            MainView(panes: panes, selection: Selection(panes: panes, showing: id))
+                .environment(\.drawsSidebarColors, true)
+                .defaultScrollAnchor(isScrolledToEnd ? .bottom : nil)
+        }
+    }
+
+    /// Content that left the window's bounds: a pane taller than the window moves the split view.
+    private static func overflow(_ content: NSView) -> String? {
+        content.subviews.first { $0.frame != content.bounds }.map {
+            "the window content is \($0.frame), the window is \(content.bounds)"
         }
     }
 }

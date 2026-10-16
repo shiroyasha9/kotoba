@@ -106,33 +106,49 @@ The screenshots show sample data.
   <tr>
     <td width="50%">
       <picture>
-        <source media="(prefers-color-scheme: dark)" srcset="docs/images/insights-dark.png">
-        <img src="docs/images/insights-light.png" alt="Settings, Insights pane: words per minute, streak, time saved, a 30-day chart of words dictated, words learned and top apps">
+        <source media="(prefers-color-scheme: dark)" srcset="docs/images/readme-home-dark.png">
+        <img src="docs/images/readme-home-light.png" alt="Home: kotoba is ready to dictate, with today’s words, this week’s words, the streak and the newest dictations">
       </picture>
-      <p align="center">Insights</p>
+      <p align="center">Home</p>
     </td>
     <td width="50%">
       <picture>
-        <source media="(prefers-color-scheme: dark)" srcset="docs/images/modes-dark.png">
-        <img src="docs/images/modes-light.png" alt="Settings, Modes pane: Code and Writing modes, and the mode of each app">
+        <source media="(prefers-color-scheme: dark)" srcset="docs/images/readme-history-dark.png">
+        <img src="docs/images/readme-history-light.png" alt="History: dictations by day, with the app, length and word count of each, and the ones not yet transcribed">
       </picture>
-      <p align="center">Modes</p>
+      <p align="center">History</p>
     </td>
   </tr>
   <tr>
     <td width="50%">
       <picture>
-        <source media="(prefers-color-scheme: dark)" srcset="docs/images/history-dark.png">
-        <img src="docs/images/history-light.png" alt="History pane: dictations by day, with search, copy, paste, retry and delete">
+        <source media="(prefers-color-scheme: dark)" srcset="docs/images/readme-insights-dark.png">
+        <img src="docs/images/readme-insights-light.png" alt="Insights: words per minute, streak, time saved, a 30-day chart of words dictated and words learned">
       </picture>
-      <p align="center">History</p>
+      <p align="center">Insights</p>
     </td>
     <td width="50%">
       <picture>
-        <source media="(prefers-color-scheme: dark)" srcset="docs/images/usage-dark.png">
-        <img src="docs/images/usage-light.png" alt="Settings, Usage pane: dictations, words, audio and spend per model this month">
+        <source media="(prefers-color-scheme: dark)" srcset="docs/images/readme-usage-dark.png">
+        <img src="docs/images/readme-usage-light.png" alt="Usage: dictations, words, audio and spend, spend per model and top apps">
       </picture>
       <p align="center">Usage</p>
+    </td>
+  </tr>
+  <tr>
+    <td width="50%">
+      <picture>
+        <source media="(prefers-color-scheme: dark)" srcset="docs/images/readme-modes-dark.png">
+        <img src="docs/images/readme-modes-light.png" alt="Modes: cleanup for code apps and writing apps, and the mode of each app">
+      </picture>
+      <p align="center">Modes</p>
+    </td>
+    <td width="50%">
+      <picture>
+        <source media="(prefers-color-scheme: dark)" srcset="docs/images/readme-general-dark.png">
+        <img src="docs/images/readme-general-light.png" alt="General: sound, indicator, saved audio, and whether kotoba opens at login and shows in the Dock and menu bar">
+      </picture>
+      <p align="center">General</p>
     </td>
   </tr>
 </table>

@@ -43,12 +43,12 @@ private struct HomePane: View {
 
     private var hero: some View {
         HStack {
-            Image(nsImage: NSApplication.shared.applicationIconImage)
+            Image(nsImage: model.identity.icon)
                 .resizable()
                 .frame(width: 64, height: 64)
                 .accessibilityHidden(true)
             VStack(alignment: .leading, spacing: 2) {
-                Text(Install.displayName).font(.title.weight(.semibold))
+                Text(model.identity.name).font(.title.weight(.semibold))
                 Text("Version \(model.version)").foregroundStyle(.secondary)
             }
         }
@@ -217,16 +217,26 @@ extension Pane {
 
 extension HomeModel {
     /// Synthetic figures: five dictations, a streak that includes today.
-    static var sample: HomeModel {
+    static var sample: HomeModel { sample() }
+
+    /// Home in the README: the release's name and icon, and only dictations with text.
+    static var readme: HomeModel {
+        sample(HistoryController.sampleRows().filter(\.hasText), identity: .release)
+    }
+
+    private static func sample(
+        _ rows: [DictationRecord] = HistoryController.sampleRows(), identity: Identity = .running
+    ) -> HomeModel {
         let today = Calendar.current.startOfDay(for: .now)
         let insights = DictationInsights(
             dictations: 1_204, wordsThisWeek: 3_575, wordsThisMonth: 12_840, words: 48_310, streak: 5,
             isTodayInStreak: true, days: [.init(start: today, words: 640, dictations: 14)])
-        let recent = Array(HistoryController.sampleRows().prefix(recentCount))
+        let recent = Array(rows.prefix(recentCount))
         return HomeModel(
             readiness: .sample(), chords: HotkeyChords(defaults: nil),
             figures: Figures(
-                insights: insights, recent: recent, hasLastDictation: true, retryable: HistoryModel.kept(recent)))
+                insights: insights, recent: recent, hasLastDictation: true, retryable: HistoryModel.kept(recent)),
+            identity: identity)
     }
 
     /// A first launch: no OpenRouter key yet, nothing dictated.

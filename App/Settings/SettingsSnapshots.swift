@@ -104,13 +104,27 @@ extension Pane {
             isFramed: isFramed)
     }
 
+    /// The images in the README's "Screenshots" section, which `make readme-images` copies to docs/images: the whole
+    /// window content at one size, as the release shows it. General is scrolled to its end, for Sound, Dock and menu
+    /// bar.
+    static func readmeSnapshots() -> [Snapshot] {
+        let panes = samplePanes(home: .readme)
+        let ids: [PaneID] = [.home, .history, .insights, .usage, .modes, .general]
+        return ids.map { id in
+            MainWindow.readmeSnapshot(
+                of: panes, selecting: id, named: "readme-\(id.rawValue)", isScrolledToEnd: id == .general)
+        }
+    }
+
     /// Every pane with sample data; `history` selects that History sample row.
-    private static func samplePanes(suggestions: [DictionarySuggestion] = [], history selected: Int = 0) -> [Pane] {
+    private static func samplePanes(
+        suggestions: [DictionarySuggestion] = [], history selected: Int = 0, home: HomeModel = .sample
+    ) -> [Pane] {
         let rows = HistoryController.sampleRows()
         let history = HistoryModel(rows: rows)
         history.selection = [rows[selected].id]
         return [
-            .home(.sample),
+            .home(home),
             .history(history),
             .general(.sample()),
             .dictionary(sampleModel(sampleDictionary, suggestions: suggestions)),
