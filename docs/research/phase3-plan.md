@@ -173,3 +173,4 @@ Owner decisions, each with a recommendation.
 - "Add to kotoba Dictionary" service (2.2d): research Services support (Ghostty, cmux, Terminal, iTerm2, browsers) first, then build if the research supports it.
 - List-size bench (section 3): go given; it runs now.
 - Context awareness (section 4, 11:59 IST): parked. The research stays in `context-awareness.md`; "text near the cursor" (v1 there) is the candidate for a later, in-depth discussion. If built, dictionary terms keep their places and context terms take only free slots.
+- Marketing video (12:40 IST): build a short product video for the README, shown there as a GIF (or a looping video). Phase 3, after 0.2.0.
