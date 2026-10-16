@@ -185,6 +185,22 @@ custom_rules:
     match_kinds: [string]
     message: "Use the curly apostrophe and quotes (’ “ ”) in UI text, not ' or \\\" (CODING_STANDARDS.md, User-facing text 13)."
     severity: error
+  # Rule 4 was broken in three phases ("Ctrl+Opt+Cmd", "Command-V", then "(Control-Option-Command)" on the 0.2.0 welcome
+  # page, owner 2026-10-16): a modifier written as a word and joined to another key by "-" or "+".
+  ui_text_key_names:
+    name: "UI text: keys as symbols"
+    included: ["App/.*\\.swift"]
+    regex: "(?<=(?:\\b(?:Text|Button|Toggle|Section|Label|Picker|LabeledContent|Link|Menu|TextField|SecureField|GroupBox|NSMenuItem|NSButton|NSTextField|NSAlert|MenuChoice|help|navigationTitle|confirmationDialog|alert)\\(|\\.(?:title|subtitle|toolTip|messageText|informativeText|placeholderString|stringValue|prompt) = )[^\\n]{0,200})(?:\\b(?:Ctrl|Control|Opt|Option|Alt|Cmd|Command|Shift|Fn)[-+](?:Ctrl|Control|Opt|Option|Alt|Cmd|Command|Shift|Fn|Return|Space|Tab|Esc|Delete|[A-Z0-9])\\b)"
+    match_kinds: [string]
+    message: "Write keys as symbols in UI text: ⌃ ⌥ ⌘ ⇧ fn, ⌘V, never \"Control-Option-Command\" or \"Cmd+V\" (CODING_STANDARDS.md, User-facing text 4)."
+    severity: error
+  status_text_key_names:
+    name: "Status text: keys as symbols"
+    included: ["App/StatusText\\.swift"]
+    regex: "(?:\\b(?:Ctrl|Control|Opt|Option|Alt|Cmd|Command|Shift|Fn)[-+](?:Ctrl|Control|Opt|Option|Alt|Cmd|Command|Shift|Fn|Return|Space|Tab|Esc|Delete|[A-Z0-9])\\b)"
+    match_kinds: [string]
+    message: "Write keys as symbols in pill and menu text: ⌃ ⌥ ⌘ ⇧ fn, ⌘V (CODING_STANDARDS.md, User-facing text 4)."
+    severity: error
   status_text_straight_quotes:
     name: "Status text: curly apostrophe and quotes"
     included: ["App/StatusText\\.swift"]

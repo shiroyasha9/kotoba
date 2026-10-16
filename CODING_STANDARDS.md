@@ -49,7 +49,7 @@
 
 ## User-facing text
 
-Reference: the copy deck in `docs/research/ux-polish.md` (sections 4.1-4.6). A new string follows these rules; review checks them, and `.swiftlint.yml` enforces 3, 5 and 8 on UI-building lines.
+Reference: the copy deck in `docs/research/ux-polish.md` (sections 4.1-4.6). A new string follows these rules; review checks them, and `.swiftlint.yml` enforces 3, 4 (a modifier name joined to a key, such as "Cmd+V"), 5, 8 and 13 on UI-building lines.
 
 1. Brand: always "kotoba", lowercase, also at the start of a sentence.
 2. Capitalisation (Apple HIG): Title Case for menu items, buttons, window and pane titles, section headers. Sentence case for toggle and field labels, footers, help text, pill messages and status lines.
