@@ -1,0 +1,13 @@
+{
+  "id": "gen-3",
+  "provider": "Together",
+  "model": "deepseek/deepseek-v4.1-flash",
+  "choices": [
+    {
+      "finish_reason": "length",
+      "native_finish_reason": "length",
+      "message": { "role": "assistant", "content": "Fix the login" }
+    }
+  ],
+  "usage": { "prompt_tokens": 1038, "completion_tokens": 4096 }
+}

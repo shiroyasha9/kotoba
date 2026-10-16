@@ -130,6 +130,14 @@ private struct HomePane: View {
                     Text(StatusText.shortcutHelp(.copyLast))
                 }
             }
+            if let polishLast = model.chords.polishLast {
+                LabeledContent {
+                    Text(polishLast.title)
+                } label: {
+                    Text(StatusText.shortcutTitle(.polishLast))
+                    Text(StatusText.shortcutHelp(.polishLast))
+                }
+            }
             LabeledContent {
                 Text("Esc")
             } label: {

@@ -25,9 +25,10 @@ public enum CleanupModel: String, CaseIterable, Sendable {
 /// transcript goes in the user message inside <transcript> tags, as data.
 /// API: https://openrouter.ai/docs/api/reference/chat-completion
 public final class OpenRouterCleaner: TextCleaner {
-    private let connection: ProviderConnection
+    /// Shared with Polish (`polisher()`).
+    let connection: ProviderConnection
     private let settings: TranscriptionSettings
-    private let baseURL: URL
+    let baseURL: URL
 
     /// `apiKey` is the OpenRouter key from the app's `KeyVault`, shared with transcription.
     public convenience init(apiKey: any APIKeySource, settings: TranscriptionSettings) {

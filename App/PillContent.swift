@@ -48,6 +48,8 @@ extension IndicatorPanel {
     /// In place of the state dot while a dictation will be cleaned up and while it is: the one fact the owner acts on
     /// (a short wait, and words that may change). Not the learned word's "sparkles".
     static let cleanupSymbol = "wand.and.sparkles"
+    /// While Polish rewrites the last dictation: a rewrite, not a cleanup.
+    nonisolated static let polishSymbol = "text.badge.star"
 
     /// What the pill shows for `state`; nil hides it.
     static func content(
@@ -82,13 +84,15 @@ extension IndicatorPanel {
             return .init(text: text, color: .systemBlue, showsSpinner: true, isCompact: true)
         case .cleaning:
             return .init(text: text, color: .systemBlue, symbol: cleanupSymbol, showsSpinner: true, isCompact: true)
+        case .polishing:
+            return .init(text: text, color: .systemBlue, symbol: polishSymbol, showsSpinner: true, isCompact: true)
         case .undoable:
             // The pipeline ends the Undo window itself; the bar follows it.
             return .init(
                 text: text, color: .secondaryLabelColor, action: action,
                 timer: .init(duration: context.undoWindow, kind: .followsUndoWindow))
         case .failed, .needsSetup, .rejected, .cleanupFailed, .cleanupTooSlow, .returnSkipped, .recovered, .copied,
-            .captureFailed, .nothingRecorded, .audioNotSaved, .audioCut, .clipboardNotKept:
+            .captureFailed, .nothingRecorded, .audioNotSaved, .audioCut, .clipboardNotKept, .polished, .polishFailed:
             return .init(
                 PillNotice(text: text, action: action), color: state.isGoodOutcome ? .systemGreen : .systemOrange)
         }

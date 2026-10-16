@@ -18,10 +18,11 @@ public struct InstallYield: Sendable, Equatable {
     public func showsYield(in state: DictationState) -> Bool {
         guard isYielding else { return false }
         switch state {
-        case .recording, .transcribing, .cleaning, .undoable:
+        case .recording, .transcribing, .cleaning, .undoable, .polishing:
             return false
         case .idle, .failed, .needsSetup, .rejected, .cleanupFailed, .cleanupTooSlow, .returnSkipped, .copied,
-            .recovered, .captureFailed, .nothingRecorded, .audioNotSaved, .audioCut, .clipboardNotKept:
+            .recovered, .captureFailed, .nothingRecorded, .audioNotSaved, .audioCut, .clipboardNotKept, .polished,
+            .polishFailed:
             return true
         }
     }

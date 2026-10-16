@@ -18,6 +18,13 @@ actor FakeStore: Store {
         ledger += entries.filter { entry in !ledger.contains { $0.id == entry.id } }
     }
 
+    func setPolishedText(_ text: String?, of id: DictationID, usage: [UsageEntry]) async throws -> Bool {
+        try await addUsage(usage)
+        guard let index = records.firstIndex(where: { $0.id == id && $0.status.isTranscribed }) else { return false }
+        records[index].polishedText = text
+        return true
+    }
+
     /// Discarded recordings whose file stayed (`markDiscarded`).
     private(set) var discarded: Set<DictationID> = []
 

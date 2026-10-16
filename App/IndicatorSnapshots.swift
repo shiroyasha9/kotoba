@@ -24,7 +24,7 @@ extension IndicatorPanel {
             .idle, .recording(isLong: false), .transcribing, .cleaning, .undoable, .failed(id), .rejected(id, .other),
             .needsSetup(id, .key), .cleanupFailed(id), .cleanupTooSlow(id), .returnSkipped(id), .copied(id),
             .recovered(id), .captureFailed, .nothingRecorded, .audioNotSaved(.diskFull), .audioCut(id, .diskFull),
-            .clipboardNotKept(id),
+            .clipboardNotKept(id), .polishing, .polished(id, isReplaced: true), .polishFailed(.failed),
         ]
         var snapshots = [
             Snapshot(name: "indicator-drag") { PillStandIn(content: .init(), anchor: nil) },
@@ -153,6 +153,25 @@ extension IndicatorPanel {
             lossRows(of: state)
         case .clipboardNotKept:
             [SnapshotRow(name: "clipboardNotKept", state: state)]
+        case .polishing, .polished, .polishFailed:
+            polishRows(for: state)
+        }
+    }
+
+    /// Polish's states: the replaced and the new-text outcome, and each failure.
+    private static func polishRows(for state: DictationState) -> [SnapshotRow] {
+        switch state {
+        case .polished(let id, _):
+            [
+                SnapshotRow(name: "polished", state: .polished(id, isReplaced: true)),
+                SnapshotRow(name: "polished-as-new-text", state: .polished(id, isReplaced: false)),
+            ]
+        case .polishFailed:
+            [
+                PolishFailure.nothingToPolish, .cutOff, .tooSlow, .needsSetup(.key), .needsSetup(.credit), .failed,
+            ].map { SnapshotRow(name: "polishFailed-\(Self.snapshotName(of: $0))", state: .polishFailed($0)) }
+        default:
+            [SnapshotRow(name: "polishing", state: state)]
         }
     }
 
@@ -179,8 +198,18 @@ extension IndicatorPanel {
         case .returnSkipped: "returnSkipped"
         case .recovered: "recovered"
         case .idle, .recording, .needsSetup, .rejected, .copied, .captureFailed, .nothingRecorded, .audioNotSaved,
-            .audioCut, .clipboardNotKept:
+            .audioCut, .clipboardNotKept, .polishing, .polished, .polishFailed:
             "\(state)"
+        }
+    }
+
+    private static func snapshotName(of failure: PolishFailure) -> String {
+        switch failure {
+        case .nothingToPolish: "nothingToPolish"
+        case .cutOff: "cutOff"
+        case .tooSlow: "tooSlow"
+        case .needsSetup(let item): "needs-\(item.rawValue)"
+        case .failed: "failed"
         }
     }
 }

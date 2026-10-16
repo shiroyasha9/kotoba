@@ -11,10 +11,11 @@ extension DictationPipeline {
     /// is not kept), so Insights counts the dictation and its speaking time once.
     ///
     /// False when nothing changed: the dictation has no text yet (Retry sends it), its audio is gone, it is being sent
-    /// or sent again, the request failed, the answer heard no words, or its cleanup missed. The dictation then keeps
+    /// or sent again, Polish runs, the request failed, the answer heard no words, or its cleanup missed. The dictation then keeps
     /// its text and its status.
     public func transcribeAgain(_ id: DictationID, model: String? = nil) async -> Bool {
-        guard !inFlight.contains(id), !transcribingAgain.contains(id) else { return false }
+        // Polish writes the text it read before its request: the two never overlap.
+        guard !inFlight.contains(id), !transcribingAgain.contains(id), !isPolishing else { return false }
         transcribingAgain.insert(id)
         announceActivity()
         defer {
@@ -46,6 +47,8 @@ extension DictationPipeline {
             return false
         }
         record.usage = Self.reworded(record.usage, change: (record.wordCount ?? 0) - oldWords)
+        // Polish rewrote the old text: the new text has not been polished.
+        record.polishedText = nil
         return await ports.store.updateOrLog(record)
     }
 

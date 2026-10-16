@@ -1,5 +1,6 @@
 import AppKit
 import KotobaCore
+import KotobaProviders
 
 // MARK: - Pill actions
 
@@ -17,14 +18,19 @@ enum PillAction: Sendable, Equatable {
     case chooseMicrophone
     /// Removes the words that auto-learn just added to the dictionary, found by the learn's id.
     case undoLearned(UUID)
+    /// Puts back the text from before Polish (`DictationPipeline.undoPolish`).
+    case undoPolish(DictationID)
+    case retryPolish
+    /// OpenRouter's credits page: Polish runs there whatever the speech model.
+    case addOpenRouterCredit
 
     var title: String {
         switch self {
-        case .undo, .undoLearned: "Undo"
-        case .retry: "Retry"
+        case .undo, .undoLearned, .undoPolish: "Undo"
+        case .retry, .retryPolish: "Retry"
         case .addKey: "Add Key…"
         case .openSpeechSettings: "Settings…"
-        case .addCredit: "Add Credit…"
+        case .addCredit, .addOpenRouterCredit: "Add Credit…"
         case .copy: "Copy"
         case .allowPasting: "Allow Pasting…"
         case .openMicrophoneSettings: "Open System Settings…"
@@ -36,9 +42,8 @@ enum PillAction: Sendable, Equatable {
 extension AppDelegate {
     func perform(_ action: PillAction) {
         switch action {
-        case .undo:
-            guard let pipeline else { return }
-            Task { await pipeline.undo() }
+        case .undo, .undoPolish, .retryPolish:
+            performOnPipeline(action)
         case .retry:
             retryFailed()
         case .addKey, .openSpeechSettings, .chooseMicrophone:
@@ -54,6 +59,18 @@ extension AppDelegate {
             readiness.openSettings(.microphone)
         case .undoLearned(let id):
             learner.undo(id)
+        case .addOpenRouterCredit:
+            NSWorkspace.shared.open(ProviderAccount.openRouter.creditsPage)
+        }
+    }
+
+    /// Esc's Undo, Polish's Undo and Polish's Retry: the pipeline does them.
+    private func performOnPipeline(_ action: PillAction) {
+        guard let pipeline else { return }
+        switch action {
+        case .undoPolish(let id): Task { await pipeline.undoPolish(id) }
+        case .retryPolish: Task { await pipeline.polishLast() }
+        default: Task { await pipeline.undo() }
         }
     }
 

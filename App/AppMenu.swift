@@ -111,6 +111,10 @@ extension AppDelegate: StatusMenuActions {
         lastDictation?.perform(.copy)
     }
 
+    func polishLastDictation() {
+        lastDictation?.perform(.polish)
+    }
+
     func submitPhraseChanged(isOn: Bool) {
         submitPhraseChanges.continuation.yield(isOn)
     }

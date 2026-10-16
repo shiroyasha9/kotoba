@@ -749,3 +749,24 @@ Rows 740-751 need real hardware or a TCC change, which a snapshot or unit test c
 | 749 | Add the input source “Dvorak - QWERTY ⌘” and select it; dictate into TextEdit. Switch back afterwards | The text pastes (no beep, no ⌘. cancel) | |
 | 750 | Turn kotoba Dev off in Accessibility, wait 2 s, turn it on again (do not click kotoba). Then dictate with the chord into TextEdit | The chord starts the recording and the text pastes, with no relaunch. The log has “Hotkey tap made again after Accessibility came back” | |
 | 751 | Start `kill -STOP <pid>` on a running kotoba Dev (it hangs), then open a second copy (`open -n`). Afterwards `kill -CONT <pid>` and quit one copy | If the open fails, the second copy keeps running (the log has “This copy runs instead”); it never quits with no copy left. Note what the log says for a hung copy | |
+
+## Polish and View Changes (kotoba Dev)
+
+Polish sends the last dictation to OpenRouter (DeepSeek V4.1 Flash, about USD 0.0004 a request). Use kotoba Dev with its own OpenRouter key and the release kotoba quit. Read the log with `log show --last 5m --predicate 'subsystem == "tech.teensy.kotoba.dev"' | grep -i polish`.
+
+| # | Do this | Expect | Result |
+|---|---|---|---|
+| 800 | Settings > General > “Polish last dictation”: click **Use ⌥1** | The shortcut shows ⌥1; Home lists “Polish last dictation ⌥1” | |
+| 801 | Copy some text. In TextEdit, dictate a rambling request of 30 s with a file name in it, then press ⌥1 | The pill shows “Polishing”, then “Polished” with Undo. The dictation in TextEdit is replaced by a shorter text with the same file name; ⌘V after 2 s pastes the text you copied. The log has “the text to replace is selected” | |
+| 802 | Right after row 801, click **Undo** on the pill | The text from before Polish is back in TextEdit; History’s row has no “Polished” note | |
+| 803 | In cmux (a Claude Code prompt), dictate, then press ⌥1 | The pill says “Polished. Pasted as new text”; the polished text appears after your dictation (a terminal cannot select it). Write whether this is good enough | |
+| 804 | In TextEdit, dictate, change one word of the pasted text, then press ⌥1 | “Polished. Pasted as new text”: your edited text stays as you left it | |
+| 805 | Press ⌥1 and switch to another app at once | The pill says “Copied. Press ⌘V to paste.”; ⌘V pastes the polished text; nothing pasted in either app | |
+| 806 | Menu bar menu > **Polish Last Dictation** | As row 801 | |
+| 807 | Turn Wi-Fi off, press ⌥1 | “Couldn’t polish. Nothing changed.” with Retry; nothing pasted. Turn Wi-Fi on and click Retry: as row 801 | |
+| 808 | Start a dictation (tap the chord), then press ⌥1 while it records | Nothing happens: the pill stays “Listening” | |
+| 809 | After a polish: press the Paste Last chord, then menu > **Paste Last Without Cleanup** (cleanup dictation) | Paste Last pastes the polished text; Without Cleanup pastes the raw transcript | |
+| 810 | History: right-click the polished row > **View Changes…**, in light and dark appearance | A sheet with “Transcript → Polished” (and the cleanup pairs for a cleanup dictation); removed words struck through in red, added words underlined in green; Done closes it | |
+| 811 | Row 810 with VoiceOver on (⌘F5), move to the text | VoiceOver reads the text with “removed:” and “added:” before the changed words | |
+| 812 | Settings > Usage after a polish | “DeepSeek V4.1 Flash · Polish model” with a cost; the dictation and word counts did not change | |
+| 813 | In Slack or a Chrome text field, dictate, then ⌥1 | Write which: replaced (“Polished” with Undo) or added (“Polished. Pasted as new text”) | |

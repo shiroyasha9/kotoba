@@ -37,7 +37,7 @@ struct AXFieldWatcher: FieldWatcher {
 /// `@unchecked Sendable`: the AX objects and the observer are touched only on `thread`, through `thread.run`.
 final class AXFocusedField: FocusedField, @unchecked Sendable {
     /// A slow app (a terminal with a long scrollback) blocks one call, on the session thread, for at most this long.
-    private static let timeout: Float = 0.25
+    static let timeout: Float = 0.25
     /// Fields without a ranged read are read whole only up to this length (UTF-16 units).
     private static let maxWholeRead = 20_000
     /// Electron apps whose tree kotoba has woken, by pid and launch date; each process is asked once.
@@ -198,7 +198,7 @@ final class AXFocusedField: FocusedField, @unchecked Sendable {
 
     // MARK: Attributes
 
-    private static func attribute(_ name: String, of element: AXUIElement, as typeID: CFTypeID? = nil) -> CFTypeRef? {
+    static func attribute(_ name: String, of element: AXUIElement, as typeID: CFTypeID? = nil) -> CFTypeRef? {
         var value: CFTypeRef?
         guard AXUIElementCopyAttributeValue(element, name as CFString, &value) == .success, let value,
             typeID.map({ CFGetTypeID(value) == $0 }) ?? true
@@ -206,11 +206,11 @@ final class AXFocusedField: FocusedField, @unchecked Sendable {
         return value
     }
 
-    private static func characterCount(of element: AXUIElement) -> Int? {
+    static func characterCount(of element: AXUIElement) -> Int? {
         attribute(kAXNumberOfCharactersAttribute, of: element, as: CFNumberGetTypeID()) as? Int
     }
 
-    private static func selectedRange(of element: AXUIElement) -> CFRange? {
+    static func selectedRange(of element: AXUIElement) -> CFRange? {
         guard let value = attribute(kAXSelectedTextRangeAttribute, of: element, as: AXValueGetTypeID()) else {
             return nil
         }

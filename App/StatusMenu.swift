@@ -16,6 +16,7 @@ import KotobaProviders
     func pasteLastDictation()
     func pasteLastWithoutCleanup()
     func copyLastDictation()
+    func polishLastDictation()
     func openSuggestions()
     func addWord()
     func openHistory()
@@ -132,19 +133,7 @@ struct MenuModel {
                     action: #selector(StatusMenuActions.copyRecovered(_:))))
         }
         if hasLastDictation {
-            items.append(
-                .action(
-                    "Paste Last Dictation", target: target, action: #selector(StatusMenuActions.pasteLastDictation)))
-            if hasRawLastDictation {
-                items.append(
-                    .action(
-                        "Paste Last Without Cleanup", target: target,
-                        action: #selector(StatusMenuActions.pasteLastWithoutCleanup)))
-            }
-            items.append(
-                .action("Copy Last Dictation", target: target, action: #selector(StatusMenuActions.copyLastDictation)))
-            items.append(
-                .action("Fix Last Dictation…", target: target, action: #selector(StatusMenuActions.fixLastDictation)))
+            items += lastDictationItems(target: target)
         }
         if suggestionCount > 0 {
             items.append(
@@ -153,6 +142,25 @@ struct MenuModel {
                     action: #selector(StatusMenuActions.openSuggestions)))
         }
         items.append(.action("Add Word…", target: target, action: #selector(StatusMenuActions.addWord)))
+        return items
+    }
+
+    /// Paste, copy, polish or fix the last dictation.
+    private func lastDictationItems(target: StatusMenuActions?) -> [NSMenuItem] {
+        var items: [NSMenuItem] = [
+            .action("Paste Last Dictation", target: target, action: #selector(StatusMenuActions.pasteLastDictation))
+        ]
+        if hasRawLastDictation {
+            items.append(
+                .action(
+                    "Paste Last Without Cleanup", target: target,
+                    action: #selector(StatusMenuActions.pasteLastWithoutCleanup)))
+        }
+        items += [
+            .action("Copy Last Dictation", target: target, action: #selector(StatusMenuActions.copyLastDictation)),
+            .action("Polish Last Dictation", target: target, action: #selector(StatusMenuActions.polishLastDictation)),
+            .action("Fix Last Dictation…", target: target, action: #selector(StatusMenuActions.fixLastDictation)),
+        ]
         return items
     }
 

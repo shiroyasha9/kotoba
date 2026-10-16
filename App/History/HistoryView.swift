@@ -41,6 +41,9 @@ struct HistoryView: View {
             } message: {
                 Text("kotoba couldn’t delete some dictations, so they stay in History. Try again later.")
             }
+            .sheet(item: $model.changesShown) { record in
+                ChangesView(record: record)
+            }
             .confirmationDialog(
                 deleteTitle, isPresented: isAskingToDelete, presenting: model.pendingDelete
             ) { ids in
@@ -161,8 +164,13 @@ struct HistoryView: View {
             if model.audioRecord(records) != nil {
                 Button("Show Audio in Finder") { model.showInFinder(records) }
             }
-            if model.canFix(records) {
+            if model.canViewChanges(records) || model.canFix(records) {
                 Divider()
+            }
+            if model.canViewChanges(records) {
+                Button("View Changes…") { model.viewChanges(records) }
+            }
+            if model.canFix(records) {
                 Button("Fix Dictation…") { model.fix(records) }
             }
             Divider()
@@ -230,7 +238,7 @@ struct HistoryRow: View {
             .frame(width: 24, height: 24)
             .accessibilityHidden(true)
             VStack(alignment: .leading, spacing: 3) {
-                if record.hasText, let text = record.deliveredText {
+                if record.hasText, let text = record.latestText {
                     Text(text).lineLimit(3)
                 } else {
                     Text(isRetryable ? "No text · audio saved" : "No text").foregroundStyle(.secondary)
@@ -300,7 +308,8 @@ struct HistoryStatus {
         }
         switch record.status {
         case .pasted, .copied:
-            return nil
+            guard record.polishedText != nil else { return nil }
+            (title, systemImage, isProblem) = ("Polished", IndicatorPanel.polishSymbol, false)
         case .recovered:
             (title, systemImage, isProblem) = ("Recovered", "checkmark.circle", false)
         case .cancelled:

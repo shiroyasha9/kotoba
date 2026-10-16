@@ -11,6 +11,8 @@ struct LastDictation {
         /// The raw transcript of a cleanup dictation.
         case pasteWithoutCleanup
         case copy
+        /// Polish rewrites it (`DictationPipeline.polishLast`).
+        case polish
     }
 
     let store: HistoryStore
@@ -32,7 +34,8 @@ struct LastDictation {
     }
 
     /// The menu has closed when this runs, and a menu bar menu does not take focus, so Cmd-V reaches the app the
-    /// owner was in. Paste and copy go the way of their chords (`DictationPipeline.pasteLast`, `copyLast`).
+    /// owner was in. Paste, copy and polish go the way of their chords (`DictationPipeline.pasteLast`, `copyLast`,
+    /// `polishLast`).
     func perform(_ action: Action) {
         Task {
             switch action {
@@ -44,6 +47,8 @@ struct LastDictation {
                 }
             case .copy:
                 await pipeline.copyLast()
+            case .polish:
+                await pipeline.polishLast()
             }
         }
     }

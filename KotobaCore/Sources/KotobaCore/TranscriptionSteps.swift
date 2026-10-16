@@ -132,18 +132,13 @@ struct TranscriptionSteps: Sendable {
         return .success(replaced)
     }
 
-    private enum Answer: Sendable {
-        case answered(Result<CleanedText, any Error>)
-        case tooSlow
-    }
-
     /// The cleaner's answer, or `.tooSlow` when `deadline` passes first on the pipeline clock. The request is not
     /// cancelled: a late answer was billed, so its cost goes to the ledger when it comes, with no words delivered,
     /// dated `time` (its transcript's answer).
     private func answer(
         to request: @escaping @Sendable () async throws -> CleanedText, for record: DictationRecord, at time: Date,
         deadline: Duration?
-    ) async -> Answer {
+    ) async -> Deadlined<CleanedText> {
         guard let deadline else {
             do {
                 return .answered(.success(try await request()))
@@ -151,16 +146,8 @@ struct TranscriptionSteps: Sendable {
                 return .answered(.failure(error))
             }
         }
-        let first = FirstOf<Answer>()
-        let timer = work.schedule(at: clock.now + deadline) { first.settle(.tooSlow) }
-        work.track { [store, id = record.id, app = record.app] in
-            let result: Result<CleanedText, any Error>
-            do {
-                result = .success(try await request())
-            } catch {
-                result = .failure(error)
-            }
-            guard !first.settle(.answered(result)), case .success(let late) = result else { return }
+        let (store, id, app) = (store, record.id, record.app)
+        return await work.answer(to: request, within: deadline, on: clock) { late in
             do {
                 try await store.addUsage([
                     UsageEntry(
@@ -170,6 +157,35 @@ struct TranscriptionSteps: Sendable {
             } catch {
                 Log.pipeline.error("Cleanup \(id.rawValue): cannot bill the late answer: \(error)")
             }
+        }
+    }
+}
+
+/// A request's answer, or the deadline that passed first (`PendingWork.answer`).
+enum Deadlined<Value: Sendable>: Sendable {
+    case answered(Result<Value, any Error>)
+    case tooSlow
+}
+
+extension PendingWork {
+    /// `request`'s answer, or `.tooSlow` when `deadline` passes first on `clock`: a live cleanup and Polish, whose
+    /// paste waits. The request is not cancelled: a late answer was billed, so it goes to `late` when it comes.
+    func answer<Value: Sendable>(
+        to request: @escaping @Sendable () async throws -> Value, within deadline: Duration,
+        on clock: any PipelineClock,
+        late: @escaping @Sendable (Value) async -> Void
+    ) async -> Deadlined<Value> {
+        let first = FirstOf<Deadlined<Value>>()
+        let timer = schedule(at: clock.now + deadline) { first.settle(.tooSlow) }
+        track {
+            let result: Result<Value, any Error>
+            do {
+                result = .success(try await request())
+            } catch {
+                result = .failure(error)
+            }
+            guard !first.settle(.answered(result)), case .success(let value) = result else { return }
+            await late(value)
         }
         let answer = await first.value
         timer.cancel()

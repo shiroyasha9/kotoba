@@ -6,8 +6,8 @@ import IOKit
 import KotobaCore
 import Synchronization
 
-/// Reports the owner's hands-free, push-to-talk, cleanup, Paste Last and Copy Last chords, Esc and Return from a CGEventTap that
-/// runs on its own thread.
+/// Reports the owner's hands-free, push-to-talk, cleanup, Paste Last, Copy Last and Polish Last chords, Esc and Return
+/// from a CGEventTap that runs on its own thread.
 ///
 /// A modifier-only chord works while secure input is on. The tap is active, so it can swallow Esc and Return while
 /// recording and the key of a key chord; an active tap needs the Accessibility permission. Key-up events go
@@ -47,7 +47,8 @@ final class HotkeyTap: Sendable {
             State(
                 classifier: HotkeyClassifier(
                     handsFreeChord: saved.handsFree, pushToTalkChord: saved.pushToTalk, cleanupChord: saved.cleanup,
-                    pasteLastChord: saved.pasteLast, copyLastChord: saved.copyLast, isReturnGestureOn: true)))
+                    pasteLastChord: saved.pasteLast, copyLastChord: saved.copyLast, polishLastChord: saved.polishLast,
+                    isReturnGestureOn: true)))
         (events, continuation) = AsyncStream.makeStream(of: (event: HotkeyEvent, at: ContinuousClock.Instant).self)
         (disabledByUserInput, disabledContinuation) = AsyncStream.makeStream(bufferingPolicy: .bufferingNewest(1))
         chords.tap = self
@@ -62,6 +63,7 @@ final class HotkeyTap: Sendable {
             state.classifier.cleanupChord = chords.cleanup
             state.classifier.pasteLastChord = chords.pasteLast
             state.classifier.copyLastChord = chords.copyLast
+            state.classifier.polishLastChord = chords.polishLast
             state.classifier.isPaused = isPaused
             let hasKey = state.classifier.hasKeyChord
             return (state.tap?.hasKeyUp == hasKey ? nil : state.runLoop, hasKey)

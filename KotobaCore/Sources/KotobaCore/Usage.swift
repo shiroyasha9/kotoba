@@ -22,12 +22,14 @@ public struct Cost: Sendable, Equatable {
     }
 }
 
-/// One billed request: a speech answer or a cleanup answer. The usage ledger keeps it apart from the history, so
+/// One billed request: a speech answer, a cleanup answer or a Polish answer. The usage ledger keeps it apart from the history, so
 /// deleting a dictation or its audio never removes what it cost. It holds no dictated text.
 public struct UsageEntry: Sendable, Equatable, Identifiable {
     public enum Kind: String, Sendable {
         case speech
         case cleanup
+        /// Polish rewrote a dictation already counted: no words and no audio, so it is not a dictation.
+        case polish
     }
 
     /// Makes a second write of the same answer a no-op.
@@ -39,7 +41,7 @@ public struct UsageEntry: Sendable, Equatable, Identifiable {
     public var kind: Kind
     /// The route or cleanup model identifier; `unknownModel` for a cleanup kept before kotoba recorded its model.
     public var model: String
-    /// Speech: the audio the route counted (MAI-Transcribe-2 bills whole seconds). Cleanup and a route primer
+    /// Speech: the audio the route counted (MAI-Transcribe-2 bills whole seconds). Cleanup, Polish and a route primer
     /// (`TranscriptionProvider.prime`): zero, so minutes stay what the owner dictated.
     public var audio: Duration
     /// The change this answer made to the words of the delivered text, so the entries of a dictation add up to the

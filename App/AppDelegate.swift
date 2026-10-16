@@ -93,6 +93,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         statusItem = DockAndMenuBar.shared.attach(StatusBarItem(target: self) { [weak self] in self?.menuModel() })
         updater?.onWaitingUpdateChange = { [weak self] in self?.updateIcon() }
         guard let store = openHistory() else { return }
+        let cleaner = OpenRouterCleaner(apiKey: vault.source(for: .openRouter), settings: routeSettings)
         let pipeline = DictationPipeline(
             ports: .init(
                 audio: audio,
@@ -101,10 +102,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
                 pasteboard: SystemPasteboard(),
                 clock: SystemClock(),
                 store: store,
-                cleaner: OpenRouterCleaner(apiKey: vault.source(for: .openRouter), settings: routeSettings),
+                cleaner: cleaner,
                 missingSetup: { [vault, routeSettings] in routeSettings.missingSetup(hasKey: vault.hasKey(for:)) },
                 readback: learner.readback,
-                frontApp: { FrontAppObserver.current }
+                // The polisher shares the cleanup connection: OpenRouter's chat keeps one URLSession.
+                frontApp: { FrontAppObserver.current }, polisher: cleaner.polisher(), selector: AXPastedTextSelector()
             ),
             settings: settings
         )

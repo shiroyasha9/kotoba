@@ -15,13 +15,34 @@ extension Pane {
             ("history-empty", HistoryModel(rows: [])),
             ("history-no-results", HistoryModel(rows: [], search: "invoice")),
             ("history-load-failed", HistoryModel.loadFailed),
+            ("history-polished", HistoryModel(rows: [HistoryController.samplePolished()] + rows)),
         ].map { name, model in
             MainWindow.snapshot(of: .history(model), named: name)
-        }
+        } + ChangesView.snapshots()
     }
 }
 
 extension HistoryController {
+    /// A cleaned dictation that Polish rewrote, for History's polished row and View Changes.
+    static func samplePolished() -> DictationRecord {
+        var record = DictationRecord(
+            id: DictationID(), createdAt: Snapshots.sampleNow - 60,
+            audio: RecordedAudio(file: URL(filePath: "/System/Library/Sounds/Tink.aiff"), duration: .seconds(24)),
+            transcript:
+                "okay so I want you to look at the the webhook handler in src/billing/webhook.ts because I think "
+                + "it's double counting refunds, and um don't touch the Stripe client",
+            status: .pasted, latency: LatencyLog())
+        record.cleanedText =
+            "Okay, so I want you to look at the webhook handler in src/billing/webhook.ts, because I think it's "
+            + "double counting refunds. And don't touch the Stripe client."
+        record.output = .cleanup(.code)
+        record.polishedText =
+            "Look at the webhook handler in src/billing/webhook.ts. I think it double counts refunds. Don't touch "
+            + "the Stripe client."
+        record.app = DictationApp(bundleID: "com.apple.Terminal", name: "Terminal")
+        return record
+    }
+
     /// Rows of each status over two days, for the History and Home snapshots.
     static func sampleRows() -> [DictationRecord] {
         let now = Snapshots.sampleNow

@@ -83,6 +83,8 @@ final class HistoryModel {
     var transcribing: Set<DictationID> { activity.transcribingAgain }
     /// A Transcribe Again kept the old text of some rows: the window says so.
     var isTranscribeFailureShown = false
+    /// The row whose View Changes sheet is open.
+    var changesShown: DictationRecord?
 
     @ObservationIgnored private let source: Source?
     /// Each read takes the next number; a result that comes back after a newer read started is dropped.
@@ -230,10 +232,10 @@ final class HistoryModel {
 
     // MARK: Selection and actions
 
-    /// The text of each row, oldest first, a blank line between: the order they were spoken. `raw` takes the
-    /// transcript before cleanup, which is the delivered text of a dictation without cleanup.
+    /// The latest text of each row (polished when Polish ran), oldest first, a blank line between: the order they were
+    /// spoken. `raw` takes the transcript before cleanup, which is the delivered text of a dictation without cleanup.
     static func text(of records: [DictationRecord], raw: Bool = false) -> String? {
-        let texts = records.reversed().compactMap { raw ? $0.transcript : $0.deliveredText }.filter { !$0.isEmpty }
+        let texts = records.reversed().compactMap { raw ? $0.transcript : $0.latestText }.filter { !$0.isEmpty }
         return texts.isEmpty ? nil : texts.joined(separator: "\n\n")
     }
 
@@ -256,13 +258,23 @@ final class HistoryModel {
         source.fix(record)
     }
 
+    /// One row with a cleaned or polished text: View Changes compares it with the text before.
+    func canViewChanges(_ records: [DictationRecord]) -> Bool {
+        records.count == 1 && records.first.map { !ChangesView.Comparison.all(of: $0).isEmpty } == true
+    }
+
+    func viewChanges(_ records: [DictationRecord]) {
+        guard canViewChanges(records) else { return }
+        changesShown = records.first
+    }
+
     /// One row only: two texts pasted in one go would read as one dictation.
     func canPasteAgain(_ records: [DictationRecord]) -> Bool {
         activity.isQuiet && records.count == 1 && records.first?.hasText == true
     }
 
     func pasteAgain(_ records: [DictationRecord]) {
-        guard let source, canPasteAgain(records), let record = records.first, let text = record.deliveredText
+        guard let source, canPasteAgain(records), let record = records.first, let text = record.latestText
         else { return }
         Task {
             if await !source.paste(text, record.id) {

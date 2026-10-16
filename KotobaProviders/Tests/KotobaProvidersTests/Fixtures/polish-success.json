@@ -1,0 +1,13 @@
+{
+  "id": "gen-2",
+  "provider": "Together",
+  "model": "deepseek/deepseek-v4.1-flash",
+  "choices": [
+    {
+      "finish_reason": "stop",
+      "native_finish_reason": "stop",
+      "message": { "role": "assistant", "content": "Fix the login bug in auth.ts.\n" }
+    }
+  ],
+  "usage": { "prompt_tokens": 1038, "completion_tokens": 264, "total_tokens": 1302, "cost": 0.000395 }
+}

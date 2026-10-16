@@ -11,6 +11,7 @@ struct ChordTests {
         var cleanup: Chord? = .defaultCleanup
         var pasteLast: Chord?
         var copyLast: Chord?
+        var polishLast: Chord?
         let problem: ChordProblem?
 
         var testDescription: String { name }
@@ -172,12 +173,13 @@ struct ChordTests {
         #expect(Chord.pushToTalk(afterSaving: saved, as: role, handsFree: handsFree, kept: set) == kept)
     }
 
-    @Test(arguments: rows + pasteLastRows + copyLastRows + pushToTalkRows)
+    // One array of arrays: a chain of `+` takes the type checker too long.
+    @Test(arguments: [rows, pasteLastRows, copyLastRows, polishLastRows, pushToTalkRows].flatMap { $0 })
     func problem(_ row: Row) {
         #expect(
             Chord.problem(
                 handsFree: row.handsFree, pushToTalk: row.pushToTalk, cleanup: row.cleanup, pasteLast: row.pasteLast,
-                copyLast: row.copyLast) == row.problem)
+                copyLast: row.copyLast, polishLast: row.polishLast) == row.problem)
     }
 }
 

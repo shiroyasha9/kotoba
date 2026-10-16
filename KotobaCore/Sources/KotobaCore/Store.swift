@@ -18,7 +18,7 @@ public protocol Store: Sendable {
     /// the menu, so their latency logs may be left empty.
     func recovered(since cutoff: Date) async throws -> [DictationRecord]
     /// The newest dictation whose text reached the owner (`.pasted` or `.copied`), by `createdAt`, with no latency
-    /// log; nil when there is none. "Paste Last Dictation" pastes its `deliveredText`.
+    /// log; nil when there is none. "Paste Last Dictation" pastes its `latestText`.
     func lastDelivered() async throws -> DictationRecord?
     /// Sets one record's status to `.copied`, keeping everything else.
     func markCopied(_ id: DictationID) async throws
@@ -36,6 +36,10 @@ public protocol Store: Sendable {
     /// its name, is removed; a row whose file cannot be removed stays unmarked, so a later run tries it again. Audio
     /// retention calls it on its events (`AudioRetention.swift`), never before a paste.
     func deleteAudio(transcribedBefore cutoff: Date, after cursor: AudioCursor?) async throws -> AudioBatch
+    /// Sets Polish's text of a dictation that has its text (nil removes it) and adds Polish's billed answers to the
+    /// ledger, in one write that leaves every other column as it is, so a Polish never writes back a transcript it read
+    /// before its request. False when the row is gone or has no text; the answers are billed either way.
+    func setPolishedText(_ text: String?, of id: DictationID, usage: [UsageEntry]) async throws -> Bool
     /// Adds billed answers to the usage ledger, each once (by `UsageEntry.id`), with no row write: a cleanup answer that
     /// came after its deadline was dropped, but it was billed.
     func addUsage(_ entries: [UsageEntry]) async throws
@@ -89,6 +93,8 @@ public struct DictationRecord: Sendable, Equatable, Identifiable {
     public var output = DictationOutput.transcript
     /// The cleaned text that was pasted, for a cleanup dictation; `transcript` stays the raw text.
     public var cleanedText: String?
+    /// Polish's rewrite of `deliveredText`, once the owner polished it; `deliveredText` stays the dictation's own text.
+    public var polishedText: String?
     /// A `.failed` dictation that waits for the owner to set a key or an endpoint; retried then, not on its own.
     public var needsSetup: SetupItem?
     /// Why a `.rejected` dictation was refused; nil for every other status.
@@ -143,6 +149,10 @@ public struct DictationApp: Sendable, Hashable {
 extension DictationRecord {
     /// The text kotoba pasted or offers to copy: the cleaned text of a cleanup dictation, else the transcript.
     public var deliveredText: String? { cleanedText ?? transcript }
+
+    /// The newest text the owner got: the polished text once Polish ran, else `deliveredText`. Paste Last, Copy Last,
+    /// History's Copy and Paste Again, and the next Polish use it.
+    public var latestText: String? { polishedText ?? deliveredText }
 
     /// There is text to copy, paste again or fix: `deliveredText` is there and not empty.
     public var hasText: Bool { deliveredText?.isEmpty == false }
@@ -230,6 +240,16 @@ extension Store {
             try await addUsage(entries)
         } catch {
             Log.pipeline.error("Cannot bill the answers of \(id.rawValue): \(error)")
+        }
+    }
+
+    /// Sets Polish's text and logs a failure. False when the row is gone or the store failed: nothing is pasted then.
+    func setPolishedTextOrLog(_ text: String?, of id: DictationID, usage: [UsageEntry]) async -> Bool {
+        do {
+            return try await setPolishedText(text, of: id, usage: usage)
+        } catch {
+            Log.pipeline.error("Cannot save the polished text of \(id.rawValue): \(error)")
+            return false
         }
     }
 
@@ -354,6 +374,16 @@ struct AnnouncingStore: Store {
     func addUsage(_ entries: [UsageEntry]) async throws {
         defer { changes.yield(.usageAdded) }
         try await base.addUsage(entries)
+    }
+
+    func setPolishedText(_ text: String?, of id: DictationID, usage: [UsageEntry]) async throws -> Bool {
+        let isWritten = try await base.setPolishedText(text, of: id, usage: usage)
+        if isWritten {
+            changes.yield(.saved(id, isUsageAdded: !usage.isEmpty))
+        } else if !usage.isEmpty {
+            changes.yield(.usageAdded)
+        }
+        return isWritten
     }
 
     /// Not announced: no row changed.

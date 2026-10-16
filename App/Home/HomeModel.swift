@@ -94,7 +94,7 @@ final class HomeModel {
     }
 
     func copy(_ record: DictationRecord) {
-        guard let source, let text = record.deliveredText else { return }
+        guard let source, let text = record.latestText else { return }
         copying = Task { await source.copy(text) }
     }
 

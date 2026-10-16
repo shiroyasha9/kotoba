@@ -16,6 +16,12 @@ public struct Chord: Sendable, Hashable {
     public static let defaultCleanup = Self(modifiers: [.control, .option, .shift, .command])
     /// ⌃⌘C, as the owner had "Copy last transcript" in Wispr Flow.
     public static let defaultCopyLast = Self(modifiers: [.control, .command], keyCode: KeyCode.ansiC)
+    /// What the Polish Last recorder offers while it is off, in order: ⌥1, Wispr Flow's Polish, then ⌃⌘P for owners
+    /// whose push to talk is ⌥.
+    public static let polishLastSuggestions = [
+        Self(modifiers: .option, keyCode: KeyCode.ansi1),
+        Self(modifiers: [.control, .command], keyCode: KeyCode.ansiP),
+    ]
 
     /// A modifier-only chord is down while all of its modifiers are; other modifiers held with it do not matter.
     func isHeld(by held: ModifierKeys) -> Bool {
@@ -33,14 +39,15 @@ public struct Chord: Sendable, Hashable {
     }
 }
 
-/// What a chord does: start a dictation hands-free or push to talk, start a cleanup dictation, or paste or copy the
-/// last dictation again.
+/// What a chord does: start a dictation hands-free or push to talk, start a cleanup dictation, paste or copy the last
+/// dictation again, or polish it.
 public enum ChordRole: Sendable, Hashable {
     case handsFree
     case pushToTalk
     case cleanup
     case pasteLast
     case copyLast
+    case polishLast
 }
 
 /// Why a recorded chord is refused.
@@ -64,8 +71,8 @@ public enum ChordProblem: Sendable, Equatable {
     /// Each press of the dictation chord of `role` also completes the cleanup chord, so no dictation could skip
     /// cleanup.
     case dictationIncludesCleanup(ChordRole)
-    /// The Paste Last or Copy Last chord has no key: modifiers alone would act each time they are pressed for another
-    /// shortcut.
+    /// The Paste Last, Copy Last or Polish Last chord has no key: modifiers alone would act each time they are pressed
+    /// for another shortcut.
     case needsKey
     /// The Paste Last chord is the chord of `role` (hands-free, push to talk or cleanup).
     case pasteLastSameAs(ChordRole)
@@ -76,6 +83,10 @@ public enum ChordProblem: Sendable, Equatable {
     case copyLastSameAs(ChordRole)
     /// The Copy Last chord holds the modifier-only chord of `role` on the way to its key, as `pasteLastIncludes`.
     case copyLastIncludes(ChordRole)
+    /// The Polish Last chord is the chord of `role` (a dictation chord, cleanup, Paste Last or Copy Last).
+    case polishLastSameAs(ChordRole)
+    /// The Polish Last chord holds the modifier-only chord of `role` on the way to its key, as `pasteLastIncludes`.
+    case polishLastIncludes(ChordRole)
 }
 
 extension Chord {
@@ -91,7 +102,8 @@ extension Chord {
     /// A cleanup or hands-free chord may hold the push-to-talk chord on the way (⌃⌥⇧⌘ holds ⌥): the press follows the
     /// chord with more keys before the dictation shows (`HotkeyClassifier`), as cleanup follows ⇧ today.
     public static func problem(
-        handsFree: Chord, pushToTalk: Chord? = nil, cleanup: Chord?, pasteLast: Chord? = nil, copyLast: Chord? = nil
+        handsFree: Chord, pushToTalk: Chord? = nil, cleanup: Chord?, pasteLast: Chord? = nil, copyLast: Chord? = nil,
+        polishLast: Chord? = nil
     ) -> ChordProblem? {
         if let problem = handsFree.ownProblem(as: .handsFree) { return problem }
         if let problem = pushToTalk?.ownProblem(as: .pushToTalk) { return problem }
@@ -107,7 +119,11 @@ extension Chord {
         }
         let chords: [(Chord?, ChordRole)] = dictation.map { ($0, $1) } + [(cleanup, .cleanup)]
         if let problem = pasteLast?.problem(as: .pasteLast, clashingWith: chords) { return problem }
-        return copyLast?.problem(as: .copyLast, clashingWith: chords + [(pasteLast, .pasteLast)])
+        if let problem = copyLast?.problem(as: .copyLast, clashingWith: chords + [(pasteLast, .pasteLast)]) {
+            return problem
+        }
+        return polishLast?.problem(
+            as: .polishLast, clashingWith: chords + [(pasteLast, .pasteLast), (copyLast, .copyLast)])
     }
 
     /// The Copy Last chord in use: the one the owner saved (`.some(nil)`: off), else ⌃⌘C while it does not clash with
@@ -144,22 +160,34 @@ extension Chord {
         return chord == handsFree ? nil : chord
     }
 
-    /// The Paste Last or Copy Last chord's own problem, or how it clashes with one of `others`. The classifier tries
-    /// the dictation and cleanup chords first, so a key press that matches one, or that holds one of them on the way,
-    /// never reaches Paste Last or Copy Last.
+    /// The Paste Last, Copy Last or Polish Last chord's own problem, or how it clashes with one of `others`. The
+    /// classifier tries the dictation and cleanup chords first, so a key press that matches one, or that holds one of
+    /// them on the way, never reaches these three.
     private func problem(as last: ChordRole, clashingWith others: [(Chord?, ChordRole)]) -> ChordProblem? {
         guard keyCode != nil else { return .needsKey }
         if let problem = ownProblem(as: last) { return problem }
         for (other, role) in others {
             guard let other else { continue }
             if other.keyCode == nil, other.modifiers.isSatisfied(by: modifiers) {
-                return last == .copyLast ? .copyLastIncludes(role) : .pasteLastIncludes(role)
+                return Self.clash(of: last, with: role, isSameChord: false)
             }
             if other.keyCode == keyCode, other.modifiers.kinds == modifiers.kinds {
-                return last == .copyLast ? .copyLastSameAs(role) : .pasteLastSameAs(role)
+                return Self.clash(of: last, with: role, isSameChord: true)
             }
         }
         return nil
+    }
+
+    /// The problem of the `last` chord (Paste Last, Copy Last or Polish Last) that is, or holds, the chord of `role`.
+    private static func clash(of last: ChordRole, with role: ChordRole, isSameChord: Bool) -> ChordProblem {
+        switch (last, isSameChord) {
+        case (.copyLast, true): .copyLastSameAs(role)
+        case (.copyLast, false): .copyLastIncludes(role)
+        case (.polishLast, true): .polishLastSameAs(role)
+        case (.polishLast, false): .polishLastIncludes(role)
+        case (_, true): .pasteLastSameAs(role)
+        case (_, false): .pasteLastIncludes(role)
+        }
     }
 
     private func ownProblem(as role: ChordRole) -> ChordProblem? {
@@ -228,6 +256,8 @@ public enum KeyCode {
     public static let ansi3: UInt16 = 0x14
     public static let ansi4: UInt16 = 0x15
     public static let ansi5: UInt16 = 0x17
+    public static let ansi1: UInt16 = 0x12
+    public static let ansiP: UInt16 = 0x23
     public static let ansiM: UInt16 = 0x2E
     public static let tab: UInt16 = 0x30
     public static let space: UInt16 = 0x31

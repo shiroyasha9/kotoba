@@ -140,7 +140,7 @@ private struct UsagePane: View {
                         Text(Self.title(of: spend))
                         Text(
                             [
-                                spend.kind == .cleanup ? "Cleanup model" : "Speech model",
+                                Self.role(of: spend.kind),
                                 spend.isEstimated ? "Estimated" : nil,
                                 spend.unpricedAnswers > 0 ? Self.unpricedNote(spend.unpricedAnswers) : nil,
                             ]
@@ -169,6 +169,15 @@ private struct UsagePane: View {
         }
     }
 
+    /// What the model does, the line under its name.
+    private static func role(of kind: UsageEntry.Kind) -> String {
+        switch kind {
+        case .speech: "Speech model"
+        case .cleanup: "Cleanup model"
+        case .polish: "Polish model"
+        }
+    }
+
     /// The model's display name; a model kotoba no longer offers gets a generic one, never its identifier.
     private static func title(of spend: ModelSpend) -> String {
         switch spend.kind {
@@ -176,6 +185,8 @@ private struct UsagePane: View {
             CleanupModel(rawValue: spend.model)?.title ?? "Earlier cleanup model"
         case .speech:
             TranscriptionRoute(rawValue: spend.model)?.menuTitle ?? "Earlier speech model"
+        case .polish:
+            PolishModel(rawValue: spend.model)?.title ?? "Earlier polish model"
         }
     }
 

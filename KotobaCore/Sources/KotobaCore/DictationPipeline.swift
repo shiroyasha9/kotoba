@@ -43,6 +43,10 @@ public actor DictationPipeline {
     var transcribingAgain: Set<DictationID> = []
     /// The dictations in flight whose transcript is with the cleaner.
     var cleaning: Set<DictationID> = []
+    /// On while Polish waits for its answer and pastes (`PipelinePolish.swift`).
+    var isPolishing = false
+    /// The last Polish that saved its text, and the polished text it replaced: Undo puts that one back.
+    var lastPolish: (id: DictationID, earlier: String?)?
     /// Dictations stopped with Return, or given a Return just after the stop: Return follows their paste.
     var submitRequests: Set<DictationID> = []
     /// The last dictation stopped, for a Return the tap swallowed just after the stop.
@@ -106,8 +110,17 @@ public actor DictationPipeline {
         case .chordInterrupted: await chordInterrupted()
         case .submit: requestSubmit(at: now)
         // Tracked, so the next key event does not wait for the history read.
-        case .pasteLast: work.track { await self.pasteLast() }
-        case .copyLast: work.track { await self.copyLast() }
+        case .pasteLast, .copyLast, .polishLast: work.track { await self.lastDictation(event) }
+        }
+    }
+
+    /// The Paste Last, Copy Last and Polish Last chords.
+    private func lastDictation(_ event: HotkeyEvent) async {
+        switch event {
+        case .pasteLast: await pasteLast()
+        case .copyLast: await copyLast()
+        case .polishLast: await polishLast()
+        default: break
         }
     }
 
@@ -203,7 +216,7 @@ public actor DictationPipeline {
     public func pasteLast() async {
         guard isQuiet else { return }
         do {
-            guard let last = try await ports.store.lastDelivered(), let text = last.deliveredText else { return }
+            guard let last = try await ports.store.lastDelivered(), let text = last.latestText else { return }
             await pasteAgain(text, of: last.id)
         } catch {
             Log.pipeline.error("Cannot read the last dictation: \(error)")
@@ -215,18 +228,10 @@ public actor DictationPipeline {
     /// the clipboard before the app reads it); when paste is not allowed, the text stays on the clipboard.
     public func pasteAgain(_ text: String, of id: DictationID) async {
         guard isQuiet else { return }
-        let write = await clipboard.writeTransient(text, over: await clipboard.snapshot())
-        do {
-            try await ports.paster.sendPaste()
-            guard let write else {
-                emit(.clipboardNotKept(id))
-                return
-            }
-            work.schedule(at: ports.clock.now + settings.restoreDelay) { await self.clipboard.restore(after: write) }
-        } catch {
-            Log.pipeline.error("Paste not allowed, the last dictation is left on the clipboard: \(error)")
-            await clipboard.copy(text)
-            emit(.copied(id))
+        switch await pasteThroughClipboard(text) {
+        case .pasted: break
+        case .clipboardNotKept: emit(.clipboardNotKept(id))
+        case .copied: emit(.copied(id))
         }
     }
 
@@ -234,7 +239,7 @@ public actor DictationPipeline {
     /// no restore, and the indicator says so. During a dictation it copies too, and the indicator keeps its state.
     public func copyLast() async {
         do {
-            guard let last = try await ports.store.lastDelivered(), let text = last.deliveredText else { return }
+            guard let last = try await ports.store.lastDelivered(), let text = last.latestText else { return }
             await clipboard.copy(text)
             if isQuiet { emit(.copied(last.id)) }
         } catch {
@@ -301,9 +306,9 @@ extension DictationPipeline {
         activityContinuation.yield(now)
     }
 
-    /// No recording, no Undo window and no transcription in flight: "Paste Again" can paste.
+    /// No recording, no Undo window, no transcription in flight and no Polish: "Paste Again" can paste.
     public var isQuiet: Bool {
-        recording == nil && paused == nil && inFlight.isEmpty
+        recording == nil && paused == nil && inFlight.isEmpty && !isPolishing
     }
 
     private func waitUntilQuiet() async {

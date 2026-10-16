@@ -1,7 +1,7 @@
 import Foundation
 
-/// A key event from the owner's hands-free, push-to-talk, cleanup, Paste Last or Copy Last chord, Esc or Return, as
-/// `HotkeyClassifier` reports it.
+/// A key event from the owner's hands-free, push-to-talk, cleanup, Paste Last, Copy Last or Polish Last chord, Esc or
+/// Return, as `HotkeyClassifier` reports it.
 public enum HotkeyEvent: Sendable, Equatable {
     /// A press began; `ChordGesture` says what its release does.
     case chordDown(ChordGesture)
@@ -24,6 +24,9 @@ public enum HotkeyEvent: Sendable, Equatable {
     /// The Copy Last chord was pressed: put the last dictation on the clipboard, as the menu's "Copy Last Dictation"
     /// does.
     case copyLast
+    /// The Polish Last chord was pressed and every modifier is up again (it posts ⌘V, as Paste Last): polish the last
+    /// dictation, as the menu's "Polish Last Dictation" does.
+    case polishLast
 }
 
 /// What the release of the press that starts a dictation does (spec "Hotkey state machine").
@@ -77,6 +80,12 @@ public enum DictationState: Sendable, Equatable {
     case audioCut(DictationID, AudioLoss)
     /// Pasted, but the clipboard before it was too large to keep (`PasteboardSnapshot.byteLimit`): it is not restored.
     case clipboardNotKept(DictationID)
+    /// Polish sent the last dictation to the LLM; the paste follows.
+    case polishing
+    /// Polish pasted its text: over the old text (`isReplaced`, Undo can bring it back), or at the insertion point.
+    case polished(DictationID, isReplaced: Bool)
+    /// Polish pasted nothing and changed nothing.
+    case polishFailed(PolishFailure)
 
     /// What the indicator shows once a dictation reaches `record.status`.
     static func outcome(of record: DictationRecord) -> Self {
@@ -110,6 +119,10 @@ extension DictationPipeline {
         /// The front app, kept current by app activation events; nil when unknown. A submit Return goes only to the
         /// app that was in front at the stop, and the history keeps that app.
         public let frontApp: @Sendable () -> FrontApp?
+        /// Rewrites the last dictation on the owner's request; nil leaves Polish off.
+        public let polisher: (any TextPolisher)?
+        /// Selects the text Polish replaces; nil pastes Polish's text at the insertion point.
+        public let selector: (any PastedTextSelector)?
 
         public init(
             audio: any AudioSource,
@@ -121,7 +134,9 @@ extension DictationPipeline {
             cleaner: (any TextCleaner)? = nil,
             missingSetup: @escaping @Sendable () async -> SetupItem? = { nil },
             readback: EditReadback? = nil,
-            frontApp: @escaping @Sendable () -> FrontApp? = { nil }
+            frontApp: @escaping @Sendable () -> FrontApp? = { nil },
+            polisher: (any TextPolisher)? = nil,
+            selector: (any PastedTextSelector)? = nil
         ) {
             self.audio = audio
             self.provider = provider
@@ -133,6 +148,8 @@ extension DictationPipeline {
             self.missingSetup = missingSetup
             self.readback = readback
             self.frontApp = frontApp
+            self.polisher = polisher
+            self.selector = selector
         }
     }
 
@@ -170,6 +187,9 @@ extension DictationPipeline {
         /// kotoba-bench-v1). A late answer is dropped and its cost still goes to the ledger. A retry has no paste
         /// waiting, so it has no deadline.
         public var cleanupDeadline: Duration
+        /// The longest Polish waits for its answer (bench p90 1.3 s, plus one try on the fallback model); then it pastes
+        /// nothing. A late answer's cost still goes to the ledger.
+        public var polishDeadline: Duration
         /// A transcript that ends with a submit phrase ("press enter", "press return") is pasted without it, then Return.
         public var isSubmitPhraseOn: Bool
         /// How long a transcribed dictation keeps its audio.
@@ -201,6 +221,7 @@ extension DictationPipeline {
             chordReleaseWait: Duration = .seconds(2),
             undoWindow: Duration = .seconds(5),
             cleanupDeadline: Duration = .seconds(5),
+            polishDeadline: Duration = .seconds(10),
             isSubmitPhraseOn: Bool = true,
             audioRetention: AudioRetention = .standard,
             modes: ModeRules = ModeRules(),
@@ -218,6 +239,7 @@ extension DictationPipeline {
             self.chordReleaseWait = chordReleaseWait
             self.undoWindow = undoWindow
             self.cleanupDeadline = cleanupDeadline
+            self.polishDeadline = polishDeadline
             self.isSubmitPhraseOn = isSubmitPhraseOn
             self.audioRetention = audioRetention
             self.modes = modes

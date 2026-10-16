@@ -44,8 +44,22 @@ enum PriceList {
 
     /// `outputTokens` includes reasoning tokens, as OpenRouter's `completion_tokens` does.
     static func estimate(_ model: CleanupModel, inputTokens: Int, outputTokens: Int) -> Cost {
-        let price = centsPerMillionTokens(model)
-        return .estimated(Decimal(inputTokens * price.input + outputTokens * price.output) / 100_000_000)
+        estimate(centsPerMillionTokens(model), inputTokens: inputTokens, outputTokens: outputTokens)
+    }
+
+    /// Polish (`GET /models/<slug>/endpoints`, 2026-10-17): Together, PrimeIntellect and InferenceNet ask at most
+    /// $0.30 / $1.20 per 1M tokens for DeepSeek V4.1 Flash; Gemini as for cleanup.
+    static func estimate(_ model: PolishModel, inputTokens: Int, outputTokens: Int) -> Cost {
+        let price =
+            switch model {
+            case .deepSeekFlash: (input: 30, output: 120)
+            case .geminiFlashLite: centsPerMillionTokens(.geminiFlashLite)
+            }
+        return estimate(price, inputTokens: inputTokens, outputTokens: outputTokens)
+    }
+
+    private static func estimate(_ price: (input: Int, output: Int), inputTokens: Int, outputTokens: Int) -> Cost {
+        .estimated(Decimal(inputTokens * price.input + outputTokens * price.output) / 100_000_000)
     }
 }
 

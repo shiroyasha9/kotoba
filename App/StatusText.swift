@@ -93,6 +93,7 @@ enum StatusText {
         case .cleanup: "Clean up"
         case .pasteLast: "Paste last dictation"
         case .copyLast: "Copy last dictation"
+        case .polishLast: "Polish last dictation"
         }
     }
 
@@ -104,6 +105,7 @@ enum StatusText {
         case .cleanup: "Removes filler words and fixes punctuation. Takes a second or two longer."
         case .pasteLast: "Pastes your last dictation again."
         case .copyLast: "Puts your last dictation on the clipboard."
+        case .polishLast: "Rewrites your last dictation shorter and clearer."
         }
     }
 
@@ -151,6 +153,7 @@ extension DictationState {
         case .recording: context.isSecureInputOn ? "Listening · Secure Input on" : "Listening"
         case .transcribing: "Transcribing"
         case .cleaning: "Cleaning up"
+        case .polishing: "Polishing"
         case .undoable: "Canceled"
         default: outcomeText(context)
         }
@@ -167,6 +170,7 @@ extension DictationState {
         case .nothingRecorded: "Nothing was recorded. Try again."
         case .audioNotSaved(.diskFull): "Couldn’t save audio. Disk full?"
         case .audioNotSaved(.other): "Couldn’t save audio. Try again."
+        case .polishFailed(let failure): failure.text
         default: deliveredText
         }
     }
@@ -182,8 +186,10 @@ extension DictationState {
         case .audioCut(_, .diskFull): "Pasted what was saved. Disk full?"
         case .audioCut(_, .other): "Pasted what was saved. Some audio was lost."
         case .clipboardNotKept: "Pasted. Old clipboard too large to keep."
+        case .polished(_, isReplaced: true): "Polished"
+        case .polished(_, isReplaced: false): "Polished. Pasted as new text"
         case .idle, .recording, .transcribing, .cleaning, .undoable, .failed, .needsSetup, .rejected, .captureFailed,
-            .nothingRecorded, .audioNotSaved:
+            .nothingRecorded, .audioNotSaved, .polishing, .polishFailed:
             nil
         }
     }
@@ -194,23 +200,58 @@ extension DictationState {
         case .undoable: .undo
         case .recording(_, isSilent: true, _): .chooseMicrophone
         case .failed: .retry
-        case .needsSetup(_, .key): .addKey
-        case .needsSetup(_, .endpoint): .openSpeechSettings
-        case .needsSetup(_, .credit): .addCredit
+        case .needsSetup(_, let item): item.pillAction
         case .recovered: .copy
         case .copied: context.isPasteAllowed ? nil : .allowPasting
         case .captureFailed: context.microphone == .denied ? .openMicrophoneSettings : nil
+        case .polished, .polishFailed: polishAction
         case .idle, .recording, .transcribing, .cleaning, .rejected, .cleanupFailed, .cleanupTooSlow, .returnSkipped,
-            .nothingRecorded, .audioNotSaved, .audioCut, .clipboardNotKept:
+            .nothingRecorded, .audioNotSaved, .audioCut, .clipboardNotKept, .polishing:
             nil
         }
     }
 
-    /// Recovered and copied are good news; the other outcomes ask the owner to act.
+    /// Undo after Polish replaced the text; the fix after it failed.
+    private var polishAction: PillAction? {
+        switch self {
+        case .polished(let id, isReplaced: true): .undoPolish(id)
+        case .polishFailed(.needsSetup(.credit)): .addOpenRouterCredit
+        case .polishFailed(.needsSetup): .addKey
+        case .polishFailed(.failed), .polishFailed(.tooSlow): .retryPolish
+        default: nil
+        }
+    }
+
+    /// Recovered, copied and polished are good news; the other outcomes ask the owner to act.
     var isGoodOutcome: Bool {
         switch self {
-        case .recovered, .copied: true
+        case .recovered, .copied, .polished: true
         default: false
+        }
+    }
+}
+
+extension SetupItem {
+    /// The button that sets it: the key and the endpoint in Settings, credit on the provider's site.
+    var pillAction: PillAction {
+        switch self {
+        case .key: .addKey
+        case .endpoint: .openSpeechSettings
+        case .credit: .addCredit
+        }
+    }
+}
+
+extension PolishFailure {
+    /// Polish runs on OpenRouter whatever the speech model, so its texts name OpenRouter.
+    var text: String {
+        switch self {
+        case .nothingToPolish: "Nothing to polish yet"
+        case .cutOff: "Polish cut off. Nothing changed."
+        case .tooSlow: "Polish too slow. Nothing changed."
+        case .needsSetup(.credit): "\(ProviderAccount.openRouter.title) is out of credit"
+        case .needsSetup(let item): StatusText.add(item, for: .openRouter)
+        case .failed: "Couldn’t polish. Nothing changed."
         }
     }
 }

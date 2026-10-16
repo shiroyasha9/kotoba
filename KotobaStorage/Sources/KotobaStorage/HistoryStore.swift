@@ -30,7 +30,8 @@ public actor HistoryStore: Store {
             app_name TEXT,
             audio_deleted INTEGER NOT NULL DEFAULT 0,
             audio_bytes INTEGER,
-            cleanup_mode TEXT
+            cleanup_mode TEXT,
+            polished_text TEXT
         );
         CREATE INDEX IF NOT EXISTS dictations_status ON dictations (status);
         -- The History window's order, newest first.
@@ -50,12 +51,12 @@ public actor HistoryStore: Store {
         ("model", "TEXT"), ("recovered_at", "REAL"), ("cleaned_text", "TEXT"), ("needs_setup", "TEXT"),
         ("mode", "TEXT NOT NULL DEFAULT 'transcript'"), ("reject_reason", "TEXT"), ("app_bundle_id", "TEXT"),
         ("app_name", "TEXT"), ("audio_deleted", "INTEGER NOT NULL DEFAULT 0"), ("audio_bytes", "INTEGER"),
-        ("cleanup_mode", "TEXT"),
+        ("cleanup_mode", "TEXT"), ("polished_text", "TEXT"),
     ]
 
     private static let columns = """
         id, created_at, audio_path, audio_duration_ms, transcript, model, status, recovered_at, cleaned_text,
-        needs_setup, mode, reject_reason, app_bundle_id, app_name, cleanup_mode
+        needs_setup, mode, reject_reason, app_bundle_id, app_name, cleanup_mode, polished_text
         """
     /// What a read returns: the written columns, then the ones only `deleteAudio` writes.
     private static let readColumns = columns + ", audio_deleted"
@@ -117,14 +118,15 @@ public actor HistoryStore: Store {
             record,
             sql: """
                 INSERT INTO dictations (\(Self.columns), audio_bytes)
-                VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15, ?16)
+                VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15, ?16, ?17)
                 ON CONFLICT (id) DO UPDATE SET
                     audio_path = excluded.audio_path, audio_duration_ms = excluded.audio_duration_ms,
                     transcript = excluded.transcript, model = excluded.model, status = excluded.status,
                     recovered_at = excluded.recovered_at, cleaned_text = excluded.cleaned_text,
                     needs_setup = excluded.needs_setup, mode = excluded.mode, reject_reason = excluded.reject_reason,
                     app_bundle_id = excluded.app_bundle_id, app_name = excluded.app_name,
-                    cleanup_mode = excluded.cleanup_mode, audio_bytes = excluded.audio_bytes
+                    cleanup_mode = excluded.cleanup_mode, polished_text = excluded.polished_text,
+                    audio_bytes = excluded.audio_bytes
                 RETURNING id;
                 """)
     }
@@ -136,14 +138,14 @@ public actor HistoryStore: Store {
             sql: """
                 UPDATE dictations SET (
                     audio_path, audio_duration_ms, transcript, model, status, recovered_at, cleaned_text, needs_setup,
-                    mode, reject_reason, app_bundle_id, app_name, cleanup_mode, audio_bytes
-                ) = (?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15, ?16)
+                    mode, reject_reason, app_bundle_id, app_name, cleanup_mode, polished_text, audio_bytes
+                ) = (?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15, ?16, ?17)
                 WHERE id = ?1
                 RETURNING id;
                 """)
     }
 
-    /// Runs `sql` with the record's columns as ?1-?15 (`columns` order) and the audio file's size as ?16 (one `stat`,
+    /// Runs `sql` with the record's columns as ?1-?16 (`columns` order) and the audio file's size as ?17 (one `stat`,
     /// about 10 µs, for the Settings size), then replaces its latency marks, in one
     /// transaction; the record's usage entries go to the ledger even when `sql` wrote no row (the dictation was
     /// deleted during a retry, and the answer was still billed). False when `sql` wrote no row.
@@ -162,7 +164,8 @@ public actor HistoryStore: Store {
                     record.recoveredAt.map { .real($0.timeIntervalSince1970) } ?? .null, Self.text(record.cleanedText),
                     Self.text(record.needsSetup?.rawValue), .text(Self.modeColumn(of: record.output)),
                     Self.text(record.rejectReason?.rawValue), Self.text(record.app?.bundleID),
-                    Self.text(record.app?.name), Self.text(record.output.cleanupMode?.rawValue), bytes,
+                    Self.text(record.app?.name), Self.text(record.output.cleanupMode?.rawValue),
+                    Self.text(record.polishedText), bytes,
                 ]
             ).isEmpty
             guard isWritten else { return }
@@ -278,7 +281,8 @@ public actor HistoryStore: Store {
         record.output = output(modeColumn: string(row[10]), cleanupMode: string(row[14]))
         record.rejectReason = string(row[11]).flatMap(RejectReason.init(rawValue:))
         record.app = string(row[12]).map { DictationApp(bundleID: $0, name: string(row[13])) }
-        record.isAudioDeleted = row[15] == .integer(1)
+        record.polishedText = string(row[15])
+        record.isAudioDeleted = row[16] == .integer(1)
         return record
     }
 
@@ -295,6 +299,23 @@ public actor HistoryStore: Store {
         return log
     }
 
+}
+
+extension HistoryStore {
+    public func setPolishedText(_ text: String?, of id: DictationID, usage: [UsageEntry]) throws -> Bool {
+        var isWritten = false
+        try database.transaction { () throws(SQLiteError) in
+            try Self.addToLedger(usage, in: database)
+            isWritten = try !database.query(
+                """
+                UPDATE dictations SET polished_text = ?2 WHERE id = ?1 AND status IN \(Self.transcribed) RETURNING id;
+                """,
+                [.text(id.rawValue.uuidString), Self.text(text)]
+            ).isEmpty
+        }
+        return isWritten
+    }
+
     static func sqlList(_ statuses: [DictationRecord.Status]) -> String {
         "(" + statuses.map { "'\($0.rawValue)'" }.joined(separator: ", ") + ")"
     }
@@ -306,9 +327,7 @@ public actor HistoryStore: Store {
     private static func string(_ value: Value) -> String? {
         if case .text(let text) = value { text } else { nil }
     }
-}
 
-extension HistoryStore {
     /// The `mode` column keeps the values it had before per-app modes, "transcript" or "cleanup"; the mode a cleanup
     /// wrote in is `cleanup_mode`.
     static func modeColumn(of output: DictationOutput) -> String {

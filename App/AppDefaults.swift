@@ -14,6 +14,7 @@ enum AppDefaults {
         case cleanupChord = "hotkey.cleanupChord"
         case pasteLastChord = "hotkey.pasteLastChord"
         case copyLastChord = "hotkey.copyLastChord"
+        case polishLastChord = "hotkey.polishLastChord"
         case microphoneOrder = "microphone.order"
         case submitPhrase = "paste.submitPhrase"
         case learnsFromEdits = "dictionary.learnsFromEdits"
