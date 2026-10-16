@@ -72,7 +72,7 @@ Reading: the slow part is on the provider side after the edge, and it is warm fo
    - Large primer on a cold route (lead decision, 2026-10-17; a measured stopgap): at the announcement, when the route answered nothing (no transcription, no primer) within `Settings.primerInterval` (40 s), the primer is one second of white noise as a 48 kHz stereo 32-bit WAV, 384,044 bytes (512,179 bytes of JSON body). Otherwise, and for every re-prime, it is the silent one. `RouteWarmth` (KotobaCore) wraps the provider port and keeps when the route last answered, for every caller (dictation, retry, Transcribe Again). MAI accepted the app's exact bytes and billed one second; clip A after it took 1,231 / 1,106 ms (VPN path, section 2.1). The body is built once per route and language and kept (`PrimerBodies`): one buffer of its final size with the WAV made and base64-encoded in place, about 1.2 ms, and about 0.55 MiB of footprint, the same as a plain 512 KB `Data` (a standalone probe; building the WAV and its base64 whole first held about 1.5 MiB). A primer then copies and encodes nothing.
      - Data: in the owner's Wispr Flow history (938 dictations on 92 days, `SELECT timestamp, duration FROM History WHERE timestamp IS NOT NULL ORDER BY timestamp`, read-only on the backup copy), 69% of dictations came with no answer in the 40 s before. So about 69 large primers per 100 dictations: about 35 MB up per 100 dictations (about 35 MB a day at 100 a day). Re-primes stay silent, so a long recording adds no large ones.
      - Root fix, on the list: a streaming speech endpoint (section 4), which needs no primer.
-     - Limits: the warm state is not kept per route, so the first dictation after a route switch (or after "Transcribe Again With" another model) can get the silent primer on a cold route. With a key that fails, every cold announcement sends a 0.5 MB primer that fails. The 40 s window is the re-prime interval too (warm measured 45 s).
+     - Limits: the warm state is not kept per route, so the first dictation after a route switch (or after "Transcribe Again With" another model) can get the silent primer on a cold route; left as is, route switches are rare (lead, 2026-10-17). With a key that fails, every cold announcement sends a 0.5 MB primer that fails. The 40 s window is the re-prime interval too (warm measured 45 s).
    - Limit: a recording shorter than the primer's own round trip (about 1-2 s when cold) gets less of the gain; the two requests then run side by side on the HTTP/2 connection.
 2. **Persistent latency line and `make latency-log`**. The per-dictation line on `Log.latency` is now a notice with `model=` and `audioMs=`, so the log store keeps it. `scripts/latency-log.sh` reads `log show` (or a saved copy, `FROM=`) and prints the gate and the stop path split (stop to uploadStart, body build and upload, server, answer body, paste), split by the quiet time before each dictation; the primer's upload lines are summed apart. No database read. Cost: one log line per dictation at notice level.
 3. **`bun run latency`** (`bench/latency/run.ts`): the probes above, so later agents measure the same way (`--exp duration|shape|hedge|models|idle|primer|spacing|report`). Raw rows go to `<out>/results/latency-raw.jsonl` as they come; the report reads only that file.
@@ -91,6 +91,13 @@ Reading: the slow part is on the provider side after the edge, and it is warm fo
 ## 5. Cost
 
 $0.1146 in `latency-raw.jsonl` (`usage.cost`) plus about $0.012 for the curl A/Bs (path and Wi-Fi primer; cost not logged, estimated from audio seconds at $0.10/h): about $0.127 of the $2.00 cap. Wall time about 2.5 hours, most of it the 90 s quiet periods.
+
+## 6. Owner trial (kotoba Dev)
+
+1. `make build`, then launch kotoba Dev from `build/DerivedData`.
+2. Five dictations of 10-20 s, each after 2 minutes or more of quiet; then five of 10-20 s, 10-20 s apart.
+3. `make latency-log DEV=1 LAST=1h`: stop to Cmd-V sent "after a quiet minute" should be near "within a minute", both under 1.5 s at p90. The "primer lines" set shows the primers' own wait.
+4. The large primer's upload copy: in Instruments (Allocations) on a Release build, start a dictation after 2 minutes of quiet and check that the 512 KB primer body is not copied on each send (one allocation at the first cold primer, none after).
 
 ## Unresolved questions
 
