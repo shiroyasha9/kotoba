@@ -305,7 +305,7 @@ extension AppDelegate {
     /// window's panes.
     private func historyChanged(_ change: HistoryChange) {
         mainWindow.historyChanged(change)
-        scheduleQueueRefresh()
+        if change.isRowChanged { scheduleQueueRefresh() }
     }
 
     /// A dictation writes the history two or three times; the menu reads its counts once for such a burst: one
