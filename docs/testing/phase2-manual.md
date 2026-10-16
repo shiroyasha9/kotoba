@@ -647,7 +647,7 @@ Rows 520-535 use kotoba Dev with the release kotoba quit, so Dev keeps its hotke
 | 521 | Settings > General: turn **Show in Dock** off | The Dock icon stays while the window is open. Close the window: the Dock icon goes, kotoba Dev stays in the menu bar, and a dictation still pastes | |
 | 522 | With **Show in Dock** off: menu > **Settings…** | The Dock icon and kotoba Dev’s menus appear with the window, with no ⌘-Tab. ⌘-Tab lists kotoba Dev. Close the window: the icon goes | |
 | 523 | With **Show in Dock** off and the main window open, choose **Fix Last Dictation…**, then close the main window, then the Fix window | The Dock icon stays until the Fix window closes | |
-| 524 | With **Show in Dock** off and no window open: menu > **About kotoba Dev**, close the panel, click another app | The Dock icon shows with the About panel and goes when you click the other app | |
+| 524 | With **Show in Dock** off and no window open: menu > **About kotoba Dev** | The About panel opens in front; no Dock icon appears | |
 | 525 | With **Show in Dock** off and the main window open: turn **Show in Dock** on, then off | On: nothing changes (the icon is there). Off: the icon stays until the window closes. The window stays in front and key; ⌘A and ⌘V work in a text field | |
 | 526 | Turn **Show in menu bar** off | The menu bar icon goes; **Show in Dock** is dimmed, and the footer says why. Turn it on again: the icon comes back in the same place | |
 | 527 | Turn **Show in Dock** off | **Show in menu bar** is dimmed, with the footer | |

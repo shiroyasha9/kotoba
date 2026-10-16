@@ -14,27 +14,25 @@ final class DockAndMenuBar {
     static let shared = DockAndMenuBar()
 
     private(set) var presence = AppDefaults.presence
-    /// The policy last set; the launch starts as an agent (`LSUIElement`).
-    private var isInDock = false
     private weak var statusItem: StatusBarItem?
     /// One per open window, removed when it closes.
     private var closeObservers: [ObjectIdentifier: any NSObjectProtocol] = [:]
     private var resignObserver: (any NSObjectProtocol)?
 
     /// Dictations that wait for a retry, as the Dock badge. Set on each read of the queue; the tile changes only when
-    /// the count does.
+    /// the count does, and out of the Dock it shows nowhere: it takes the count as kotoba enters.
     var waitingCount = 0 {
         didSet {
-            if waitingCount != oldValue { showBadge() }
+            if waitingCount != oldValue, isInDock { showBadge() }
         }
     }
 
+    private var isInDock: Bool { NSApp.activationPolicy() == .regular }
+
     private init() {}
 
-    /// The first step of the launch, before anything builds a window or the menu bar icon. Returns who launched
-    /// kotoba, read now: the open-application event is gone once the launch ends.
-    func start() -> AppPresence.Launch {
-        isInDock = NSApp.activationPolicy() == .regular
+    /// The first step of the launch, before anything builds a window or the menu bar icon.
+    func start() {
         apply()
         resignObserver = NotificationCenter.default.addObserver(
             forName: NSApplication.didResignActiveNotification, object: nil, queue: .main
@@ -44,12 +42,12 @@ final class DockAndMenuBar {
                 self?.apply()
             }
         }
-        return Self.launch()
     }
 
     /// A login item's launch carries `keyAELaunchedAsLogInItem` in its open-application event; any other launch is the
-    /// owner's (Finder, Spotlight, the Dock, `open`).
-    private static func launch() -> AppPresence.Launch {
+    /// owner's (Finder, Spotlight, the Dock, `open`). Read it in `applicationDidFinishLaunching`: the event is gone
+    /// after it.
+    static func launch() -> AppPresence.Launch {
         let event = NSAppleEventManager.shared().currentAppleEvent
         let isLogin =
             event?.eventID == AEEventID(kAEOpenApplication)
@@ -114,11 +112,10 @@ final class DockAndMenuBar {
     }
 
     private func apply() {
-        guard presence.isInDock != isInDock else { return }
-        isInDock = presence.isInDock
+        let isInDock = presence.isInDock
+        guard isInDock != self.isInDock else { return }
         NSApp.setActivationPolicy(isInDock ? .regular : .accessory)
-        Log.app.info("Dock icon \(self.isInDock ? "shown" : "hidden", privacy: .public)")
-        // Out of the Dock, the tile shows nowhere; it takes the count again as it enters.
+        Log.app.info("Dock icon \(isInDock ? "shown" : "hidden", privacy: .public)")
         if isInDock { showBadge() }
     }
 

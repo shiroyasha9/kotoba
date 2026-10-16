@@ -63,7 +63,8 @@ public struct AppPresence: Sendable, Equatable {
         openWindows.remove(id)
     }
 
-    /// kotoba is no longer the active app: a request that showed no tracked window (the About panel) ends.
+    /// kotoba is no longer the active app: a request that showed no window ends, so the Dock icon cannot stay with no
+    /// window.
     public mutating func deactivated() {
         isWindowRequested = false
     }

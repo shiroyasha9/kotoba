@@ -25,6 +25,12 @@ enum WindowFront {
         NSApp.activate()
     }
 
+    /// The About panel: AppKit builds and orders it, so there is no window to give `show(_:)`. It does not count as a
+    /// window for "Show in Dock" off.
+    static func activateForAboutPanel() {
+        NSApp.activate()
+    }
+
     /// Shows `window` in front of every app as kotoba's key window. `activate()` must come first.
     static func show(_ window: NSWindow) {
         DockAndMenuBar.shared.opened(window)

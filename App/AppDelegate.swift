@@ -80,7 +80,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
     func applicationDidFinishLaunching(_ notification: Notification) {
         // First, so the Dock icon comes before any window (story 35).
-        let launch = DockAndMenuBar.shared.start()
+        DockAndMenuBar.shared.start()
+        let launch = DockAndMenuBar.launch()
         // A recording file made after this is never taken for an orphan (`OrphanAudio`).
         let launchedAt = Date.now
         CGEventPaster.trackKeyboardLayout()

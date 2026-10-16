@@ -75,7 +75,7 @@ struct AppPresenceTests {
         #expect(!presence.isInDock)
     }
 
-    /// A request that shows no tracked window (the About panel) keeps the Dock icon only while kotoba is active.
+    /// A request that shows no window keeps the Dock icon only while kotoba is active.
     @Test func aRequestWithNoWindowEndsWhenKotobaIsNoLongerActive() {
         var presence = AppPresence(showsInDock: false, showsMenuBarIcon: true)
         presence.windowRequested()
