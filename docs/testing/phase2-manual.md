@@ -440,7 +440,7 @@ Rows from each agent's phase 2.5 work. The numbers continue the list above.
 | 329 | Click **Delete Audio Now…**, then **Cancel**; click it again, then **Delete Audio** | The dialog says how much it deletes. Cancel deletes nothing. **Delete Audio** deletes the audio of every transcribed dictation, today’s too: **Saved audio** goes to “Zero KB” and the button dims; failed, cancelled and refused rows keep theirs; every row stays in History | |
 | 330 | Set **Keep audio** to “Forever”, quit kotoba, reopen it | The setting is still “Forever” and no question is asked (a longer period applies at once); no audio is deleted at launch | |
 | 331 | Set **Keep audio** to “7 Days”, leave kotoba closed for more than 7 days after a dictation, then open it | Once dictation works, that dictation shows “audio deleted” in History, with no dictation needed | |
-| 332 | With Wi-Fi off, dictate once (“Not transcribed”); look at the **History** section | Under the section: “… of audio waits for Retry” with a size; it goes away once Retry sends the dictation | |
+| 332 | With Wi-Fi off, dictate once (“Not transcribed”); look at the **History** section | Under the section: “Audio not yet transcribed (…) stays until you retry or delete it.” with a size; that sentence goes away once Retry sends the dictation | |
 | 333 | Update from a build without audio retention (dictations older than 7 days in History), open kotoba, then Settings > **General** | **Keep audio** is “Forever”; no audio was deleted; History shows no “audio deleted” | |
 | 334 | With only today’s dictations, set **Keep audio** from “30 Days” to “1 Day” | No question: nothing is old enough to delete, so the period applies at once | |
 | 335 | Set **Keep audio** to “1 Day” (confirm if asked) and keep kotoba running. Today, dictate once with Wi-Fi on and once with Wi-Fi off (“Not transcribed”). Tomorrow, without dictating or quitting, turn Wi-Fi on and **Retry** that row | Once Retry recovers it, retention runs: yesterday’s pasted dictation shows “audio deleted” (a recovered dictation is delivered too) | |
@@ -637,6 +637,7 @@ Layout and copy pass over the main window. Snapshots cannot show the toolbar's g
 | 703 | General > **Shortcuts**: set a cleanup shortcut that is not the default | The ⓧ and the reset arrow sit left of the shortcut; the right edges of the Dictate, Clean up and Paste last shortcuts line up | |
 | 704 | Dictionary: compare the **Learn from my edits** switch with a switch in General | Same size | |
 | 705 | Menu > **Fix Last Dictation…**; edit a word, click **Learn**; then do it with a long dictation where you fix many names | The window is as tall as its text and buttons, with no empty half; after **Learn** it grows downward (its top stays) to show **Words to Add**; with many words it stops growing and the form scrolls | |
+| 706 | Settings > General, scroll to the end | One **App** box holds “Open kotoba when you log in”, “Show in Dock”, “Show in menu bar” and “Check for updates automatically”; turning off one of the two icons still dims the other and shows the footer | |
 
 ## Dock app (story 35, kotoba Dev)
 

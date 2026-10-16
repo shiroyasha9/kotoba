@@ -204,13 +204,13 @@ private struct GeneralPane: View {
                     ChordRecorder(chords: model.chords, role: .dictation)
                 } label: {
                     Text("Dictate")
-                    Text("Tap to start and stop, or hold while you speak.")
+                    Text(StatusText.shortcutHelp(.dictation))
                 }
                 LabeledContent {
                     ChordRecorder(chords: model.chords, role: .cleanup)
                 } label: {
                     Text("Clean up")
-                    Text("Removes filler words and fixes punctuation. Takes a second or two longer.")
+                    Text(StatusText.shortcutHelp(.cleanup))
                 }
                 Picker("Cleanup model", selection: $model.cleanupModel) {
                     ForEach(CleanupModel.allCases, id: \.self) { Text($0.title).tag($0) }
@@ -220,45 +220,18 @@ private struct GeneralPane: View {
                     ChordRecorder(chords: model.chords, role: .pasteLast)
                 } label: {
                     Text("Paste last dictation")
-                    Text("Pastes your last dictation again. Off until you record a shortcut.")
+                    Text(StatusText.shortcutHelp(.pasteLast) + " Off until you record a shortcut.")
                 }
             }
             Section {
                 Toggle(isOn: $model.isSubmitPhraseOn) {
                     Text("Press Return when you say “press enter”")
-                    Text("Also “press return”. Say it last: kotoba pastes the text without it, then presses Return.")
+                    Text("Also “press return”. Say it last; kotoba leaves it out of the text.")
                 }
             } header: {
                 Text("Paste")
             } footer: {
-                Text("While you dictate, press Return to stop. kotoba pastes the text, then presses Return.")
-            }
-            Section("Startup") {
-                Toggle(
-                    "Open kotoba when you log in",
-                    isOn: Binding(get: { model.isLaunchAtLoginOn }, set: { model.setLaunchAtLogin($0) }))
-                if let problem = model.loginProblem {
-                    LabeledContent {
-                        Button("Open Login Items…", action: LaunchAtLogin.openLoginItemsSettings)
-                    } label: {
-                        Text(problem.text).foregroundStyle(.secondary)
-                    }
-                }
-            }
-            Section {
-                Toggle(isOn: $model.showsInDock) {
-                    Text("Show in Dock")
-                    Text("When off, kotoba is in the Dock only while one of its windows is open.")
-                }
-                .disabled(!model.presence.canHideDockIcon)
-                Toggle("Show in menu bar", isOn: $model.showsMenuBarIcon)
-                    .disabled(!model.presence.canHideMenuBarIcon)
-            } header: {
-                Text("Dock and Menu Bar")
-            } footer: {
-                if !model.presence.canHideDockIcon || !model.presence.canHideMenuBarIcon {
-                    Text("kotoba keeps the Dock icon or the menu bar icon, so you can always open it.")
-                }
+                Text("Press Return while you dictate to stop: kotoba pastes the text, then presses Return.")
             }
             Section("Feedback") {
                 Toggle("Play a sound when dictation starts and stops", isOn: $model.areSoundsOn)
@@ -279,9 +252,33 @@ private struct GeneralPane: View {
             if let audio = model.audio {
                 AudioSection(model: audio)
             }
-            if model.hasUpdater {
-                Section("Updates") {
+            // How kotoba starts, shows itself and updates, in one box after the dictation settings.
+            Section {
+                Toggle(
+                    "Open kotoba when you log in",
+                    isOn: Binding(get: { model.isLaunchAtLoginOn }, set: { model.setLaunchAtLogin($0) }))
+                if let problem = model.loginProblem {
+                    LabeledContent {
+                        Button("Open Login Items…", action: LaunchAtLogin.openLoginItemsSettings)
+                    } label: {
+                        Text(problem.text).foregroundStyle(.secondary)
+                    }
+                }
+                Toggle(isOn: $model.showsInDock) {
+                    Text("Show in Dock")
+                    Text("When off, kotoba is in the Dock only while one of its windows is open.")
+                }
+                .disabled(!model.presence.canHideDockIcon)
+                Toggle("Show in menu bar", isOn: $model.showsMenuBarIcon)
+                    .disabled(!model.presence.canHideMenuBarIcon)
+                if model.hasUpdater {
                     Toggle("Check for updates automatically", isOn: $model.checksForUpdates)
+                }
+            } header: {
+                Text("App")
+            } footer: {
+                if !model.presence.canHideDockIcon || !model.presence.canHideMenuBarIcon {
+                    Text("kotoba keeps the Dock icon or the menu bar icon, so you can always open it.")
                 }
             }
         }

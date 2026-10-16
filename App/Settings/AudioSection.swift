@@ -214,11 +214,12 @@ struct AudioSection: View {
         } header: {
             Text("History")
         } footer: {
-            VStack(alignment: .leading) {
+            if let waiting = model.size?.waiting, waiting > 0 {
+                Text(
+                    "History keeps the text of every dictation. Audio not yet transcribed "
+                        + "(\(waiting.formatted(.byteCount(style: .file)))) stays until you retry or delete it.")
+            } else {
                 Text("History keeps the text of every dictation.")
-                if let waiting = model.size?.waiting, waiting > 0 {
-                    Text("\(waiting.formatted(.byteCount(style: .file))) of audio waits for Retry.")
-                }
             }
         }
         .onAppear(perform: model.show)
