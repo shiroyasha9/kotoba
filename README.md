@@ -40,10 +40,10 @@ kotoba is a native, open-source alternative to Wispr Flow, built for developers 
 
 ## Why kotoba
 
-- **Fast.** Your words appear about one second after you stop.
-- **Accurate on technical words.** Add names and terms to your dictionary, and kotoba spells them your way. On 62 real dictations it got 84.6% of technical terms exactly right. Wispr Flow got 50.0%.
-- **Private.** No account, no kotoba server, no telemetry. Your audio goes only to the speech service you choose, with your own key.
-- **Cheap and light.** No subscription: you pay OpenRouter about $0.10 per hour of audio. kotoba uses 15.9 MB of memory at idle.
+- Your words appear about one second after you stop.
+- Add names and terms to your dictionary, and kotoba spells them your way. On 62 real dictations it got 84.6% of technical terms exactly right, against 50.0% for Wispr Flow.
+- You need no account, kotoba has no server of its own, and it sends no telemetry. Your audio goes only to the speech service you choose, with your own key.
+- There is no subscription. You pay OpenRouter about $0.10 per hour of audio, and kotoba uses 15.9 MB of memory at idle.
 
 ## kotoba vs Wispr Flow
 
@@ -60,38 +60,40 @@ kotoba is a native, open-source alternative to Wispr Flow, built for developers 
 
 ## Features
 
-**Dictate anywhere**
+### Dictate anywhere
 
 - Tap ⌃⌥⌘ to start and again to stop, or hold it while you speak. Any shortcut works, even fn alone.
 - Text goes into the focused app: terminals, editors, browsers, chat. Your clipboard comes back after the paste.
 - Esc cancels, with 5 seconds to Undo. Press Return while you speak, or end with "press enter", to paste and send in one step.
 - A small indicator shows the mic level and warns when the mic hears nothing.
 - When AirPods play your music, kotoba records from the built-in mic, so your music does not drop to call quality.
-- kotoba lives in the Dock and the menu bar. Hide either one.
+- kotoba lives in the Dock and the menu bar, and you can hide either one.
 
-**Get technical words right**
+### Get technical words right
 
 - A personal dictionary goes to the speech model as hints, plus replacement rules that run on every transcript.
 - kotoba learns from your edits: fix a word right after a paste, and kotoba adds it. For terminals, use "Fix Last Dictation…".
 - Import your Wispr Flow dictionary in one click, with the corrections Wispr learned.
 
-**Clean up, per app**
+### Clean up, per app
 
 - A second shortcut (⌃⌥⇧⌘) runs the transcript through an LLM that removes filler words and fixes punctuation: Gemini 3.5 Flash-Lite, Qwen 3.8 27B on Cerebras or Claude Haiku 5.5.
 - Code mode keeps commands, paths and flags as you said them. Writing mode writes clear sentences in your words. kotoba picks the mode from the app in front.
 
-**Never lose a dictation**
+### Never lose a dictation
 
 - A failed dictation keeps its audio and retries when the network comes back. After a crash, kotoba transcribes the lost recording at the next launch.
 - History keeps every dictation, with search, Copy, Paste Again and Retry.
 - Paste your last dictation again from the menu or with its own shortcut.
 
-**See what you dictate**
+### See what you dictate
 
 - Insights: words per minute, your streak, time saved compared with typing, and your top apps.
 - Usage: words, audio and spend per model, from the cost OpenRouter reports.
 
-**Speech models:** MAI-Transcribe-2 (recommended) or Grok through OpenRouter, with one key. Under Advanced, Grok through xAI and MAI-Transcribe-2 through Azure.
+### Speech models
+
+MAI-Transcribe-2 (recommended) or Grok through OpenRouter, with one key. Under Advanced, you can use Grok through xAI or MAI-Transcribe-2 through Azure with your own key.
 
 ## Screenshots
 
@@ -151,11 +153,11 @@ kotoba updates itself with [Sparkle](https://sparkle-project.org).
 
 ## Privacy
 
-- **Your key, your provider.** There is no kotoba server and no account. Audio goes only to the speech service you choose.
-- **Zero data retention.** On OpenRouter, kotoba asks for endpoints that keep no data (`provider.zdr`) for MAI-Transcribe-2 and for every cleanup model. Grok has no such endpoint, and kotoba tells you when you pick it.
-- **On your Mac.** API keys stay in the macOS Keychain. Transcripts, audio and your dictionary stay in `~/Library/Application Support/kotoba/`.
-- **No telemetry.** No analytics and no crash reports. The only other request is Sparkle's daily update check, which you can turn off.
-- **Learning stays local.** To learn from your edits, kotoba reads the field you pasted into for a short time after the paste. It never reads password fields, and it keeps only the words it learns.
+- Audio goes only to the speech service you choose, with your own key. There is no kotoba server and no account.
+- On OpenRouter, kotoba asks for endpoints that keep no data (`provider.zdr`) for MAI-Transcribe-2 and for every cleanup model. Grok has no such endpoint, and kotoba tells you when you pick it.
+- API keys stay in the macOS Keychain. Transcripts, audio and your dictionary stay in `~/Library/Application Support/kotoba/`.
+- kotoba sends no analytics and no crash reports. Its only other request is Sparkle's daily update check, which you can turn off.
+- To learn from your edits, kotoba reads the field you pasted into for a short time after the paste. It never reads password fields, and it keeps only the words it learns.
 
 ## Limits
 
