@@ -40,10 +40,14 @@ public struct RecordedAudio: Sendable, Equatable {
     public var file: URL
     /// The length written; zero when no frame was (a stop before the first buffer, an orphan with no readable audio).
     public var duration: Duration
+    /// Some captured audio could not be written (a full disk): the file holds only `duration`, and the pipeline says
+    /// so. Known only at the stop; the history does not keep it.
+    public var isIncomplete: Bool
 
-    public init(file: URL, duration: Duration) {
+    public init(file: URL, duration: Duration, isIncomplete: Bool = false) {
         self.file = file
         self.duration = duration
+        self.isIncomplete = isIncomplete
     }
 
     /// Something to send: a recording with no frames is never sent, and never offered for a retry.

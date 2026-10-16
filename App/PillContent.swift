@@ -88,7 +88,7 @@ extension IndicatorPanel {
                 text: text, color: .secondaryLabelColor, action: action,
                 timer: .init(duration: context.undoWindow, kind: .followsUndoWindow))
         case .failed, .needsSetup, .rejected, .cleanupFailed, .cleanupTooSlow, .returnSkipped, .recovered, .copied,
-            .captureFailed, .nothingRecorded:
+            .captureFailed, .nothingRecorded, .audioNotSaved, .audioCut:
             return .init(
                 PillNotice(text: text, action: action), color: state.isGoodOutcome ? .systemGreen : .systemOrange)
         }

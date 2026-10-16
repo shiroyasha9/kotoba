@@ -5,59 +5,6 @@ import KotobaCore
 import Synchronization
 import os
 
-/// Single-producer, single-consumer ring of mono samples. The IO thread pushes; the writer thread
-/// reads. `written` publishes frames with release/acquire ordering, so neither side locks.
-final class SampleRing: Sendable {
-    /// About 1.4 s at 48 kHz; the writer drains it every hardware cycle (about 10 ms).
-    static let capacity = 1 << 16
-
-    /// Total frames pushed since launch; the writer keeps its own read position.
-    let written = Atomic<Int>(0)
-    /// Host time of the first sample pushed after `beginCapture`, 0 until then.
-    let firstHostTime = Atomic<UInt64>(0)
-    /// Host time just after the last pushed sample.
-    let lastEndHostTime = Atomic<UInt64>(0)
-    /// Signalled once per push, and by stop requests.
-    let wake = DispatchSemaphore(value: 0)
-    // Only the IO thread writes slots, only past `written`; the writer reads only before it.
-    nonisolated(unsafe) private let storage: UnsafeMutablePointer<Float>
-
-    /// Not zero-filled: a slot is read only after `push` wrote it, and untouched pages stay out of
-    /// the footprint (2 MiB less idle than the zero-filled 1 << 19 ring, measured with `footprint`).
-    init() {
-        storage = .allocate(capacity: Self.capacity)
-    }
-
-    deinit {
-        storage.deallocate()
-    }
-
-    /// Clears the first-sample time and returns the position a new writer starts reading from.
-    func beginCapture() -> Int {
-        firstHostTime.store(0, ordering: .relaxed)
-        return written.load(ordering: .acquiring)
-    }
-
-    func push(_ samples: UnsafePointer<Float>, count: Int, startHostTime: UInt64, endHostTime: UInt64) {
-        let start = written.load(ordering: .relaxed)
-        let slot = start & (Self.capacity - 1)
-        let head = min(count, Self.capacity - slot)
-        (storage + slot).update(from: samples, count: head)
-        storage.update(from: samples + head, count: count - head)
-        _ = firstHostTime.compareExchange(expected: 0, desired: startHostTime, ordering: .relaxed)
-        lastEndHostTime.store(endHostTime, ordering: .relaxed)
-        written.store(start + count, ordering: .releasing)
-        wake.signal()
-    }
-
-    func copy(from position: Int, count: Int, into destination: UnsafeMutablePointer<Float>) {
-        let slot = position & (Self.capacity - 1)
-        let head = min(count, Self.capacity - slot)
-        destination.update(from: storage + slot, count: head)
-        (destination + head).update(from: storage, count: count - head)
-    }
-}
-
 /// Drains the ring on its own thread, converts to 16 kHz mono Int16 and writes FLAC.
 /// The file, converter and read position are used only on that thread; `control` is the only
 /// state shared with the actor.
@@ -99,6 +46,9 @@ final class CaptureWriter: @unchecked Sendable {
     private var conversion: Conversion
     private var readPosition: Int
     private var framesWritten: AVAudioFramePosition = 0
+    /// A chunk was lost: the file did not take it (a full disk) or the converter failed. Logged once; the stop
+    /// reports it (`RecordedAudio.isIncomplete`).
+    private var hasLostAudio = false
     private var hasReportedFirstBuffer = false
     private var levelSum: Float = 0
     private var levelFrames = 0
@@ -274,7 +224,10 @@ final class CaptureWriter: @unchecked Sendable {
             inputStatus.pointee = .haveData
             return buffer
         }
-        guard status != .error else { return }
+        guard status != .error else {
+            lostAudio("The converter dropped a chunk", error)
+            return
+        }
         write(conversion.output)
     }
 
@@ -294,8 +247,15 @@ final class CaptureWriter: @unchecked Sendable {
             try file.write(from: output)
             framesWritten += AVAudioFramePosition(output.frameLength)
         } catch {
-            Log.audio.error("FLAC write failed: \(error)")
+            lostAudio("FLAC write failed", error)
         }
+    }
+
+    /// Once per capture: a full disk fails every chunk after the first failure, ten a second.
+    private func lostAudio(_ what: StaticString, _ error: (any Error)?) {
+        guard !hasLostAudio else { return }
+        hasLostAudio = true
+        Log.audio.error("\(String(describing: what), privacy: .public): \(String(describing: error))")
     }
 
     private func switchConversion(to sampleRate: Double) {
@@ -313,7 +273,8 @@ final class CaptureWriter: @unchecked Sendable {
         flushConverter()
         file.close()
         events.finish()
-        return RecordedAudio(file: fileURL, duration: Self.duration(ofFrames: framesWritten))
+        return RecordedAudio(
+            file: fileURL, duration: Self.duration(ofFrames: framesWritten), isIncomplete: hasLostAudio)
     }
 
     /// RMS over 4,800 input frames (100 ms at 48 kHz), scaled so speech fills most of the range. The
@@ -329,7 +290,11 @@ final class CaptureWriter: @unchecked Sendable {
         levelSum = 0
         levelFrames = 0
     }
+}
 
+// MARK: - Conversion and time
+
+extension CaptureWriter {
     private static func makeConversion(sampleRate: Double) throws -> Conversion {
         let resampled = (Double(chunkFrames) * outputFormat.sampleRate / sampleRate).rounded(.up)
         let outputFrames = AVAudioFrameCount(resampled) + 64

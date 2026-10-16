@@ -23,7 +23,7 @@ extension IndicatorPanel {
         let samples: [DictationState] = [
             .idle, .recording(isLong: false), .transcribing, .cleaning, .undoable, .failed(id), .rejected(id, .other),
             .needsSetup(id, .key), .cleanupFailed(id), .cleanupTooSlow(id), .returnSkipped(id), .copied(id),
-            .recovered(id), .captureFailed, .nothingRecorded,
+            .recovered(id), .captureFailed, .nothingRecorded, .audioNotSaved, .audioCut(id),
         ]
         var snapshots = [
             Snapshot(name: "indicator-drag") { PillStandIn(content: .init(), anchor: nil) },
@@ -146,7 +146,7 @@ extension IndicatorPanel {
                     context: StatusContext(provider: .azure, microphone: .denied)),
             ]
         case .transcribing, .cleaning, .undoable, .failed, .cleanupFailed, .cleanupTooSlow, .returnSkipped, .recovered,
-            .nothingRecorded:
+            .nothingRecorded, .audioNotSaved, .audioCut:
             [SnapshotRow(name: snapshotName(of: state), state: state)]
         }
     }
@@ -162,7 +162,9 @@ extension IndicatorPanel {
         case .cleanupTooSlow: "cleanupTooSlow"
         case .returnSkipped: "returnSkipped"
         case .recovered: "recovered"
-        case .idle, .recording, .needsSetup, .rejected, .copied, .captureFailed, .nothingRecorded: "\(state)"
+        case .audioCut: "audioCut"
+        case .idle, .recording, .needsSetup, .rejected, .copied, .captureFailed, .nothingRecorded, .audioNotSaved:
+            "\(state)"
         }
     }
 }
