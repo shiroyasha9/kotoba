@@ -215,20 +215,6 @@ public actor HistoryStore: Store {
         )
     }
 
-    public func delete(_ ids: Set<DictationID>) throws {
-        guard !ids.isEmpty else { return }
-        let placeholders = (1...ids.count).map { "?\($0)" }.joined(separator: ", ")
-        try deleteRows(where: "id IN (\(placeholders))", ids.map { .text($0.rawValue.uuidString) })
-    }
-
-    /// Deletes the rows and their audio files; the latency marks go with them (`ON DELETE CASCADE`).
-    private func deleteRows(where condition: String, _ values: [Value]) throws {
-        let deleted = try database.query("DELETE FROM dictations WHERE \(condition) RETURNING audio_path;", values)
-        for case .text(let path) in deleted.map({ $0[0] }) {
-            _ = Self.removeAudio(at: audioFile(at: path))
-        }
-    }
-
     public func queueForRetry(_ id: DictationID) throws {
         try database.run(
             "UPDATE dictations SET status = ?2, reject_reason = NULL WHERE id = ?1 AND status IN \(Self.requeued);",

@@ -20,6 +20,11 @@ struct HistoryView: View {
             } message: {
                 Text("kotoba couldn’t bring back the app you were in. The text is on the clipboard: press ⌘V there.")
             }
+            .alert("Couldn’t Delete", isPresented: $model.isDeleteFailureShown) {
+                Button("OK") {}
+            } message: {
+                Text("kotoba couldn’t delete some dictations, so they stay in History. Try again later.")
+            }
             .confirmationDialog(
                 deleteTitle, isPresented: isAskingToDelete, presenting: model.pendingDelete
             ) { ids in

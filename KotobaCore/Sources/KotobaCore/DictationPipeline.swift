@@ -128,14 +128,18 @@ public actor DictationPipeline {
         await retryPending(.only(ids))
     }
 
-    /// The History window's Delete. A dictation in flight is kept: its own save would bring the row back.
-    public func delete(_ ids: Set<DictationID>) async {
+    /// The History window's Delete. A dictation in flight is kept: its own save would bring the row back. False when a
+    /// dictation stays because its audio file cannot be removed, or the store failed: the window says so.
+    public func delete(_ ids: Set<DictationID>) async -> Bool {
         let deletable = ids.subtracting(inFlight)
-        guard !deletable.isEmpty else { return }
+        guard !deletable.isEmpty else { return true }
         do {
-            try await ports.store.delete(deletable)
+            let kept = try await ports.store.delete(deletable)
+            if !kept.isEmpty { Log.pipeline.error("Kept \(kept.count) dictations whose audio cannot be deleted") }
+            return kept.isEmpty
         } catch {
             Log.pipeline.error("Cannot delete dictations: \(error)")
+            return false
         }
     }
 

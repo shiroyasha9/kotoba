@@ -5,7 +5,7 @@ import Foundation
 extension DictationPipeline {
     func start(at now: Instant) async {
         let id = DictationID()
-        let file = settings.audioDirectory.appending(path: "\(id.rawValue.uuidString).flac")
+        let file = settings.audioDirectory.appending(path: id.audioFileName)
         // The connection warms while the engine starts.
         work.track { [provider = ports.provider] in await provider.warmUp() }
         let modes = settings.modes

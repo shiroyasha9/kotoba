@@ -171,7 +171,7 @@ struct InsightsTests {
         for record in [kept, deleted, noLength, silent] {
             try await store.save(record)
         }
-        try await store.delete([deleted.id])
+        #expect(try await store.delete([deleted.id]).isEmpty)
 
         let insights = try await store.insights(at: try date(10, 14), in: Self.india)
 
@@ -201,7 +201,7 @@ struct InsightsTests {
         record.usage = [speech(at: try date(10, 13), words: 50, for: record.id, app: Self.mail)]
         try await store.save(record)
         try await store.addUsage([speech(at: try date(10, 12), app: Self.notes)])
-        try await store.delete([record.id])
+        #expect(try await store.delete([record.id]).isEmpty)
 
         let insights = try await store.insights(at: try date(10, 14), in: Self.india)
 

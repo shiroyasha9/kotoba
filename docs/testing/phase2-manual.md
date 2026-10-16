@@ -496,6 +496,18 @@ The Writing prompt waits for its benchmark (docs/research/per-app-modes.md, ques
 | 404 | Open **General**, press ⌘F; do the same in each other pane; then click **Dictionary** | Nothing happens in the other panes; **Dictionary** opens with the cursor not in **Search words** | |
 | 405 | Press ⌘F in **Dictionary**, close Settings with ⌘W, reopen it on **Dictionary**, press ⌘F | The cursor goes to **Search words** each time | |
 
+### Audio with no History row (phase 3)
+
+Force quit with Activity Monitor (**Force Quit**) or `kill -9 <pid>` of kotoba Dev, never by name.
+
+| # | Do this | Expect | Result |
+|---|---|---|---|
+| 420 | In kotoba Dev, tap the chord, speak for about 10 s, and force quit kotoba Dev while it records; open kotoba Dev again | Within seconds the pill says “Saved dictation recovered”; the menu lists it under **Recovered Dictations** with your words up to about the last half second; nothing is pasted | |
+| 421 | Open **History** after row 420 | The dictation is there at the time you started it, with its length, its text and “Recovered”; no app name | |
+| 422 | Quit kotoba Dev with ⌘Q and open it again after row 420 | Nothing new is recovered, and History has the dictation once | |
+| 423 | Tap the chord and force quit kotoba Dev in the first half second of the recording; open it again | History shows a “Cancelled” row with “No text”; **Delete** removes it | |
+| 424 | Run `chmod 555 ~/Library/Application\ Support/kotoba-dev/audio`; in History, delete a dictation; then run `chmod 755` on the same folder | The alert “Couldn’t Delete” shows and the row stays; after `chmod 755`, **Delete** removes the row; quit and open kotoba Dev: it does not come back | |
+
 ## Known offscreen-only doubts
 
 The offscreen snapshots (`make snapshots`) show two things that may not happen in the real app. Check them on screen:

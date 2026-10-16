@@ -177,7 +177,7 @@ struct HistoryStoreTests {
             try await store.save(saved)
         }
 
-        try await store.delete([deleted.id])
+        #expect(try await store.delete([deleted.id]).isEmpty)
 
         #expect(try await store.status(of: deleted.id) == nil)
         #expect(try await store.status(of: kept.id) == .failed)
@@ -187,17 +187,52 @@ struct HistoryStoreTests {
         #expect(marks.first?.first == .integer(2))
     }
 
+    /// The files go first, then only the rows whose file is gone. A row whose file cannot be removed stays
+    /// with its file, so a deleted dictation never comes back as audio with no row.
+    @Test func aDeleteWhoseFileCannotBeRemovedKeepsItsRow() async throws {
+        let store = try HistoryStore(url: url, audio: audio)
+        let stuck = record(.failed)
+        let deleted = record(.cancelled)
+        try Data("flac".utf8).write(to: stuck.audio.file)
+        try await store.save(stuck)
+        try await store.save(deleted)
+        try FileManager.default.setAttributes([.posixPermissions: 0o555], ofItemAtPath: audio.path)
+        defer { try? FileManager.default.setAttributes([.posixPermissions: 0o755], ofItemAtPath: audio.path) }
+
+        #expect(try await store.delete([stuck.id, deleted.id]) == [stuck.id])
+        #expect(try await store.status(of: stuck.id) == .failed)
+        #expect(try await store.status(of: deleted.id) == nil)
+        #expect(FileManager.default.fileExists(atPath: stuck.audio.file.path))
+
+        try FileManager.default.setAttributes([.posixPermissions: 0o755], ofItemAtPath: audio.path)
+        #expect(try await store.delete([stuck.id]).isEmpty)
+        #expect(try await store.status(of: stuck.id) == nil)
+        #expect(!FileManager.default.fileExists(atPath: stuck.audio.file.path))
+    }
+
+    @Test func knownIDsAreTheOnesWithARow() async throws {
+        let store = try HistoryStore(url: url, audio: audio)
+        let saved = record(.pasted)
+        try await store.save(saved)
+
+        #expect(try await store.knownIDs(among: [saved.id, DictationID()]) == [saved.id])
+        #expect(try await store.knownIDs(among: []).isEmpty)
+    }
+
     /// The cost the History window pays: a page, a deep page, a search and one changed row on 10,000 rows of about 30
     /// words, and the menu's reads. Measured 2026-10-16 (debug build): about 0.8 ms a page, 3.3 ms for a search that
-    /// matches nothing, 0.06 ms for one row, 2.8 ms for the menu. The bound is loose for other agents' builds on the
-    /// same machine.
+    /// matches nothing, 0.06 ms for one row, 2.8 ms for the menu, 17.5 ms for the launch's id check of 10,001 files.
+    /// The bound is loose for other agents' builds on the same machine.
     @Test func aPageAndASearchOn10000RowsStayFast() async throws {
         let store = try HistoryStore(url: url, audio: audio)
         let words = "please move the standup to thursday and ask the team to review the pull request before lunch"
             .split(separator: " ")
+        var ids: [DictationID] = []
         for index in 0..<10_000 {
             let text = (0..<30).map { words[($0 * 7 + index) % words.count] }.joined(separator: " ")
-            try await store.save(spoken(text + " row\(index)", at: TimeInterval(index)))
+            let saved = spoken(text + " row\(index)", at: TimeInterval(index))
+            try await store.save(saved)
+            ids.append(saved.id)
         }
         let clock = ContinuousClock()
         var first: [DictationRecord] = []
@@ -212,9 +247,11 @@ struct HistoryStoreTests {
             _ = try await store.pendingCount()
             _ = try await store.lastDelivered()
         }
+        // The launch's check for audio with no row (`OrphanAudio`), with every file in the folder named.
+        let known = try await clock.measure { _ = try await store.knownIDs(among: ids + [DictationID()]) }
 
         #expect(first.count == 200)
-        for time in [page, deep, hit, miss, row, menu] {
+        for time in [page, deep, hit, miss, row, menu, known] {
             #expect(time < .milliseconds(100))
         }
     }
@@ -245,7 +282,7 @@ struct HistoryStoreTests {
         let deleted = spoken("gone", at: 2_000)
         try await store.save(kept)
         try await store.save(deleted)
-        try await store.delete([deleted.id])
+        #expect(try await store.delete([deleted.id]).isEmpty)
 
         kept.status = .recovered
         kept.latency = LatencyLog()

@@ -74,7 +74,7 @@ final class CaptureWriter: @unchecked Sendable {
     }
 
     private static let chunkFrames = 4_800
-    private static let outputFormat: AVAudioFormat = {
+    static let outputFormat: AVAudioFormat = {
         guard
             let format = AVAudioFormat(
                 commonFormat: .pcmFormatInt16, sampleRate: 16_000, channels: 1, interleaved: true)
@@ -113,17 +113,29 @@ final class CaptureWriter: @unchecked Sendable {
     ) throws {
         try FileManager.default.createDirectory(at: url.deletingLastPathComponent(), withIntermediateDirectories: true)
         fileURL = url
-        file = try AVAudioFile(
-            forWriting: url,
-            settings: [AVFormatIDKey: kAudioFormatFLAC, AVSampleRateKey: 16_000, AVNumberOfChannelsKey: 1],
-            commonFormat: .pcmFormatInt16,
-            interleaved: true
-        )
+        file = try Self.makeFile(at: url)
         conversion = try Self.makeConversion(sampleRate: sampleRate)
         self.ring = ring
         self.events = events
         self.levels = levels
         self.readPosition = readPosition
+    }
+
+    /// The FLAC file of a recording, in `outputFormat`. Orphan recovery writes the same file (`OrphanAudioRecovery`).
+    static func makeFile(at url: URL) throws -> AVAudioFile {
+        try AVAudioFile(
+            forWriting: url,
+            settings: [
+                AVFormatIDKey: kAudioFormatFLAC, AVSampleRateKey: outputFormat.sampleRate,
+                AVNumberOfChannelsKey: outputFormat.channelCount,
+            ],
+            commonFormat: .pcmFormatInt16,
+            interleaved: true
+        )
+    }
+
+    static func duration(ofFrames frames: AVAudioFramePosition) -> Duration {
+        .seconds(Double(frames) / outputFormat.sampleRate)
     }
 
     func start() {
@@ -301,7 +313,7 @@ final class CaptureWriter: @unchecked Sendable {
         flushConverter()
         file.close()
         events.finish()
-        return RecordedAudio(file: fileURL, duration: .seconds(Double(framesWritten) / Self.outputFormat.sampleRate))
+        return RecordedAudio(file: fileURL, duration: Self.duration(ofFrames: framesWritten))
     }
 
     /// RMS over 4,800 input frames (100 ms at 48 kHz), scaled so speech fills most of the range. The

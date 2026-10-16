@@ -17,8 +17,9 @@ final class HistoryModel {
             @MainActor (_ search: String, _ after: DictationRecord?, _ limit: Int) async throws -> [DictationRecord]
         /// One row when it exists and matches the search.
         var record: @MainActor (DictationID, _ search: String) async throws -> DictationRecord?
-        /// The pipeline announces what it deleted (`HistoryChange.deleted`); the window removes rows only then.
-        var delete: @MainActor (Set<DictationID>) async -> Void
+        /// The pipeline announces what it deleted (`HistoryChange.deleted`); the window removes rows only then. False
+        /// when a dictation stays: its audio file cannot be removed, or the store failed.
+        var delete: @MainActor (Set<DictationID>) async -> Bool
         var retry: @MainActor (Set<DictationID>) async -> Void
         /// False when the app the owner was in did not come back, so nothing was pasted; the text is on the clipboard.
         var paste: @MainActor (String, DictationID) async -> Bool
@@ -64,6 +65,8 @@ final class HistoryModel {
     var isPasteFailureShown = false
     /// The rows the Delete confirmation asks about; nil when it is not shown.
     var pendingDelete: [DictationID]?
+    /// A Delete kept some dictations: the window says so.
+    var isDeleteFailureShown = false
 
     @ObservationIgnored private let source: Source?
     /// Each read takes the next number; a result that comes back after a newer read started is dropped.
@@ -235,7 +238,11 @@ final class HistoryModel {
 
     func delete(_ ids: [DictationID]) {
         guard let source else { return }
-        Task { await source.delete(Set(ids)) }
+        Task {
+            if await !source.delete(Set(ids)) {
+                isDeleteFailureShown = true
+            }
+        }
     }
 
     // MARK: Display

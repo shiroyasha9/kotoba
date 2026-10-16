@@ -75,6 +75,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     }
 
     func applicationDidFinishLaunching(_ notification: Notification) {
+        // A recording file made after this is never taken for an orphan (`OrphanAudio`).
+        let launchedAt = Date.now
         CGEventPaster.trackKeyboardLayout()
         FrontAppObserver.track()
         CGEventPaster.warmUp()
@@ -109,6 +111,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         watchReleaseApp()
         Task {
             await settingsController.loadDictionary(into: pipeline)
+            // Audio left with no row (a crash during a recording) joins this launch's retry.
+            await OrphanAudioRecovery.run(in: AppFiles.audio, store: store, launchedAt: launchedAt)
             await pipeline.retryPending()
             await refreshQueues()
         }

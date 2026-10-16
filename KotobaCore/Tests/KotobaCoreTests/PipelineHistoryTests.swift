@@ -118,7 +118,7 @@ struct PipelineHistoryChangeTests {
 
         let retry = Task { await pipeline.retry([id]) }
         #expect(await eventually { await gate.hasWaiters })
-        await pipeline.delete([id])
+        _ = await pipeline.delete([id])
         await gate.open()
         await retry.value
 
@@ -136,7 +136,7 @@ struct PipelineHistoryChangeTests {
         #expect(await eventually { await gate.hasWaiters })
         let id = try #require(await world.store.records.first?.id)
 
-        await pipeline.delete([id])
+        _ = await pipeline.delete([id])
         await gate.open()
         await pipeline.settle()
 
@@ -198,7 +198,7 @@ struct PipelineHistoryChangeTests {
 
         await pipeline.dictate(world)
         let id = try #require(await world.store.records.first?.id)
-        await pipeline.delete([id])
+        _ = await pipeline.delete([id])
 
         // Saved pending at the stop, saved pasted, then deleted.
         #expect(await changes.next() == .saved(id))
@@ -206,17 +206,39 @@ struct PipelineHistoryChangeTests {
         #expect(await changes.next() == .deleted([id]))
     }
 
-    @Test func aFailedDeleteAnnouncesNothing() async throws {
+    @Test func aFailedDeleteAnnouncesNothingAndSaysSo() async throws {
         let world = FakeWorld(transcript: "kept")
         let pipeline = world.makePipeline()
         var changes = pipeline.historyChanges.makeAsyncIterator()
         await world.store.failDeletes(with: FakeError())
 
-        await pipeline.delete([DictationID()])
+        #expect(await !pipeline.delete([DictationID()]))
         await pipeline.dictate(world)
 
         let id = try #require(await world.store.records.first?.id)
         #expect(await changes.next() == .saved(id))
+    }
+
+    /// A dictation whose audio file cannot be removed stays, so it never leaves audio with no row; the window keeps its
+    /// row and says so.
+    @Test func aDeleteThatKeepsADictationAnnouncesOnlyTheRestAndSaysSo() async throws {
+        let world = FakeWorld(transcript: "two")
+        let pipeline = world.makePipeline()
+        var changes = pipeline.historyChanges.makeAsyncIterator()
+        await pipeline.dictate(world)
+        await pipeline.dictate(world)
+        let ids = await world.store.records.map(\.id)
+        try #require(ids.count == 2)
+        await world.store.keepAudio(of: [ids[0]])
+
+        #expect(await !pipeline.delete(Set(ids)))
+
+        #expect(await world.store.records.map(\.id) == [ids[0]])
+        // Each dictation was saved twice: pending at the stop, then pasted.
+        for _ in 0..<4 {
+            _ = await changes.next()
+        }
+        #expect(await changes.next() == .deleted([ids[1]]))
     }
 
     @Test func aRejectedDictationIsSentAgainAndCanFailAgain() async throws {

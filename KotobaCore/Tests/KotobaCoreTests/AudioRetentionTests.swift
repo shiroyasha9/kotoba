@@ -244,7 +244,7 @@ struct AudioRetentionTests {
         await pipeline.deleteExpiredAudio()
         await pipeline.deleteTranscribedAudio()
         await pipeline.deleteTranscribedAudio()
-        await pipeline.delete([marker])
+        _ = await pipeline.delete([marker])
 
         let deleted = Set(await world.store.records.map(\.id))
         #expect(await changes.next() == .audioDeleted(deleted))

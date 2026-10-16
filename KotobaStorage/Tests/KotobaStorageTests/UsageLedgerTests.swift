@@ -74,7 +74,7 @@ struct UsageLedgerTests {
         try await store.save(deleted)
         try await store.save(pruned)
 
-        try await store.delete([deleted.id])
+        #expect(try await store.delete([deleted.id]).isEmpty)
         let batch = try await store.deleteAudio(
             transcribedBefore: Date(timeIntervalSince1970: 3_000), after: nil)
         #expect(batch.deleted == [pruned.id])
@@ -91,7 +91,7 @@ struct UsageLedgerTests {
         let store = try HistoryStore(url: url, audio: audio)
         var record = dictation(at: 1_000)
         try await store.save(record)
-        try await store.delete([record.id])
+        #expect(try await store.delete([record.id]).isEmpty)
 
         record.usage = [entry(at: 2_000, for: record.id, cost: .reported(try usd("0.001")))]
         #expect(try await !store.update(record))

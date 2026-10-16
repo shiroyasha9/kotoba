@@ -74,15 +74,23 @@ actor FakeStore: Store {
         history[id, default: []].append(.failed)
     }
 
-    func delete(_ ids: Set<DictationID>) async throws {
+    func delete(_ ids: Set<DictationID>) async throws -> Set<DictationID> {
         if let deleteError { throw deleteError }
-        records.removeAll { ids.contains($0.id) }
+        let kept = ids.intersection(undeletable)
+        records.removeAll { ids.contains($0.id) && !kept.contains($0.id) }
+        return kept
     }
 
     private var deleteError: (any Error)?
+    /// Dictations whose audio file cannot be removed: a delete keeps them.
+    private var undeletable: Set<DictationID> = []
 
     func failDeletes(with error: any Error) {
         deleteError = error
+    }
+
+    func keepAudio(of ids: Set<DictationID>) {
+        undeletable = ids
     }
 
     /// The cutoff of each `deleteAudio` batch, in order.

@@ -65,25 +65,38 @@ extension HistoryStore {
             values += [.real(cursor.transcribedAt.timeIntervalSince1970), .text(cursor.id.rawValue.uuidString)]
         }
         return try database.query(Self.expiredAudioQuery(after: cursor != nil), values).compactMap { row in
-            guard let id = row[0].string.flatMap(UUID.init(uuidString:)), let path = row[1].string,
-                case .real(let time) = row[2]
-            else { return nil }
-            return (AudioCursor(transcribedAt: Date(timeIntervalSince1970: time), id: DictationID(rawValue: id)), path)
+            guard let id = Self.id(row[0]), let path = row[1].string, case .real(let time) = row[2] else { return nil }
+            return (AudioCursor(transcribedAt: Date(timeIntervalSince1970: time), id: id), path)
         }
     }
 
-    /// One statement for the batch: the ids (UUID text, nothing to escape) go in as one JSON array. Returns the rows it
-    /// marked; a row the owner deleted meanwhile is not among them.
+    /// One statement for the batch. Returns the rows it marked; a row the owner deleted meanwhile is not among them.
     private func markAudioDeleted(_ ids: [DictationID]) throws -> Set<DictationID> {
-        let list = "[" + ids.map { "\"\($0.rawValue.uuidString)\"" }.joined(separator: ",") + "]"
         let marked = try database.query(
             """
             UPDATE dictations SET audio_deleted = 1
-            WHERE audio_deleted = 0 AND id IN (SELECT value FROM json_each(?1))
+            WHERE audio_deleted = 0 AND \(Self.inIDList)
             RETURNING id;
             """,
-            [.text(list)])
-        return Set(marked.compactMap { $0[0].string.flatMap(UUID.init(uuidString:)).map(DictationID.init) })
+            [Self.idList(ids)])
+        return Self.ids(in: marked)
+    }
+
+    /// Many ids as one statement value, ?1 in `inIDList`: the ids (UUID text, nothing to escape) go in as one JSON
+    /// array.
+    static func idList(_ ids: some Sequence<DictationID>) -> Value {
+        .text("[" + ids.map { "\"\($0.rawValue.uuidString)\"" }.joined(separator: ",") + "]")
+    }
+
+    static let inIDList = "id IN (SELECT value FROM json_each(?1))"
+
+    static func id(_ value: Value) -> DictationID? {
+        value.string.flatMap(UUID.init(uuidString:)).map(DictationID.init)
+    }
+
+    /// The ids of rows whose first column is the id.
+    static func ids(in rows: [[Value]]) -> Set<DictationID> {
+        Set(rows.compactMap { id($0[0]) })
     }
 
     /// A row's audio file: its name in the audio folder. Retention, Delete and Retry never touch a file outside the
@@ -192,5 +205,50 @@ extension HistoryStore {
             }
         }
         return size
+    }
+}
+
+/// The History window's Delete, and the launch's check for audio with no row (`OrphanAudio`).
+extension HistoryStore {
+    /// Removes the audio files first, off this actor as retention does, then deletes only the rows whose file is gone:
+    /// a row whose file cannot be removed stays with its file, so no deleted dictation leaves audio with no row for a
+    /// later launch to bring back. The latency marks go with the rows (`ON DELETE CASCADE`). Returns the ids that stay.
+    @concurrent
+    public nonisolated func delete(_ ids: Set<DictationID>) async throws -> Set<DictationID> {
+        guard !ids.isEmpty else { return [] }
+        var gone: [DictationID] = []
+        var kept: Set<DictationID> = []
+        for row in try await keptAudio(of: ids) {
+            if let path = row.path, !Self.removeAudio(at: audioFile(at: path)) {
+                kept.insert(row.id)
+            } else {
+                gone.append(row.id)
+            }
+        }
+        if !gone.isEmpty { try await deleteRows(gone) }
+        return kept
+    }
+
+    /// Each row with its audio path, nil when audio retention already deleted the file.
+    private func keptAudio(of ids: Set<DictationID>) throws -> [(id: DictationID, path: String?)] {
+        try database.query(
+            "SELECT id, audio_path, audio_deleted FROM dictations WHERE \(Self.inIDList);", [Self.idList(ids)]
+        ).compactMap { row in
+            guard let id = Self.id(row[0]) else { return nil }
+            return (id, row[2] == .integer(1) ? nil : row[1].string)
+        }
+    }
+
+    private func deleteRows(_ ids: [DictationID]) throws {
+        try database.run("DELETE FROM dictations WHERE \(Self.inIDList);", [Self.idList(ids)])
+    }
+
+    /// The ids among `ids` that have a row, in one statement on the primary key: the launch reads the audio of the
+    /// other files only (`OrphanAudio.records`).
+    public func knownIDs(among ids: [DictationID]) throws -> Set<DictationID> {
+        guard !ids.isEmpty else { return [] }
+        return Self.ids(
+            in: try database.query(
+                "SELECT id FROM dictations WHERE \(Self.inIDList);", [Self.idList(ids)]))
     }
 }

@@ -22,8 +22,10 @@ public protocol Store: Sendable {
     /// Puts a `.cancelled` or `.rejected` record in the retry queue as `.failed`; a record with any other status keeps
     /// it.
     func queueForRetry(_ id: DictationID) async throws
-    /// Deletes the records, their latency logs and their audio files (the History window's Delete).
-    func delete(_ ids: Set<DictationID>) async throws
+    /// Deletes the records, their latency logs and their audio files (the History window's Delete), each audio file
+    /// first: a record whose file cannot be removed stays, with its file, so no deleted dictation leaves audio with no
+    /// record (`OrphanAudio` would bring it back). Returns the ids that stay for that reason.
+    func delete(_ ids: Set<DictationID>) async throws -> Set<DictationID>
     /// One batch of audio retention: of the dictations whose audio expired before `cutoff`
     /// (`DictationRecord.isAudioExpired(before:)`), oldest text first and after `cursor`, deletes the files and marks
     /// the rows `isAudioDeleted`; rows, their text and the usage ledger stay. Only a file inside the audio folder, found by
@@ -267,10 +269,13 @@ struct AnnouncingStore: Store {
         try await base.queueForRetry(id)
     }
 
-    /// Announced only once done: a window that hides rows the store still has would show the wrong history.
-    func delete(_ ids: Set<DictationID>) async throws {
-        try await base.delete(ids)
-        changes.yield(.deleted(ids))
+    /// Announced only once done, and only the rows that went: a window that hides rows the store still has would show
+    /// the wrong history.
+    func delete(_ ids: Set<DictationID>) async throws -> Set<DictationID> {
+        let kept = try await base.delete(ids)
+        let deleted = ids.subtracting(kept)
+        if !deleted.isEmpty { changes.yield(.deleted(deleted)) }
+        return kept
     }
 
     /// Announced only when a file went: retention runs after each dictation, and many runs delete nothing.

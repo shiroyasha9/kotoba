@@ -159,7 +159,7 @@ struct AudioRetentionStoreTests {
         try await store.save(moved)
 
         let queued = try await store.pendingRetries()
-        try await store.delete([foreign.id, moved.id])
+        #expect(try await store.delete([foreign.id, moved.id]).isEmpty)
 
         #expect(Set(queued.map(\.audio.file)) == [audio.appending(path: "notes.flac"), file])
         #expect(FileManager.default.fileExists(atPath: elsewhere.path))
