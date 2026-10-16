@@ -159,6 +159,34 @@ struct InsightsTests {
         #expect(insights.words == 60)
     }
 
+    /// Speed counts the recorded length while the dictation is in History, not the billed audio (MAI rounds it up to
+    /// whole seconds); a deleted dictation counts its billed audio.
+    @Test func speedCountsTheRecordedLengthWhileTheDictationIsKept() async throws {
+        let store = try makeStore()
+        let kept = try record(at: try date(10, 13), recorded: .milliseconds(11_500), billed: .seconds(12), words: 30)
+        let deleted = try record(at: try date(10, 12), recorded: .milliseconds(7_200), billed: .seconds(8), words: 15)
+        try await store.save(kept)
+        try await store.save(deleted)
+        try await store.delete([deleted.id])
+
+        let insights = try await store.insights(at: try date(10, 14), in: Self.india)
+
+        #expect(insights.spokenWords == 45)
+        #expect(insights.speakingTime == .milliseconds(19_500))
+        #expect(insights.wordsPerMinute == 138)
+    }
+
+    func record(at time: Date, recorded: Duration, billed: Duration, words: Int, app: DictationApp? = nil) throws
+        -> DictationRecord
+    {
+        var record = DictationRecord(
+            id: DictationID(), createdAt: time,
+            audio: RecordedAudio(file: folder.url.appending(path: "\(UUID().uuidString).flac"), duration: recorded),
+            transcript: "words", model: "microsoft/mai-transcribe-2", status: .pasted, latency: LatencyLog())
+        record.usage = [speech(at: time, words: words, audio: billed, for: record.id, app: app)]
+        return record
+    }
+
     /// Deleting dictations leaves the ledger, and the figures, as they were.
     @Test func topAppsAreByWordsAndOutliveDeletedDictations() async throws {
         let store = try makeStore()
@@ -195,17 +223,18 @@ struct InsightsTests {
         #expect(try await store.learnedWords() == [.edit: 1, .fix: 1])
     }
 
-    /// The cost the Insights pane pays when it opens, over 10,000 dictations in 70 days (a streak past the chart).
-    /// Measured 2026-10-16 (debug build): about 15 ms. The bound is loose for other agents' builds on the same machine.
+    /// The cost the Insights pane pays when it opens, over 10,000 kept dictations in 70 days (a streak past the
+    /// chart). Measured 2026-10-16: see `docs/research/memory-spike.md`, "Insights pane". The bound is loose for other
+    /// agents' builds on the same machine.
     @Test func insightsOf10000DictationsStayFast() async throws {
         let store = try makeStore()
         let now = try date(10, 14, 18)
         let apps = [Self.notes, Self.mail, DictationApp(bundleID: "com.apple.Terminal", name: "Terminal"), nil]
-        for start in stride(from: 0, to: 10_000, by: 1_000) {
-            try await store.addUsage(
-                (start..<start + 1_000).map { index in
-                    speech(at: now - Double(index) * 600, words: 13, audio: .seconds(8), app: apps[index % 4])
-                })
+        for index in 0..<10_000 {
+            try await store.save(
+                try record(
+                    at: now - Double(index) * 600, recorded: .seconds(8), billed: .seconds(8), words: 13,
+                    app: apps[index % 4]))
         }
         let clock = ContinuousClock()
         var insights = DictationInsights()

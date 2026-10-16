@@ -24,7 +24,8 @@ public struct DictationInsights: Sendable, Equatable {
     public var wordsThisWeek: Int
     public var wordsThisMonth: Int
     public var words: Int
-    /// Words the speech models heard, and the audio of those answers: recordings in full, pauses included.
+    /// Words the speech models heard, and the length of those recordings, pauses included: as recorded while the
+    /// dictation is in History, else the audio the speech model billed (MAI rounds it up to whole seconds).
     public var spokenWords: Int
     public var speakingTime: Duration
     /// Days in a row with a delivered dictation, up to today when today has one, else up to yesterday.
@@ -66,21 +67,22 @@ public struct DictationInsights: Sendable, Equatable {
 }
 
 extension HistoryStore {
-    /// The figures at `now` in `calendar`: one scan of the ledger for the totals, one day-range read per chart day on
-    /// its `time` index, the top apps, and for a streak longer than the chart one more read per year of it.
+    /// The figures at `now` in `calendar`: one scan of the ledger for the totals (with each speech answer's dictation
+    /// by its primary key, for the recorded length), one day-range read per chart day on its `time` index, the top
+    /// apps, and for a streak longer than the chart one more read per year of it.
     public func insights(at now: Date, in calendar: Calendar, apps: Int = 5) throws -> DictationInsights {
         let week = calendar.dateInterval(of: .weekOfYear, for: now) ?? DateInterval(start: now, duration: 0)
         let month = calendar.dateInterval(of: .month, for: now) ?? DateInterval(start: now, duration: 0)
-        let speech = "kind = '\(UsageEntry.Kind.speech.rawValue)' AND spoken_words > 0"
+        let speech = "l.kind = '\(UsageEntry.Kind.speech.rawValue)' AND l.spoken_words > 0"
         let totals = try database.query(
             """
-            SELECT count(DISTINCT CASE WHEN \(speech) THEN dictation_id END),
-                coalesce(sum(CASE WHEN time >= ?1 AND time < ?2 THEN words END), 0),
-                coalesce(sum(CASE WHEN time >= ?3 AND time < ?4 THEN words END), 0), coalesce(sum(words), 0),
-                coalesce(sum(CASE WHEN \(speech) THEN spoken_words END), 0),
-                coalesce(sum(CASE WHEN \(speech) THEN audio_ms END), 0),
-                min(CASE WHEN \(speech) THEN time END)
-            FROM usage_ledger;
+            SELECT count(DISTINCT CASE WHEN \(speech) THEN l.dictation_id END),
+                coalesce(sum(CASE WHEN l.time >= ?1 AND l.time < ?2 THEN l.words END), 0),
+                coalesce(sum(CASE WHEN l.time >= ?3 AND l.time < ?4 THEN l.words END), 0), coalesce(sum(l.words), 0),
+                coalesce(sum(CASE WHEN \(speech) THEN l.spoken_words END), 0),
+                coalesce(sum(CASE WHEN \(speech) THEN coalesce(d.audio_duration_ms, l.audio_ms) END), 0),
+                min(CASE WHEN \(speech) THEN l.time END)
+            FROM usage_ledger AS l LEFT JOIN dictations AS d ON \(speech) AND d.id = l.dictation_id;
             """, [week.start, week.end, month.start, month.end].map { .real($0.timeIntervalSince1970) })
         guard let row = totals.first, let count = row[0].integer, count > 0, case .real(let first) = row[6] else {
             return DictationInsights()
