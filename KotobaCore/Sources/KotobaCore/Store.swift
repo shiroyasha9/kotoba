@@ -14,6 +14,9 @@ public protocol Store: Sendable {
     /// Records with status `.recovered` and `recoveredAt` at or after `cutoff`, newest first. For
     /// the menu, so their latency logs may be left empty.
     func recovered(since cutoff: Date) async throws -> [DictationRecord]
+    /// The newest dictation whose text reached the owner (`.pasted` or `.copied`), by `createdAt`, with no latency
+    /// log; nil when there is none. "Paste Last Dictation" pastes its `deliveredText`.
+    func lastDelivered() async throws -> DictationRecord?
     /// Sets one record's status to `.copied`, keeping everything else.
     func markCopied(_ id: DictationID) async throws
     /// Puts a `.cancelled` or `.rejected` record in the retry queue as `.failed`; a record with any other status keeps
@@ -248,6 +251,10 @@ struct AnnouncingStore: Store {
 
     func recovered(since cutoff: Date) async throws -> [DictationRecord] {
         try await base.recovered(since: cutoff)
+    }
+
+    func lastDelivered() async throws -> DictationRecord? {
+        try await base.lastDelivered()
     }
 
     func markCopied(_ id: DictationID) async throws {

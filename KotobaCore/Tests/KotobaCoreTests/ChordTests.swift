@@ -2,12 +2,13 @@ import Testing
 
 @testable import KotobaCore
 
-/// Each row: a dictation and a cleanup chord the owner records, and the reason the pair is refused, if any.
+/// Each row: a dictation, a cleanup and a Paste Last chord the owner records, and the reason they are refused, if any.
 struct ChordTests {
     struct Row: Sendable, CustomTestStringConvertible {
         let name: String
         var dictation = Chord.defaultDictation
         var cleanup: Chord? = .defaultCleanup
+        var pasteLast: Chord?
         let problem: ChordProblem?
 
         var testDescription: String { name }
@@ -90,9 +91,9 @@ struct ChordTests {
             problem: nil),
     ]
 
-    @Test(arguments: rows)
+    @Test(arguments: rows + pasteLastRows)
     func problem(_ row: Row) {
-        #expect(Chord.problem(dictation: row.dictation, cleanup: row.cleanup) == row.problem)
+        #expect(Chord.problem(dictation: row.dictation, cleanup: row.cleanup, pasteLast: row.pasteLast) == row.problem)
     }
 }
 

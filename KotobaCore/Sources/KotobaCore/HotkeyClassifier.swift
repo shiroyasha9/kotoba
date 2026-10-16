@@ -1,63 +1,3 @@
-/// Modifier keys, left and right apart, as the app's event tap reports them. In a `Chord`, a kind with both
-/// sides set (`.option`) takes either side; one side (`.rightOption`) takes only that key.
-public struct ModifierKeys: OptionSet, Sendable, Hashable {
-    public let rawValue: UInt16
-
-    public init(rawValue: UInt16) {
-        self.rawValue = rawValue
-    }
-
-    public static let leftControl = Self(rawValue: 1 << 0)
-    public static let rightControl = Self(rawValue: 1 << 1)
-    public static let leftOption = Self(rawValue: 1 << 2)
-    public static let rightOption = Self(rawValue: 1 << 3)
-    public static let leftShift = Self(rawValue: 1 << 4)
-    public static let rightShift = Self(rawValue: 1 << 5)
-    public static let leftCommand = Self(rawValue: 1 << 6)
-    public static let rightCommand = Self(rawValue: 1 << 7)
-    /// The Fn / Globe key; it has one side.
-    public static let function = Self(rawValue: 1 << 8)
-
-    public static let control: Self = [.leftControl, .rightControl]
-    public static let option: Self = [.leftOption, .rightOption]
-    public static let shift: Self = [.leftShift, .rightShift]
-    public static let command: Self = [.leftCommand, .rightCommand]
-    public static let rightSides: Self = [.rightControl, .rightOption, .rightShift, .rightCommand]
-    /// Each kind with all its sides, in Apple's display order: fn ⌃ ⌥ ⇧ ⌘.
-    public static let allKinds: [Self] = [.function, .control, .option, .shift, .command]
-
-    /// Each kind present, with both its sides: right ⌥ and ⌘ give ⌥⌘.
-    public var kinds: Self {
-        var kinds: Self = []
-        for kind in Self.allKinds where !isDisjoint(with: kind) {
-            kinds.formUnion(kind)
-        }
-        return kinds
-    }
-
-    /// How many kinds (fn, ⌃, ⌥, ⇧, ⌘) it holds; both sides of one kind count once.
-    public var kindCount: Int {
-        Self.allKinds.count { !isDisjoint(with: $0) }
-    }
-
-    /// Read as a chord's modifiers: every kind in it is held, on one of the sides it allows.
-    func isSatisfied(by held: Self) -> Bool {
-        Self.allKinds.allSatisfy { kind in
-            let sides = intersection(kind)
-            return sides.isEmpty || !sides.isDisjoint(with: held)
-        }
-    }
-
-    /// Read as a chord's modifiers: whenever `other` (another chord's modifiers) is satisfied, so is this.
-    func isImplied(by other: Self) -> Bool {
-        Self.allKinds.allSatisfy { kind in
-            let sides = intersection(kind)
-            let otherSides = other.intersection(kind)
-            return sides.isEmpty || (!otherSides.isEmpty && otherSides.isSubset(of: sides))
-        }
-    }
-}
-
 /// One keyboard event from the event tap.
 public enum KeyInput: Sendable, Hashable {
     case modifiersChanged(ModifierKeys)
@@ -154,6 +94,9 @@ public struct HotkeyDecision: Sendable, Equatable {
 /// `.chordUp`, and the first moment the cleanup chord is held reports `.cleanupModifier`. With the default chords
 /// (⌃⌥⌘, and ⌃⌥⇧⌘ for cleanup) the cleanup chord is the dictation chord plus ⇧, pressed in any order; an unrelated
 /// cleanup chord reports `.chordDown` and `.cleanupModifier` together. The pipeline decides the mode later.
+///
+/// The Paste Last chord (a key with modifiers) reports `.pasteLast` once every modifier is up again: a Cmd-V posted
+/// while ⌃ is held reaches the app as ⌃⌘V.
 public struct HotkeyClassifier: Sendable {
     /// On while the indicator shows recording. Esc then cancels, and with `isReturnGestureOn` a plain Return
     /// stops with a submit; neither key reaches the app.
@@ -166,6 +109,8 @@ public struct HotkeyClassifier: Sendable {
     public var dictationChord: Chord
     /// nil turns cleanup dictation off.
     public var cleanupChord: Chord?
+    /// nil, the default, leaves Paste Last to the menu.
+    public var pasteLastChord: Chord?
     /// Set from a submit Return's key-down to its key-up: its repeats and key-up are swallowed too, also after
     /// recording ended in between.
     private var isSubmitKeyDown = false
@@ -179,12 +124,20 @@ public struct HotkeyClassifier: Sendable {
     private var isInterrupted = false
     /// Set when the cleanup chord was held at some moment of this press.
     private var isCleanupSeen = false
+    /// The Paste Last key, from its press to its key-up: its repeats and key-up are swallowed, as its press was.
+    private var pasteLastKey: UInt16?
+    /// Set at the Paste Last press until every modifier is up (`.pasteLast`) or another key or a chord press cancels it.
+    private var isPasteLastDue = false
 
     /// The chords are the owner's saved ones.
-    public init(dictationChord: Chord = .defaultDictation, cleanupChord: Chord?, isReturnGestureOn: Bool = false) {
+    public init(
+        dictationChord: Chord = .defaultDictation, cleanupChord: Chord?, pasteLastChord: Chord? = nil,
+        isReturnGestureOn: Bool = false
+    ) {
         self.isReturnGestureOn = isReturnGestureOn
         self.dictationChord = dictationChord
         self.cleanupChord = cleanupChord
+        self.pasteLastChord = pasteLastChord
     }
 
     /// A click on the indicator pill acts as a chord tap. While a chord is held it sends only the chord-down,
@@ -224,25 +177,28 @@ public struct HotkeyClassifier: Sendable {
             return keyDown(keyCode, isRepeat: isRepeat, &events)
         case .keyUp(let keyCode, let held):
             sync(held, keyCode: keyCode, &events)
-            if isSubmitKeyDown, keyCode == KeyCode.return {
-                isSubmitKeyDown = false
-                return HotkeyDecision(events: events, isSwallowed: true)
-            }
-            guard keyCode == heldChordKey else { return HotkeyDecision(events: events) }
-            heldChordKey = nil
-            update(&events)
-            return HotkeyDecision(events: events, isSwallowed: true)
+            return keyUp(keyCode, &events)
         }
     }
 
-    private mutating func keyDown(_ keyCode: UInt16, isRepeat: Bool, _ events: inout HotkeyEvents) -> HotkeyDecision {
-        if keyCode == heldChordKey {
-            if isRepeat {
-                return HotkeyDecision(events: events, isSwallowed: true)
-            }
-            // A new press of the chord key: its key-up was missed (sleep, secure input), so that press ended.
+    /// The key-up of a submit Return, the Paste Last key or a held chord key is swallowed, as its press was.
+    private mutating func keyUp(_ keyCode: UInt16, _ events: inout HotkeyEvents) -> HotkeyDecision {
+        if isSubmitKeyDown, keyCode == KeyCode.return {
+            isSubmitKeyDown = false
+        } else if keyCode == pasteLastKey {
+            pasteLastKey = nil
+        } else if keyCode == heldChordKey {
             heldChordKey = nil
             update(&events)
+        } else {
+            return HotkeyDecision(events: events)
+        }
+        return HotkeyDecision(events: events, isSwallowed: true)
+    }
+
+    private mutating func keyDown(_ keyCode: UInt16, isRepeat: Bool, _ events: inout HotkeyEvents) -> HotkeyDecision {
+        if isHeldKeyRepeat(keyCode, isRepeat: isRepeat, &events) {
+            return HotkeyDecision(events: events, isSwallowed: true)
         }
         // A shortcut recorder that listens gets every key, Esc and Return included.
         guard !isPaused else { return HotkeyDecision(events: events) }
@@ -261,15 +217,11 @@ public struct HotkeyClassifier: Sendable {
                 return HotkeyDecision(events: events, isSwallowed: true)
             }
         }
-        if heldChordKey == nil {
-            let isCleanup = cleanupChord?.isPressed(by: keyCode, with: modifiers) == true
-            if isCleanup || dictationChord.isPressed(by: keyCode, with: modifiers) {
-                heldChordKey = keyCode
-                isHeldKeyCleanup = isCleanup
-                update(&events)
-                return HotkeyDecision(events: events, isSwallowed: true)
-            }
+        if heldChordKey == nil, pressKeyChord(keyCode, &events) {
+            return HotkeyDecision(events: events, isSwallowed: true)
         }
+        // Paste Last waits for its modifiers; a key typed meanwhile makes them part of another shortcut.
+        isPasteLastDue = false
         // Another key typed during a press, Esc included, makes the press part of another app's shortcut.
         // The key still reaches the app.
         if isPressing, !isInterrupted {
@@ -277,6 +229,37 @@ public struct HotkeyClassifier: Sendable {
             events.append(.chordInterrupted)
         }
         return HotkeyDecision(events: events)
+    }
+
+    /// Whether `keyCode`, the key of a chord held, repeats: its repeats are swallowed, as its press was. A new press
+    /// of it means its key-up was missed (sleep, secure input), so that press ended.
+    private mutating func isHeldKeyRepeat(_ keyCode: UInt16, isRepeat: Bool, _ events: inout HotkeyEvents) -> Bool {
+        guard keyCode == heldChordKey || keyCode == pasteLastKey else { return false }
+        if isRepeat { return true }
+        if keyCode == heldChordKey {
+            heldChordKey = nil
+            update(&events)
+        }
+        if keyCode == pasteLastKey {
+            pasteLastKey = nil
+        }
+        return false
+    }
+
+    /// Starts a press of the dictation or cleanup key chord, or makes Paste Last due; false when `keyCode` with the
+    /// modifiers held is none of them.
+    private mutating func pressKeyChord(_ keyCode: UInt16, _ events: inout HotkeyEvents) -> Bool {
+        let isCleanup = cleanupChord?.isPressed(by: keyCode, with: modifiers) == true
+        if isCleanup || dictationChord.isPressed(by: keyCode, with: modifiers) {
+            heldChordKey = keyCode
+            isHeldKeyCleanup = isCleanup
+            update(&events)
+            return true
+        }
+        guard pasteLastChord?.isPressed(by: keyCode, with: modifiers) == true else { return false }
+        pasteLastKey = keyCode
+        isPasteLastDue = true
+        return true
     }
 
     /// Follows a key event's own flags, so a modifier change the tap missed cannot leave a chord down. Only which
@@ -303,6 +286,7 @@ public struct HotkeyClassifier: Sendable {
             events.append(.chordDown)
             isInterrupted = false
             isCleanupSeen = false
+            isPasteLastDue = false
         } else if !isHeld, isPressing {
             events.append(.chordUp)
         }
@@ -310,6 +294,10 @@ public struct HotkeyClassifier: Sendable {
         if isHeld, isCleanupHeld, !isCleanupSeen {
             isCleanupSeen = true
             events.append(.cleanupModifier)
+        }
+        if isPasteLastDue, modifiers.isEmpty {
+            isPasteLastDue = false
+            if !isPaused { events.append(.pasteLast) }
         }
     }
 

@@ -25,6 +25,13 @@ public struct Chord: Sendable, Hashable {
     }
 }
 
+/// What a chord does: start a dictation, start a cleanup dictation, or paste the last dictation again.
+public enum ChordRole: Sendable, Hashable {
+    case dictation
+    case cleanup
+    case pasteLast
+}
+
 /// Why a recorded chord is refused.
 public enum ChordProblem: Sendable, Equatable {
     /// A key with no ⌃, ⌥, ⌘ or fn (⇧ alone types a capital): the key would stop typing.
@@ -42,6 +49,13 @@ public enum ChordProblem: Sendable, Equatable {
     case sameAsOther
     /// Each press of the dictation chord also completes the cleanup chord, so no dictation could skip cleanup.
     case dictationIncludesCleanup
+    /// The Paste Last chord has no key: modifiers alone would paste each time they are pressed for another shortcut.
+    case needsKey
+    /// The Paste Last chord is the chord of `role` (dictation or cleanup).
+    case pasteLastSameAs(ChordRole)
+    /// The Paste Last chord holds the modifier-only chord of `role` on the way to its key, so it would start a
+    /// dictation first.
+    case pasteLastIncludes(ChordRole)
 }
 
 extension Chord {
@@ -51,14 +65,28 @@ extension Chord {
         keyCode == nil && modifiers.kindCount == 2
     }
 
-    /// The first reason the pair cannot be saved, or nil. A chord's own problem comes before a clash.
-    public static func problem(dictation: Chord, cleanup: Chord?) -> ChordProblem? {
+    /// The first reason the chords cannot be saved, or nil. A chord's own problem comes before a clash.
+    public static func problem(dictation: Chord, cleanup: Chord?, pasteLast: Chord? = nil) -> ChordProblem? {
         if let problem = dictation.ownProblem { return problem }
-        guard let cleanup else { return nil }
-        if let problem = cleanup.ownProblem { return problem }
-        if dictation == cleanup { return .sameAsOther }
-        if cleanup.keyCode == nil, cleanup.modifiers.isImplied(by: dictation.modifiers) {
-            return .dictationIncludesCleanup
+        if let cleanup {
+            if let problem = cleanup.ownProblem { return problem }
+            if dictation == cleanup { return .sameAsOther }
+            if cleanup.keyCode == nil, cleanup.modifiers.isImplied(by: dictation.modifiers) {
+                return .dictationIncludesCleanup
+            }
+        }
+        guard let pasteLast else { return nil }
+        guard pasteLast.keyCode != nil else { return .needsKey }
+        return pasteLast.ownProblem ?? pasteLast.clash(with: dictation, cleanup: cleanup)
+    }
+
+    /// How this Paste Last chord clashes with the dictation or cleanup chord. The classifier tries those two first,
+    /// so a key press that matches both, or that holds one of them on the way, never reaches Paste Last.
+    private func clash(with dictation: Chord, cleanup: Chord?) -> ChordProblem? {
+        for (other, role) in [(dictation, ChordRole.dictation), (cleanup, .cleanup)] {
+            guard let other else { continue }
+            if other.keyCode == nil, other.modifiers.isSatisfied(by: modifiers) { return .pasteLastIncludes(role) }
+            if other.keyCode == keyCode, other.modifiers.kinds == modifiers.kinds { return .pasteLastSameAs(role) }
         }
         return nil
     }

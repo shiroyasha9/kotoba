@@ -84,6 +84,8 @@ public actor DictationPipeline {
             }
         case .chordInterrupted: await chordInterrupted()
         case .submit: requestSubmit(at: now)
+        // Tracked, so the next key event does not wait for the history read.
+        case .pasteLast: work.track { await self.pasteLast() }
         }
     }
 
@@ -165,9 +167,20 @@ public actor DictationPipeline {
         settings.isSubmitPhraseOn = isOn
     }
 
-    /// "Paste Last Dictation": pastes `text` of dictation `id` through the clipboard guard, as a dictation does, with
-    /// no Return. Only between dictations, with none in flight (its paste would replace this text on the clipboard
-    /// before the app reads it); when paste is not allowed, the text stays on the clipboard.
+    /// "Paste Last Dictation", from the menu or its chord: pastes the newest delivered dictation again (`pasteAgain`).
+    public func pasteLast() async {
+        guard isQuiet else { return }
+        do {
+            guard let last = try await ports.store.lastDelivered(), let text = last.deliveredText else { return }
+            await pasteAgain(text, of: last.id)
+        } catch {
+            Log.pipeline.error("Cannot read the last dictation: \(error)")
+        }
+    }
+
+    /// Pastes `text` of dictation `id` through the clipboard guard, as a dictation does, with no Return (Paste Last,
+    /// History's "Paste Again"). Only between dictations, with none in flight (its paste would replace this text on
+    /// the clipboard before the app reads it); when paste is not allowed, the text stays on the clipboard.
     public func pasteAgain(_ text: String, of id: DictationID) async {
         guard isQuiet else { return }
         let write = await clipboard.writeTransient(text, over: await clipboard.snapshot())

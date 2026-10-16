@@ -5,7 +5,8 @@ import IOKit
 import KotobaCore
 import Synchronization
 
-/// Reports the owner's dictation and cleanup chords, Esc and Return from a CGEventTap that runs on its own thread.
+/// Reports the owner's dictation, cleanup and Paste Last chords, Esc and Return from a CGEventTap that runs on its own
+/// thread.
 ///
 /// A modifier-only chord works while secure input is on. The tap is active, so it can swallow Esc and Return while
 /// recording and the key of a key chord; an active tap needs the Accessibility permission. Key-up events go
@@ -31,17 +32,19 @@ final class HotkeyTap: Sendable {
         state = Mutex(
             State(
                 classifier: HotkeyClassifier(
-                    dictationChord: chords.dictation, cleanupChord: chords.cleanup, isReturnGestureOn: true)))
+                    dictationChord: chords.dictation, cleanupChord: chords.cleanup, pasteLastChord: chords.pasteLast,
+                    isReturnGestureOn: true)))
         (events, continuation) = AsyncStream.makeStream(of: (event: HotkeyEvent, at: ContinuousClock.Instant).self)
         chords.tap = self
     }
 
     /// `isPaused` is on while a shortcut recorder listens: no chord counts.
-    func setChords(dictation: Chord, cleanup: Chord?, isPaused: Bool) {
-        let hasKey = dictation.keyCode != nil || cleanup?.keyCode != nil
+    func setChords(dictation: Chord, cleanup: Chord?, pasteLast: Chord?, isPaused: Bool) {
+        let hasKey = dictation.keyCode != nil || cleanup?.keyCode != nil || pasteLast != nil
         let runLoop = state.withLock {
             $0.classifier.dictationChord = dictation
             $0.classifier.cleanupChord = cleanup
+            $0.classifier.pasteLastChord = pasteLast
             $0.classifier.isPaused = isPaused
             return $0.tap?.hasKeyUp == hasKey ? nil : $0.runLoop
         }
@@ -112,6 +115,7 @@ final class HotkeyTap: Sendable {
         let thread = Thread { [self] in
             let hasKey = state.withLock {
                 $0.classifier.dictationChord.keyCode != nil || $0.classifier.cleanupChord?.keyCode != nil
+                    || $0.classifier.pasteLastChord != nil
             }
             // Before the tap exists, so a `setEnabled` or chord change that comes during `install` is applied after it.
             state.withLock { $0.runLoop = TapRunLoop(loop: CFRunLoopGetCurrent()) }

@@ -533,3 +533,16 @@ The offscreen snapshots (`make snapshots`) show two things that may not happen i
 | 415 | In the Fix window, click into the text, press ⌘A, then ⌘C; click at the end, press ⌘V | ⌘A selects the whole text, ⌘V pastes it; no beep | |
 | 416 | With **Fix Dictation…** open for one row, choose it again for the same row | The window comes to the front and keeps your edit | |
 | 417 | With **Fix Dictation…** open, choose it on another row, then open menu > **Fix Last Dictation…** | The window shows the other row’s text, then the last dictation, titled “Fix Last Dictation” | |
+
+## Paste Last shortcut (kotoba Dev)
+
+| # | Do this | Expect | Result |
+|---|---|---|---|
+| 440 | Settings > General, fresh install | “Paste last dictation” shows **Off**; ⌃⌘V in TextEdit does what TextEdit does, kotoba does nothing | |
+| 441 | Record ⌃⌘V for “Paste last dictation”. Dictate into TextEdit, click into another TextEdit window, press ⌃⌘V and let go | The same text pastes once into the second window, after you let go of ⌃ and ⌘ (no “⌃⌘V” beep or menu action). After 2 s, ⌘V pastes what the clipboard held before | |
+| 442 | Hold ⌃⌘, press V three times (and hold V once so it repeats), then let go | The last dictation pastes once; no “v” is typed | |
+| 443 | Hold ⌃⌘, press V, then press C before you let go | Nothing pastes; ⌃⌘C reaches the app as usual | |
+| 444 | Start a dictation, press ⌃⌘V while it records, then stop it | Nothing extra pastes; only the new dictation pastes | |
+| 445 | Try to record ⌃⌥⌘V, then ⌃⌘ alone, then ⌘V | Each is refused with a red note: “⌃⌥⌘V includes ⌃⌥⌘, so it would start a dictation.”, “Add a key to ⌃⌘, for example ⌃⌘V.”, “macOS uses ⌘V. Choose another shortcut.” The shortcut stays ⌃⌘V | |
+| 446 | With Paste Last on ⌃⌘V, record right ⌘ for “Dictate” | Refused: “⌃⌘V includes right ⌘, so it would start a dictation.” Dictate keeps its shortcut | |
+| 447 | Click the ⓧ next to ⌃⌘V; quit and reopen kotoba Dev | It shows **Off** after the restart; ⌃⌘V reaches the app again | |

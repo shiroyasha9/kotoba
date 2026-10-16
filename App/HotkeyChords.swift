@@ -3,22 +3,21 @@ import Foundation
 import KotobaCore
 import Observation
 
-/// The owner's dictation and cleanup chords, saved in UserDefaults. Every text that names a chord reads it
+/// The owner's dictation, cleanup and Paste Last chords, saved in UserDefaults. Every text that names a chord reads it
 /// here, so views redraw when the owner records a new one, and the hotkey tap follows each change at once.
 @MainActor
 @Observable
 final class HotkeyChords {
-    enum Role {
-        case dictation
-        case cleanup
-    }
+    typealias Role = ChordRole
 
     static let shared = HotkeyChords(defaults: .standard)
 
     private(set) var dictation: Chord
     /// nil turns cleanup dictation off.
     private(set) var cleanup: Chord?
-    /// On while a shortcut recorder listens: the tap ignores both chords, so the press reaches the recorder.
+    /// Unset (nil) by default: a default chord could take a shortcut another app uses. The menu item works without it.
+    private(set) var pasteLast: Chord?
+    /// On while a shortcut recorder listens: the tap ignores every chord, so the press reaches the recorder.
     var isRecording = false {
         didSet { apply() }
     }
@@ -30,31 +29,46 @@ final class HotkeyChords {
     /// nil for snapshots: nothing is read or saved.
     @ObservationIgnored private let defaults: UserDefaults?
 
-    init(defaults: UserDefaults?, dictation: Chord = .defaultDictation, cleanup: Chord? = .defaultCleanup) {
+    init(
+        defaults: UserDefaults?, dictation: Chord = .defaultDictation, cleanup: Chord? = .defaultCleanup,
+        pasteLast: Chord? = nil
+    ) {
         self.defaults = defaults
         self.dictation = defaults.flatMap { Self.load(Key.dictationChord, from: $0) }.flatMap { $0 } ?? dictation
         self.cleanup = defaults.flatMap { Self.load(Key.cleanupChord, from: $0) } ?? cleanup
+        self.pasteLast = defaults.flatMap { Self.load(Key.pasteLastChord, from: $0) } ?? pasteLast
     }
 
     func chord(_ role: Role) -> Chord? {
-        role == .dictation ? dictation : cleanup
+        switch role {
+        case .dictation: dictation
+        case .cleanup: cleanup
+        case .pasteLast: pasteLast
+        }
     }
 
-    /// Saves `chord` (nil turns cleanup off) unless the pair cannot work; then returns why and keeps the old one.
+    /// Saves `chord` (nil turns cleanup or Paste Last off) unless the chords cannot work together; then returns why
+    /// and keeps the old one.
     func save(_ chord: Chord?, as role: Role) -> ChordProblem? {
-        let pair = role == .dictation ? (chord ?? .defaultDictation, cleanup) : (dictation, chord)
-        if let problem = Chord.problem(dictation: pair.0, cleanup: pair.1) {
+        var new = (dictation: dictation, cleanup: cleanup, pasteLast: pasteLast)
+        switch role {
+        case .dictation: new.dictation = chord ?? .defaultDictation
+        case .cleanup: new.cleanup = chord
+        case .pasteLast: new.pasteLast = chord
+        }
+        if let problem = Chord.problem(dictation: new.dictation, cleanup: new.cleanup, pasteLast: new.pasteLast) {
             return problem
         }
-        (dictation, cleanup) = pair
+        (dictation, cleanup, pasteLast) = new
         defaults?.set(dictation.storedValue, forKey: Key.dictationChord.rawValue)
         defaults?.set(cleanup?.storedValue ?? Self.off, forKey: Key.cleanupChord.rawValue)
+        defaults?.set(pasteLast?.storedValue ?? Self.off, forKey: Key.pasteLastChord.rawValue)
         apply()
         return nil
     }
 
     private func apply() {
-        tap?.setChords(dictation: dictation, cleanup: cleanup, isPaused: isRecording)
+        tap?.setChords(dictation: dictation, cleanup: cleanup, pasteLast: pasteLast, isPaused: isRecording)
     }
 
     private typealias Key = AppDefaults.Key

@@ -1,6 +1,6 @@
 import Foundation
 
-/// A key event from the owner's dictation or cleanup chord, or Esc, as `HotkeyClassifier` reports it.
+/// A key event from the owner's dictation, cleanup or Paste Last chord, Esc or Return, as `HotkeyClassifier` reports it.
 public enum HotkeyEvent: Sendable, Equatable {
     case chordDown
     /// The whole cleanup chord (the dictation chord plus Shift by default) was down at some moment of this
@@ -13,6 +13,9 @@ public enum HotkeyEvent: Sendable, Equatable {
     case chordInterrupted
     /// Return with no modifier while recording: stop, and send Return after the paste (submit after paste).
     case submit
+    /// The Paste Last chord was pressed and every modifier is up again: paste the last dictation again, as the menu's
+    /// "Paste Last Dictation" does.
+    case pasteLast
 }
 
 /// What the indicator shows.

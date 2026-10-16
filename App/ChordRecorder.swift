@@ -27,13 +27,13 @@ struct ChordRecorder: View {
                 }
                 .help(
                     listener.isListening ? "Press the new shortcut, or Esc to stop" : "Click to record a new shortcut")
-                if role == .cleanup, chord != nil {
+                if role != .dictation, chord != nil {
                     Button("Turn Off", systemImage: "xmark.circle") { save(nil) }
                         .labelStyle(.iconOnly)
                         .buttonStyle(.borderless)
-                        .help("Turn off cleanup dictation")
+                        .help(role == .cleanup ? "Turn off cleanup dictation" : "Turn off this shortcut")
                 }
-                if chord != defaultChord {
+                if let defaultChord, chord != defaultChord {
                     Button("Reset", systemImage: "arrow.counterclockwise") { save(defaultChord) }
                         .labelStyle(.iconOnly)
                         .buttonStyle(.borderless)
@@ -56,7 +56,14 @@ struct ChordRecorder: View {
 
     private var chord: Chord? { chords.chord(role) }
 
-    private var defaultChord: Chord { role == .dictation ? .defaultDictation : .defaultCleanup }
+    /// Paste Last has none: it is off until the owner records one.
+    private var defaultChord: Chord? {
+        switch role {
+        case .dictation: .defaultDictation
+        case .cleanup: .defaultCleanup
+        case .pasteLast: nil
+        }
+    }
 
     private var caption: String {
         guard listener.isListening else { return chord?.title ?? "Off" }
@@ -86,8 +93,9 @@ struct ChordRecorder: View {
         }
     }
 
+    /// Only a recorded chord or a reset can be refused; turning a chord off always works.
     private func save(_ new: Chord?) {
-        listener.refused = chords.save(new, as: role).map { (new ?? defaultChord, $0) }
+        listener.refused = chords.save(new, as: role).flatMap { problem in new.map { ($0, problem) } }
     }
 }
 
@@ -195,6 +203,22 @@ extension ChordProblem {
             let dictation = role == .dictation ? chord : chords.dictation
             let cleanup = role == .cleanup ? chord : (chords.cleanup ?? chord)
             return "\(dictation.title) includes \(cleanup.title), so every dictation would clean up."
+        case .needsKey, .pasteLastSameAs, .pasteLastIncludes: return pasteLastText(chord, role: role, chords: chords)
+        }
+    }
+
+    /// The Paste Last problems: `chord` was recorded for `role`, Paste Last or the chord it clashes with.
+    @MainActor
+    private func pasteLastText(_ chord: Chord, role: HotkeyChords.Role, chords: HotkeyChords) -> String {
+        switch self {
+        case .pasteLastSameAs(let other):
+            guard role == .pasteLast else { return "This is the shortcut to paste the last dictation." }
+            return other == .cleanup ? "This is the cleanup shortcut." : "This is the dictation shortcut."
+        case .pasteLastIncludes(let other):
+            let pasteLast = role == .pasteLast ? chord : (chords.pasteLast ?? chord)
+            let held = role == .pasteLast ? (chords.chord(other) ?? chord) : chord
+            return "\(pasteLast.title) includes \(held.title), so it would start a dictation."
+        default: return "Add a key to \(chord.title), for example ⌃⌘V."
         }
     }
 }
@@ -202,8 +226,8 @@ extension ChordProblem {
 // MARK: - Snapshots
 
 extension ChordRecorder {
-    /// The recorder at rest, off, with the fn hint, listening, and after a refused chord, in a grouped form as in
-    /// General.
+    /// The recorder at rest, off, with the fn hint, listening, after a refused chord, and for Paste Last, in a grouped
+    /// form as in General.
     @MainActor
     static func snapshots() -> [Snapshot] {
         let chords = HotkeyChords(defaults: nil)
@@ -213,6 +237,9 @@ extension ChordRecorder {
         let clash = HotkeyChords(
             defaults: nil, dictation: Chord(modifiers: .function), cleanup: Chord(modifiers: [.control, .option]))
         let spotlight = Chord(modifiers: .command, keyCode: KeyCode.space)
+        let pasteLast = HotkeyChords(
+            defaults: nil, pasteLast: Chord(modifiers: [.control, .command], keyCode: KeyCode.ansiV))
+        let pasteLastClash = Chord(modifiers: [.control, .option, .command], keyCode: KeyCode.ansiV)
         let form = Form {
             row("At rest", ChordRecorder(chords: chords, role: .dictation))
             row("Cleanup off", ChordRecorder(chords: off, role: .cleanup))
@@ -232,6 +259,18 @@ extension ChordRecorder {
                 ChordRecorder(
                     chords: clash, role: .dictation,
                     listener: ChordListener(refused: (.defaultDictation, .dictationIncludesCleanup))))
+            row("Paste last off", ChordRecorder(chords: chords, role: .pasteLast))
+            row("Paste last set", ChordRecorder(chords: pasteLast, role: .pasteLast))
+            row(
+                "Paste last clash",
+                ChordRecorder(
+                    chords: chords, role: .pasteLast,
+                    listener: ChordListener(refused: (pasteLastClash, .pasteLastIncludes(.dictation)))))
+            row(
+                "Paste last without a key",
+                ChordRecorder(
+                    chords: chords, role: .pasteLast,
+                    listener: ChordListener(refused: (Chord(modifiers: [.control, .command]), .needsKey))))
         }
         .formStyle(.grouped)
         .frame(width: 520)

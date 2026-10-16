@@ -32,17 +32,18 @@ struct LastDictation {
     }
 
     /// The menu has closed when this runs, and a menu bar menu does not take focus, so Cmd-V reaches the app the
-    /// owner was in.
+    /// owner was in. Paste goes the way of the Paste Last chord (`DictationPipeline.pasteLast`).
     func perform(_ action: Action) {
         Task {
-            guard let last = await record() else { return }
             switch action {
             case .paste:
-                if let text = last.deliveredText { await pipeline.pasteAgain(text, of: last.id) }
+                await pipeline.pasteLast()
             case .pasteWithoutCleanup:
-                if let raw = Self.rawText(of: last) { await pipeline.pasteAgain(raw, of: last.id) }
+                if let last = await record(), let raw = Self.rawText(of: last) {
+                    await pipeline.pasteAgain(raw, of: last.id)
+                }
             case .copy:
-                if let text = last.deliveredText { await pipeline.copyAgain(text) }
+                if let text = await record()?.deliveredText { await pipeline.copyAgain(text) }
             }
         }
     }

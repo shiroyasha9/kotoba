@@ -11,6 +11,7 @@ struct HotkeyClassifierTests {
         var paused = false
         var dictationChord = Chord.defaultDictation
         var cleanupChord: Chord? = .defaultCleanup
+        var pasteLastChord: Chord?
         var isReturnGestureOn = true
         let steps: [(KeyInput, HotkeyDecision)]
 
@@ -224,12 +225,12 @@ struct HotkeyClassifierTests {
         ),
     ]
 
-    @Test(arguments: rows + missedReleaseRows + returnRows)
+    @Test(arguments: rows + missedReleaseRows + returnRows + pasteLastRows)
     func classify(_ row: Row) {
         var keyboard = Keyboard(
             classifier: HotkeyClassifier(
                 dictationChord: row.dictationChord, cleanupChord: row.cleanupChord,
-                isReturnGestureOn: row.isReturnGestureOn))
+                pasteLastChord: row.pasteLastChord, isReturnGestureOn: row.isReturnGestureOn))
         keyboard.classifier.isRecordingShown = row.recording
         keyboard.classifier.isPaused = row.paused
         for (index, (input, expected)) in row.steps.enumerated() {

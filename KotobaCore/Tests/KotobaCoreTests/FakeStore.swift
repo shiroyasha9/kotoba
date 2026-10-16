@@ -43,6 +43,10 @@ actor FakeStore: Store {
             .sorted { ($0.recoveredAt ?? .distantPast) > ($1.recoveredAt ?? .distantPast) }
     }
 
+    func lastDelivered() async throws -> DictationRecord? {
+        records.filter { [.pasted, .copied].contains($0.status) }.max { $0.createdAt < $1.createdAt }
+    }
+
     func status(of id: DictationID) async throws -> DictationRecord.Status? {
         records.first { $0.id == id }?.status
     }

@@ -11,9 +11,9 @@ extension SettingsPane {
     }
 }
 
-/// The General pane's settings: the dictation and cleanup shortcuts and the cleanup model, the spoken Return phrase,
-/// launch at login, sounds, the indicator's position and visibility, how long audio is kept, and automatic update
-/// checks. Each change applies at once.
+/// The General pane's settings: the dictation, cleanup and Paste Last shortcuts and the cleanup model, the spoken
+/// Return phrase, launch at login, sounds, the indicator's position and visibility, how long audio is kept, and
+/// automatic update checks. Each change applies at once.
 @MainActor
 @Observable
 final class GeneralModel {
@@ -165,7 +165,7 @@ private struct GeneralPane: View {
             Section {
                 PaneHeader(pane: .general)
             }
-            Section("Shortcut") {
+            Section("Shortcuts") {
                 LabeledContent {
                     ChordRecorder(chords: model.chords, role: .dictation)
                 } label: {
@@ -182,6 +182,12 @@ private struct GeneralPane: View {
                     ForEach(CleanupModel.allCases, id: \.self) { Text($0.title).tag($0) }
                 }
                 .disabled(model.chords.cleanup == nil)
+                LabeledContent {
+                    ChordRecorder(chords: model.chords, role: .pasteLast)
+                } label: {
+                    Text("Paste last dictation")
+                    Text("Pastes your last dictation again. Off until you record a shortcut.")
+                }
             }
             Section {
                 Toggle(isOn: $model.isSubmitPhraseOn) {
@@ -234,7 +240,7 @@ private struct GeneralPane: View {
 extension SettingsPane {
     static func generalSnapshots() -> [Snapshot] {
         [
-            SettingsWindow.snapshot(of: .general(.sample()), named: "settings-general", height: 1_000),
+            SettingsWindow.snapshot(of: .general(.sample()), named: "settings-general", height: 1_080),
             loginFailureSnapshot(),
         ]
     }
@@ -251,7 +257,8 @@ extension SettingsPane {
                     return .failed
                 }))
         model.setLaunchAtLogin(true)
-        var snapshot = SettingsWindow.snapshot(of: .general(model), named: "settings-general-login-failed", height: 980)
+        var snapshot = SettingsWindow.snapshot(
+            of: .general(model), named: "settings-general-login-failed", height: 1_140)
         snapshot.check = { _ in
             guard changes == 1, model.loginProblem == .failed, !model.isLaunchAtLoginOn else {
                 return "A failed launch-at-login change made \(changes) calls and kept no note"

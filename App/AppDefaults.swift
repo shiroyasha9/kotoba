@@ -8,6 +8,7 @@ enum AppDefaults {
         case soundCues
         case dictationChord = "hotkey.dictationChord"
         case cleanupChord = "hotkey.cleanupChord"
+        case pasteLastChord = "hotkey.pasteLastChord"
         case microphoneOrder = "microphone.order"
         case submitPhrase = "paste.submitPhrase"
         case learnsFromEdits = "dictionary.learnsFromEdits"
