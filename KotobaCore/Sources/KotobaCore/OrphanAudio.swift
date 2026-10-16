@@ -3,8 +3,10 @@ import Foundation
 /// Audio files with no History row. A crash, a force quit or a power loss during a recording leaves
 /// `<id>.flac` with no row (the row is first saved at the stop), and so does a failed save. At launch each orphan gets
 /// the row a quit gives a live recording (`DictationPipeline.shutdown`): `.pending`, so the launch retry transcribes it
-/// into Recovered and nothing is pasted. A file with no readable audio gets a `.cancelled` row with no text, so the
-/// owner sees it in History and can delete it. kotoba never deletes an orphan by itself.
+/// into Recovered and nothing is pasted. A file with no readable audio gets a `.cancelled` row with no text and no
+/// Retry, so the owner sees it in History and can delete it. kotoba never deletes an orphan by itself. A recording the
+/// owner discarded is not an orphan: when its file stayed, the store remembers it (`Store.markDiscarded`), and the
+/// launch removes the file instead (`discardedFiles`).
 public enum OrphanAudio {
     /// One file of the audio folder, as a folder listing gives it, with no file opened.
     public struct File: Sendable, Equatable {
@@ -26,19 +28,20 @@ public enum OrphanAudio {
     }
 
     /// The rows for the orphans among `files`, oldest first. A file is an orphan when its name gives a dictation id
-    /// (`id(of:)`), no row has that id (`knownIDs`), and it was created before `launchedAt`, so a recording that started
-    /// after launch is never taken. `length` gives a file's audio length and runs for orphans only; it returns nil or
-    /// zero when the file has no audio.
+    /// (`id(of:)`), no row has that id (`knownIDs`), the owner did not discard it (`discardedIDs`), and it was created
+    /// before `launchedAt`, so a recording that started after launch is never taken. `length` gives a file's audio
+    /// length and runs for orphans only; it returns nil or zero when the file has no audio.
     public static func records(
         files: [File],
         knownIDs: Set<DictationID>,
+        discardedIDs: Set<DictationID>,
         launchedAt: Date,
         length: (URL) -> Duration?
     ) -> [DictationRecord] {
         files.lazy
             .filter { $0.createdAt < launchedAt }
             .compactMap { file in id(of: file.url).map { (id: $0, file: file) } }
-            .filter { !knownIDs.contains($0.id) }
+            .filter { !knownIDs.contains($0.id) && !discardedIDs.contains($0.id) }
             .sorted { $0.file.createdAt < $1.file.createdAt }
             .map { orphan in
                 let duration = length(orphan.file.url) ?? .zero
@@ -47,6 +50,17 @@ public enum OrphanAudio {
                     audio: RecordedAudio(file: orphan.file.url, duration: duration), transcript: nil,
                     status: duration > .zero ? .pending : .cancelled, latency: LatencyLog())
             }
+    }
+
+    /// The files among `files` of the discarded recordings that stayed (`discardedIDs`), by id: the launch removes
+    /// them, as the discard meant to. A discarded id with no file here is gone, so the store can forget it.
+    public static func discardedFiles(files: [File], discardedIDs: Set<DictationID>) -> [DictationID: URL] {
+        guard !discardedIDs.isEmpty else { return [:] }
+        return Dictionary(
+            files.compactMap { file in
+                id(of: file.url).flatMap { discardedIDs.contains($0) ? ($0, file.url) : nil }
+            },
+            uniquingKeysWith: { first, _ in first })
     }
 }
 

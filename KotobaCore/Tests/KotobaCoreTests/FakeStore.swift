@@ -18,6 +18,13 @@ actor FakeStore: Store {
         ledger += entries.filter { entry in !ledger.contains { $0.id == entry.id } }
     }
 
+    /// Discarded recordings whose file stayed (`markDiscarded`).
+    private(set) var discarded: Set<DictationID> = []
+
+    func markDiscarded(_ id: DictationID) async throws {
+        discarded.insert(id)
+    }
+
     func save(_ record: DictationRecord) async throws {
         addToLedger(record)
         records.removeAll { $0.id == record.id }

@@ -6,12 +6,15 @@ public protocol AudioSource: Sendable {
     /// Starts capture into `file` and returns at once, without waiting for audio.
     /// The stream reports capture events and finishes when capture ends.
     func beginCapture(into file: URL) async throws -> AsyncStream<CaptureEvent>
-    /// Stops after one more buffer, so the last word is kept, and closes the file.
+    /// Stops after one more buffer, so the last word is kept, and closes the file. Throws only when no capture runs:
+    /// nothing was written then.
     func endCapture() async throws -> RecordedAudio
     /// Stops at once and keeps what was written.
     func cancelCapture() async -> RecordedAudio?
-    /// Stops at once and deletes the file.
-    func discardCapture() async
+    /// Stops at once and deletes the file. False when the file stays on disk (its removal failed): the pipeline then
+    /// remembers the discard, so the file is never sent (`Store.markDiscarded`).
+    @discardableResult
+    func discardCapture() async -> Bool
     /// Turns the mic off and keeps the file open, for the Undo window after Esc.
     func pauseCapture() async
     /// Turns the mic back on and appends to the same file.
@@ -31,10 +34,14 @@ public enum CaptureEvent: Sendable, Equatable {
 
 public struct RecordedAudio: Sendable, Equatable {
     public var file: URL
+    /// The length written; zero when no frame was (a stop before the first buffer, an orphan with no readable audio).
     public var duration: Duration
 
     public init(file: URL, duration: Duration) {
         self.file = file
         self.duration = duration
     }
+
+    /// Something to send: a recording with no frames is never sent, and never offered for a retry.
+    public var hasAudio: Bool { duration > .zero }
 }

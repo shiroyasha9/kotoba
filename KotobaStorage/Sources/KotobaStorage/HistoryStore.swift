@@ -42,6 +42,7 @@ public actor HistoryStore: Store {
             PRIMARY KEY (dictation_id, mark)
         );
         \(ledgerSchema)
+        \(discardedSchema)
         """
 
     /// Columns added after the first build the owner ran; an older database gets them on open.

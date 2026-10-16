@@ -508,6 +508,17 @@ Force quit with Activity Monitor (**Force Quit**) or `kill -9 <pid>` of kotoba D
 | 423 | Tap the chord and force quit kotoba Dev in the first half second of the recording; open it again | History shows a “Cancelled” row with “No text”; **Delete** removes it | |
 | 424 | Run `chmod 555 ~/Library/Application\ Support/kotoba-dev/audio`; in History, delete a dictation; then run `chmod 755` on the same folder | The alert “Couldn’t Delete” shows and the row stays; after `chmod 755`, **Delete** removes the row; quit and open kotoba Dev: it does not come back | |
 
+### Discarded and empty recordings (0.2.1)
+
+Rows 450-452 deny file removal in the audio folder of kotoba Dev with an ACL; row 452 takes it away again. Use the chord's modifiers in a shortcut of another app (hold them and press a letter key) to make kotoba Dev discard the press.
+
+| # | Do this | Expect | Result |
+|---|---|---|---|
+| 450 | Run `chmod +a "everyone deny delete_child" ~/Library/Application\ Support/kotoba-dev/audio` and count its files (`ls … \| wc -l`); in TextEdit, use the chord's modifiers in a shortcut; count again | One file more (its removal failed); no pill and no History row | |
+| 451 | After row 450, with the ACL still on, quit kotoba Dev with ⌘Q and open it again | No “Saved dictation recovered” pill; no new History row; the Usage pane counts no new dictation; the file is still there | |
+| 452 | Run `chmod -a "everyone deny delete_child" ~/Library/Application\ Support/kotoba-dev/audio`; quit and open kotoba Dev | The file from row 450 is gone; History has no new row | |
+| 453 | Select the “Cancelled” row with “No text” and 0:00 from row 423 in History; open its context menu | The row says “No text”, not “No text · audio saved”; **Retry** is dimmed in the toolbar and the menu; **Delete** removes the row | |
+
 ### Rank and cap dictionary words (phase 3)
 
 | # | Do this | Expect | Result |

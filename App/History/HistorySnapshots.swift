@@ -17,10 +17,10 @@ extension HistoryController {
     }
 
     /// The whole window as the owner sees it: title bar, toolbar with its buttons and the search field, and a selected
-    /// row: one with text (Copy, Paste Again and Delete on) and a failed one (Retry and Delete on). The run fails when
-    /// the content needs more room than the window.
+    /// row: one with text (Copy, Paste Again and Delete on), a failed one (Retry and Delete on) and one with no audio
+    /// (Delete on only). The run fails when the content needs more room than the window.
     private static func windowSnapshots() -> [Snapshot] {
-        [("history-window", 0), ("history-window-failed", 2)].map { name, selected in
+        [("history-window", 0), ("history-window-failed", 2), ("history-window-no-audio", 5)].map { name, selected in
             windowSnapshot(named: name, selecting: selected)
         }
     }
@@ -36,7 +36,8 @@ extension HistoryController {
 
     private static func sampleRows() -> [DictationRecord] {
         let now = Date.now
-        // A file every Mac has stands in for kept audio, so the failed and cancelled rows read "audio saved".
+        // A file every Mac has stands in for kept audio, so the failed and cancelled rows read "audio saved"; the row of 0
+        // seconds is an orphan with no readable audio, which reads "No text" with no Retry.
         let kept = URL(filePath: "/System/Library/Sounds/Tink.aiff")
         func row(
             _ text: String?, minutesAgo: Double, seconds: Int, app: (String, String)?,
@@ -65,6 +66,7 @@ extension HistoryController {
                 "Run the migration on staging first, then check the logs for slow queries.", minutesAgo: 41,
                 seconds: 6, app: ("com.apple.Terminal", "Terminal"), status: .recovered),
             row(nil, minutesAgo: 58, seconds: 3, app: ("com.apple.Safari", "Safari"), status: .cancelled),
+            row(nil, minutesAgo: 66, seconds: 0, app: nil, status: .cancelled),
             row(
                 "Thanks for the notes. I added two questions at the end of the doc, and I think the timeline in "
                     + "section three needs another week for testing on older Macs before we can commit to a date.",

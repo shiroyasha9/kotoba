@@ -36,8 +36,10 @@ struct TranscriptionSteps: Sendable {
 
     /// Sends the record's audio and keeps the answer in it: the model and a usage entry first (an answer with no words
     /// is billed too), then the transcript. Throws `ProviderError.emptyTranscript` when the provider heard no words;
-    /// the pipeline owns that decision and the trim, whatever the route sends.
+    /// the pipeline owns that decision and the trim, whatever the route sends. A record with no audio is never sent:
+    /// `ProviderError.noAudio`, so it is rejected at once, live or on a retry.
     func transcribe(_ record: inout DictationRecord, settings: DictationPipeline.Settings) async throws -> Transcribed {
+        guard record.audio.hasAudio else { throw ProviderError.noAudio }
         let request = settings.request(for: record.audio, at: clock.date)
         record.sentTerms = request.dictionaryTerms
         let transcript = try await provider.transcribe(request)

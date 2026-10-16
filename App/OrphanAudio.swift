@@ -5,8 +5,9 @@ import KotobaStorage
 import os
 
 /// The launch's recovery of audio files with no History row (`OrphanAudio`): one listing of the audio folder (names and
-/// creation dates only), one query for the ids that have rows, and an `AVAudioFile` read of each orphan only. The rows
-/// are saved before the launch retry, which transcribes them into Recovered.
+/// creation dates only), one query for the ids that have rows and one for the discarded ids, and an `AVAudioFile` read
+/// of each orphan only. The rows are saved before the launch retry, which transcribes them into Recovered. The files of
+/// discarded recordings are removed, never read.
 enum OrphanAudioRecovery {
     /// Apple's FLAC encoder writes blocks of 4,608 samples (spike `spikes/flac-kill`).
     private static let blockSize: AVAudioFrameCount = 4_608
@@ -38,14 +39,17 @@ enum OrphanAudioRecovery {
             return
         }
         let known: Set<DictationID>
+        let discarded: Set<DictationID>
         do {
             known = try await store.knownIDs(among: files.compactMap { OrphanAudio.id(of: $0.url) })
+            discarded = try await store.discardedIDs()
         } catch {
             Log.app.error("Cannot read the dictation ids: \(error)")
             return
         }
+        await removeDiscarded(files: files, discardedIDs: discarded, store: store)
         let orphans = OrphanAudio.records(
-            files: files, knownIDs: known, launchedAt: launchedAt, length: repairedLength(of:))
+            files: files, knownIDs: known, discardedIDs: discarded, launchedAt: launchedAt, length: repairedLength(of:))
         for orphan in orphans {
             do {
                 try await store.save(orphan)
@@ -57,6 +61,22 @@ enum OrphanAudioRecovery {
         }
         let took = ContinuousClock.now - started
         Log.app.info("Orphan audio: \(orphans.count) of \(files.count) files, \(took, privacy: .public)")
+    }
+
+    /// Removes what the discards could not, and forgets each discard whose file is gone. A file that still cannot be
+    /// removed stays remembered, so it is never taken for an orphan.
+    private static func removeDiscarded(files: [OrphanAudio.File], discardedIDs: Set<DictationID>, store: HistoryStore)
+        async
+    {
+        guard !discardedIDs.isEmpty else { return }
+        let leftovers = OrphanAudio.discardedFiles(files: files, discardedIDs: discardedIDs)
+        let gone = discardedIDs.filter { id in leftovers[id].map(HistoryStore.removeAudio(at:)) ?? true }
+        do {
+            try await store.forgetDiscarded(gone)
+        } catch {
+            // The next launch finds the ids again; their files are gone, so it only forgets them.
+            Log.app.error("Cannot forget discarded audio: \(error)")
+        }
     }
 
     /// An orphan's audio length, after it is made readable. A recording that never closed (a crash, a force quit) has

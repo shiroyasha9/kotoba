@@ -134,6 +134,45 @@ struct PipelineRejectTests {
         #expect(await world.provider.requests.count == 2)
     }
 
+    /// A stop before the first buffer wrote no frames: nothing to send, so no request, no Retry and no "audio saved".
+    @Test func aRecordingWithNoAudioIsNotSentAndOffersNoRetry() async throws {
+        let world = FakeWorld(transcript: "never heard")
+        let pipeline = world.makePipeline()
+        await world.audio.record(.zero)
+
+        await pipeline.dictate(world)
+
+        let record = try #require(await world.store.records.first)
+        #expect(record.status == .rejected)
+        #expect(record.rejectReason == .emptyTranscript)
+        #expect(!record.isRetryable)
+        #expect(await pipeline.state == .rejected(record.id, .emptyTranscript))
+        #expect(await world.paster.pasteCount == 0)
+        await pipeline.retryPending()
+        await pipeline.retry([record.id])
+        #expect(await world.provider.requests.isEmpty)
+        #expect(await world.store.ledger.isEmpty)
+    }
+
+    /// A row with no audio that an older build queued is rejected at its next retry, with no request.
+    @Test func aQueuedDictationWithNoAudioIsRejectedWithoutARequest() async throws {
+        let world = FakeWorld(transcript: "never heard")
+        let pipeline = world.makePipeline()
+        let queued = DictationRecord(
+            id: DictationID(), createdAt: .now,
+            audio: RecordedAudio(file: URL(filePath: "/tmp/a.flac"), duration: .zero),
+            transcript: nil, status: .failed, latency: LatencyLog())
+        try await world.store.save(queued)
+
+        await pipeline.retryPending()
+        await pipeline.retryPending()
+
+        let record = try #require(await world.store.records.first)
+        #expect(record.status == .rejected)
+        #expect(record.rejectReason == .emptyTranscript)
+        #expect(await world.provider.requests.isEmpty)
+    }
+
     /// An answer with no words is billed: each try is a ledger entry with no words and its cost.
     @Test func anEmptyTranscriptKeepsTheCostOfEachTry() async throws {
         let world = FakeWorld(transcript: "")

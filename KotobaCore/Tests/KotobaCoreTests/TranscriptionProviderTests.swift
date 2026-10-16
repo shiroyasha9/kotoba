@@ -15,6 +15,7 @@ struct TranscriptionProviderTests {
         (.rejected(status: 400, message: "Unsupported audio"), .permanent),
         (.noCredit, .needsSetup),
         (.emptyTranscript, .permanent),
+        (.noAudio, .permanent),
     ])
     func eachErrorHasOneWayToRecover(error: ProviderError, recovery: ProviderError.Recovery) {
         #expect(error.recovery == recovery)
@@ -22,6 +23,7 @@ struct TranscriptionProviderTests {
 
     @Test(arguments: [
         (ProviderError.emptyTranscript, RejectReason?.some(.emptyTranscript)),
+        (.noAudio, .emptyTranscript),
         (.noCredit, nil),
         (.rejected(status: 400, message: "Unsupported audio"), .other),
         (.offline, nil),

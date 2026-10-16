@@ -101,6 +101,8 @@ public enum ProviderError: Error, Sendable, Equatable {
     case rejected(status: Int, message: String)
     /// The route answered with no words: the pipeline throws it after it kept the answer's usage.
     case emptyTranscript
+    /// The recording has no audio (`RecordedAudio.hasAudio`): the pipeline throws it before any request.
+    case noAudio
 
     public enum Recovery: Sendable, Equatable {
         /// Network, server or rate limit: a later retry can succeed.
@@ -125,14 +127,14 @@ public enum ProviderError: Error, Sendable, Equatable {
         switch self {
         case .offline, .keyUnavailable, .rateLimited, .server: .transient
         case .auth, .needsSetup, .noCredit: .needsSetup
-        case .rejected, .emptyTranscript: .permanent
+        case .rejected, .emptyTranscript, .noAudio: .permanent
         }
     }
 
     /// Why the route refused, for a `.permanent` error; the indicator picks its text and button from it.
     public var rejectReason: RejectReason? {
         switch self {
-        case .emptyTranscript: .emptyTranscript
+        case .emptyTranscript, .noAudio: .emptyTranscript
         case .rejected: .other
         case .offline, .auth, .needsSetup, .noCredit, .keyUnavailable, .rateLimited, .server: nil
         }
@@ -141,7 +143,7 @@ public enum ProviderError: Error, Sendable, Equatable {
 
 /// Why a dictation was rejected.
 public enum RejectReason: String, Sendable {
-    /// The route heard no speech, twice.
+    /// The route heard no speech, twice, or the recording has no audio to send.
     case emptyTranscript
     case other
 }

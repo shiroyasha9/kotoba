@@ -60,6 +60,11 @@ actor FakeAudioSource: AudioSource {
     private(set) var resumes = 0
     /// Files deleted by `discardCapture`.
     private(set) var discarded: [URL] = []
+    /// Files `discardCapture` could not delete: they stay on disk.
+    private(set) var undeletable: [URL] = []
+    private var isRemovalFailing = false
+    /// The length `endCapture` reports; zero is a stop before the first buffer.
+    private var recordedLength: Duration = .seconds(1)
     /// When set, `beginCapture` waits for this gate.
     var beginGate: Gate?
     var beginError: (any Error)?
@@ -68,6 +73,16 @@ actor FakeAudioSource: AudioSource {
 
     func holdBegin(at gate: Gate) {
         beginGate = gate
+    }
+
+    /// From now on `discardCapture` cannot delete the file, as when the audio folder refuses the removal.
+    func failRemoval() {
+        isRemovalFailing = true
+    }
+
+    /// From now on `endCapture` reports `length` of audio.
+    func record(_ length: Duration) {
+        recordedLength = length
     }
 
     func failBegin(with error: any Error) {
@@ -102,7 +117,7 @@ actor FakeAudioSource: AudioSource {
     func endCapture() async throws -> RecordedAudio {
         isCapturing = false
         continuation?.finish()
-        return RecordedAudio(file: files.last ?? URL(filePath: "/dev/null"), duration: .seconds(1))
+        return RecordedAudio(file: files.last ?? URL(filePath: "/dev/null"), duration: recordedLength)
     }
 
     func cancelCapture() async -> RecordedAudio? {
@@ -122,10 +137,16 @@ actor FakeAudioSource: AudioSource {
         resumes += 1
     }
 
-    func discardCapture() async {
+    func discardCapture() async -> Bool {
         isCapturing = false
         continuation?.finish()
-        discarded += files.popLast().map { [$0] } ?? []
+        guard let file = files.popLast() else { return true }
+        if isRemovalFailing {
+            undeletable.append(file)
+            return false
+        }
+        discarded.append(file)
+        return true
     }
 }
 

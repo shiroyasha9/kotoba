@@ -111,7 +111,7 @@ extension HistoryStore {
 
     /// True when the file is gone: removed now, or not there. Any other failure is logged and the file stays, so its
     /// row stays unmarked and a later run tries again.
-    static func removeAudio(at file: URL) -> Bool {
+    public static func removeAudio(at file: URL) -> Bool {
         do {
             try FileManager.default.removeItem(at: file)
             return true
@@ -250,5 +250,28 @@ extension HistoryStore {
         return Self.ids(
             in: try database.query(
                 "SELECT id FROM dictations WHERE \(Self.inIDList);", [Self.idList(ids)]))
+    }
+}
+
+/// Discarded recordings whose audio file stayed on disk (`Store.markDiscarded`): an id each, no row and no text, until
+/// a launch removes the file (`OrphanAudio.discardedFiles`). The table is empty unless a removal failed.
+extension HistoryStore {
+    static let discardedSchema = """
+        CREATE TABLE IF NOT EXISTS discarded_audio (id TEXT PRIMARY KEY) WITHOUT ROWID;
+        """
+
+    public func markDiscarded(_ id: DictationID) throws {
+        try database.run(
+            "INSERT INTO discarded_audio (id) VALUES (?1) ON CONFLICT DO NOTHING;", [.text(id.rawValue.uuidString)])
+    }
+
+    public func discardedIDs() throws -> Set<DictationID> {
+        Self.ids(in: try database.query("SELECT id FROM discarded_audio;"))
+    }
+
+    /// The launch removed these files, or found them gone.
+    public func forgetDiscarded(_ ids: Set<DictationID>) throws {
+        guard !ids.isEmpty else { return }
+        try database.run("DELETE FROM discarded_audio WHERE \(Self.inIDList);", [Self.idList(ids)])
     }
 }

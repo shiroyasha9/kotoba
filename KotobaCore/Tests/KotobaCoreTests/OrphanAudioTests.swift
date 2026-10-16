@@ -17,7 +17,8 @@ struct OrphanAudioTests {
     @Test func anOrphanGetsAPendingRowWithTheFileCreationDateAndLength() throws {
         let orphan = file(secondsBeforeLaunch: 3_600)
 
-        let records = OrphanAudio.records(files: [orphan], knownIDs: [], launchedAt: launchedAt) { _ in .seconds(42) }
+        let records = OrphanAudio.records(
+            files: [orphan], knownIDs: [], discardedIDs: [], launchedAt: launchedAt, length: { _ in .seconds(42) })
 
         let record = try #require(records.first)
         #expect(records.count == 1)
@@ -33,7 +34,9 @@ struct OrphanAudioTests {
         let known = DictationID()
         var read: [URL] = []
 
-        let records = OrphanAudio.records(files: [file(known)], knownIDs: [known], launchedAt: launchedAt) {
+        let records = OrphanAudio.records(
+            files: [file(known)], knownIDs: [known], discardedIDs: [], launchedAt: launchedAt
+        ) {
             read.append($0)
             return .seconds(1)
         }
@@ -45,7 +48,8 @@ struct OrphanAudioTests {
     /// A recording that started after launch has no row until its stop; it is never taken.
     @Test func aFileCreatedAfterLaunchIsSkipped() {
         let records = OrphanAudio.records(
-            files: [file(secondsBeforeLaunch: -1), file(secondsBeforeLaunch: 0)], knownIDs: [], launchedAt: launchedAt
+            files: [file(secondsBeforeLaunch: -1), file(secondsBeforeLaunch: 0)], knownIDs: [], discardedIDs: [],
+            launchedAt: launchedAt
         ) { _ in .seconds(1) }
 
         #expect(records.isEmpty)
@@ -56,25 +60,102 @@ struct OrphanAudioTests {
         let names = ["notes.flac", "\(id).wav", "\(id.lowercased()).flac", "\(id).flac.part", "\(id) 2.flac"]
         let files = names.map { OrphanAudio.File(url: folder.appending(path: $0), createdAt: launchedAt - 60) }
 
-        #expect(OrphanAudio.records(files: files, knownIDs: [], launchedAt: launchedAt) { _ in .seconds(1) }.isEmpty)
+        #expect(
+            OrphanAudio.records(files: files, knownIDs: [], discardedIDs: [], launchedAt: launchedAt) { _ in .seconds(1)
+            }.isEmpty)
         #expect(OrphanAudio.id(of: folder.appending(path: "\(id).flac"))?.rawValue.uuidString == id)
     }
 
     /// The owner sees it in History and can delete it; kotoba deletes nothing.
     @Test func aFileWithNoReadableAudioGetsACancelledRow() {
         let records = OrphanAudio.records(
-            files: [file(), file()], knownIDs: [], launchedAt: launchedAt
+            files: [file(), file()], knownIDs: [], discardedIDs: [], launchedAt: launchedAt
         ) { _ in nil }
 
         #expect(records.map(\.status) == [.cancelled, .cancelled])
         #expect(records.allSatisfy { $0.audio.duration == .zero })
+        #expect(records.allSatisfy { !$0.isRetryable })
+    }
+
+    /// History offers no Retry for it; a retry that comes anyway sends nothing.
+    @Test func anOrphanWithNoAudioIsNeverSent() async throws {
+        let world = FakeWorld(transcript: "never sent")
+        let pipeline = world.makePipeline()
+        let record = try #require(
+            OrphanAudio.records(files: [file()], knownIDs: [], discardedIDs: [], launchedAt: launchedAt) { _ in nil }
+                .first)
+        try await world.store.save(record)
+
+        await pipeline.retryPending()
+        await pipeline.retry([record.id])
+
+        #expect(await world.provider.requests.isEmpty)
+        #expect(try #require(await world.store.records.first).isRetryable == false)
+    }
+
+    /// The owner threw the press away: its file is not an orphan, even when its removal failed.
+    @Test func aDiscardedShortcutWhoseFileStaysIsNeverRecoveredOrSent() async throws {
+        let world = FakeWorld(transcript: "part of a shortcut")
+        let pipeline = world.makePipeline()
+        await world.audio.failRemoval()
+
+        await pipeline.handle(.chordDown)
+        await pipeline.handle(.chordInterrupted)
+        await pipeline.handle(.chordUp)
+        await pipeline.settle()
+
+        let stayed = try #require(await world.audio.undeletable.first)
+        let id = try #require(OrphanAudio.id(of: stayed))
+        #expect(await world.store.records.isEmpty)
+        #expect(await world.store.discarded == [id])
+
+        // The next launch.
+        let files = [OrphanAudio.File(url: stayed, createdAt: launchedAt - 60)]
+        let discarded = await world.store.discarded
+        let records = OrphanAudio.records(
+            files: files, knownIDs: [], discardedIDs: discarded, launchedAt: launchedAt, length: { _ in .seconds(1) })
+        for record in records {
+            try await world.store.save(record)
+        }
+        await pipeline.retryPending()
+
+        #expect(records.isEmpty)
+        #expect(OrphanAudio.discardedFiles(files: files, discardedIDs: discarded) == [id: stayed])
+        #expect(await world.provider.requests.isEmpty)
+    }
+
+    @Test func aDiscardWhoseFileWentRemembersNothing() async {
+        let world = FakeWorld(transcript: "part of a shortcut")
+        let pipeline = world.makePipeline()
+
+        await pipeline.handle(.chordDown)
+        await pipeline.handle(.chordInterrupted)
+        await pipeline.handle(.chordUp)
+        await pipeline.settle()
+
+        #expect(await world.audio.discarded.count == 1)
+        #expect(await world.store.discarded.isEmpty)
+    }
+
+    /// A discarded id whose file is not in the folder is left out, so the store can forget it; other files stay.
+    @Test func onlyTheFilesOfDiscardedIDsAreRemoved() {
+        let stayed = DictationID()
+        let gone = DictationID()
+        let orphan = file()
+
+        let files = OrphanAudio.discardedFiles(files: [file(stayed), orphan], discardedIDs: [stayed, gone])
+
+        #expect(files == [stayed: folder.appending(path: stayed.audioFileName)])
+        #expect(OrphanAudio.discardedFiles(files: [orphan], discardedIDs: []).isEmpty)
     }
 
     @Test func orphansComeOldestFirst() {
         let newer = file(secondsBeforeLaunch: 10)
         let older = file(secondsBeforeLaunch: 20)
 
-        let records = OrphanAudio.records(files: [newer, older], knownIDs: [], launchedAt: launchedAt) { _ in
+        let records = OrphanAudio.records(
+            files: [newer, older], knownIDs: [], discardedIDs: [], launchedAt: launchedAt
+        ) { _ in
             .seconds(1)
         }
 
@@ -86,7 +167,7 @@ struct OrphanAudioTests {
         let pipeline = world.makePipeline()
         let orphan = file()
         for record in OrphanAudio.records(
-            files: [orphan], knownIDs: [], launchedAt: launchedAt, length: { _ in .seconds(5) })
+            files: [orphan], knownIDs: [], discardedIDs: [], launchedAt: launchedAt, length: { _ in .seconds(5) })
         {
             try await world.store.save(record)
         }

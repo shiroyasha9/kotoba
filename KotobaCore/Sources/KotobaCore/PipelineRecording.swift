@@ -137,13 +137,14 @@ extension DictationPipeline {
         work.track { await self.finish(current, audio: await ended.value, clipboard: clipboard) }
     }
 
-    /// Stops after the buffer that holds the stop moment; on an error, sends what was written.
+    /// Stops after the buffer that holds the stop moment. On an error no capture ran, so the dictation has no audio and
+    /// is not sent (`RecordedAudio.hasAudio`).
     func endCapture(of current: Recording) async -> RecordedAudio {
         let audio: RecordedAudio
         do {
             audio = try await ports.audio.endCapture()
         } catch {
-            Log.pipeline.error("Capture did not end cleanly, sending what was written: \(error)")
+            Log.pipeline.error("Capture did not end cleanly, no audio to send: \(error)")
             audio = RecordedAudio(file: current.file, duration: .zero)
         }
         await current.captureEvents.value
@@ -218,10 +219,17 @@ extension DictationPipeline {
         await cancel(current.item)
     }
 
-    /// Drops a recording that turned out to be part of another app's shortcut: no row, no file, no cue.
+    /// Drops a recording that turned out to be part of another app's shortcut: no row, no file, no cue. A file that
+    /// stays on disk is remembered as discarded, so no launch takes it for an orphan and sends it (`OrphanAudio`).
     func discard(_ current: Recording) async {
         endRecording(current)
-        await ports.audio.discardCapture()
+        if await !ports.audio.discardCapture() {
+            do {
+                try await ports.store.markDiscarded(current.id)
+            } catch {
+                Log.pipeline.error("Cannot remember discarded audio \(current.id.rawValue): \(error)")
+            }
+        }
         await current.captureEvents.value
         _ = latencies.take(current.id)
         emit(inFlightState)

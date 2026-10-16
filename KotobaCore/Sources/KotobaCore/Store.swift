@@ -35,6 +35,9 @@ public protocol Store: Sendable {
     /// Adds billed answers to the usage ledger, each once (by `UsageEntry.id`), with no row write: a cleanup answer that
     /// came after its deadline was dropped, but it was billed.
     func addUsage(_ entries: [UsageEntry]) async throws
+    /// Remembers a discarded recording whose audio file stayed on disk (`AudioSource.discardCapture`), with no row: the
+    /// launch never takes its file for an orphan, and removes it (`OrphanAudio.discardedFiles`).
+    func markDiscarded(_ id: DictationID) async throws
 }
 
 public struct DictationID: Hashable, Sendable {
@@ -164,9 +167,9 @@ extension DictationRecord {
 
     /// A dictation with no text yet that the History window's Retry can send, while its audio is kept: queued, failed,
     /// cancelled or rejected (`DictationPipeline.retry(_:)` queues the last two first). A rejected one can succeed once
-    /// the owner fixed the cause, for example added credit.
+    /// the owner fixed the cause, for example added credit. One with no audio cannot (`RecordedAudio.hasAudio`).
     public var isRetryable: Bool {
-        !status.isTranscribed
+        !status.isTranscribed && audio.hasAudio
     }
 
     /// When the dictation got its text: the retry that recovered it, else the dictation itself (its paste or copy
@@ -291,5 +294,10 @@ struct AnnouncingStore: Store {
     func addUsage(_ entries: [UsageEntry]) async throws {
         defer { changes.yield(.usageAdded) }
         try await base.addUsage(entries)
+    }
+
+    /// Not announced: no row changed.
+    func markDiscarded(_ id: DictationID) async throws {
+        try await base.markDiscarded(id)
     }
 }
