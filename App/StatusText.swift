@@ -179,6 +179,7 @@ extension DictationState {
         case .recovered: "Saved dictation recovered"
         case .copied: "Copied. Press ⌘V to paste."
         case .audioCut: "Pasted what was saved. Disk full?"
+        case .clipboardNotKept: "Pasted. Old clipboard too large to keep"
         case .idle, .recording, .transcribing, .cleaning, .undoable, .failed, .needsSetup, .rejected, .captureFailed,
             .nothingRecorded, .audioNotSaved:
             nil
@@ -198,7 +199,7 @@ extension DictationState {
         case .copied: context.isPasteAllowed ? nil : .allowPasting
         case .captureFailed: context.microphone == .denied ? .openMicrophoneSettings : nil
         case .idle, .recording, .transcribing, .cleaning, .rejected, .cleanupFailed, .cleanupTooSlow, .returnSkipped,
-            .nothingRecorded, .audioNotSaved, .audioCut:
+            .nothingRecorded, .audioNotSaved, .audioCut, .clipboardNotKept:
             nil
         }
     }

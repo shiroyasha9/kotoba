@@ -207,6 +207,10 @@ public actor DictationPipeline {
         let write = await clipboard.writeTransient(text, over: await clipboard.snapshot())
         do {
             try await ports.paster.sendPaste()
+            guard let write else {
+                emit(.clipboardNotKept(id))
+                return
+            }
             work.schedule(at: ports.clock.now + settings.restoreDelay) { await self.clipboard.restore(after: write) }
         } catch {
             Log.pipeline.error("Paste not allowed, the last dictation is left on the clipboard: \(error)")

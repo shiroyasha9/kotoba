@@ -183,8 +183,16 @@ actor FakePasteboard: Pasteboard {
         self.text = text
     }
 
+    /// The clipboard holds more than `PasteboardSnapshot.byteLimit`.
+    private var isOverLimit = false
+
+    func holdMoreThanTheLimit() {
+        isOverLimit = true
+    }
+
     func snapshot() async -> PasteboardSnapshot {
         snapshots += 1
+        if isOverLimit { return PasteboardSnapshot(items: [], isTooLarge: true) }
         return PasteboardSnapshot(items: text.map { [["public.utf8-plain-text": Data($0.utf8)]] } ?? [])
     }
 

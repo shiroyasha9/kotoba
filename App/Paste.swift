@@ -16,17 +16,25 @@ actor SystemPasteboard: KotobaCore.Pasteboard {
         NSPasteboard.general.changeCount
     }
 
+    /// Stops reading at `PasteboardSnapshot.byteLimit`: each type read makes the owning app render it (a big image
+    /// as TIFF and PDF), and the snapshot stays in memory until the restore.
     func snapshot() -> PasteboardSnapshot {
-        let items = NSPasteboard.general.pasteboardItems ?? []
-        return PasteboardSnapshot(
-            items: items.map { item in
-                var types: [String: Data] = [:]
-                for type in item.types {
-                    types[type.rawValue] = item.data(forType: type)
+        var byteCount = 0
+        var items: [[String: Data]] = []
+        for item in NSPasteboard.general.pasteboardItems ?? [] {
+            var types: [String: Data] = [:]
+            for type in item.types {
+                guard let data = item.data(forType: type) else { continue }
+                byteCount += data.count
+                guard byteCount <= PasteboardSnapshot.byteLimit else {
+                    Log.app.notice("The clipboard holds over \(byteCount) bytes; kotoba will not keep it")
+                    return PasteboardSnapshot(items: [], isTooLarge: true)
                 }
-                return types
+                types[type.rawValue] = data
             }
-        )
+            items.append(types)
+        }
+        return PasteboardSnapshot(items: items)
     }
 
     func write(_ text: String, isTransient transient: Bool) -> Int {

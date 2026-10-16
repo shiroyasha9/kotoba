@@ -24,6 +24,7 @@ extension IndicatorPanel {
             .idle, .recording(isLong: false), .transcribing, .cleaning, .undoable, .failed(id), .rejected(id, .other),
             .needsSetup(id, .key), .cleanupFailed(id), .cleanupTooSlow(id), .returnSkipped(id), .copied(id),
             .recovered(id), .captureFailed, .nothingRecorded, .audioNotSaved, .audioCut(id),
+            .clipboardNotKept(id),
         ]
         var snapshots = [
             Snapshot(name: "indicator-drag") { PillStandIn(content: .init(), anchor: nil) },
@@ -146,8 +147,12 @@ extension IndicatorPanel {
                     context: StatusContext(provider: .azure, microphone: .denied)),
             ]
         case .transcribing, .cleaning, .undoable, .failed, .cleanupFailed, .cleanupTooSlow, .returnSkipped, .recovered,
-            .nothingRecorded, .audioNotSaved, .audioCut:
+            .nothingRecorded, .audioNotSaved:
             [SnapshotRow(name: snapshotName(of: state), state: state)]
+        case .audioCut:
+            [SnapshotRow(name: "audioCut", state: state)]
+        case .clipboardNotKept:
+            [SnapshotRow(name: "clipboardNotKept", state: state)]
         }
     }
 
@@ -162,8 +167,8 @@ extension IndicatorPanel {
         case .cleanupTooSlow: "cleanupTooSlow"
         case .returnSkipped: "returnSkipped"
         case .recovered: "recovered"
-        case .audioCut: "audioCut"
-        case .idle, .recording, .needsSetup, .rejected, .copied, .captureFailed, .nothingRecorded, .audioNotSaved:
+        case .idle, .recording, .needsSetup, .rejected, .copied, .captureFailed, .nothingRecorded, .audioNotSaved,
+            .audioCut, .clipboardNotKept:
             "\(state)"
         }
     }

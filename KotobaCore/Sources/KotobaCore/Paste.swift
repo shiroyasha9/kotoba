@@ -26,9 +26,16 @@ public protocol Pasteboard: Sendable {
 
 /// Every item on the pasteboard, each as a map from type identifier to data.
 public struct PasteboardSnapshot: Sendable, Equatable {
-    public var items: [[String: Data]]
+    /// The most a snapshot holds in memory (lead, 2026-10-17). A larger clipboard (a big image, a long spreadsheet
+    /// range) is not kept: the dictation still pastes, and the earlier clipboard is gone.
+    public static let byteLimit = 64 * 1024 * 1024
 
-    public init(items: [[String: Data]]) {
+    public var items: [[String: Data]]
+    /// The clipboard held more than `byteLimit`; `items` is empty and nothing is restored.
+    public var isTooLarge: Bool
+
+    public init(items: [[String: Data]], isTooLarge: Bool = false) {
         self.items = items
+        self.isTooLarge = isTooLarge
     }
 }

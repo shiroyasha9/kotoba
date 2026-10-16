@@ -35,13 +35,14 @@ actor ClipboardGuard {
     }
 
     /// Writes the transcript as a transient item. If the owner copied something after `snapshot`,
-    /// that newer clipboard is the one to restore.
-    func writeTransient(_ text: String, over snapshot: Snapshot) async -> Write {
+    /// that newer clipboard is the one to restore. Nil when there is nothing to restore: the clipboard was too large
+    /// to keep (`PasteboardSnapshot.isTooLarge`).
+    func writeTransient(_ text: String, over snapshot: Snapshot) async -> Write? {
         let isUnchanged = await pasteboard.changeCount == snapshot.changeCount
         let original = isUnchanged ? snapshot.contents : await self.snapshot().contents
         let write = Write(changeCount: await pasteboard.write(text, isTransient: true))
-        pending = (write, original)
-        return write
+        pending = original.isTooLarge ? nil : (write, original)
+        return pending?.write
     }
 
     /// Leaves `text` on the clipboard for the owner to paste, with no restore.

@@ -76,6 +76,8 @@ public enum DictationState: Sendable, Equatable {
     case audioNotSaved
     /// Pasted, but the file stopped taking audio during the recording (a full disk): the text has only the part saved.
     case audioCut(DictationID)
+    /// Pasted, but the clipboard before it was too large to keep (`PasteboardSnapshot.byteLimit`): it is not restored.
+    case clipboardNotKept(DictationID)
 
     /// What the indicator shows once a dictation reaches `record.status`.
     static func outcome(of record: DictationRecord) -> Self {
