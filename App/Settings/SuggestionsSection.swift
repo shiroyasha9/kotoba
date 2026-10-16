@@ -40,7 +40,7 @@ struct LearnFromEditsToggle: View {
 
     // Custom row: outside a Form a switch sits next to its label, and this row puts it at the trailing edge, as a Form
     // row does. A grouped Form above the word list cannot hold it: a fixed-height Form makes the pane's ideal height
-    // the list's full height, and the Settings window then grows past the screen (spike, docs/research/native-ui.md).
+    // the list's full height, and the main window then grows past the screen (spike, docs/research/native-ui.md).
     var body: some View {
         HStack {
             VStack(alignment: .leading) {

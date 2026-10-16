@@ -79,7 +79,7 @@ private struct UsagePane: View {
             .pickerStyle(.segmented)
             .labelsHidden()
             .fixedSize()
-            .padding(.top, 20)
+            .padding(.top)
             if model.reader.isLoadFailed {
                 EmptyState.loadFailed(retry: model.reader.show)
             } else if let summary = model.summary {

@@ -340,7 +340,7 @@ private struct ModesPane: View {
         ForEach(AppMode.allCases, id: \.self) { Text($0.title).tag($0) }
     }
 
-    /// Decoration: the row's name says which app it is (as in the History window).
+    /// Decoration: the row's name says which app it is (as in the History pane).
     private func icon(of bundleID: String) -> some View {
         Group {
             if let image = model.icons[bundleID] {

@@ -7,7 +7,8 @@ extension MainWindow {
     /// One pane at the size of the window's detail column, for `make snapshots`. Each pane's file registers its own
     /// snapshots with this. The sidebar and the toolbar (title, search field) need the real window: the sidebar's
     /// selection and vibrancy do not render offscreen, so they are not in the image.
-    /// `height` above the window's 600 shows a pane that scrolls in the window in full.
+    /// 760 x 600 is about the detail column at the default window size; a taller `height` shows a pane that scrolls in
+    /// the window in full.
     static func snapshot(of pane: Pane, named name: String, height: CGFloat = 600) -> Snapshot {
         Snapshot(name: name) {
             let view = Snapshots.hostingView(pane.content().frame(width: 760, height: height))
@@ -30,16 +31,15 @@ extension MainWindow {
                 "the window content is \($0.frame), the window is \(content.bounds)"
             }
         }
-        let view: @MainActor () -> MainView = {
-            let selection = Selection()
-            selection.id = id
-            return MainView(panes: panes, selection: selection)
-        }
+        let selection = { Selection(panes: panes, showing: id) }
         guard isFramed else {
-            return Snapshots.fixedWindow(named: name, size: size, check: overflow, view)
+            return Snapshots.fixedWindow(named: name, size: size, check: overflow) {
+                MainView(panes: panes, selection: selection())
+            }
         }
         return Snapshots.window(named: name, contentSize: size) {
-            let window = window(showing: view())
+            let window = window(showing: MainView(panes: panes, selection: selection()))
+            // Set here: the window sets it when the pane appears, and an offscreen window shows no view.
             window.title = id.title
             return window
         } check: {
@@ -71,14 +71,13 @@ extension MainWindow {
     static func switchSnapshot(of panes: [Pane], through path: [PaneID], named name: String) -> Snapshot {
         var chromes: [(PaneID, Chrome)] = []
         return Snapshots.window(named: name, contentSize: defaultSize) {
-            let selection = Selection()
+            let selection = Selection(panes: panes, showing: path.first)
             let window = window(showing: MainView(panes: panes, selection: selection))
             window.setContentSize(defaultSize)
             for id in path {
                 selection.id = id
                 window.title = id.title
-                // SwiftUI applies a new pane's toolbar on the next turns of the run loop.
-                RunLoop.main.run(until: .now + 0.2)
+                settle()
                 window.layoutIfNeeded()
                 chromes.append((id, Chrome(window)))
             }
@@ -88,6 +87,15 @@ extension MainWindow {
             return chromes.first { $0.1 != expected }.map { id, chrome in
                 "\(id.title) has \(chrome); \(first.title) has \(expected)"
             }
+        }
+    }
+
+    /// Runs the main run loop until it has no more work, without waiting: SwiftUI applies a new pane's toolbar in later
+    /// turns. The snapshot run happens before the app's run loop starts. The bound stops a view that keeps scheduling
+    /// work.
+    private static func settle() {
+        for _ in 0..<1_000 where CFRunLoopRunInMode(.defaultMode, 0, true) != .handledSource {
+            return
         }
     }
 }

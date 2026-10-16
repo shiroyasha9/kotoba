@@ -63,7 +63,7 @@ struct HistoryView: View {
                 Section(day.title) {
                     ForEach(day.rows) { record in
                         HistoryRow(
-                            record: record, icon: model.apps.icon(of: record.app),
+                            record: record, apps: model.apps,
                             isRetryable: model.retryable.contains(record.id),
                             isSending: model.activity.inFlight.contains(record.id))
                     }
@@ -146,7 +146,7 @@ struct HistoryView: View {
 /// One dictation: the app's icon, the text, and its details under it.
 struct HistoryRow: View {
     let record: DictationRecord
-    let icon: NSImage?
+    let apps: InstalledApps
     /// No text yet, and the audio is kept for a retry.
     var isRetryable = false
     var isSending = false
@@ -154,7 +154,7 @@ struct HistoryRow: View {
     var body: some View {
         HStack(alignment: .top, spacing: 10) {
             Group {
-                if let icon {
+                if let icon = apps.icon(of: record.app) {
                     Image(nsImage: icon).resizable()
                 } else {
                     Color.clear
@@ -195,7 +195,7 @@ struct HistoryRow: View {
     /// whether audio retention deleted the audio.
     private var details: String {
         var parts: [String] = []
-        if let app = record.app, let name = app.name ?? InstalledApp.name(of: app.bundleID) {
+        if let app = record.app, let name = apps.name(of: app) {
             parts.append(name)
         }
         parts.append(record.audio.duration.formatted(.time(pattern: .minuteSecond)))

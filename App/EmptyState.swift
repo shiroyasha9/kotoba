@@ -26,6 +26,13 @@ extension EmptyState where Actions == EmptyView {
     init(_ title: String, systemImage: String, description: String) {
         self.init(title: title, systemImage: systemImage, description: description) { EmptyView() }
     }
+
+    /// History, and Home's newest dictations, before the first dictation.
+    static func noDictations(chord: Chord) -> Self {
+        EmptyState(
+            "No Dictations Yet", systemImage: "waveform",
+            description: "Tap \(chord.title) to dictate. Each dictation appears here.")
+    }
 }
 
 extension EmptyState where Actions == Button<Text> {
@@ -37,15 +44,6 @@ extension EmptyState where Actions == Button<Text> {
         ) {
             Button("Try Again", action: retry)
         }
-    }
-}
-
-extension EmptyState where Actions == EmptyView {
-    /// History, and Home's newest dictations, before the first dictation.
-    static func noDictations(chord: Chord) -> Self {
-        EmptyState(
-            "No Dictations Yet", systemImage: "waveform",
-            description: "Tap \(chord.title) to dictate. Each dictation appears here.")
     }
 }
 

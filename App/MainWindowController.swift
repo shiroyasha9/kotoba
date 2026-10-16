@@ -63,7 +63,7 @@ final class MainWindowController {
     }
 
     /// Reads the personal dictionary (its own file, so its writes never block a dictation save)
-    /// and hands it to the pipeline; Settings edits go to the pipeline from then on.
+    /// and hands it to the pipeline; the Dictionary pane's edits go to the pipeline from then on.
     func loadDictionary(into pipeline: DictationPipeline) async {
         do {
             let store = try DictionaryStore(url: AppFiles.dictionary)
@@ -89,15 +89,17 @@ final class MainWindowController {
     }
 
     /// A history write (from `DictationPipeline.historyChanges`): an open History pane reads the row it names; a shown
-    /// Home, Usage or Insights pane or History section reads again. Deleted audio changes no usage; Insights reads only
-    /// the ledger, which deleted dictations keep.
+    /// Home, Usage or Insights pane or History section reads again. Deleted audio changes nothing Home shows and no
+    /// usage; Insights reads only the ledger, which deleted dictations keep.
     func historyChanged(_ change: HistoryChange) {
         historyPane?.historyChanged(change)
-        home?.historyChanged()
         switch change {
         case .audioDeleted: break
-        case .deleted: usage?.historyChanged()
+        case .deleted:
+            home?.historyChanged()
+            usage?.historyChanged()
         case .saved, .usageAdded:
+            home?.historyChanged()
             usage?.historyChanged()
             insights?.storeChanged()
         }
@@ -109,8 +111,8 @@ final class MainWindowController {
         historyPane?.activityChanged(activity)
     }
 
-    /// `pane` opens a given pane, e.g. Speech for the pill's "Add Key…"; nil keeps the pane shown, or Home when the
-    /// window opens.
+    /// `pane` opens a given pane, e.g. Speech for the pill's "Add Key…"; nil keeps the pane shown, or opens the window
+    /// at the pane it showed last (Home the first time).
     func show(selecting pane: PaneID? = nil) {
         window.show(panes(), selecting: pane)
     }
@@ -151,7 +153,7 @@ final class MainWindowController {
             let usage = UsageModel { try await history.usage(from: $0, to: .distantFuture) }
             self.usage = usage
             panes.append(.usage(usage))
-            // The dictionary at the read: Settings can open before it is read at launch.
+            // The dictionary at the read: the main window can open before it is read at launch.
             let insights = InsightsModel { [weak self] now in
                 let dictionary = self?.dictionaryStore
                 async let learned = dictionary?.learnedWords() ?? [:]
@@ -167,7 +169,8 @@ final class MainWindowController {
         HomeModel.Source(
             read: { [weak self] now in
                 guard let history = self?.history else { throw NoHistory() }
-                async let insights = history.insights(at: now, in: .current)
+                // No top apps: Home does not show them.
+                async let insights = history.insights(at: now, in: .current, apps: 0)
                 async let recent = history.page(limit: HomeModel.recentCount)
                 async let last = history.lastDelivered()
                 return .init(

@@ -50,7 +50,9 @@ private struct InsightsPane: View {
     let model: InsightsModel
 
     var body: some View {
-        Group {
+        // One container, not a Group: a Group gives each branch its own onAppear and onDisappear, so the change from
+        // the placeholder to the figures would read again, or leave the reader hidden.
+        VStack {
             if model.reader.isLoadFailed {
                 EmptyState.loadFailed(retry: model.reader.show)
             } else if let figures = model.reader.value {

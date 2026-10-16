@@ -1,4 +1,5 @@
 import AppKit
+import KotobaCore
 import Observation
 import SwiftUI
 
@@ -117,37 +118,35 @@ final class MainWindow: NSObject, NSWindowDelegate, NSMenuItemValidation {
     /// Runs when the window closes, so the owner of the pane models releases them.
     var onClose: @MainActor () -> Void = {}
     private var window: NSWindow?
-    private let selection = Selection()
-    /// The panes of the open window; a pane the window was built without (History when the history did not open) is
-    /// never selected.
-    private var paneIDs: Set<PaneID> = []
+    /// The open window's pane, Back and Forward; nil while it is closed.
+    private var selection: Selection?
 
     /// The pane the open window shows; nil while it is closed.
-    var shownPane: PaneID? { window == nil ? nil : selection.id }
+    var shownPane: PaneID? { selection?.history.current }
 
     /// Shows the window, building it with `panes` when it is not open. `id` picks the pane to show; nil keeps the
-    /// pane already shown, or Home.
+    /// pane already shown, or opens at the pane the window showed last (Home the first time).
     func show(_ panes: @autoclosure () -> [Pane], selecting id: Pane.ID? = nil) {
         WindowFront.activate()
-        let window = window ?? makeWindow(panes: panes())
-        self.window = window
-        if let id, paneIDs.contains(id) {
-            selection.id = id
+        if window != nil, let id {
+            selection?.id = id
         }
+        let window = window ?? makeWindow(panes: panes(), showing: id)
+        self.window = window
         WindowFront.show(window)
     }
 
     /// Edit > Find… (⌘F): no view in the window answers it, so AppKit sends it to the window's delegate. SwiftUI's
     /// toolbar search field does not take it on its own.
     @objc func performTextFinderAction(_ sender: Any?) {
-        selection.findRequests += 1
+        selection?.findRequests += 1
     }
 
     /// Find is on only in a pane with a search field, and off while a sheet is open: AppKit also sends the sheet's
     /// actions to this window when no view in the sheet answers them, and the field is behind the sheet.
     func validateMenuItem(_ menuItem: NSMenuItem) -> Bool {
         guard menuItem.action == #selector(performTextFinderAction(_:)) else { return true }
-        return selection.id?.hasSearch == true && window?.attachedSheet == nil
+        return shownPane?.hasSearch == true && window?.attachedSheet == nil
     }
 
     func windowWillClose(_ notification: Notification) {
@@ -155,16 +154,19 @@ final class MainWindow: NSObject, NSWindowDelegate, NSMenuItemValidation {
         // frame.
         window?.setFrameAutosaveName("")
         window = nil
-        selection.reset(to: nil)
+        selection = nil
         onClose()
     }
 
-    private func makeWindow(panes: [Pane]) -> NSWindow {
-        paneIDs = Set(panes.map(\.id))
-        selection.reset(to: .home)
-        // The window title follows the pane, as in System Settings.
+    private func makeWindow(panes: [Pane], showing id: Pane.ID?) -> NSWindow {
+        let selection = Selection(panes: panes, showing: id, last: AppDefaults.lastPane)
+        self.selection = selection
         let window = Self.window(
-            showing: MainView(panes: panes, selection: selection) { [weak self] title in self?.window?.title = title })
+            showing: MainView(panes: panes, selection: selection) { [weak self] pane in
+                // The window title follows the pane, as in System Settings; the next window opens at it.
+                self?.window?.title = pane.title
+                AppDefaults.lastPane = pane
+            })
         window.delegate = self
         // The size and place the owner left it at; centred at the default size the first time.
         if !window.setFrameUsingName(Self.frameName) {
@@ -186,66 +188,42 @@ final class MainWindow: NSObject, NSWindowDelegate, NSMenuItemValidation {
     }
 }
 
-/// The pane the sidebar shows, and the panes shown before and after it for Back and Forward, as in System Settings.
+/// The pane the sidebar shows, with Back and Forward (`PaneHistory`, KotobaCore), for one open window.
 @MainActor
 @Observable
 final class Selection {
-    /// Each change by the owner (the sidebar, a pane's link, the menu) goes on the Back list.
-    var id: Pane.ID? {
-        didSet {
-            guard let oldValue, oldValue != id else { return }
-            if isMovingInHistory {
-                isMovingInHistory = false
-            } else {
-                back.append(oldValue)
-                forward.removeAll()
-            }
-        }
-    }
+    var history: PaneHistory<PaneID>
     /// Edit > Find… requests; the shown pane gets them as `findRequests`.
     var findRequests = 0
-    private(set) var back: [Pane.ID] = []
-    private(set) var forward: [Pane.ID] = []
-    @ObservationIgnored private var isMovingInHistory = false
 
-    func goBack() {
-        guard let id, let previous = back.popLast() else { return }
-        forward.append(id)
-        isMovingInHistory = true
-        self.id = previous
+    /// Shows `id`, else `last`, else Home; a pane missing from `panes` is skipped.
+    init(panes: [Pane], showing id: PaneID?, last: PaneID? = nil) {
+        history = PaneHistory(panes: Set(panes.map(\.id)), showing: id, last: last, home: .home)
     }
 
-    func goForward() {
-        guard let id, let next = forward.popLast() else { return }
-        back.append(id)
-        isMovingInHistory = true
-        self.id = next
-    }
-
-    /// A new window starts with no Back or Forward.
-    func reset(to id: Pane.ID?) {
-        isMovingInHistory = true
-        self.id = id
-        isMovingInHistory = false
-        back.removeAll()
-        forward.removeAll()
+    /// The sidebar's selection. Each change by the owner (the sidebar, a pane's link, the menu) goes on the Back list.
+    /// Optional only for the sidebar list, which sends nil on a ⌘-click; the window always shows a pane.
+    var id: Pane.ID? {
+        get { history.current }
+        set { history.select(newValue) }
     }
 }
 
 struct MainView: View {
     let panes: [Pane]
     @Bindable var selection: Selection
-    let onTitle: (String) -> Void
+    /// Gets each pane the window shows.
+    let onShow: (PaneID) -> Void
 
-    init(panes: [Pane], selection: Selection, onTitle: @escaping (String) -> Void = { _ in }) {
+    init(panes: [Pane], selection: Selection, onShow: @escaping (PaneID) -> Void = { _ in }) {
         let order = PaneID.allCases
         self.panes = panes.sorted { order.firstIndex(of: $0.id) ?? 0 < order.firstIndex(of: $1.id) ?? 0 }
         self.selection = selection
-        self.onTitle = onTitle
+        self.onShow = onShow
     }
 
     private var shown: Pane? {
-        panes.first { $0.id == selection.id } ?? panes.first
+        panes.first { $0.id == selection.history.current }
     }
 
     var body: some View {
@@ -266,14 +244,14 @@ struct MainView: View {
             // the sidebar and the title (owner, 2026-10-16).
             .toolbar {
                 ToolbarItemGroup(placement: .navigation) {
-                    Button("Back", systemImage: "chevron.backward", action: selection.goBack)
+                    Button("Back", systemImage: "chevron.backward") { selection.history.goBack() }
                         .help("Show the previous pane")
                         .keyboardShortcut("[", modifiers: .command)
-                        .disabled(selection.back.isEmpty)
-                    Button("Forward", systemImage: "chevron.forward", action: selection.goForward)
+                        .disabled(selection.history.back.isEmpty)
+                    Button("Forward", systemImage: "chevron.forward") { selection.history.goForward() }
                         .help("Show the next pane")
                         .keyboardShortcut("]", modifiers: .command)
-                        .disabled(selection.forward.isEmpty)
+                        .disabled(selection.history.forward.isEmpty)
                 }
             }
         } detail: {
@@ -286,7 +264,9 @@ struct MainView: View {
             }
         }
         .frame(minWidth: 720, minHeight: 480)
-        .onChange(of: shown?.title, initial: true) { _, title in onTitle(title ?? Install.displayName) }
+        .onChange(of: shown?.id, initial: true) { _, id in
+            if let id { onShow(id) }
+        }
     }
 
     private func rows(_ panes: [Pane]) -> some View {

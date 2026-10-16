@@ -16,6 +16,7 @@ enum AppDefaults {
         case indicatorVisibility = "indicator.visibility"
         case audioRetention = "history.audioRetention"
         case modes = "modes.rules"
+        case mainWindowPane = "mainWindow.pane"
     }
 
     /// The values a setting has until the owner changes it, registered once at launch (`main.swift`) before anything
@@ -55,6 +56,13 @@ enum AppDefaults {
     /// Not `integer(forKey:)`: its 0 for a missing value is `.forever`.
     private static var storedAudioRetention: AudioRetention? {
         (UserDefaults.standard.object(forKey: Key.audioRetention.rawValue) as? Int).flatMap(AudioRetention.init)
+    }
+
+    /// The pane the main window showed last: a window that opens without a named pane opens at it (owner,
+    /// 2026-10-16), also after a relaunch. Nil before the window first opens, or for a pane this build does not have.
+    static var lastPane: PaneID? {
+        get { UserDefaults.standard.string(forKey: Key.mainWindowPane.rawValue).flatMap(PaneID.init) }
+        set { UserDefaults.standard.set(newValue?.rawValue, forKey: Key.mainWindowPane.rawValue) }
     }
 
     /// The per-app modes (story 29), saved as the owner's changes to `ModeRules.standard`, so apps a later build adds

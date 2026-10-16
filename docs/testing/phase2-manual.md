@@ -527,18 +527,18 @@ macOS can refuse kotoba's request to become the active app. kotoba then still sh
 
 | # | Do this | Expect | Result |
 |---|---|---|---|
-| 460 | Choose menu > **Settings…**; close it, click into the terminal and type; repeat 10 times | Settings opens in front all 10 times, never behind the terminal, and takes the keys | |
-| 461 | Choose menu > **History…**, 5 times as in row 460 | History opens in front each time and takes the keys | |
+| 460 | Choose menu > **Settings…**; close it, click into the terminal and type; repeat 10 times | The main window opens in front all 10 times, never behind the terminal, and takes the keys | |
+| 461 | Choose menu > **History…**, 5 times as in row 460 | The main window opens at History in front each time and takes the keys | |
 | 462 | Dictate once, then choose menu > **Fix Last Dictation…**, 5 times as in row 460 | “Fix Last Dictation” opens in front with the last dictation each time | |
 | 463 | In History, right-click a row > **Fix Dictation…** | “Fix Dictation” opens in front of History | |
-| 464 | With the pill showing a button that opens Settings (for example **Add Key…** with no key saved), click the button | Settings opens on that pane in front. Before the click, the pill never took the keys: the text cursor stayed in the other app | |
+| 464 | With the pill showing a button that opens a settings pane (for example **Add Key…** with no key saved), click the button | The main window opens on that pane in front. Before the click, the pill never took the keys: the text cursor stayed in the other app | |
 | 465 | While setup is not complete, choose menu > **Finish Setting Up kotoba…** | The setup window opens in front | |
 | 466 | Choose menu > **About kotoba Dev** | The About panel opens. It does not use the new code: write if it opens behind | |
-| 467 | Open Settings, click into the terminal so Settings is behind it, then choose menu > **Settings…** again | The same Settings window comes to the front on the pane you left | |
-| 468 | With no kotoba window open, open kotoba Dev from Spotlight (⌘Space, type “kotoba Dev”, Return) | Settings opens in front and takes the keys | |
-| 469 | As row 468, from Raycast | Settings opens in front and takes the keys | |
-| 470 | With History open behind the terminal, open kotoba Dev from Spotlight | Settings opens in front of History and the terminal | |
-| 471 | Open Settings from the menu, then click into the terminal | The terminal comes in front of Settings; Settings does not float above it | |
+| 467 | Open a settings pane, click into the terminal so the main window is behind it, then choose menu > **Settings…** again | The same window comes to the front on the pane you left | |
+| 468 | With no kotoba window open, open kotoba Dev from Spotlight (⌘Space, type “kotoba Dev”, Return) | The main window opens in front, at the pane it showed last (Home the first time), and takes the keys | |
+| 469 | As row 468, from Raycast | The main window opens in front and takes the keys | |
+| 470 | With the main window open behind the terminal, open kotoba Dev from Spotlight | The main window comes in front of the terminal on the pane it showed | |
+| 471 | Open the main window from the menu, then click into the terminal | The terminal comes in front of the main window; the window does not float above it | |
 
 ### Rank and cap dictionary words (phase 3)
 
@@ -606,17 +606,21 @@ The offscreen snapshots (`make snapshots`) show two things that may not happen i
 
 ## Main window (0.3.0)
 
-One window for Home, History, Insights, Usage and the settings. Rows 470-479 use kotoba Dev with the release kotoba quit.
+One window for Home, History, Insights, Usage and the settings. Rows 480-493 use kotoba Dev with the release kotoba quit.
 
 | # | Do this | Expect | Result |
 |---|---|---|---|
-| 470 | Quit kotoba Dev; delete its saved frame (`defaults delete tech.teensy.kotoba.dev "NSWindow Frame Main"`); open kotoba Dev, then menu > **Settings…** | One window, about 960 × 640, opens at **General** in front of other apps. The sidebar has Home, History, Insights and Usage, then the header “Settings” over General, Speech, Dictionary, Modes and Microphone | |
-| 471 | Click **Home** | kotoba’s icon, name and version; “Ready to dictate” with a green check; **Activity** with Today, This week and Streak (hidden before your first dictation); **Recent Dictations** with up to 5 rows; **How to Dictate** with your chords as set in General | |
-| 472 | Settings > General: record another Dictate shortcut; click **Home** | **How to Dictate** and the empty state show the new chord. Record the old one again | |
-| 473 | On Home, click the copy icon of a row, then press ⌘V in TextEdit; click **Show All**; click **Home**, then **Show Insights**; click **Home**, then **Change Shortcuts** | The row’s text pastes; the window shows History, then Insights, then General | |
-| 474 | With Home shown, dictate in TextEdit | The new dictation is the top row of **Recent Dictations** at once; Today’s words go up | |
-| 475 | On Home, click **Fix Last Dictation…** | The Fix window opens with the last dictation | |
-| 476 | Turn kotoba Dev off in System Settings > Privacy & Security > Accessibility; look at Home; click **Allow Accessibility…**; turn it on again | Home says “Not ready to dictate” · “kotoba can’t hear your shortcut or paste yet.”; the button opens onboarding on the Accessibility step; after the grant, Home says “Ready to dictate” within about a second | |
-| 477 | Menu > **History…**, select a row, press ⌘F, type a word, then press ⌘A and ⌘V in the search field; right-click a row with text | ⌘F puts the cursor in the search field; ⌘A selects the search text and ⌘V pastes; the row menu has Copy, Paste Again, Retry (failed rows), **Fix Dictation…** and **Delete…** | |
-| 478 | Click **Home**, then **General**, and open the Edit menu each time | **Find…** is dimmed in both panes | |
-| 479 | Move and resize the window, close it with ⌘W, open it from **Settings…**; quit and open kotoba Dev, open it again | It opens where you left it, at the same size, both times | |
+| 480 | Quit kotoba Dev; delete its saved frame (`defaults delete tech.teensy.kotoba.dev "NSWindow Frame Main"`); open kotoba Dev, then menu > **Settings…** | One window, about 960 × 640, opens at **General** in front of other apps. The sidebar has Home, History, Insights and Usage, then the header “Settings” over General, Speech, Dictionary, Modes and Microphone | |
+| 481 | Click **Home** | kotoba’s icon, name and version; “Ready to dictate” with a green check; **Activity** with Today, This week and Streak (hidden before your first dictation); **Recent Dictations** with up to 5 rows; **How to Dictate** with your chords as set in General | |
+| 482 | Settings > General: record another Dictate shortcut; click **Home** | **How to Dictate** and the empty state show the new chord. Record the old one again | |
+| 483 | On Home, click the copy icon of a row, then press ⌘V in TextEdit; click **Show All**; click **Home**, then **Show Insights**; click **Home**, then **Change Shortcuts** | The row’s text pastes; the window shows History, then Insights, then General | |
+| 484 | With Home shown, dictate in TextEdit | The new dictation is the top row of **Recent Dictations** at once; Today’s words go up | |
+| 485 | On Home, click **Fix Last Dictation…** | The Fix window opens with the last dictation | |
+| 486 | Turn kotoba Dev off in System Settings > Privacy & Security > Accessibility; look at Home; click **Allow Accessibility…**; turn it on again | Home says “Not ready to dictate” · “kotoba can’t hear your shortcut or paste yet.”; the button opens onboarding on the Accessibility step; after the grant, Home says “Ready to dictate” within about a second | |
+| 487 | Menu > **History…**, select a row, press ⌘F, type a word, then press ⌘A and ⌘V in the search field; right-click a row with text | ⌘F puts the cursor in the search field; ⌘A selects the search text and ⌘V pastes; the row menu has Copy, Paste Again, Retry (failed rows), **Fix Dictation…** and **Delete…** | |
+| 488 | Click **Home**, then **General**, and open the Edit menu each time | **Find…** is dimmed in both panes | |
+| 489 | Move and resize the window, close it with ⌘W, open it from **Settings…**; quit and open kotoba Dev, open it again | It opens where you left it, at the same size, both times | |
+| 490 | Click **Home**, **History**, then **Speech**; press ⌘[ twice, then ⌘] once; then click **Back** and **Forward** in the toolbar | ⌘[ shows History, then Home; ⌘] shows History; the toolbar buttons do the same. **Back** is dimmed on the first pane you opened, **Forward** on the last | |
+| 491 | Show **Usage**, close the window; open kotoba Dev again from Spotlight | The window opens at **Usage** | |
+| 492 | Show **Insights**, quit kotoba Dev, open it, then open it again from Spotlight | The window opens at **Insights** | |
+| 493 | Show **Usage**, close the window; click the pill’s **Add Key…** (no key saved) | The window opens at **Speech**, not Usage | |

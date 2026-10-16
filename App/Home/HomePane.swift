@@ -42,7 +42,7 @@ private struct HomePane: View {
     }
 
     private var hero: some View {
-        HStack(spacing: 14) {
+        HStack {
             Image(nsImage: NSApplication.shared.applicationIconImage)
                 .resizable()
                 .frame(width: 64, height: 64)
@@ -155,7 +155,7 @@ private struct HomePane: View {
             } else {
                 ForEach(records) { record in
                     HStack(alignment: .top) {
-                        HistoryRow(record: record, icon: model.apps.icon(of: record.app))
+                        HistoryRow(record: record, apps: model.apps)
                         Button("Copy", systemImage: "doc.on.doc") { model.copy(record) }
                             .labelStyle(.iconOnly)
                             .buttonStyle(.borderless)

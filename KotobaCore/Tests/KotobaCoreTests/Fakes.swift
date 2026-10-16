@@ -375,8 +375,8 @@ final class ManualClock: PipelineClock {
     }
 }
 
-/// Yields until `condition` holds, for the few steps that run in tasks the test cannot await.
-func eventually(_ condition: () async -> Bool) async -> Bool {
+/// Yields until `condition` holds, for the few steps that run in tasks the test cannot await. Runs on the caller's actor.
+nonisolated(nonsending) func eventually(_ condition: () async -> Bool) async -> Bool {
     for _ in 0..<10_000 {
         if await condition() { return true }
         await Task.yield()

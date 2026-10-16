@@ -34,6 +34,8 @@ final class HomeModel {
     let reader: PaneReader<Figures>
     let apps = InstalledApps()
     private let source: Source?
+    /// The last Copy, which a pasteboard write ends at once; the next Copy replaces it.
+    private var copying: Task<Void, Never>?
 
     init(readiness: Readiness, chords: HotkeyChords, source: Source) {
         self.readiness = readiness
@@ -67,7 +69,7 @@ final class HomeModel {
 
     func copy(_ record: DictationRecord) {
         guard let source, let text = record.deliveredText else { return }
-        Task { await source.copy(text) }
+        copying = Task { await source.copy(text) }
     }
 
     func fixLast() {

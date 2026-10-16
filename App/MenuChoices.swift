@@ -57,7 +57,8 @@ extension NSMenuItem {
 extension NSMenu {
     /// A main menu with the standard File > Close and Edit items. An `LSUIElement` app shows no menu bar, but without
     /// these key equivalents Cmd-W, Cmd-X/C/V/A/Z and Cmd-F find no action and the windows beep. Find… goes along the
-    /// responder chain to the key window's delegate; the History window answers it by focusing its search field.
+    /// responder chain to the key window's delegate; the main window answers it by focusing the shown pane's search
+    /// field.
     @MainActor
     static func hiddenMain() -> NSMenu {
         let file = NSMenu(title: "File")
