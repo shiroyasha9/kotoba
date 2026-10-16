@@ -14,6 +14,10 @@ actor FakeStore: Store {
         ledger += record.usage.filter { entry in !ledger.contains { $0.id == entry.id } }
     }
 
+    func addUsage(_ entries: [UsageEntry]) async throws {
+        ledger += entries.filter { entry in !ledger.contains { $0.id == entry.id } }
+    }
+
     func save(_ record: DictationRecord) async throws {
         addToLedger(record)
         records.removeAll { $0.id == record.id }

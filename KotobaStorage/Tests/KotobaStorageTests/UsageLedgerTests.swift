@@ -198,6 +198,19 @@ struct UsageLedgerTests {
             ])
     }
 
+    @Test func usageAddedWithNoRowCountsOnce() async throws {
+        let store = try HistoryStore(url: url, audio: audio)
+        let late = entry(.cleanup, at: 1_000, words: 0, cost: .reported(try usd("0.0004")), app: Self.notes)
+
+        try await store.addUsage([late])
+        try await store.addUsage([late])
+
+        let summary = try await everything(store)
+        #expect(summary.cost == (try usd("0.0004")))
+        #expect(summary.dictations == 0)
+        #expect(try await store.page(limit: 10).isEmpty)
+    }
+
     @Test func recentAppsAreTheAppsSinceTheStartByWords() async throws {
         let store = try HistoryStore(url: url, audio: audio)
         try await save(

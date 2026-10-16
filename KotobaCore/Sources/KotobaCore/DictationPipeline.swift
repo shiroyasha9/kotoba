@@ -59,13 +59,12 @@ public actor DictationPipeline {
         self.settings = settings
         work = PendingWork(clock: ports.clock)
         clipboard = ClipboardGuard(pasteboard: ports.pasteboard)
+        let steps = TranscriptionSteps(
+            provider: ports.provider, cleaner: ports.cleaner, clock: ports.clock, store: ports.store, work: work)
         delivery = TranscriptDelivery(
-            provider: ports.provider, cleaner: ports.cleaner, paster: ports.paster, store: ports.store,
-            clock: ports.clock, clipboard: clipboard, frontApp: ports.frontApp)
-        retries = RetryQueue(
-            steps: TranscriptionSteps(provider: ports.provider, cleaner: ports.cleaner, clock: ports.clock),
-            store: ports.store,
-            clock: ports.clock, clipboard: clipboard)
+            steps: steps, paster: ports.paster, store: ports.store, clock: ports.clock, clipboard: clipboard,
+            frontApp: ports.frontApp)
+        retries = RetryQueue(steps: steps, store: ports.store, clock: ports.clock, clipboard: clipboard)
         (states, stateContinuation) = AsyncStream.makeStream(of: DictationState.self)
         (activity, activityContinuation) = AsyncStream.makeStream(
             of: PipelineActivity.self, bufferingPolicy: .bufferingNewest(1))

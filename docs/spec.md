@@ -168,6 +168,15 @@ Plans: `docs/research/ux-polish.md` (49 items, IDs used below) and `docs/researc
   - idea 1, context terms from the active repo and session (privacy decision open: on or off by default, story 34);
   - idea 5, rank and cap dictionary terms per request (risk: it can drop a needed term).
 
+### Per-app modes (story 29; lead decisions 2026-10-16)
+
+Design and evidence: `docs/research/per-app-modes.md`.
+- Two modes in v1, Code and Writing. A mode sets the cleanup prompt and "Clean up every dictation" (off by default for both). Apps map to a mode by bundle ID, from standard lists the owner edits; every other app uses Code.
+- The app in front at the stop decides the mode (the same rule as submit's Return); key-down only warms the cleaner and marks the pill. Esc keeps the app and the mode of the Esc. A retry cleans in the mode the record keeps.
+- The cleanup chord cleans with the mode's prompt. A cleanup has a 5 s deadline on the pipeline clock; past it the raw text pastes, the pill says so, and the late answer's cost still goes to the ledger.
+- Speech model, language and website rules per mode: later, not v1.
+- The Writing prompt ships in a release only after its benchmark passes (`docs/release.md`).
+
 ### Wispr Flow transition
 - The owner keeps Wispr Flow until kotoba passes the gates and one week of daily use.
 

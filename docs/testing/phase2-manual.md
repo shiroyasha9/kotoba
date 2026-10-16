@@ -467,6 +467,9 @@ The Writing prompt waits for its benchmark (docs/research/per-app-modes.md, ques
 | 345 | Turn **Writing apps** off; dictate in Notes with a plain tap | Raw transcript, about as fast as before; no wand, no “Cleaning up” | |
 | 346 | Set **Other apps** to Writing; dictate with the cleanup chord in Ghostty or Terminal | Still a Code cleanup (terminals stay in Code); in an app not in the list (for example TextEdit removed in row 339) the cleanup is prose | |
 | 347 | Change a mode in Settings and at once dictate | The next dictation uses the new setting | |
+| 348 | With **Writing apps** on, slow the network (Network Link Conditioner, “Very Bad Network”) and dictate in Notes | After about 5 s of “Cleaning up” the raw text pastes and the pill says “Cleanup too slow: pasted as spoken”; **Usage** later counts the cleanup’s cost | |
+| 349 | Use a direct route (xAI or Azure) with no OpenRouter key; open Settings > **Modes** | “Cleanup needs your OpenRouter key” with **Add Key…**, which opens **Speech**; after you save the key and come back, the note is gone | |
+| 350 | Dictate with the cleanup chord in Notes, press Esc, click into Terminal within 5 s; then History > **Retry** that row | The row names Notes, and the retried text is cleaned as prose (the Esc’s app and mode) | |
 
 ## Known offscreen-only doubts
 

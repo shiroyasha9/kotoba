@@ -149,6 +149,15 @@ Later, in order of value: custom instructions per mode; Paste Raw (already in th
 5. Website rules: later, not v1.
 6. `make latency` reads the kotoba DB: it needs the owner's go.
 
+## Review decisions (2026-10-16, review-modes)
+
+1. A cleanup has a 5 s deadline on the pipeline clock (`Settings.cleanupDeadline`, about 2x the 2.3 s p90). Past it the raw text pastes and the pill says "Cleanup too slow: pasted as spoken"; the late answer is dropped and its cost goes to the ledger (`Store.addUsage`).
+2. `ModeRules` decodes tolerantly: a missing field takes its default, and an unknown mode (from a later build) drops only its own entry.
+3. Esc keeps the app and the mode of the Esc.
+4. The bench runs the Writing prompt (`bun run bench --only cleanup --prompt writing`: 28 clips from Writing apps in kotoba-bench-v1, 84 calls, about $0.03); `docs/release.md` holds the release gate.
+5. The Modes pane says when cleanup has no OpenRouter key, with "Add Key…", and looks up apps only when it shows (3-9 ms for the standard lists, measured).
+6. The saved rules stay the whole list, not changes over `ModeRules.standard`: what the pane shows is what is saved. So apps added to the standard lists in a later build reach only owners who never edited the list.
+
 ## Unresolved questions (phase A)
 
 1. Should Writing clean every dictation by default? The spec says chat apps "get prose", but that costs about 1.6 s on each Slack message, and Slack had 15 dictations in 5 months. Recommendation: off; the chord does it.

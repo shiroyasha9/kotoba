@@ -37,6 +37,8 @@ public enum DictationState: Sendable, Equatable {
     case needsSetup(DictationID, SetupItem)
     /// The cleanup failed, so the raw transcript was pasted.
     case cleanupFailed(DictationID)
+    /// The cleaner did not answer within `Settings.cleanupDeadline`, so the raw transcript was pasted.
+    case cleanupTooSlow(DictationID)
     /// Pasted, but the submit Return was not sent: another app came to the front after the stop.
     case returnSkipped(DictationID)
     /// Paste was not allowed, so the transcript is on the clipboard.
@@ -122,6 +124,9 @@ extension DictationPipeline {
         public var chordReleaseWait: Duration
         /// How long Undo can resume a recording after Esc.
         public var undoWindow: Duration
+        /// The longest a cleanup may take; then the raw transcript pastes (about 2x the cleanup p90 of 2.3 s in
+        /// kotoba-bench-v1). A late answer is dropped and its cost still goes to the ledger.
+        public var cleanupDeadline: Duration
         /// A transcript that ends with a submit phrase ("press enter", "press return") is pasted without it, then Return.
         public var isSubmitPhraseOn: Bool
         /// How long a transcribed dictation keeps its audio.
@@ -145,6 +150,7 @@ extension DictationPipeline {
             restoreDelay: Duration = .seconds(1),
             chordReleaseWait: Duration = .seconds(2),
             undoWindow: Duration = .seconds(5),
+            cleanupDeadline: Duration = .seconds(5),
             isSubmitPhraseOn: Bool = true,
             audioRetention: AudioRetention = .standard,
             modes: ModeRules = ModeRules()
@@ -158,6 +164,7 @@ extension DictationPipeline {
             self.restoreDelay = restoreDelay
             self.chordReleaseWait = chordReleaseWait
             self.undoWindow = undoWindow
+            self.cleanupDeadline = cleanupDeadline
             self.isSubmitPhraseOn = isSubmitPhraseOn
             self.audioRetention = audioRetention
             self.modes = modes

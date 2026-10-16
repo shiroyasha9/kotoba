@@ -109,12 +109,21 @@ extension DictationState {
         case .needsSetup(_, .credit): "\(provider) is out of credit. Saved."
         case .needsSetup(_, let item): StatusText.add(item, for: context.provider)
         case .rejected(_, let reason): reason.text(provider: provider)
+        case .captureFailed: context.microphone == .denied ? "Microphone access is off" : "No microphone found"
+        default: deliveredText
+        }
+    }
+
+    /// The text reached the owner, with a note on how.
+    private var deliveredText: String? {
+        switch self {
         case .cleanupFailed: "Pasted without cleanup"
+        case .cleanupTooSlow: "Cleanup too slow: pasted as spoken"
         case .returnSkipped: "Didn’t press Return: app changed"
         case .recovered: "Saved dictation recovered"
         case .copied: "Copied. Press ⌘V to paste."
-        case .captureFailed: context.microphone == .denied ? "Microphone access is off" : "No microphone found"
-        case .idle, .recording, .transcribing, .cleaning, .undoable: nil
+        case .idle, .recording, .transcribing, .cleaning, .undoable, .failed, .needsSetup, .rejected, .captureFailed:
+            nil
         }
     }
 
@@ -130,7 +139,8 @@ extension DictationState {
         case .recovered: .copy
         case .copied: context.isPasteAllowed ? nil : .allowPasting
         case .captureFailed: context.microphone == .denied ? .openMicrophoneSettings : nil
-        case .idle, .recording, .transcribing, .cleaning, .rejected, .cleanupFailed, .returnSkipped: nil
+        case .idle, .recording, .transcribing, .cleaning, .rejected, .cleanupFailed, .cleanupTooSlow, .returnSkipped:
+            nil
         }
     }
 

@@ -1,6 +1,6 @@
 // Builds results/report.md from the raw JSONL files only.
 
-import { CLEANUP_MODELS, type CleanupRow, cleanupSets } from "./cleanup.ts";
+import { CLEANUP_MODELS, type CleanupRow, cleanupSets, writingClips } from "./cleanup.ts";
 import {
 	type AudioInfo,
 	BENCH_SEED,
@@ -228,23 +228,42 @@ export async function writeReport(p: Paths, clips: Clip[], dict: DictionaryEntry
 	const best = bestSttVariant(clips, ok);
 	const sources = [...new Set([...cleanupRows.map((r) => r.sttVariant), ...(best ? [best] : [])])];
 	const sets = cleanupSets(clips);
+	const isWriting = (key: string) => key.endsWith("+writing");
+	const writing = writingClips(clips);
 	const cleanupSetsShown = [
-		{ title: `edited subset (n=${sets.edited.length}, noisy), reference = editedText`, set: sets.edited, ref: (c: Clip) => c.reference },
+		{
+			title: `edited subset (n=${sets.edited.length}, noisy), reference = editedText`,
+			set: sets.edited,
+			ref: (c: Clip) => c.reference,
+			shows: (key: string) => !isWriting(key),
+		},
 		{
 			title: `seeded sample (n=${sets.sample.length}), reference = pastedText (proxy: matches Wispr's accepted output)`,
 			set: sets.sample,
 			ref: (c: Clip) => c.pastedText ?? "",
+			shows: (key: string) => !isWriting(key),
 		},
+		// The Writing prompt's acceptance set (docs/research/per-app-modes.md, question 3); shown once it has rows.
+		...(cleanupRows.some((r) => isWriting(r.variant))
+			? [
+					{
+						title: `clips from Writing apps (n=${writing.length}), Writing prompt, reference = edited or pasted text`,
+						set: writing,
+						ref: (c: Clip) => c.reference,
+						shows: isWriting,
+					},
+				]
+			: []),
 	];
 	out.push("## Cleanup", "");
 	if (!sources.length) out.push("No STT variant covers 90% of the scored clips yet.", "");
 	for (const source of sources) {
 		const raw = (c: Clip) => ok.get(source)?.get(c.id)?.text;
 		const keys = [...new Set([...CLEANUP_MODELS.map((m) => m.key), ...cleanupRows.map((r) => r.variant)])];
-		for (const { title, set, ref } of cleanupSetsShown) {
+		for (const { title, set, ref, shows } of cleanupSetsShown) {
 			const ids = new Set(set.map((c) => c.id));
 			const rows: (string | number)[][] = [];
-			for (const key of keys) {
+			for (const key of keys.filter(shows)) {
 				const mine = cleanupRows.filter((r) => r.variant === key && r.sttVariant === source && ids.has(r.clipId));
 				if (!mine.length) continue;
 				const firstOk = okRowsByVariant(mine).get(key) ?? new Map<string, CleanupRow>();

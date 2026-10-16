@@ -27,7 +27,7 @@ extension DictationPipeline {
         var sound: NoSoundPolicy
         /// The timer at `sound.deadline`; nil while the warning shows.
         var soundDeadline: Task<Void, Never>?
-        /// The front app at the stop; a submit Return goes only to it, and its mode decides `output`.
+        /// The front app at the stop (or at the Esc); a submit Return goes only to it, and its mode decides `output`.
         var frontAppAtStop: FrontApp?
         /// What the dictation does with its transcript, decided at the stop.
         var output = DictationOutput.transcript

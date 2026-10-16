@@ -1,3 +1,5 @@
+import Synchronization
+
 /// The text steps a live dictation and a retry share: transcribe with the dictionary terms, remove a submit phrase,
 /// apply the replacements, and for a cleanup dictation clean the raw transcript.
 struct TranscriptionSteps: Sendable {
@@ -10,10 +12,22 @@ struct TranscriptionSteps: Sendable {
         var submits = false
     }
 
+    /// Why a cleanup gave no text; the raw transcript is used then.
+    enum CleanupMiss: Error {
+        /// No cleaner, an error, or an answer with no words.
+        case failed
+        /// No answer within `Settings.cleanupDeadline`.
+        case tooSlow
+    }
+
     let provider: any TranscriptionProvider
     let cleaner: (any TextCleaner)?
-    /// Dates each billed answer in the usage ledger.
+    /// Dates each billed answer in the usage ledger, and times the cleanup deadline.
     let clock: any PipelineClock
+    /// Where a cleanup answer that came after its deadline is billed.
+    let store: any Store
+    /// Holds the deadline and a cleanup request that outlives it.
+    let work: PendingWork
 
     /// Sends the record's audio and keeps the answer in it: the model and a usage entry first (an answer with no words
     /// is billed too), then the transcript. Throws `ProviderError.emptyTranscript` when the provider heard no words;
@@ -40,26 +54,38 @@ struct TranscriptionSteps: Sendable {
     /// answered no words: the raw transcript is used then, and the cleanup is not retried. An answer's usage goes to
     /// the record, empty or not. The replacements run once, on the cleaner's output, so a rule such as
     /// "kotoba" -> "kotoba.app" does not grow twice.
+    @discardableResult
     func clean(
         _ raw: String, in mode: AppMode, into record: inout DictationRecord, settings: DictationPipeline.Settings
-    ) async {
-        record.cleanedText = await cleaned(raw, in: mode, record: &record, settings: settings)
+    ) async -> CleanupMiss? {
+        switch await cleaned(raw, in: mode, record: &record, settings: settings) {
+        case .success(let text):
+            record.cleanedText = text
+            return nil
+        case .failure(let miss):
+            record.cleanedText = nil
+            return miss
+        }
     }
 
     private func cleaned(
         _ raw: String, in mode: AppMode, record: inout DictationRecord, settings: DictationPipeline.Settings
-    ) async -> String? {
+    ) async -> Result<String, CleanupMiss> {
         let id = record.id
         guard let cleaner else {
             Log.pipeline.error("Cleanup \(id.rawValue): no cleaner, using the raw transcript")
-            return nil
+            return .failure(.failed)
         }
         let cleaned: CleanedText
-        do {
-            cleaned = try await cleaner.clean(raw, vocabulary: settings.dictionary.keyterms, mode: mode)
-        } catch {
+        switch await answer(of: cleaner, raw, in: mode, for: record, settings: settings) {
+        case .answered(.success(let answer)):
+            cleaned = answer
+        case .answered(.failure(let error)):
             Log.pipeline.error("Cleanup \(id.rawValue) failed, using the raw transcript: \(error)")
-            return nil
+            return .failure(.failed)
+        case .tooSlow:
+            Log.pipeline.error("Cleanup \(id.rawValue) passed its deadline, using the raw transcript")
+            return .failure(.tooSlow)
         }
         let text = cleaned.text.trimmingCharacters(in: .whitespacesAndNewlines)
         let replaced = settings.dictionary.applyReplacements(to: text)
@@ -73,8 +99,84 @@ struct TranscriptionSteps: Sendable {
                 cost: cleaned.cost, app: record.app))
         guard !text.isEmpty else {
             Log.pipeline.error("Cleanup \(id.rawValue) answered no words, using the raw transcript")
-            return nil
+            return .failure(.failed)
         }
-        return replaced
+        return .success(replaced)
+    }
+
+    private enum Answer: Sendable {
+        case answered(Result<CleanedText, any Error>)
+        case tooSlow
+    }
+
+    /// The cleaner's answer, or `.tooSlow` when `Settings.cleanupDeadline` passes first on the pipeline clock. The
+    /// request is not cancelled: a late answer was billed, so its cost goes to the ledger when it comes, with no words
+    /// delivered.
+    private func answer(
+        of cleaner: any TextCleaner, _ raw: String, in mode: AppMode, for record: DictationRecord,
+        settings: DictationPipeline.Settings
+    ) async -> Answer {
+        let first = FirstOf<Answer>()
+        let deadline = work.schedule(at: clock.now + settings.cleanupDeadline) { first.settle(.tooSlow) }
+        work.track { [clock, store, id = record.id, app = record.app, terms = settings.dictionary.keyterms] in
+            let result: Result<CleanedText, any Error>
+            do {
+                result = .success(try await cleaner.clean(raw, vocabulary: terms, mode: mode))
+            } catch {
+                result = .failure(error)
+            }
+            guard !first.settle(.answered(result)), case .success(let late) = result else { return }
+            do {
+                try await store.addUsage([
+                    UsageEntry(
+                        time: clock.date, dictation: id, kind: .cleanup, model: late.model, deliveredWords: 0,
+                        cost: late.cost, app: app)
+                ])
+            } catch {
+                Log.pipeline.error("Cleanup \(id.rawValue): cannot bill the late answer: \(error)")
+            }
+        }
+        let answer = await first.value
+        deadline.cancel()
+        return answer
+    }
+}
+
+/// The first of two events, such as an answer and its deadline: the first value settles it; a later one is told it lost.
+final class FirstOf<Value: Sendable>: Sendable {
+    private enum State {
+        case open(waiter: CheckedContinuation<Value, Never>?)
+        case settled(Value)
+    }
+
+    private let state = Mutex(State.open(waiter: nil))
+
+    /// True when `value` came first.
+    @discardableResult
+    func settle(_ value: Value) -> Bool {
+        let won = state.withLock { state -> (isFirst: Bool, waiter: CheckedContinuation<Value, Never>?) in
+            guard case .open(let waiter) = state else { return (false, nil) }
+            state = .settled(value)
+            return (true, waiter)
+        }
+        won.waiter?.resume(returning: value)
+        return won.isFirst
+    }
+
+    /// The first value, once one came. One waiter only.
+    var value: Value {
+        get async {
+            await withCheckedContinuation { continuation in
+                let settled = state.withLock { state -> Value? in
+                    switch state {
+                    case .settled(let value): return value
+                    case .open:
+                        state = .open(waiter: continuation)
+                        return nil
+                    }
+                }
+                if let settled { continuation.resume(returning: settled) }
+            }
+        }
     }
 }

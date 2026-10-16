@@ -29,17 +29,13 @@ struct TranscriptDelivery: Sendable {
         var isSubmitted = false
     }
 
-    let provider: any TranscriptionProvider
-    /// Used for cleanup jobs; nil pastes the raw transcript.
-    let cleaner: (any TextCleaner)?
+    /// The transcribe and clean steps, shared with the retry queue.
+    let steps: TranscriptionSteps
     let paster: any Paster
     let store: any Store
     let clock: any PipelineClock
     let clipboard: ClipboardGuard
     let frontApp: @Sendable () -> FrontApp?
-
-    /// The transcribe and clean steps, shared with the retry queue.
-    private var steps: TranscriptionSteps { TranscriptionSteps(provider: provider, cleaner: cleaner, clock: clock) }
 
     /// `beforePaste` returns when it is safe to post Cmd-V (the chord is released). `beforeCleanup` runs as the
     /// transcript goes to the cleaner, so the indicator can say so. `isSubmitRequested` tells, once pasted, whether the
@@ -71,7 +67,7 @@ struct TranscriptDelivery: Sendable {
         await savedPending
 
         var restore: ClipboardGuard.Write?
-        var isCleanupFailed = false
+        var cleanupMiss: TranscriptionSteps.CleanupMiss?
         var submitted: Submitted?
         switch result {
         case .failure(let error):
@@ -81,9 +77,8 @@ struct TranscriptDelivery: Sendable {
             if let mode = job.output.cleanupMode {
                 await beforeCleanup()
                 mark(.cleanStart, at: clock.now)
-                await steps.clean(transcribed.raw, in: mode, into: &record, settings: job.settings)
+                cleanupMiss = await steps.clean(transcribed.raw, in: mode, into: &record, settings: job.settings)
                 mark(.cleanResponse, at: clock.now)
-                isCleanupFailed = record.cleanedText == nil
             }
             (record.status, restore) = await paste(
                 record.cleanedText ?? transcribed.text, job: job, latency: &latency, beforePaste: beforePaste)
@@ -97,17 +92,21 @@ struct TranscriptDelivery: Sendable {
         // The answers' ledger entries go with this save. A crash between the answer and here (at most the cleanup and
         // the paste, 1-2 s) loses them; the pending row is sent again at the next launch.
         await store.saveOrLog(record)
-        let showing = Self.notice(for: record, isCleanupFailed: isCleanupFailed, submitted: submitted)
+        let showing = Self.notice(for: record, cleanupMiss: cleanupMiss, submitted: submitted)
         return Outcome(record: record, restore: restore, showing: showing, isSubmitted: submitted == .sent)
     }
 
     /// A copied transcript needs the owner's Cmd-V, so "Copied" wins over the cleanup note. A Return the owner asked
     /// for and did not get wins over the cleanup note too.
     private static func notice(
-        for record: DictationRecord, isCleanupFailed: Bool, submitted: Submitted?
+        for record: DictationRecord, cleanupMiss: TranscriptionSteps.CleanupMiss?, submitted: Submitted?
     ) -> DictationState? {
         if submitted == .frontAppChanged { return .returnSkipped(record.id) }
-        return isCleanupFailed && record.status == .pasted ? .cleanupFailed(record.id) : nil
+        guard record.status == .pasted, let cleanupMiss else { return nil }
+        return switch cleanupMiss {
+        case .failed: .cleanupFailed(record.id)
+        case .tooSlow: .cleanupTooSlow(record.id)
+        }
     }
 
     /// Return right after the Cmd-V, into the same event stream; the chord is already released. True when sent.

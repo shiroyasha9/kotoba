@@ -68,6 +68,45 @@ Example
 Can you open the auth.ts file and check why login fails when I pass --debug?`;
 }
 
+/** Which of kotoba's mode prompts a cleanup run sends (`--prompt`). */
+export type CleanupPrompt = "code" | "writing";
+
+/** A Writing row has its own variant, so a report never mixes it with the Code rows of the same model. */
+export function variantKey(model: string, prompt: CleanupPrompt): string {
+	return prompt === "writing" ? `${model}+writing` : model;
+}
+
+/**
+ * Where a Writing run's clips were dictated: the Writing apps of kotoba's `ModeRules.standard` (chat, mail, notes),
+ * plus browsers, where messages and mail are written in web apps.
+ */
+export const WRITING_APPS = new Set([
+	"com.tinyspeck.slackmacgap",
+	"com.apple.MobileSMS",
+	"net.whatsapp.WhatsApp",
+	"ru.keepcoder.Telegram",
+	"com.hnc.Discord",
+	"com.microsoft.teams2",
+	"com.apple.mail",
+	"com.microsoft.Outlook",
+	"com.superhuman.electron",
+	"com.apple.Notes",
+	"notion.id",
+	"com.apple.Safari",
+	"com.google.Chrome",
+	"org.mozilla.firefox",
+	"com.brave.Browser",
+	"company.thebrowser.Browser",
+	"company.thebrowser.dia",
+	"app.zen-browser.zen",
+	"net.imput.helium",
+]);
+
+/** The clips a Writing run cleans: dictated into a Writing app, with a reference to score against. */
+export function writingClips(clips: Clip[]): Clip[] {
+	return clips.filter((c) => c.app !== null && WRITING_APPS.has(c.app) && c.reference.trim() !== "");
+}
+
 /** The Writing mode's prompt (docs/research/per-app-modes.md): the same data and output rules, for messages, mail and
  * notes. kotoba's `OpenRouterCleaner.writingPrompt` copies it word for word; it ships after a run on non-terminal clips. */
 export function writingSystemPrompt(vocabulary: string[]): string {
@@ -122,9 +161,16 @@ type Chunk = {
 	usage?: CleanupRow["usage"];
 };
 
-type CleanupJob = { m: CleanupModel; sttVariant: string; clipId: string; transcript: string; system: string };
+type CleanupJob = {
+	m: CleanupModel;
+	variant: string;
+	sttVariant: string;
+	clipId: string;
+	transcript: string;
+	system: string;
+};
 
-function clean(sink: CallSink, { m, sttVariant, clipId, transcript, system }: CleanupJob): Promise<CleanupRow> {
+function clean(sink: CallSink, { m, variant, sttVariant, clipId, transcript, system }: CleanupJob): Promise<CleanupRow> {
 	const body = JSON.stringify({
 		model: m.model,
 		stream: true,
@@ -199,7 +245,7 @@ function clean(sink: CallSink, { m, sttVariant, clipId, transcript, system }: Cl
 		}
 		const row: CleanupRow = {
 			kind: "cleanup",
-			variant: m.key,
+			variant,
 			model: m.model,
 			sttVariant,
 			clipId,
@@ -229,6 +275,8 @@ export type CleanupContext = {
 	budget: Budget;
 	concurrency: number;
 	dryRun: boolean;
+	/** "writing" runs the Writing prompt on `writingClips` (docs/research/per-app-modes.md, question 3). */
+	prompt: CleanupPrompt;
 };
 
 export const CLEANUP_SAMPLE = 100;
@@ -247,13 +295,16 @@ export function cleanupSets(clips: Clip[]): { edited: Clip[]; sample: Clip[] } {
 }
 
 export async function runCleanup(ctx: CleanupContext): Promise<void> {
-	const { p, budget } = ctx;
+	const { p, budget, prompt } = ctx;
 	const { edited, sample } = cleanupSets(ctx.clips);
-	const targets = [...new Map([...edited, ...sample].map((c) => [c.id, c])).values()];
+	const targets =
+		prompt === "writing" ? writingClips(ctx.clips) : [...new Map([...edited, ...sample].map((c) => [c.id, c])).values()];
 	const stt = okRowsByVariant(await readJsonl<SttRow>(p.sttRaw));
 	const source = bestSttVariant(ctx.clips, stt);
 	console.log(
-		`\nCleanup plan: ${edited.length} edited + ${sample.length} sampled = ${targets.length} clips x ${CLEANUP_MODELS.length} models`,
+		prompt === "writing"
+			? `\nCleanup plan (Writing prompt): ${targets.length} clips from Writing apps x ${CLEANUP_MODELS.length} models`
+			: `\nCleanup plan: ${edited.length} edited + ${sample.length} sampled = ${targets.length} clips x ${CLEANUP_MODELS.length} models`,
 	);
 	if (!source) {
 		console.log("  no STT variant covers 90% of the scored clips yet; run --only stt first");
@@ -265,13 +316,13 @@ export async function runCleanup(ctx: CleanupContext): Promise<void> {
 			.map((r) => `${r.variant}\t${r.sttVariant}\t${r.clipId}`),
 	);
 	const inputs = stt.get(source)!;
-	const system = systemPrompt(ctx.vocabulary);
+	const system = prompt === "writing" ? writingSystemPrompt(ctx.vocabulary) : systemPrompt(ctx.vocabulary);
 	const queue = targets.flatMap((c) => {
 		const transcript = inputs.get(c.id)?.text;
 		if (!transcript) return [];
-		return CLEANUP_MODELS.filter((m) => !done.has(`${m.key}\t${source}\t${c.id}`)).map(
-			(m): CleanupJob => ({ m, sttVariant: source, clipId: c.id, transcript, system }),
-		);
+		return CLEANUP_MODELS.map((m) => ({ m, variant: variantKey(m.key, prompt) }))
+			.filter(({ variant }) => !done.has(`${variant}\t${source}\t${c.id}`))
+			.map(({ m, variant }): CleanupJob => ({ m, variant, sttVariant: source, clipId: c.id, transcript, system }));
 	});
 	console.log(`  input: ${source} output; ${queue.length} calls pending`);
 	if (ctx.dryRun || !queue.length) return;

@@ -22,6 +22,25 @@ public struct ModeRules: Sendable, Equatable, Codable {
         self.cleansEveryDictation = cleansEveryDictation
     }
 
+    private enum CodingKeys: String, CodingKey {
+        case apps
+        case otherApps
+        case cleansEveryDictation
+    }
+
+    /// Never loses the owner's list: a missing field takes its default, and a mode this build does not know (written by
+    /// a later build) drops only its own entry. Fields this build does not know are ignored.
+    public init(from decoder: any Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        let apps = try container.decodeIfPresent([String: String].self, forKey: .apps) ?? [:]
+        let otherApps = try container.decodeIfPresent(String.self, forKey: .otherApps)
+        let cleaning = try container.decodeIfPresent([String].self, forKey: .cleansEveryDictation) ?? []
+        self.init(
+            apps: apps.compactMapValues(AppMode.init(rawValue:)),
+            otherApps: otherApps.flatMap(AppMode.init(rawValue:)) ?? .code,
+            cleansEveryDictation: Set(cleaning.compactMap(AppMode.init(rawValue:))))
+    }
+
     /// The mode of `app`; kotoba itself in front, or an app with no bundle ID, gets `otherApps`.
     public func mode(for app: DictationApp?) -> AppMode {
         app.flatMap { apps[$0.bundleID] } ?? otherApps

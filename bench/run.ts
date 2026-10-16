@@ -1,10 +1,11 @@
 // kotoba-bench-v1 entry point.
-// bun run bench [--limit N] [--only stt|cleanup|latency|report] [--probe N] [--concurrency N] [--cap USD] [--dry-run] [--data DIR]
+// bun run bench [--limit N] [--only stt|cleanup|latency|report] [--prompt code|writing] [--probe N] [--concurrency N]
+//   [--cap USD] [--dry-run] [--data DIR]
 // A run without --only does the accuracy pass (STT, cleanup), then the sequential latency pass, then the report.
 
 import { parseArgs } from "node:util";
 import { fail, intArg } from "./cli.ts";
-import { CLEANUP_MODELS, PINNED_PROVIDERS, runCleanup } from "./cleanup.ts";
+import { CLEANUP_MODELS, type CleanupPrompt, PINNED_PROVIDERS, runCleanup } from "./cleanup.ts";
 import { loadClips, loadDictionary, paths, prepareAudio, vocabulary } from "./data.ts";
 import { Budget, confirmModels, spentUsd } from "./openrouter.ts";
 import { writeReport } from "./report.ts";
@@ -26,6 +27,8 @@ const { values } = parseArgs({
 		concurrency: { type: "string", default: "100" },
 		// USD this run may add on top of what the raw files already record (the owner's go names it).
 		cap: { type: "string" },
+		// The cleanup prompt: kotoba's Code prompt on the cleanup sets, or its Writing prompt on clips from Writing apps.
+		prompt: { type: "string", default: "code" },
 		"dry-run": { type: "boolean", default: false },
 		data: { type: "string", default: Bun.env.KOTOBA_BENCH_DATA },
 	},
@@ -39,6 +42,8 @@ const concurrency = intArg(values, "concurrency", 1)!;
 const runCap = values.cap === undefined ? undefined : Number(values.cap);
 if (runCap !== undefined && !(runCap > 0)) fail("--cap must be a positive number of USD");
 const dryRun = values["dry-run"];
+const prompt = values.prompt as CleanupPrompt;
+if (prompt !== "code" && prompt !== "writing") fail("--prompt must be code or writing");
 if (!values.data) fail("set KOTOBA_BENCH_DATA or pass --data DIR");
 const runs = (pass: Pass) => !only || only === pass;
 
@@ -65,7 +70,7 @@ if (only !== "report") {
 		const stt = { p, clips, audio, dict, budget, concurrency, dryRun, passthroughProbe };
 		if (runs("stt")) await runStt(stt);
 		if (runs("cleanup") && !budget.exceeded) {
-			await runCleanup({ p, clips, vocabulary: vocabulary(dict), budget, concurrency, dryRun });
+			await runCleanup({ p, clips, vocabulary: vocabulary(dict), budget, concurrency, dryRun, prompt });
 		}
 		if (runs("latency") && !budget.exceeded) await runLatency(stt);
 		console.log(`spent total: $${budget.total.toFixed(4)}`);

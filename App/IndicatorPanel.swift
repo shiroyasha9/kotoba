@@ -140,7 +140,8 @@ final class IndicatorPanel {
             return .init(
                 text: text, color: .secondaryLabelColor, action: action,
                 timer: .init(duration: context.undoWindow, kind: .followsUndoWindow))
-        case .failed, .needsSetup, .rejected, .cleanupFailed, .returnSkipped, .recovered, .copied, .captureFailed:
+        case .failed, .needsSetup, .rejected, .cleanupFailed, .cleanupTooSlow, .returnSkipped, .recovered, .copied,
+            .captureFailed:
             return .init(
                 PillNotice(text: text, action: action), color: state.isGoodOutcome ? .systemGreen : .systemOrange)
         }

@@ -73,7 +73,13 @@ final class SettingsController {
         if let dictionary {
             panes.append(.dictionary(dictionary))
         }
-        panes.append(.modes(ModesModel(source: .live(history: history) { [weak self] in self?.send($0) })))
+        panes.append(
+            .modes(
+                ModesModel(
+                    source: .live(
+                        history: history, hasCleanupKey: { [vault] in vault.hasKey(for: .openRouter) },
+                        addKey: { [weak self] in self?.show(selecting: .speech) },
+                        send: { [weak self] in self?.send($0) }))))
         let audio = audio
         panes.append(
             .microphones(

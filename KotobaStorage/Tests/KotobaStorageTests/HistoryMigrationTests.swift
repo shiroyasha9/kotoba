@@ -83,6 +83,56 @@ struct HistoryMigrationTests {
         PRAGMA user_version = 1;
         """
 
+    /// `HistoryStore.schema` with `ledgerSchema` and `keptAudioIndex` at 410b4e5 (pushed main before per-app modes),
+    /// with audio retention's columns and index.
+    static let retentionBuild = """
+        PRAGMA journal_mode = WAL;
+        CREATE TABLE IF NOT EXISTS dictations (
+            id TEXT PRIMARY KEY,
+            created_at REAL NOT NULL,
+            audio_path TEXT NOT NULL,
+            audio_duration_ms INTEGER NOT NULL,
+            transcript TEXT,
+            model TEXT,
+            status TEXT NOT NULL,
+            recovered_at REAL,
+            cleaned_text TEXT,
+            needs_setup TEXT,
+            mode TEXT NOT NULL DEFAULT 'transcript',
+            reject_reason TEXT,
+            app_bundle_id TEXT,
+            app_name TEXT,
+            audio_deleted INTEGER NOT NULL DEFAULT 0,
+            audio_bytes INTEGER
+        );
+        CREATE INDEX IF NOT EXISTS dictations_status ON dictations (status);
+        CREATE INDEX IF NOT EXISTS dictations_created ON dictations (created_at, id);
+        CREATE TABLE IF NOT EXISTS latency_marks (
+            dictation_id TEXT NOT NULL REFERENCES dictations (id) ON DELETE CASCADE,
+            mark TEXT NOT NULL,
+            offset_ms REAL NOT NULL,
+            PRIMARY KEY (dictation_id, mark)
+        );
+        CREATE TABLE IF NOT EXISTS usage_ledger (
+            id TEXT PRIMARY KEY,
+            time REAL NOT NULL,
+            dictation_id TEXT,
+            kind TEXT NOT NULL,
+            model TEXT NOT NULL,
+            audio_ms INTEGER NOT NULL,
+            words INTEGER NOT NULL,
+            spoken_words INTEGER NOT NULL DEFAULT 0,
+            cost_nano_usd INTEGER,
+            cost_estimated INTEGER,
+            app_bundle_id TEXT,
+            app_name TEXT
+        );
+        CREATE INDEX IF NOT EXISTS usage_ledger_time ON usage_ledger (time);
+        CREATE INDEX IF NOT EXISTS dictations_kept_audio ON dictations (coalesce(recovered_at, created_at), id)
+            WHERE audio_deleted = 0 AND status IN ('pasted', 'copied', 'recovered');
+        PRAGMA user_version = 1;
+        """
+
     /// A pasted dictation from 10 days ago and a failed one, as the old build wrote them: absolute paths under another
     /// home folder, files in the audio folder.
     func oldHistory(_ shape: String) throws -> (pasted: URL, failed: URL) {
@@ -107,7 +157,7 @@ struct HistoryMigrationTests {
         return (pasted, failed)
     }
 
-    @Test(arguments: [("v0.1.0", v010), ("9d69db8", usageBuild)])
+    @Test(arguments: [("v0.1.0", v010), ("9d69db8", usageBuild), ("410b4e5", retentionBuild)])
     func aShippedHistoryKeepsItsAudioUntilRetentionRuns(build: String, shape: String) async throws {
         let files = try oldHistory(shape)
 
@@ -131,7 +181,7 @@ struct HistoryMigrationTests {
 
     /// Per-app modes add `cleanup_mode`: a cleanup dictation from before them was cleaned with the Code prompt, and a
     /// retry cleans it the same way.
-    @Test(arguments: [("v0.1.0", v010), ("9d69db8", usageBuild)])
+    @Test(arguments: [("v0.1.0", v010), ("9d69db8", usageBuild), ("410b4e5", retentionBuild)])
     func aShippedCleanupDictationReadsAsACodeCleanup(build: String, shape: String) async throws {
         let database = try SQLiteDatabase(url: url)
         try database.execute(shape)

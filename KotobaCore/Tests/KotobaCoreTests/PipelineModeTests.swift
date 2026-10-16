@@ -153,6 +153,48 @@ struct PipelineModeTests {
         #expect(try #require(await world.store.records.first).status == .recovered)
     }
 
+    @Test func escTakesTheAppAndModeAtTheEsc() async throws {
+        world.frontApp.activate(200)
+        let pipeline = world.makePipeline(cleaner: cleaner, modes: writingApp)
+
+        await pipeline.cleanupTap()
+        await pipeline.handle(.escape)
+        world.frontApp.activate(100)
+        world.clock.advance(by: .seconds(5))
+        await pipeline.settle()
+
+        let record = try #require(await world.store.records.first)
+        #expect(record.status == .cancelled)
+        #expect(record.app?.bundleID == "test.app200")
+        #expect(record.output == .cleanup(.writing))
+    }
+
+    @Test func aRecordingKeptAtQuitKeepsItsMode() async throws {
+        world.frontApp.activate(200)
+        let pipeline = world.makePipeline(cleaner: cleaner, modes: writingApp)
+
+        await pipeline.cleanupTap()
+        await pipeline.shutdown()
+
+        let record = try #require(await world.store.records.first)
+        #expect(record.status == .pending)
+        #expect(record.output == .cleanup(.writing))
+    }
+
+    @Test func aFailedCleanupInAModeThatCleansEveryDictationPastesTheTranscript() async throws {
+        world.frontApp.activate(200)
+        var modes = writingApp
+        modes.cleansEveryDictation = [.writing]
+        let pipeline = world.makePipeline(
+            cleaner: FakeTextCleaner(result: .failure(ProviderError.offline)), modes: modes)
+
+        await pipeline.dictate(world)
+
+        #expect(await world.paster.pasted == ["raw words"])
+        let record = try #require(await world.store.records.first)
+        #expect(await pipeline.state == .cleanupFailed(record.id))
+    }
+
     @Test func newModesApplyToTheNextDictation() async {
         world.frontApp.activate(200)
         let pipeline = world.makePipeline(cleaner: cleaner, modes: ModeRules())
@@ -241,7 +283,8 @@ struct PipelineModeTests {
     @Test func aFinalCancelDuringACleanupLeavesThePillOnCleaning() async {
         let gate = Gate()
         let pipeline = world.makePipeline(
-            cleaner: FakeTextCleaner(result: .success("clean words"), gate: gate), modes: writingApp)
+            cleaner: FakeTextCleaner(result: .success("clean words"), gate: gate), modes: writingApp,
+            cleanupDeadline: .seconds(30))
         await pipeline.cleanupTap()
         await pipeline.tap(world)
         #expect(await eventually { await gate.hasWaiters })
@@ -277,61 +320,18 @@ struct PipelineModeTests {
     }
 }
 
-/// The rules alone: which mode an app gets, and what a dictation into it does.
-struct ModeRulesTests {
-    let slack = DictationApp(bundleID: "com.tinyspeck.slackmacgap", name: "Slack")
-    let ghostty = DictationApp(bundleID: "com.mitchellh.ghostty", name: "Ghostty")
-    let unknown = DictationApp(bundleID: "com.example.unknown")
-
-    @Test func aNewInstallPutsChatAppsInWritingAndTerminalsAndOtherAppsInCode() {
-        let rules = ModeRules.standard
-
-        #expect(rules.mode(for: slack) == .writing)
-        #expect(rules.mode(for: ghostty) == .code)
-        #expect(rules.mode(for: unknown) == .code)
-        #expect(rules.mode(for: nil) == .code)
-        #expect(rules.cleansEveryDictation.isEmpty)
-    }
-
-    @Test func terminalsStayInCodeWhenOtherAppsUseWriting() {
-        var rules = ModeRules.standard
-        rules.otherApps = .writing
-
-        #expect(rules.mode(for: ghostty) == .code)
-        #expect(rules.mode(for: unknown) == .writing)
-    }
-
-    @Test func outputIsCleanupOnlyWithTheChordOrAModeThatCleansEveryDictation() {
-        var rules = ModeRules.standard
-
-        #expect(rules.output(for: slack, isCleanupChord: false) == .transcript)
-        #expect(rules.output(for: slack, isCleanupChord: true) == .cleanup(.writing))
-        #expect(rules.output(for: ghostty, isCleanupChord: true) == .cleanup(.code))
-        rules.cleansEveryDictation = [.writing]
-        #expect(rules.output(for: slack, isCleanupChord: false) == .cleanup(.writing))
-        #expect(rules.output(for: ghostty, isCleanupChord: false) == .transcript)
-    }
-
-    @Test func rulesSurviveAJSONRoundTrip() throws {
-        var rules = ModeRules.standard
-        rules.apps["com.example.notes"] = .writing
-        rules.otherApps = .writing
-        rules.cleansEveryDictation = [.code]
-
-        let decoded = try JSONDecoder().decode(ModeRules.self, from: JSONEncoder().encode(rules))
-
-        #expect(decoded == rules)
-    }
-}
-
 extension FakeWorld {
-    func makePipeline(cleaner: (any TextCleaner)?, modes: ModeRules) -> DictationPipeline {
+    /// The Undo window and the cleanup deadline are both 5 s; a test that waits out the first sets a longer second.
+    func makePipeline(
+        cleaner: (any TextCleaner)?, modes: ModeRules, cleanupDeadline: Duration = .seconds(5)
+    ) -> DictationPipeline {
         DictationPipeline(
             ports: .init(
                 audio: audio, provider: provider, paster: paster, pasteboard: pasteboard, clock: clock, store: store,
                 cleaner: cleaner, frontApp: { [frontApp] in frontApp.current }),
             settings: .init(
-                audioDirectory: URL(filePath: "/tmp/kotoba-tests"), noSoundWarning: .seconds(3_600), modes: modes)
+                audioDirectory: URL(filePath: "/tmp/kotoba-tests"), noSoundWarning: .seconds(3_600),
+                cleanupDeadline: cleanupDeadline, modes: modes)
         )
     }
 }

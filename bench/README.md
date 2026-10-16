@@ -26,6 +26,7 @@ bun run bench --dry-run            # plan and cost estimate, no network calls
 bun run bench --limit 5            # small paid smoke run
 bun run bench                      # accuracy pass (STT, cleanup), latency pass, report
 bun run bench --only stt           # or cleanup, latency, report
+bun run bench --only cleanup --prompt writing   # kotoba's Writing prompt on clips from Writing apps
 bun run review                     # local page to hand-correct references, http://127.0.0.1:4788/
 ```
 
@@ -41,6 +42,7 @@ bun run review                     # local page to hand-correct references, http
 - STT via OpenRouter `/audio/transcriptions`: `x-ai/grok-stt-1.0` (plain, with xAI `keyterm`, and with `keyterm` plus `format` or `filler_words`; a 2026-10-15 probe showed OpenRouter forwards both), `microsoft/mai-transcribe-2` (plain, with Azure `phraseList`, and with `transcribeStyle: "clean"`). Provider options go through `provider.options.<tag>`; the report column "same text as base" flags options that the provider probably dropped.
 - Baselines: Wispr `asrText` and `formattedText`; Wispr `e2eLatency` (ms).
 - Cleanup: the output of the STT variant with the lowest WER over all scored clips, through Qwen 3.8 27B (Cerebras only), Gemini 3.5 Flash-Lite and Claude Haiku 5.5 with streaming, plus a no-LLM dictionary find/replace. Scored on the edited subset (against `editedText`) and on a seeded sample of 100 clips (against `pastedText`, a proxy for Wispr's accepted output).
+- Writing cleanup (`--prompt writing`): kotoba's Writing prompt (`writingSystemPrompt`) through the same models, on the clips dictated into Writing apps (`WRITING_APPS` in `cleanup.ts`: chat, mail, notes, browsers). Its rows are the `<model>+writing` variants, in their own report table. kotoba ships Writing only after this run passes (`docs/release.md`).
 - Reference: `editedText` when it differs from `formattedText` (after trimming), else `pastedText`, else `formattedText`.
 - Metrics: normalized WER and technical-term recall (`score.ts`).
 

@@ -27,6 +27,9 @@ public protocol Store: Sendable {
     /// its name, is removed; a row whose file cannot be removed stays unmarked, so a later run tries it again. Audio
     /// retention calls it on its events (`AudioRetention.swift`), never before a paste.
     func deleteAudio(transcribedBefore cutoff: Date, after cursor: AudioCursor?) async throws -> AudioBatch
+    /// Adds billed answers to the usage ledger, each once (by `UsageEntry.id`), with no row write: a cleanup answer that
+    /// came after its deadline was dropped, but it was billed.
+    func addUsage(_ entries: [UsageEntry]) async throws
 }
 
 public struct DictationID: Hashable, Sendable {
@@ -215,6 +218,8 @@ public enum HistoryChange: Sendable, Equatable {
     case deleted(Set<DictationID>)
     /// Audio retention deleted the audio of these rows (`DictationRecord.isAudioDeleted`); the rows stay.
     case audioDeleted(Set<DictationID>)
+    /// Billed answers went to the usage ledger with no row write (`Store.addUsage`).
+    case usageAdded
 }
 
 /// Passes every call to `base` and announces each write, so the app reads its counts and lists again only then.
@@ -266,5 +271,10 @@ struct AnnouncingStore: Store {
         let batch = try await base.deleteAudio(transcribedBefore: cutoff, after: cursor)
         if !batch.deleted.isEmpty { changes.yield(.audioDeleted(batch.deleted)) }
         return batch
+    }
+
+    func addUsage(_ entries: [UsageEntry]) async throws {
+        defer { changes.yield(.usageAdded) }
+        try await base.addUsage(entries)
     }
 }

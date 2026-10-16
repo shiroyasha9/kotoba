@@ -22,7 +22,8 @@ extension IndicatorPanel {
         let id = DictationID()
         let samples: [DictationState] = [
             .idle, .recording(isLong: false), .transcribing, .cleaning, .undoable, .failed(id), .rejected(id, .other),
-            .needsSetup(id, .key), .cleanupFailed(id), .returnSkipped(id), .copied(id), .recovered(id), .captureFailed,
+            .needsSetup(id, .key), .cleanupFailed(id), .cleanupTooSlow(id), .returnSkipped(id), .copied(id),
+            .recovered(id), .captureFailed,
         ]
         var snapshots = [
             Snapshot(name: "indicator-drag") { PillStandIn(content: .init(), anchor: nil) },
@@ -97,7 +98,7 @@ extension IndicatorPanel {
                     name: "captureFailed-denied", state: state,
                     context: StatusContext(provider: .azure, microphone: .denied)),
             ]
-        case .transcribing, .cleaning, .undoable, .failed, .cleanupFailed, .returnSkipped, .recovered:
+        case .transcribing, .cleaning, .undoable, .failed, .cleanupFailed, .cleanupTooSlow, .returnSkipped, .recovered:
             [SnapshotRow(name: snapshotName(of: state), state: state)]
         }
     }
@@ -110,6 +111,7 @@ extension IndicatorPanel {
         case .undoable: "undoable"
         case .failed: "failed"
         case .cleanupFailed: "cleanupFailed"
+        case .cleanupTooSlow: "cleanupTooSlow"
         case .returnSkipped: "returnSkipped"
         case .recovered: "recovered"
         case .idle, .recording, .needsSetup, .rejected, .copied, .captureFailed: "\(state)"

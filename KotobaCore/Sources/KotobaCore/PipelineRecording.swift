@@ -166,8 +166,8 @@ extension DictationPipeline {
         var record = DictationRecord(
             id: current.id, createdAt: ports.clock.date, audio: audio, transcript: nil, status: status, latency: latency
         )
-        // Esc and quit come before any stop: the app in front now is where the text would have gone, and its mode is
-        // what a later retry cleans in.
+        // Esc keeps the app in front at the Esc; quit comes before any stop, so the app in front now is where the text
+        // would have gone. Its mode is what a later retry cleans in.
         record.app = (current.frontAppAtStop ?? ports.frontApp())?.app
         record.output = settings.modes.output(for: record.app, isCleanupChord: current.isCleanupSeen)
         await ports.store.saveOrLog(record)
@@ -175,6 +175,9 @@ extension DictationPipeline {
 
     /// Esc: the mic goes off, the file stays open, and Undo can resume until the window closes.
     func pause(_ current: Recording, at now: Instant) async {
+        var current = current
+        // A cancel that becomes final keeps the app and the mode of the Esc, not of the app in front 5 s later.
+        current.frontAppAtStop = ports.frontApp()
         recording = nil
         current.announcement.cancel()
         current.soundDeadline?.cancel()

@@ -8,7 +8,9 @@ struct RetryQueueTests {
 
     func makeQueue() -> RetryQueue {
         RetryQueue(
-            steps: TranscriptionSteps(provider: world.provider, cleaner: nil, clock: world.clock),
+            steps: TranscriptionSteps(
+                provider: world.provider, cleaner: nil, clock: world.clock, store: world.store,
+                work: PendingWork(clock: world.clock)),
             store: world.store,
             clock: world.clock,
             clipboard: ClipboardGuard(pasteboard: world.pasteboard)

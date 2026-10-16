@@ -1,5 +1,6 @@
 import AppKit
 import KotobaCore
+import KotobaProviders
 import KotobaStorage
 import Observation
 import SwiftUI
@@ -56,6 +57,10 @@ final class ModesModel {
         var recentApps: @MainActor () async -> [DictationApp] = { [] }
         /// An app the owner picks in an open panel; nil when they cancel.
         var chooseApp: @MainActor () -> DictationApp? = { nil }
+        /// The cleaner's key (OpenRouter) is saved; without it every cleanup pastes the text as spoken.
+        var hasCleanupKey: @MainActor () -> Bool = { true }
+        /// Opens the pane where the owner adds that key.
+        var addKey: @MainActor () -> Void = {}
 
         /// Messages, Mail and Notes in Writing, Terminal in Code, and a seed app that is not installed; TextEdit and
         /// Safari as recent apps. All are system apps, so their icons render on any Mac.
@@ -90,15 +95,17 @@ final class ModesModel {
     private(set) var recent: [DictationApp] = []
     /// Each shown app's icon, looked up once per app, not at each draw or change.
     private(set) var icons: [String: NSImage] = [:]
+    private(set) var isCleanupKeyMissing = false
     @ObservationIgnored private var recentApps: [DictationApp] = []
     /// Each app's installed name, or nil when it is not installed, looked up once per app.
     @ObservationIgnored private var names: [String: String?] = [:]
     @ObservationIgnored private let source: Source
 
+    /// Reads only the rules: the window builds every pane's model when it opens, and the app lookups (3-9 ms for the
+    /// standard lists, measured 2026-10-16) wait until this pane shows (`show()`).
     init(source: Source) {
         self.source = source
         rules = source.rules()
-        reload()
     }
 
     var otherApps: AppMode {
@@ -151,8 +158,19 @@ final class ModesModel {
         }
     }
 
+    /// The pane shows: the listed apps' names and icons, and whether cleanup has its key (the owner may have added it in
+    /// the Speech pane since).
+    func show() {
+        isCleanupKeyMissing = !source.hasCleanupKey()
+        reload()
+    }
+
+    func addKey() {
+        source.addKey()
+    }
+
     /// Reads the recent apps once the pane shows (a usage ledger read), never at idle.
-    func appear() async {
+    func readRecentApps() async {
         recentApps = await source.recentApps()
         reload()
     }
@@ -190,7 +208,10 @@ final class ModesModel {
 extension ModesModel.Source {
     /// The rules in UserDefaults, the installed apps, the apps of the last 30 days in the usage ledger, and an open
     /// panel. `send` gives saved rules to the pipeline.
-    static func live(history: HistoryStore?, send: @escaping @MainActor (ModeRules) -> Void) -> Self {
+    static func live(
+        history: HistoryStore?, hasCleanupKey: @escaping @MainActor () -> Bool, addKey: @escaping @MainActor () -> Void,
+        send: @escaping @MainActor (ModeRules) -> Void
+    ) -> Self {
         Self(
             rules: { AppDefaults.modeRules },
             save: { rules in
@@ -209,7 +230,9 @@ extension ModesModel.Source {
                     return []
                 }
             },
-            chooseApp: chooseFromDisk)
+            chooseApp: chooseFromDisk,
+            hasCleanupKey: hasCleanupKey,
+            addKey: addKey)
     }
 
     /// The system's open panel in /Applications, for apps the owner has not dictated into yet.
@@ -236,6 +259,18 @@ private struct ModesPane: View {
                 PaneHeader(pane: .modes)
             }
             Section {
+                if model.isCleanupKeyMissing {
+                    LabeledContent {
+                        Button("Add Key…", action: model.addKey)
+                    } label: {
+                        Label {
+                            Text("Cleanup needs your \(ProviderAccount.openRouter.title) key")
+                            Text("Without it, kotoba pastes the text as spoken.")
+                        } icon: {
+                            Image(systemName: "exclamationmark.triangle.fill").symbolRenderingMode(.multicolor)
+                        }
+                    }
+                }
                 ForEach(AppMode.allCases, id: \.self) { mode in
                     Toggle(isOn: cleansEveryDictation(mode)) {
                         Text("\(mode.title) apps")
@@ -300,7 +335,8 @@ private struct ModesPane: View {
             }
         }
         .formStyle(.grouped)
-        .task { await model.appear() }
+        .onAppear(perform: model.show)
+        .task { await model.readRecentApps() }
     }
 
     private var modeChoices: some View {
@@ -331,12 +367,20 @@ private struct ModesPane: View {
 
 @MainActor
 extension SettingsPane {
+    /// No OpenRouter key: the cleanup section says so, with the fix on a button.
+    private static var noKeyModel: ModesModel {
+        var source = ModesModel.Source.sample()
+        source.hasCleanupKey = { false }
+        return ModesModel(source: source)
+    }
+
     static func modesSnapshots() -> [Snapshot] {
         [
             SettingsWindow.snapshot(of: .modes(ModesModel(source: .sample())), named: "settings-modes", height: 700),
             SettingsWindow.snapshot(
                 of: .modes(ModesModel(source: .sample(rules: ModeRules()))), named: "settings-modes-empty",
                 height: 600),
+            SettingsWindow.snapshot(of: .modes(noKeyModel), named: "settings-modes-no-key", height: 760),
         ]
     }
 }

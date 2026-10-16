@@ -156,6 +156,10 @@ extension HistoryStore {
 
     /// Each entry once: a record saved again with the same entries adds nothing. Costs are whole billionths of a
     /// dollar, so sums in SQLite are exact.
+    public func addUsage(_ entries: [UsageEntry]) throws {
+        try database.transaction { () throws(SQLiteError) in try Self.addToLedger(entries, in: database) }
+    }
+
     static func addToLedger(_ entries: [UsageEntry], in database: SQLiteDatabase) throws(SQLiteError) {
         guard !entries.isEmpty else { return }
         let rows = Array(repeating: "(?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)", count: entries.count)

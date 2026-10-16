@@ -137,6 +137,9 @@ final class HistoryModel {
         case .audioDeleted(let ids):
             list.markAudioDeleted(ids)
             retryable.subtract(ids)
+        case .usageAdded:
+            // The ledger only: no row changed.
+            break
         }
     }
 
