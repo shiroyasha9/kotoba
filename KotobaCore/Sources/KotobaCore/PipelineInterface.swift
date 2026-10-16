@@ -114,6 +114,9 @@ extension DictationPipeline {
         public var language: Locale.Language
         /// Keyterms for the request and find-and-replace rules for the transcript.
         public var dictionary: PersonalDictionary
+        /// How the owner uses each keyterm, by `TermUse.key(for:)`: over `PersonalDictionary.maxKeyterms`, the request
+        /// sends the terms `TermRanking` puts first.
+        public var termUse: [String: TermUse] = [:]
         /// A chord released sooner is a tap (toggle mode); a longer hold is push-to-talk.
         public var tapThreshold: Duration
         public var longRecordingWarning: Duration
@@ -138,10 +141,11 @@ extension DictationPipeline {
         /// The per-app modes: how the app in front at the stop has its dictations cleaned up.
         public var modes: ModeRules
 
-        /// The request for one recording, with the language and dictionary from these settings.
-        func request(for audio: RecordedAudio) -> TranscriptionRequest {
+        /// The request for one recording, with the language and the keyterms ranked at `now` from these settings.
+        func request(for audio: RecordedAudio, at now: Date) -> TranscriptionRequest {
             TranscriptionRequest(
-                audio: audio.file, duration: audio.duration, language: language, dictionaryTerms: dictionary.keyterms)
+                audio: audio.file, duration: audio.duration, language: language,
+                dictionaryTerms: TermRanking.keyterms(of: dictionary, use: termUse, at: now))
         }
 
         public init(

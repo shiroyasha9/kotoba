@@ -95,6 +95,9 @@ public struct DictationRecord: Sendable, Equatable, Identifiable {
     /// The answers billed since this record was read from the store: the store adds each one to the usage ledger once
     /// (by `UsageEntry.id`), so saving the record again adds nothing. A record read back has none.
     public var usage: [UsageEntry] = []
+    /// The keyterms the last request sent, since this record was read from the store; the store does not keep them.
+    /// The pipeline reports them once the dictation has its text (`TermReport`).
+    public var sentTerms: [String]?
     public var latency: LatencyLog
 
     public init(

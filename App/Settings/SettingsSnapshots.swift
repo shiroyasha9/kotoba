@@ -55,10 +55,20 @@ extension SettingsPane {
         ]
     }
 
-    /// A model over a throwaway store; snapshots never save.
+    /// 116 words, over the cap: the last dictation left out two of the sample words and the newest padding.
+    static var sampleOverCapModel: DictionaryModel {
+        var dictionary = sampleDictionary
+        dictionary.terms += (1...110).map { "word\($0)" }
+        let notSent = ["zshrc", "uv"] + (95...110).map { "word\($0)" }
+        return sampleModel(dictionary, termUse: ["pytorch": TermUse(isPinned: true)], notSent: Set(notSent))
+    }
+
+    /// A model over a throwaway store; snapshots never save. "Vercel" is starred.
     static func sampleModel(
         _ dictionary: PersonalDictionary,
-        suggestions: [DictionarySuggestion] = []
+        suggestions: [DictionarySuggestion] = [],
+        termUse: [String: TermUse] = ["vercel": TermUse(isPinned: true)],
+        notSent: Set<String> = []
     ) -> DictionaryModel {
         let url = FileManager.default.temporaryDirectory.appending(path: "kotoba-snapshot-\(UUID().uuidString).sqlite")
         let store: DictionaryStore
@@ -67,7 +77,9 @@ extension SettingsPane {
         } catch {
             preconditionFailure("Snapshot dictionary store: \(error)")
         }
-        let model = DictionaryModel(dictionary: dictionary, store: store, suggestions: suggestions) { _ in }
+        let model = DictionaryModel(
+            dictionary: dictionary, termUse: termUse, notSent: notSent, store: store, suggestions: suggestions
+        ) { _ in }
         model.isWisprInstalled = true
         return model
     }

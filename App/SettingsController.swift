@@ -24,6 +24,8 @@ final class SettingsController {
     var pipeline: DictationPipeline?
     /// The last change sent to the pipeline: each waits for the one before, so the pipeline gets them in order.
     private var modesUpdate: Task<Void, Never>?
+    /// Counts each delivered dictation's dictionary words for the app's lifetime (`DictationPipeline.termReports`).
+    private var termReports: Task<Void, Never>?
     /// The open window's Usage and Insights pane models, which read again after each history write while shown;
     /// Insights also after each dictionary write.
     private weak var usage: UsageModel?
@@ -50,15 +52,23 @@ final class SettingsController {
         do {
             let store = try DictionaryStore(url: AppFiles.dictionary)
             let loaded = try await store.load()
+            let use = try await store.termUse()
             dictionaryStore = store
             await pipeline.updateDictionary(loaded)
-            // The model calls both inside its serial save chain, so edits reach the pipeline in order, and Insights
+            await pipeline.updateTermUse(use)
+            // The model calls these inside its serial save chain, so edits reach the pipeline in order, and Insights
             // reads the learned words after they are on disk.
             dictionary = DictionaryModel(
-                dictionary: loaded, store: store, onSaved: { [weak self] in self?.insights?.storeChanged() },
-                onChange: { await pipeline.updateDictionary($0) })
+                dictionary: loaded, termUse: use, store: store,
+                onSaved: { [weak self] in self?.insights?.storeChanged() },
+                onTermUse: { await pipeline.updateTermUse($0) }, onChange: { await pipeline.updateDictionary($0) })
         } catch {
             Log.app.error("Cannot open the dictionary: \(error)")
+        }
+        termReports = Task { [weak self] in
+            for await report in pipeline.termReports {
+                self?.dictionary?.delivered(report)
+            }
         }
     }
 

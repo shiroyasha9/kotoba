@@ -38,7 +38,9 @@ struct TranscriptionSteps: Sendable {
     /// is billed too), then the transcript. Throws `ProviderError.emptyTranscript` when the provider heard no words;
     /// the pipeline owns that decision and the trim, whatever the route sends.
     func transcribe(_ record: inout DictationRecord, settings: DictationPipeline.Settings) async throws -> Transcribed {
-        let transcript = try await provider.transcribe(settings.request(for: record.audio))
+        let request = settings.request(for: record.audio, at: clock.date)
+        record.sentTerms = request.dictionaryTerms
+        let transcript = try await provider.transcribe(request)
         record.model = transcript.model
         let heard = transcript.text.trimmingCharacters(in: .whitespacesAndNewlines)
         // Matched on what the owner said, before the replacements, so a rule can neither make nor break the phrase.
@@ -90,7 +92,9 @@ struct TranscriptionSteps: Sendable {
             return .failure(.failed)
         }
         let cleaned: CleanedText
-        let terms = settings.dictionary.keyterms
+        // The keyterms the transcription sent, so the cleaner's list stays within the same cap.
+        let terms =
+            record.sentTerms ?? TermRanking.keyterms(of: settings.dictionary, use: settings.termUse, at: clock.date)
         let request: @Sendable () async throws -> CleanedText = {
             try await cleaner.clean(raw, vocabulary: terms, mode: mode)
         }

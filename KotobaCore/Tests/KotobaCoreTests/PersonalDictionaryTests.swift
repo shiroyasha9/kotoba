@@ -138,12 +138,10 @@ struct KeytermTests {
         #expect(dictionary.keyterms == [longest])
     }
 
-    @Test func keytermsStopAtTheLimit() {
+    /// `TermRanking` picks which keyterms a request sends; the dictionary lists them all.
+    @Test func keytermsKeepEveryTermOverTheCap() {
         let terms = (0..<150).map { "term\($0)" }
-        let dictionary = PersonalDictionary(terms: terms)
-        #expect(dictionary.keyterms == Array(terms.prefix(PersonalDictionary.maxKeyterms)))
-        #expect(PersonalDictionary.maxKeyterms == 100)
-        #expect(PersonalDictionary.maxKeytermLength == 50)
+        #expect(PersonalDictionary(terms: terms).keyterms == terms)
     }
 }
 

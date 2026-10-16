@@ -3,8 +3,9 @@ import Foundation
 /// The owner's words: terms sent to the model as keyterms or phrase list, and find-and-replace rules applied to the
 /// transcript before the paste.
 public struct PersonalDictionary: Sendable, Equatable {
-    /// xAI caps `keyterm` at 100 terms of up to 50 characters. MAI's `phraseList` limits are not published
-    /// (docs/spec.md, Unresolved Questions), so it gets the same list.
+    /// The most keyterms one request sends (`TermRanking` picks them). xAI caps `keyterm` at 100 terms of up to 50
+    /// characters; the OpenRouter route to MAI takes at most 200 `phraseList` terms (termcap bench, 2026-10-16), so
+    /// both get the same list.
     public static let maxKeyterms = 100
     public static let maxKeytermLength = 50
 
@@ -16,21 +17,25 @@ public struct PersonalDictionary: Sendable, Equatable {
         self.rules = rules
     }
 
-    /// The terms, then the spelling each rule writes, trimmed, without case-insensitive duplicates, at most
-    /// `maxKeytermLength` characters each and `maxKeyterms` in all. kotoba-bench-v1 measured MAI and Grok with
-    /// a list built the same way from Wispr's dictionary.
+    /// Every term a request can send: the terms, then the spelling each rule writes, as `keyterm(_:)` makes them,
+    /// without case-insensitive duplicates. kotoba-bench-v1 measured MAI and Grok with a list built the same way from
+    /// Wispr's dictionary. A request sends at most `maxKeyterms` of them, as `TermRanking` picks them.
     public var keyterms: [String] {
         var seen: Set<String> = []
-        var keyterms: [String] = []
-        for term in terms + rules.map(\.replacement) {
-            let trimmed = term.trimmingCharacters(in: .whitespacesAndNewlines)
-            guard !trimmed.isEmpty, trimmed.count <= Self.maxKeytermLength,
-                seen.insert(trimmed.lowercased()).inserted
-            else { continue }
-            keyterms.append(trimmed)
-            if keyterms.count == Self.maxKeyterms { break }
+        return (terms + rules.map(\.replacement)).compactMap { term in
+            Self.keyterm(term).flatMap { seen.insert(TermUse.key(for: $0)).inserted ? $0 : nil }
         }
-        return keyterms
+    }
+
+    /// The keys of `keyterms` (`TermUse.key(for:)`): one use count and pin each.
+    public var keytermKeys: Set<String> {
+        Set(keyterms.map(TermUse.key(for:)))
+    }
+
+    /// `term` trimmed, as a request sends it; nil when it is empty or longer than `maxKeytermLength`.
+    public static func keyterm(_ term: String) -> String? {
+        let trimmed = term.trimmingCharacters(in: .whitespacesAndNewlines)
+        return trimmed.isEmpty || trimmed.count > maxKeytermLength ? nil : trimmed
     }
 
     /// Replaces every match of every rule in one pass over `text`, so a replacement is never matched again.
@@ -108,10 +113,13 @@ public struct ReplacementRule: Sendable, Hashable {
     }
 
     var wordEdges: WordEdges {
-        guard isWholeWord, let first = find.first, let last = find.last else {
-            return WordEdges(before: false, after: false)
-        }
-        return WordEdges(before: Self.isWordCharacter(first), after: Self.isWordCharacter(last))
+        isWholeWord ? Self.wordEdges(of: find) : WordEdges(before: false, after: false)
+    }
+
+    /// The edges a whole-word match of `text` checks; `TermHits` uses the same rule.
+    static func wordEdges(of text: String) -> WordEdges {
+        guard let first = text.first, let last = text.last else { return WordEdges(before: false, after: false) }
+        return WordEdges(before: isWordCharacter(first), after: isWordCharacter(last))
     }
 
     /// The find text matched literally, in any case unless the rule is case-sensitive.
@@ -120,13 +128,16 @@ public struct ReplacementRule: Sendable, Hashable {
         return isCaseSensitive ? escaped : "(?i:\(escaped))"
     }
 
-    /// What ICU's `\w` matches: letters, marks, digits and connector punctuation such as `_`.
     private static func isWordCharacter(_ character: Character) -> Bool {
-        character.unicodeScalars.contains { scalar in
-            let properties = scalar.properties
-            return properties.isAlphabetic || properties.generalCategory == .decimalNumber
-                || properties.generalCategory == .connectorPunctuation || properties.isGraphemeExtend
-        }
+        character.unicodeScalars.contains(where: isWordScalar)
+    }
+
+    /// What ICU's `\w` matches: letters, marks, digits and connector punctuation such as `_`. `TermHits` checks word
+    /// edges with it too.
+    static func isWordScalar(_ scalar: Unicode.Scalar) -> Bool {
+        let properties = scalar.properties
+        return properties.isAlphabetic || properties.generalCategory == .decimalNumber
+            || properties.generalCategory == .connectorPunctuation || properties.isGraphemeExtend
     }
 
     /// True when both rules can match the same text, so keeping both makes the result depend on their order.

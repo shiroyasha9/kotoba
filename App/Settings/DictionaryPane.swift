@@ -83,7 +83,10 @@ private struct DictionaryPane: View {
             }
             Section {
                 ForEach(rows, id: \.self) { row in
-                    DictionaryRowView(draft: model.draft(for: row))
+                    DictionaryRowView(
+                        draft: model.draft(for: row), sendsKeyterm: model.keyterm(for: row) != nil,
+                        isPinned: model.isPinned(row), isNotSent: model.isNotSent(row)
+                    ) { model.setPinned(row, $0) }
                 }
             } header: {
                 if !model.suggestions.isEmpty, search.isEmpty, !rows.isEmpty {
@@ -181,9 +184,10 @@ private struct DictionaryPane: View {
     private var summary: String {
         let dictionary = model.dictionary
         let hints =
-            dictionary.keyterms.count < PersonalDictionary.maxKeyterms
+            dictionary.keyterms.count <= PersonalDictionary.maxKeyterms
             ? "The speech model gets up to \(PersonalDictionary.maxKeyterms) words as hints."
-            : "The speech model gets only the first \(PersonalDictionary.maxKeyterms) words as hints."
+            : "The speech model gets \(PersonalDictionary.maxKeyterms) words as hints: starred words first, then the "
+                + "words you use most."
         let words = StatusText.counted(dictionary.terms.count, "word")
         let replacements = StatusText.counted(dictionary.rules.count, "replacement")
         return "\(words), \(replacements). " + hints
@@ -254,28 +258,6 @@ private struct DictionaryPane: View {
     }
 }
 
-private struct DictionaryRowView: View {
-    let draft: EntryDraft
-
-    var body: some View {
-        HStack(spacing: 6) {
-            Text(draft.word)
-            if draft.isReplacing {
-                Image(systemName: "arrow.right").foregroundStyle(.secondary)
-                Text(draft.replacement.isEmpty ? "(deleted from text)" : draft.replacement)
-                    .foregroundStyle(draft.replacement.isEmpty ? .secondary : .primary)
-            } else if draft.word.count > PersonalDictionary.maxKeytermLength {
-                Image(systemName: "exclamationmark.triangle.fill")
-                    .symbolRenderingMode(.multicolor)
-                    .help(
-                        "Longer than \(PersonalDictionary.maxKeytermLength) characters, so kotoba does not send it to "
-                            + "the speech model."
-                    )
-            }
-        }
-    }
-}
-
 // MARK: - Snapshots
 
 @MainActor
@@ -285,6 +267,7 @@ extension SettingsPane {
         let (incoming, contents) = sampleWisprImport
         return [
             SettingsWindow.snapshot(of: .dictionary(sampleModel(sample)), named: "settings-dictionary"),
+            SettingsWindow.snapshot(of: .dictionary(sampleOverCapModel), named: "settings-dictionary-over-cap"),
             SettingsWindow.snapshot(
                 of: .dictionary(sampleModel(PersonalDictionary())), named: "settings-dictionary-empty"),
             importAlert(.preview(sample.importPreview(of: incoming), contents), named: "settings-dictionary-import"),

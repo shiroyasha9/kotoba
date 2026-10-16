@@ -508,6 +508,19 @@ Force quit with Activity Monitor (**Force Quit**) or `kill -9 <pid>` of kotoba D
 | 423 | Tap the chord and force quit kotoba Dev in the first half second of the recording; open it again | History shows a “Cancelled” row with “No text”; **Delete** removes it | |
 | 424 | Run `chmod 555 ~/Library/Application\ Support/kotoba-dev/audio`; in History, delete a dictation; then run `chmod 755` on the same folder | The alert “Couldn’t Delete” shows and the row stays; after `chmod 755`, **Delete** removes the row; quit and open kotoba Dev: it does not come back | |
 
+### Rank and cap dictionary words (phase 3)
+
+| # | Do this | Expect | Result |
+|---|---|---|---|
+| 430 | In kotoba Dev, open Settings > **Dictionary** and click the star of a word | The star fills; it stays after you close and reopen Settings, and after a relaunch | |
+| 431 | Edit a starred word only in case (“mastra” to “Mastra”), then edit it to another word | The case change keeps the star; the new word has none | |
+| 432 | With 100 words or fewer, dictate, then look at the list | No row says “Not sent”; the footer says “The speech model gets up to 100 words as hints.” | |
+| 433 | Add words until the list is over 100 (for example **Import from Wispr Flow…**); keep Settings open on **Dictionary** and dictate | The footer says “… gets 100 words as hints: starred words first, then the words you use most.” After the paste, the words left out show “Not sent”; no starred word does | |
+| 434 | Over 100 words: dictate a sentence that has a word marked “Not sent”, so the pasted text has it as written; dictate again | After the second dictation, that word no longer shows “Not sent” | |
+| 435 | Over 100 words: add 12 new words, then dictate | At most 10 of the new words are sent (the rest show “Not sent”); words you used before keep their place | |
+| 436 | Delete a starred word and add it again | It has no star | |
+| 437 | Point at a “Not sent” label, then at a star | Help tags: “Not sent with the last dictation: the list is over 100 words. Star it to always send it.” and “Star to always send it to the speech model.” | |
+
 ## Known offscreen-only doubts
 
 The offscreen snapshots (`make snapshots`) show two things that may not happen in the real app. Check them on screen:

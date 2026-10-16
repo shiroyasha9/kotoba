@@ -29,6 +29,11 @@ final class SQLiteDatabase {
         var integer: Int64? {
             if case .integer(let number) = self { number } else { nil }
         }
+
+        /// The time of a `.real` value in seconds since 1970; nil for any other.
+        var date: Date? {
+            if case .real(let seconds) = self { Date(timeIntervalSince1970: seconds) } else { nil }
+        }
     }
 
     /// SQLITE_TRANSIENT: SQLite copies bound text before the call returns.

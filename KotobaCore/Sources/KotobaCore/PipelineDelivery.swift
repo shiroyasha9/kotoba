@@ -23,11 +23,29 @@ extension DictationPipeline {
         {
             await readback.pasted(text)
         }
+        reportTerms(of: outcome.record)
         // After the paste: a dictation with text is the event that lets retention run (story 31). Tracked, so the
         // retries below do not wait for the files.
         if outcome.record.status.isTranscribed { work.track { await self.deleteExpiredAudio() } }
         // A transcript proves the route works, credit included: the dictations that waited are sent (decision 6).
         if outcome.record.transcript != nil { await setupChanged() }
+    }
+
+    /// After the paste: which keyterms the request sent, and which the delivered text has. Over every keyterm, sent or
+    /// not, so a term the model wrote without the hint earns its place back.
+    func reportTerms(of record: DictationRecord) {
+        guard record.status.isTranscribed, let sent = record.sentTerms, let text = record.deliveredText else { return }
+        let (keyterms, at) = (settings.dictionary.keyterms, ports.clock.date)
+        work.track { [termReportContinuation] in
+            let hits = await Self.hits(of: keyterms, in: text)
+            termReportContinuation.yield(TermReport(sent: sent, hits: hits, at: at))
+        }
+    }
+
+    /// Off the pipeline actor, so the next key-down never waits: 300 keyterms take about 0.15 ms on 50 words and 3 ms
+    /// on 2,000 (release build).
+    @concurrent private static func hits(of keyterms: [String], in text: String) async -> [String] {
+        TermHits.find(keyterms, in: text)
     }
 
     /// The transcript of `id` went to the cleaner: the indicator says so, unless a new recording or an Undo window

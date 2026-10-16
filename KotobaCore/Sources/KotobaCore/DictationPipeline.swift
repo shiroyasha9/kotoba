@@ -14,6 +14,8 @@ public actor DictationPipeline {
     public nonisolated let activity: AsyncStream<PipelineActivity>
     /// Each write to the store, in order: the menu reads its counts and lists again, an open History window its rows.
     public nonisolated let historyChanges: AsyncStream<HistoryChange>
+    /// The keyterms of each dictation that got its text, live or retried, after its paste.
+    public nonisolated let termReports: AsyncStream<TermReport>
 
     let ports: Ports
     var settings: Settings
@@ -23,6 +25,7 @@ public actor DictationPipeline {
     let delivery: TranscriptDelivery
     private let stateContinuation: AsyncStream<DictationState>.Continuation
     private let activityContinuation: AsyncStream<PipelineActivity>.Continuation
+    let termReportContinuation: AsyncStream<TermReport>.Continuation
     private var lastActivity = PipelineActivity(isQuiet: true, inFlight: [])
     var recording: Recording?
     /// Set while Esc's Undo window is open.
@@ -66,6 +69,7 @@ public actor DictationPipeline {
             frontApp: ports.frontApp)
         retries = RetryQueue(steps: steps, store: ports.store, clock: ports.clock, clipboard: clipboard)
         (states, stateContinuation) = AsyncStream.makeStream(of: DictationState.self)
+        (termReports, termReportContinuation) = AsyncStream.makeStream(of: TermReport.self)
         (activity, activityContinuation) = AsyncStream.makeStream(
             of: PipelineActivity.self, bufferingPolicy: .bufferingNewest(1))
     }
@@ -108,8 +112,9 @@ public actor DictationPipeline {
         let results = await retries.run(
             selection, settings: { await self.settings }, skipping: { await self.inFlight.contains($0) },
             waitUntilQuiet: { await self.waitUntilQuiet() })
-        for record in results where isQuiet {
-            emit(.outcome(of: record))
+        for record in results {
+            reportTerms(of: record)
+            if isQuiet { emit(.outcome(of: record)) }
         }
         // A recovered dictation is delivered too: retention's event (story 31).
         if results.contains(where: \.status.isTranscribed) { work.track { await self.deleteExpiredAudio() } }
@@ -159,6 +164,11 @@ public actor DictationPipeline {
     /// The owner edited the dictionary: the next request, paste and retry use it.
     public func updateDictionary(_ dictionary: PersonalDictionary) async {
         settings.dictionary = dictionary
+    }
+
+    /// The use counts or pins changed: the next request ranks its keyterms with them.
+    public func updateTermUse(_ use: [String: TermUse]) async {
+        settings.termUse = use
     }
 
     /// The owner changed the per-app modes: the next key-down and stop use them.

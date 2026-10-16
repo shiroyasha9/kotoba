@@ -23,6 +23,12 @@ final class DictionaryModel {
     }
 
     private(set) var dictionary: PersonalDictionary
+    /// How the owner uses each keyterm, with the pins, by `TermUse.key(for:)` (`term_use`). Set only by
+    /// `DictionaryKeyterms.swift`.
+    var termUse: [String: TermUse]
+    /// The keys of the keyterms the last dictation did not send (the list was over `PersonalDictionary.maxKeyterms`).
+    /// Empty until a dictation this launch. Set only by `DictionaryKeyterms.swift`.
+    var notSent: Set<String>
     /// Pending suggestions learned from corrections, the most seen first. The menu shows their count.
     private(set) var suggestions: [DictionarySuggestion] = []
     /// Pairs the owner dismissed; a correction detector skips them.
@@ -33,8 +39,10 @@ final class DictionaryModel {
     /// False hides "Import from Wispr Flow…": Wispr Flow's folder is not on this Mac.
     var isWisprInstalled = false
 
-    @ObservationIgnored private let store: DictionaryStore
+    @ObservationIgnored let store: DictionaryStore
     @ObservationIgnored private let onChange: @MainActor (PersonalDictionary) async -> Void
+    /// After each change of the use counts or pins, so the pipeline ranks the next request with them.
+    @ObservationIgnored let onTermUse: @MainActor ([String: TermUse]) async -> Void
     /// After each write to the store, so a reader of its learned words (Insights) reads again only then.
     @ObservationIgnored private let onSaved: @MainActor () -> Void
     /// Each edit goes to the pipeline and then to disk, one edit after another, so both end with the last edit.
@@ -43,12 +51,18 @@ final class DictionaryModel {
 
     /// `suggestions` given (snapshots) skips reading them from the store.
     init(
-        dictionary: PersonalDictionary, store: DictionaryStore, suggestions: [DictionarySuggestion]? = nil,
-        onSaved: @escaping @MainActor () -> Void = {}, onChange: @escaping @MainActor (PersonalDictionary) async -> Void
+        dictionary: PersonalDictionary, termUse: [String: TermUse] = [:], notSent: Set<String> = [],
+        store: DictionaryStore, suggestions: [DictionarySuggestion]? = nil,
+        onSaved: @escaping @MainActor () -> Void = {},
+        onTermUse: @escaping @MainActor ([String: TermUse]) async -> Void = { _ in },
+        onChange: @escaping @MainActor (PersonalDictionary) async -> Void
     ) {
         self.dictionary = dictionary
+        self.termUse = termUse
+        self.notSent = notSent
         self.store = store
         self.onChange = onChange
+        self.onTermUse = onTermUse
         self.onSaved = onSaved
         if let suggestions {
             self.suggestions = suggestions
@@ -222,12 +236,19 @@ final class DictionaryModel {
     /// Runs `work` after the edits before it, then refreshes the suggestions: the store, the pipeline and the list end
     /// with the last edit.
     private func enqueue(_ work: @escaping @MainActor () async -> Void) {
+        chain {
+            await work()
+            self.onSaved()
+            await self.refreshSuggestions()
+        }
+    }
+
+    /// Runs `work` after the edits before it: every store write goes through this one chain, in order.
+    func chain(_ work: @escaping @MainActor () async -> Void) {
         let previous = saving
         saving = Task {
             await previous?.value
             await work()
-            onSaved()
-            await refreshSuggestions()
         }
     }
 
@@ -257,6 +278,7 @@ final class DictionaryModel {
         recordingAdded candidates: [SuggestionCandidate] = []
     ) {
         guard updated != dictionary || !ids.isEmpty || !candidates.isEmpty else { return }
+        let isKeytermChange = updated.keytermKeys != dictionary.keytermKeys
         dictionary = updated
         enqueue { [store, onChange] in
             await onChange(updated)
@@ -267,6 +289,8 @@ final class DictionaryModel {
                 Log.dictionary.error("Cannot save the dictionary: \(error)")
                 self.saveError = "Couldn’t save your dictionary. Make the change again."
             }
+            // The save added a row for each new keyterm, with its add date, and dropped the removed ones.
+            if isKeytermChange { await self.refreshTermUse() }
         }
     }
 }

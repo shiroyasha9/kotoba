@@ -5,7 +5,8 @@ import KotobaCore
 /// write from holding the lock a dictation save needs. The dictionary is small, so a save rewrites it whole.
 ///
 /// Suggestions learned from corrections live in `dictionary_suggestions`, which a dictionary save does not rewrite:
-/// a pair the owner dismissed stays dismissed (docs/research/auto-learning.md 4.3-4.4).
+/// a pair the owner dismissed stays dismissed (docs/research/auto-learning.md 4.3-4.4). Use counts and pins live in
+/// `term_use` for the same reason (`DictionaryTermUse.swift`).
 public actor DictionaryStore {
     public static let maxPendingSuggestions = 20
     /// A pending suggestion not seen again for this long is dropped (not dismissed: seen later, it comes back).
@@ -49,7 +50,8 @@ public actor DictionaryStore {
     private static let suggestionColumns =
         "id, heard, corrected, proposes, origin, app_bundle_id, evidence, first_seen_at, last_seen_at, status"
 
-    private let database: SQLiteDatabase
+    /// Internal for the extensions in other files (`DictionaryTermUse.swift`); only this actor uses it.
+    let database: SQLiteDatabase
 
     public init(url: URL) throws {
         try FileManager.default.createDirectory(at: url.deletingLastPathComponent(), withIntermediateDirectories: true)
@@ -57,6 +59,7 @@ public actor DictionaryStore {
         try database.execute(Self.schema)
         try Self.migrateSuggestions(database)
         try database.execute(Self.pairIndex)
+        try Self.migrateTermUse(database)
     }
 
     /// A suggestion table from an earlier build matched pairs with SQLite's `lower()`, which folds ASCII only; the
@@ -89,6 +92,11 @@ public actor DictionaryStore {
     }
 
     public func load() throws -> PersonalDictionary {
+        try Self.load(database)
+    }
+
+    /// Static for the migration, which runs before the actor is set up.
+    static func load(_ database: SQLiteDatabase) throws(SQLiteError) -> PersonalDictionary {
         let terms = try database.query("SELECT term FROM dictionary_terms ORDER BY position;").compactMap { row in
             if case .text(let term) = row[0] { term } else { nil }
         }
@@ -119,6 +127,7 @@ public actor DictionaryStore {
     ) throws {
         try database.transaction { () throws(SQLiteError) in
             try write(dictionary)
+            try writeTermUse(of: dictionary, at: now)
             for id in ids {
                 try setStatus(.added, of: id)
             }
