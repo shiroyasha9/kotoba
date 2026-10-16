@@ -31,6 +31,8 @@ enum StatusText {
     static let yieldsToRelease = "Quit kotoba to dictate with \(Install.displayName)"
     /// The idle pill's help tag ("Show indicator: Always").
     static let idlePillHelp = "Click to start dictating"
+    /// What VoiceOver calls the idle pill, a button when a click on it starts a dictation.
+    static let idlePillLabel = "Start Dictating"
     /// The help tag of a recording pill whose dictation will be cleaned up (the cleanup chord, or the app's mode).
     static let cleanupHelp = "kotoba cleans up this dictation before it pastes."
 

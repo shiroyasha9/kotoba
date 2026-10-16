@@ -3,6 +3,36 @@ import KotobaCore
 
 // MARK: - Pill actions
 
+/// The one button a pill can carry. AppDelegate maps each action to its handler.
+enum PillAction: Sendable, Equatable {
+    case undo
+    case retry
+    case addKey
+    case openSpeechSettings
+    case addCredit
+    case copy
+    case allowPasting
+    case openMicrophoneSettings
+    /// Opens Settings > Microphone, from the no-sound warning.
+    case chooseMicrophone
+    /// Removes the words that auto-learn just added to the dictionary, found by the learn's id.
+    case undoLearned(UUID)
+
+    var title: String {
+        switch self {
+        case .undo, .undoLearned: "Undo"
+        case .retry: "Retry"
+        case .addKey: "Add Key…"
+        case .openSpeechSettings: "Settings…"
+        case .addCredit: "Add Credit…"
+        case .copy: "Copy"
+        case .allowPasting: "Allow Pasting…"
+        case .openMicrophoneSettings: "Open System Settings…"
+        case .chooseMicrophone: "Choose Mic…"
+        }
+    }
+}
+
 extension AppDelegate {
     func perform(_ action: PillAction) {
         switch action {

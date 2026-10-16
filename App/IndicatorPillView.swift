@@ -2,36 +2,6 @@ import AppKit
 import KotobaCore
 import SwiftUI
 
-/// The one button a pill can carry. AppDelegate maps each action to its handler.
-enum PillAction: Sendable, Equatable {
-    case undo
-    case retry
-    case addKey
-    case openSpeechSettings
-    case addCredit
-    case copy
-    case allowPasting
-    case openMicrophoneSettings
-    /// Opens Settings > Microphone, from the no-sound warning.
-    case chooseMicrophone
-    /// Removes the words that auto-learn just added to the dictionary, found by the learn's id.
-    case undoLearned(UUID)
-
-    var title: String {
-        switch self {
-        case .undo, .undoLearned: "Undo"
-        case .retry: "Retry"
-        case .addKey: "Add Key…"
-        case .openSpeechSettings: "Settings…"
-        case .addCredit: "Add Credit…"
-        case .copy: "Copy"
-        case .allowPasting: "Allow Pasting…"
-        case .openMicrophoneSettings: "Open System Settings…"
-        case .chooseMicrophone: "Choose Mic…"
-        }
-    }
-}
-
 /// The pill's own timer, the one its bar shows.
 struct PillTimer {
     enum Kind {
@@ -233,6 +203,34 @@ final class IndicatorPillView: NSView {
         }
         roundIcon.isHidden = !isRound
         updateColors()
+    }
+
+    // MARK: Accessibility
+
+    /// The round idle pill that a click starts a dictation from: VoiceOver reads it as one button, its waveform part of
+    /// it. Other pills are no element, so VoiceOver reads their text and button directly.
+    private var isIdleButton: Bool { content.isRound && content.isClickable }
+
+    override func isAccessibilityElement() -> Bool {
+        isIdleButton
+    }
+
+    override func accessibilityRole() -> NSAccessibility.Role? {
+        isIdleButton ? .button : super.accessibilityRole()
+    }
+
+    override func accessibilityLabel() -> String? {
+        isIdleButton ? StatusText.idlePillLabel : super.accessibilityLabel()
+    }
+
+    override func accessibilityChildren() -> [Any]? {
+        isIdleButton ? [] : super.accessibilityChildren()
+    }
+
+    override func accessibilityPerformPress() -> Bool {
+        guard isIdleButton else { return false }
+        onClick?()
+        return true
     }
 
     // MARK: Mouse
