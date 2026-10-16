@@ -72,7 +72,7 @@ final class HistoryModel {
         }
     }
     /// A row's saved audio, played from the pane (`HistoryAudio.swift`).
-    let playback = AudioPlayback()
+    let playback: AudioPlayback
     /// Paste Again could not bring back the app the owner was in: the window says so.
     var isPasteFailureShown = false
     /// The rows the Delete confirmation asks about; nil when it is not shown.
@@ -94,11 +94,16 @@ final class HistoryModel {
 
     init(source: Source?) {
         self.source = source
+        playback = AudioPlayback()
     }
 
-    /// For snapshots: fixed rows and no store; `transcribing` rows show as being transcribed again.
-    init(rows: [DictationRecord], search: String = "", transcribing: Set<DictationID> = []) {
+    /// For snapshots: fixed rows and no store; `transcribing` rows show as being transcribed again, and `playing`'s
+    /// audio as playing.
+    init(
+        rows: [DictationRecord], search: String = "", transcribing: Set<DictationID> = [], playing: DictationID? = nil
+    ) {
         source = nil
+        playback = AudioPlayback(playing: playing)
         self.search = search
         self.transcribing = transcribing
         list.replace(with: rows, limit: rows.count + 1)
@@ -266,34 +271,34 @@ final class HistoryModel {
         records.contains { retryable.contains($0.id) }
     }
 
-    /// The toolbar's Retry: rows with no text join the retry queue, and rows with text are transcribed again with
-    /// the current speech model.
     func retry(_ records: [DictationRecord]) {
         guard let source else { return }
-        transcribeAgain(records)
         let ids = Set(records.map(\.id)).intersection(retryable)
         guard !ids.isEmpty else { return }
         Task { await source.retry(ids) }
     }
 
-    /// Rows with text whose audio is kept, while no dictation records or is sent: the request would slow a live one.
-    func canTranscribeAgain(_ records: [DictationRecord]) -> Bool {
-        activity.isQuiet && !againRows(records).isEmpty
+    /// The one selected row with text whose audio is kept and that is not being sent; nil for none or several, so a
+    /// click never sends many paid requests.
+    func againRecord(_ records: [DictationRecord]) -> DictationRecord? {
+        guard let record = audioRecord(records), record.hasText, !transcribing.contains(record.id) else { return nil }
+        return record
     }
 
-    /// Sends each row with text again, one at a time, with `model` (a route's) or the current speech model (nil).
+    /// While no dictation records or is sent: the request would slow a live one.
+    func canTranscribeAgain(_ records: [DictationRecord]) -> Bool {
+        activity.isQuiet && againRecord(records) != nil
+    }
+
+    /// Sends the row again with `model` (a route's) or the current speech model (nil).
     func transcribeAgain(_ records: [DictationRecord], model: String? = nil) {
-        guard let source, canTranscribeAgain(records) else { return }
-        let ids = againRows(records).map(\.id)
-        transcribing.formUnion(ids)
-        Task {
-            var isEveryOneDone = true
-            for id in ids {
-                let isDone = await source.transcribeAgain(id, model)
-                isEveryOneDone = isEveryOneDone && isDone
-                transcribing.remove(id)
-            }
-            if !isEveryOneDone { isTranscribeFailureShown = true }
+        guard let source, canTranscribeAgain(records), let id = againRecord(records)?.id else { return }
+        transcribing.insert(id)
+        // Weak: a closed window drops the model, and the request still ends in the pipeline.
+        Task { [weak self] in
+            let isDone = await source.transcribeAgain(id, model)
+            self?.transcribing.remove(id)
+            if !isDone { self?.isTranscribeFailureShown = true }
         }
     }
 
@@ -302,13 +307,10 @@ final class HistoryModel {
         source?.otherSpeechModels() ?? []
     }
 
-    private func againRows(_ records: [DictationRecord]) -> [DictationRecord] {
-        records.filter { $0.hasText && Self.hasAudio($0) && !transcribing.contains($0.id) }
-    }
-
-    /// A dictation in flight is not deleted: its own save would bring the row back (the pipeline keeps it too).
+    /// A dictation in flight or being transcribed again is not deleted: its own save would bring the row back (the
+    /// pipeline keeps it too), or find it gone.
     func canDelete(_ records: [DictationRecord]) -> Bool {
-        !records.isEmpty && !records.contains { activity.inFlight.contains($0.id) }
+        !records.isEmpty && !records.contains { activity.inFlight.contains($0.id) || transcribing.contains($0.id) }
     }
 
     func askToDelete(_ records: [DictationRecord]) {

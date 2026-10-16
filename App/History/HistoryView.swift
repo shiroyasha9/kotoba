@@ -70,9 +70,9 @@ struct HistoryView: View {
                         HistoryRow(
                             record: record, apps: model.apps,
                             isRetryable: model.retryable.contains(record.id),
-                            isSending: model.activity.inFlight.contains(record.id)
-                                || model.transcribing.contains(record.id),
-                            isPlaying: model.playback.playing == record.id)
+                            isSending: model.activity.inFlight.contains(record.id),
+                            isTranscribingAgain: model.transcribing.contains(record.id),
+                            isPlaying: model.isPlaying([record]))
                     }
                 }
             }
@@ -109,9 +109,12 @@ struct HistoryView: View {
             Button("Paste Again", systemImage: "clipboard") { model.pasteAgain(records) }
                 .help("Paste the text in the app you were in")
                 .disabled(!model.canPasteAgain(records))
-            Button("Retry", systemImage: "arrow.clockwise") { model.retry(records) }
-                .help("Transcribe the saved audio again")
-                .disabled(!model.canRetry(records) && !model.canTranscribeAgain(records))
+            // A row with no text joins the retry queue; one row with text is transcribed again.
+            Button("Retry", systemImage: "arrow.clockwise") {
+                if model.canRetry(records) { model.retry(records) } else { model.transcribeAgain(records) }
+            }
+            .help("Transcribe the saved audio again")
+            .disabled(!model.canRetry(records) && !model.canTranscribeAgain(records))
             if model.isPlaying(records) {
                 Button("Stop", systemImage: "stop.fill") { model.togglePlay(records) }
                     .help("Stop the audio")
@@ -140,16 +143,16 @@ struct HistoryView: View {
             if model.canRetry(records) {
                 Button("Retry") { model.retry(records) }
             }
-            if records.contains(where: { $0.hasText && HistoryModel.hasAudio($0) }) {
+            if model.againRecord(records) != nil {
                 transcribeAgainItems(for: records)
             }
             if model.isPlaying(records) {
                 Button("Stop Audio") { model.togglePlay(records) }
-            } else if records.count == 1, records.contains(where: HistoryModel.hasAudio) {
+            } else if model.audioRecord(records) != nil {
                 Button("Play Audio") { model.togglePlay(records) }
                     .disabled(!model.canPlay(records))
             }
-            if records.count == 1, records.contains(where: HistoryModel.hasAudio) {
+            if model.audioRecord(records) != nil {
                 Button("Show Audio in Finder") { model.showInFinder(records) }
             }
             if model.canFix(records) {
@@ -200,6 +203,7 @@ struct HistoryRow: View {
     /// No text yet, and the audio is kept for a retry.
     var isRetryable = false
     var isSending = false
+    var isTranscribingAgain = false
     var isPlaying = false
 
     var body: some View {
@@ -238,7 +242,7 @@ struct HistoryRow: View {
                         .foregroundStyle(.secondary)
                         .monospacedDigit()
                 }
-                if let status = HistoryStatus(record, isSending: isSending) {
+                if let status = HistoryStatus(record, isSending: isSending || isTranscribingAgain) {
                     Label(status.title, systemImage: status.systemImage)
                         .foregroundStyle(status.isProblem ? AnyShapeStyle(.orange) : AnyShapeStyle(.secondary))
                 }

@@ -419,7 +419,7 @@ Rows from each agent's phase 2.5 work. The numbers continue the list above.
 | 724 | History: right-click a pasted row > **Transcribe Again** | The row reads “Transcribing”, then shows the new text; nothing pastes and the clipboard keeps what it held. Settings > Usage counts one more request | |
 | 725 | With keys for two speech models saved, right-click a pasted row > **Transcribe Again With** > the other model | The submenu lists only models other than the current one whose key is saved; the row gets that model’s text; the menu bar’s Speech Model does not change | |
 | 726 | Turn Wi-Fi off; right-click a pasted row > **Transcribe Again** | “Couldn’t Transcribe Again” with **OK**; the row keeps its text and shows no error status | |
-| 727 | Select a pasted row and a “Not transcribed” row; click **Retry** in the toolbar | The failed row is sent as before; the pasted row is transcribed again | |
+| 727 | Select one pasted row; click **Retry** in the toolbar. Then select two pasted rows | The row is transcribed again, and it cannot be deleted until the answer comes. With two rows with text, **Retry** is off and the menu has no **Transcribe Again**, so one click never sends many paid requests | |
 
 ### Usage pane (phase 3)
 

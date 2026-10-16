@@ -189,7 +189,7 @@ Plans: `docs/research/ux-polish.md` (49 items, IDs used below) and `docs/researc
 
 From the Wispr Flow survey (`<runbooks>/2026-10-17-wispr-flow-survey/kotoba-plan.md`, items 2, 4, 5, 7, 10):
 - Copy Last has its own chord, ⌃⌘C by default (Hotkey state machine above).
-- History: Transcribe Again sends a row's kept audio once more, with the current speech model or another one whose key is saved, and keeps the new text in place of the old; nothing is pasted, and a miss keeps the old text. The toolbar's Retry does it for a selected row with text. Play plays a row's kept audio (Space too) and stops when a dictation starts; Show Audio in Finder selects the file.
+- History: Transcribe Again sends a row's kept audio once more, with the current speech model or another one whose key is saved, and keeps the new text in place of the old; nothing is pasted, and a miss keeps the old text. It works on one row at a time, so a click never sends many paid requests; the toolbar's Retry does it for one selected row with text. Play plays a row's kept audio (Space too) and stops when a dictation starts; Show Audio in Finder selects the file.
 - The Modes pane shows one example per mode: what the owner says and what that mode's cleanup pastes, from the first example in its prompt.
 - The menu bar menu has Add Word…, which opens Dictionary with the add sheet.
 

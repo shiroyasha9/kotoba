@@ -20,8 +20,7 @@ final class HotkeyChords {
     private(set) var cleanup: Chord?
     /// Unset (nil) by default: a default chord could take a shortcut another app uses. The menu item works without it.
     private(set) var pasteLast: Chord?
-    /// ⌃⌘C by default (`Chord.defaultCopyLast`), unless that clashes with the saved chords; then off until the owner
-    /// records one. nil turns it off.
+    /// ⌃⌘C by default (`Chord.defaultCopyLast`), and off while that clashes with the saved chords. nil turns it off.
     private(set) var copyLast: Chord?
     /// On while a shortcut recorder listens: the tap ignores every chord, so the press reaches the recorder.
     var isRecording = false {
@@ -44,13 +43,15 @@ final class HotkeyChords {
         savedPushToTalk = defaults.flatMap { Self.load(Key.pushToTalkChord, from: $0) }.flatMap { $0 } ?? pushToTalk
         self.cleanup = defaults.flatMap { Self.load(Key.cleanupChord, from: $0) } ?? cleanup
         self.pasteLast = defaults.flatMap { Self.load(Key.pasteLastChord, from: $0) } ?? pasteLast
-        // The default must not break chords saved before Copy Last had one, such as a right ⌘ hands-free chord.
-        let defaultCopyLast =
-            Chord.problem(
+        if let saved = defaults.flatMap({ Self.load(Key.copyLastChord, from: $0) }) {
+            self.copyLast = saved
+        } else {
+            // The default must not break chords saved before Copy Last had one, such as a right ⌘ hands-free chord.
+            let problem = Chord.problem(
                 handsFree: self.handsFree, pushToTalk: savedPushToTalk, cleanup: self.cleanup,
-                pasteLast: self.pasteLast,
-                copyLast: copyLast) == nil ? copyLast : nil
-        self.copyLast = defaults.flatMap { Self.load(Key.copyLastChord, from: $0) } ?? defaultCopyLast
+                pasteLast: self.pasteLast, copyLast: copyLast)
+            self.copyLast = problem == nil ? copyLast : nil
+        }
     }
 
     var pushToTalk: Chord { savedPushToTalk ?? handsFree }

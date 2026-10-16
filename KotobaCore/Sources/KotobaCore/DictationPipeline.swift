@@ -222,7 +222,7 @@ public actor DictationPipeline {
         }
     }
 
-    /// "Copy Last Dictation": leaves `text` on the clipboard, with no restore.
+    /// History's Copy: leaves `text` on the clipboard, with no restore.
     public func copyAgain(_ text: String) async {
         await clipboard.copy(text)
     }

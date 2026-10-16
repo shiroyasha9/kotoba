@@ -106,8 +106,8 @@ extension Chord {
             }
         }
         let chords: [(Chord?, ChordRole)] = dictation.map { ($0, $1) } + [(cleanup, .cleanup)]
-        if let problem = pasteLast?.lastProblem(clashingWith: chords) { return problem.named(.pasteLast) }
-        return copyLast?.lastProblem(clashingWith: chords + [(pasteLast, .pasteLast)])?.named(.copyLast)
+        if let problem = pasteLast?.problem(as: .pasteLast, clashingWith: chords) { return problem }
+        return copyLast?.problem(as: .copyLast, clashingWith: chords + [(pasteLast, .pasteLast)])
     }
 
     /// The push-to-talk chord to keep after the owner saves `chord` (nil: Reset) as `role`; nil is the hands-free
@@ -120,33 +120,20 @@ extension Chord {
         return chord == handsFree ? nil : chord
     }
 
-    /// Why a Paste Last or Copy Last chord cannot be saved; `named` says which of the two.
-    private enum LastProblem {
-        case own(ChordProblem)
-        case sameAs(ChordRole)
-        case includes(ChordRole)
-
-        func named(_ last: ChordRole) -> ChordProblem {
-            switch (self, last == .copyLast) {
-            case (.own(let problem), _): problem
-            case (.sameAs(let role), true): .copyLastSameAs(role)
-            case (.sameAs(let role), false): .pasteLastSameAs(role)
-            case (.includes(let role), true): .copyLastIncludes(role)
-            case (.includes(let role), false): .pasteLastIncludes(role)
-            }
-        }
-    }
-
     /// The Paste Last or Copy Last chord's own problem, or how it clashes with one of `others`. The classifier tries
     /// the dictation and cleanup chords first, so a key press that matches one, or that holds one of them on the way,
     /// never reaches Paste Last or Copy Last.
-    private func lastProblem(clashingWith others: [(Chord?, ChordRole)]) -> LastProblem? {
-        guard keyCode != nil else { return .own(.needsKey) }
-        if let problem = ownProblem(as: .pasteLast) { return .own(problem) }
+    private func problem(as last: ChordRole, clashingWith others: [(Chord?, ChordRole)]) -> ChordProblem? {
+        guard keyCode != nil else { return .needsKey }
+        if let problem = ownProblem(as: last) { return problem }
         for (other, role) in others {
             guard let other else { continue }
-            if other.keyCode == nil, other.modifiers.isSatisfied(by: modifiers) { return .includes(role) }
-            if other.keyCode == keyCode, other.modifiers.kinds == modifiers.kinds { return .sameAs(role) }
+            if other.keyCode == nil, other.modifiers.isSatisfied(by: modifiers) {
+                return last == .copyLast ? .copyLastIncludes(role) : .pasteLastIncludes(role)
+            }
+            if other.keyCode == keyCode, other.modifiers.kinds == modifiers.kinds {
+                return last == .copyLast ? .copyLastSameAs(role) : .pasteLastSameAs(role)
+            }
         }
         return nil
     }

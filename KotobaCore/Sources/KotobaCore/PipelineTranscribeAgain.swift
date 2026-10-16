@@ -17,7 +17,7 @@ extension DictationPipeline {
             Log.pipeline.error("Transcribe again: cannot read \(id.rawValue): \(error)")
             return false
         }
-        guard var record = stored, !record.isAudioDeleted else { return false }
+        guard var record = stored, record.isAudioKept else { return false }
         do {
             let transcribed = try await delivery.steps.transcribe(&record, settings: settings, model: model)
             if let mode = record.output.cleanupMode {
@@ -26,19 +26,10 @@ extension DictationPipeline {
             }
         } catch {
             Log.pipeline.error("Transcribe again \(id.rawValue) on \(record.model ?? "no answer") failed: \(error)")
-            await bill(record.usage, of: id)
+            // The text is not kept, but the answer was billed.
+            await ports.store.addUsageOrLog(record.usage, of: id)
             return false
         }
         return await ports.store.updateOrLog(record)
-    }
-
-    /// The answers of a request whose text is not kept were billed all the same.
-    private func bill(_ usage: [UsageEntry], of id: DictationID) async {
-        guard !usage.isEmpty else { return }
-        do {
-            try await ports.store.addUsage(usage)
-        } catch {
-            Log.pipeline.error("Transcribe again \(id.rawValue): cannot bill the answer: \(error)")
-        }
     }
 }

@@ -12,6 +12,11 @@ final class AudioPlayback: NSObject, AVAudioPlayerDelegate {
     private(set) var playing: DictationID?
     @ObservationIgnored private var player: AVAudioPlayer?
 
+    /// `playing` is for snapshots: it shows as playing, with no player.
+    init(playing: DictationID? = nil) {
+        self.playing = playing
+    }
+
     /// Plays `record`'s audio from the start, after stopping any other.
     func play(_ record: DictationRecord) {
         stop()
@@ -26,11 +31,6 @@ final class AudioPlayback: NSObject, AVAudioPlayerDelegate {
         }
     }
 
-    /// For snapshots: `id` shows as playing, with no player.
-    func showAsPlaying(_ id: DictationID) {
-        playing = id
-    }
-
     func stop() {
         player?.stop()
         player = nil
@@ -38,24 +38,30 @@ final class AudioPlayback: NSObject, AVAudioPlayerDelegate {
     }
 
     nonisolated func audioPlayerDidFinishPlaying(_ player: AVAudioPlayer, successfully flag: Bool) {
-        let finished = ObjectIdentifier(player)
-        Task { @MainActor in
-            // A Play of another row since then made a new player, which keeps playing.
-            guard let current = self.player, ObjectIdentifier(current) == finished else { return }
-            self.stop()
-        }
+        Task { @MainActor in self.ended() }
+    }
+
+    nonisolated func audioPlayerDecodeErrorDidOccur(_ player: AVAudioPlayer, error: (any Error)?) {
+        Task { @MainActor in self.ended() }
+    }
+
+    /// A player ended. A late end of an earlier player finds the newer one still playing, and leaves it.
+    private func ended() {
+        guard player?.isPlaying == false else { return }
+        stop()
     }
 }
 
 extension HistoryModel {
-    /// One row whose audio is kept, while no dictation records or is sent: the speakers would reach the mic.
-    func canPlay(_ records: [DictationRecord]) -> Bool {
-        activity.isQuiet && records.count == 1 && records.first.map(Self.hasAudio) == true
+    /// The one selected row whose audio is kept; nil for none or several.
+    func audioRecord(_ records: [DictationRecord]) -> DictationRecord? {
+        guard records.count == 1, let record = records.first, record.isAudioKept else { return nil }
+        return record
     }
 
-    /// The audio file is kept: the dictation has audio and retention did not delete it.
-    static func hasAudio(_ record: DictationRecord) -> Bool {
-        record.audio.hasAudio && !record.isAudioDeleted
+    /// While no dictation records or is sent: the speakers would reach the mic.
+    func canPlay(_ records: [DictationRecord]) -> Bool {
+        activity.isQuiet && audioRecord(records) != nil
     }
 
     func isPlaying(_ records: [DictationRecord]) -> Bool {
@@ -66,14 +72,14 @@ extension HistoryModel {
     func togglePlay(_ records: [DictationRecord]) {
         if isPlaying(records) {
             playback.stop()
-        } else if canPlay(records), let record = records.first {
+        } else if canPlay(records), let record = audioRecord(records) {
             playback.play(record)
         }
     }
 
     /// The audio file selected in a Finder window.
     func showInFinder(_ records: [DictationRecord]) {
-        guard records.count == 1, let record = records.first, Self.hasAudio(record) else { return }
+        guard let record = audioRecord(records) else { return }
         NSWorkspace.shared.activateFileViewerSelecting([record.audio.file])
     }
 }

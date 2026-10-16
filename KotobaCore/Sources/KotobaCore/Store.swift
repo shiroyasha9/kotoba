@@ -179,6 +179,11 @@ extension DictationRecord {
         !status.isTranscribed && audio.hasAudio
     }
 
+    /// The audio file is kept: the dictation has audio and retention did not delete it.
+    public var isAudioKept: Bool {
+        audio.hasAudio && !isAudioDeleted
+    }
+
     /// When the dictation got its text: the retry that recovered it, else the dictation itself (its paste or copy
     /// comes seconds after `createdAt`). Nil while it has none. Audio retention counts from here.
     public var transcribedAt: Date? {
@@ -215,6 +220,16 @@ extension Store {
             try await save(record)
         } catch {
             Log.pipeline.error("Cannot save dictation \(record.id.rawValue): \(error)")
+        }
+    }
+
+    /// Adds billed answers to the ledger and logs a failure.
+    func addUsageOrLog(_ entries: [UsageEntry], of id: DictationID) async {
+        guard !entries.isEmpty else { return }
+        do {
+            try await addUsage(entries)
+        } catch {
+            Log.pipeline.error("Cannot bill the answers of \(id.rawValue): \(error)")
         }
     }
 

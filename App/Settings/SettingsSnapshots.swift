@@ -125,11 +125,8 @@ extension Pane {
         home: HomeModel = .sample
     ) -> [Pane] {
         let rows = HistoryController.sampleRows()
-        let history = HistoryModel(rows: rows)
+        let history = HistoryModel(rows: rows, playing: isPlaying ? rows[selected].id : nil)
         history.selection = [rows[selected].id]
-        if isPlaying {
-            history.playback.showAsPlaying(rows[selected].id)
-        }
         return [
             .home(home),
             .history(history),
