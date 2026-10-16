@@ -87,6 +87,9 @@ extension EnvironmentValues {
     /// it on each change.
     @Entry var findRequests = 0
 
+    /// On when the menu's "Add Word…" opened the window: the Dictionary pane opens its add sheet and turns it off.
+    @Entry var addWordRequest: Binding<Bool> = .constant(false)
+
     /// Set only by the README snapshots: the sidebar draws its selected row and its labels with explicit colors.
     /// Offscreen, the list's own selection draws as a black block over its label, and the glass's text treatment
     /// leaves the labels near black in dark (docs/research/native-ui.md): the window server applies both.
@@ -139,6 +142,11 @@ final class MainWindow: NSObject, NSWindowDelegate, NSMenuItemValidation {
         let window = window ?? makeWindow(panes: panes(), showing: id)
         self.window = window
         WindowFront.show(window)
+    }
+
+    /// The menu's "Add Word…", after `show` selected the Dictionary pane.
+    func requestAddWord() {
+        selection?.isAddWordRequested = true
     }
 
     /// Edit > Find… (⌘F): no view in the window answers it, so AppKit sends it to the window's delegate. SwiftUI's
@@ -200,6 +208,8 @@ final class Selection {
     var history: PaneHistory<PaneID>
     /// Edit > Find… requests; the shown pane gets them as `findRequests`.
     var findRequests = 0
+    /// The menu's "Add Word…": the Dictionary pane opens its add sheet and turns this off (`addWordRequest`).
+    var isAddWordRequested = false
 
     /// Shows `id`, else `last`, else Home; a pane missing from `panes` is skipped.
     init(panes: [Pane], showing id: PaneID?, last: PaneID? = nil) {
@@ -268,6 +278,7 @@ struct MainView: View {
                 pane.content()
                     .navigationTitle(pane.title)
                     .environment(\.findRequests, selection.findRequests)
+                    .environment(\.addWordRequest, $selection.isAddWordRequested)
                     // A pane opens another one (Home's "Show All"); the selection lives in the window.
                     .environment(\.openPane, OpenPaneAction { selection.id = $0 })
             }

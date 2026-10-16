@@ -119,6 +119,10 @@ extension AppDelegate: StatusMenuActions {
         mainWindow.show(selecting: .dictionary)
     }
 
+    func addWord() {
+        mainWindow.addWord()
+    }
+
     func openHistory() {
         mainWindow.show(selecting: .history)
     }

@@ -17,6 +17,7 @@ import KotobaProviders
     func pasteLastWithoutCleanup()
     func copyLastDictation()
     func openSuggestions()
+    func addWord()
     func openHistory()
     func openSettings()
     func showAbout()
@@ -151,6 +152,7 @@ struct MenuModel {
                     "\(StatusText.counted(suggestionCount, "Word Suggestion"))…", target: target,
                     action: #selector(StatusMenuActions.openSuggestions)))
         }
+        items.append(.action("Add Word…", target: target, action: #selector(StatusMenuActions.addWord)))
         return items
     }
 

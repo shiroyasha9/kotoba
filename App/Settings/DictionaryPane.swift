@@ -15,6 +15,7 @@ private struct DictionaryPane: View {
     @State private var search = ""
     @FocusState private var isSearchFocused: Bool
     @Environment(\.findRequests) private var findRequests
+    @Environment(\.addWordRequest) private var addWordRequest
     @State private var selection: Set<DictionaryModel.Row> = []
     /// The sheet: nil row adds a new entry.
     @State private var editing: Editing?
@@ -41,6 +42,11 @@ private struct DictionaryPane: View {
         .searchable(text: $search, placement: .toolbar, prompt: "Search words")
         .searchFocused($isSearchFocused)
         .onChange(of: findRequests) { isSearchFocused = true }
+        .onChange(of: addWordRequest.wrappedValue, initial: true) { _, isRequested in
+            guard isRequested else { return }
+            addWordRequest.wrappedValue = false
+            add()
+        }
         .wisprImportAlert(model)
         .sheet(item: $editing) { editing in
             EntryEditor(draft: editing.draft, isNew: editing.row == nil) { draft throws(DictionaryError) in

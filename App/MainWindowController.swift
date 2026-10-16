@@ -122,6 +122,15 @@ final class MainWindowController {
         window.show(panes(), selecting: pane)
     }
 
+    /// The menu's "Add Word…": the Dictionary pane with its add sheet open. Before the dictionary is read at launch
+    /// there is no Dictionary pane, so the window opens as it would.
+    func addWord() {
+        show(selecting: dictionary == nil ? nil : .dictionary)
+        if dictionary != nil {
+            window.requestAddWord()
+        }
+    }
+
     /// "Settings…": the settings pane the window shows, else General.
     func showSettings() {
         show(selecting: window.shownPane?.isSetting == true ? nil : .general)

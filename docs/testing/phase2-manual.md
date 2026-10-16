@@ -615,6 +615,14 @@ The offscreen snapshots (`make snapshots`) show two things that may not happen i
 | 452 | Record ⌃⌘V for “Paste last dictation”, then try to record ⌃⌘V for “Copy last dictation” | Refused: “This is the Paste Last shortcut.” Copy Last keeps ⌃⌘C | |
 | 453 | Click the ⓧ next to ⌃⌘C; quit and reopen kotoba Dev | It shows **Off** after the restart; ⌃⌘C reaches the app again | |
 
+## Add Word from the menu (kotoba Dev)
+
+| # | Do this | Expect | Result |
+|---|---|---|---|
+| 454 | With the main window closed, menu bar menu > **Add Word…** | The main window opens at Dictionary with the add sheet in front, the cursor in its first field; ⌘V pastes and ⌘A selects all in it | |
+| 455 | Type a word, click **Add**; close the window; menu > **Add Word…** again | The word is in the list; the sheet opens again, empty | |
+| 456 | With the main window open at History, menu > **Add Word…**; press Esc; click **History**, then **Dictionary** | The window shows Dictionary with the sheet; Esc closes it; going back to Dictionary opens no sheet | |
+
 ## Main window (0.3.0)
 
 One window for Home, History, Insights, Usage and the settings. Rows 480-493 use kotoba Dev with the release kotoba quit.
