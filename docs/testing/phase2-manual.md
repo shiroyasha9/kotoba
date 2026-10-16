@@ -730,3 +730,19 @@ Rows 500-514 use kotoba Dev with the release kotoba quit. A fresh setup: `defaul
 | 515 | Key step: save a good key; Try It step: dictate into the field | **Continue** turns prominent on each step once it is done | |
 | 516 | Leave Microphone off and go to the Done step | “kotoba can’t use the microphone yet.” (the same words as Home) with **Allow Microphone**; the text above says to open kotoba from the menu bar or the Dock | |
 | 517 | Settings > Speech > **Remove**, then press Esc | The same alert; Esc cancels and the key stays | |
+
+## Audit fixes (kotoba Dev, 2026-10-17)
+
+Rows 740-748 need real hardware or a TCC change, which a snapshot or unit test cannot make. Use kotoba Dev with the release kotoba quit. Read the log with `log show --last 5m --predicate 'subsystem == "tech.teensy.kotoba.dev"'`.
+
+| # | Do this | Expect | Result |
+|---|---|---|---|
+| 740 | With kotoba Dev idle, run `sudo killall coreaudiod` in a terminal; wait 5 s, then dictate | The text pastes on the first try. The log has “Rebuilding the mic input: audio service restarted” | |
+| 741 | Start a hands-free dictation, run `sudo killall coreaudiod` while you speak, keep speaking, then stop | The text has your words from after the restart too, or the pill says “No sound from the mic”; the next dictation works with no relaunch | |
+| 742 | Open a second copy of kotoba Dev while one runs (`open -n` on the built app, or a copy in ~/Downloads) | The second copy quits at once with no second Dock icon; the running copy shows its main window in front. The log has “Another copy of this install runs” | |
+| 743 | With the release kotoba running, open kotoba Dev | Both run (two installs); Dev gives way as in row 535 | |
+| 744 | In System Settings > Privacy & Security > Accessibility, turn kotoba Dev off. Click the idle pill (“Show indicator: Always”), speak, click again | The pill says “Copied. Press ⌘V to paste.” with **Allow Pasting…**; ⌘V pastes the text. Turn kotoba Dev back on afterwards | |
+| 745 | Fresh Accessibility (row 500 setup), onboarding on the Accessibility step: allow kotoba Dev in System Settings and do not click kotoba | The onboarding step turns to allowed within about 1 s while System Settings stays in front | |
+| 746 | Open the main window, switch to another app for 5 min. Then run `top -l 2 -s 30 -stats pid,command,idlew -pid <kotoba Dev pid>` | `idlew` (idle wake-ups) is near 0, not about 30 per 30 s | |
+| 747 | Disk full, short: quit kotoba Dev; `hdiutil create -size 30m -fs APFS -volname KotobaFull /tmp/kfull.dmg && hdiutil attach /tmp/kfull.dmg`; move `~/Library/Application Support/kotoba-dev/audio` aside and link it: `ln -s /Volumes/KotobaFull ~/Library/Application\ Support/kotoba-dev/audio`; fill it: `mkfile 29m /Volumes/KotobaFull/fill`. Open kotoba Dev and dictate 10 s | The pill says “Couldn’t save audio. Disk full?”; no request, no History row | |
+| 748 | Disk full, partway: as row 747, but `mkfile 28m` (about 1 MB free), then dictate for 2 min | The first part pastes and the pill says “Pasted what was saved. Disk full?”. Afterwards remove the link, move the old `audio` folder back and `hdiutil detach /Volumes/KotobaFull` | |
