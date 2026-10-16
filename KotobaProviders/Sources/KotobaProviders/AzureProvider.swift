@@ -113,6 +113,19 @@ private struct SuccessBody: Decodable {
         var text: String
     }
 
+    private enum CodingKeys: String, CodingKey {
+        case durationMilliseconds
+        case combinedPhrases
+    }
+
+    /// Nil also when it does not parse, so the recording's length counts and the text is never dropped for it.
     var durationMilliseconds: Int?
     var combinedPhrases: [Phrase]
+
+    init(from decoder: any Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        // A count, not the text: another type only means the recording's length is used.
+        durationMilliseconds = try? container.decodeIfPresent(Int.self, forKey: .durationMilliseconds)
+        combinedPhrases = try container.decode([Phrase].self, forKey: .combinedPhrases)
+    }
 }

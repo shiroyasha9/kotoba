@@ -105,6 +105,10 @@ public struct DictationRecord: Sendable, Equatable, Identifiable {
     public var app: DictationApp?
     /// Audio retention deleted the audio file; the row keeps its text. Only `Store.deleteAudio` sets it.
     public var isAudioDeleted = false
+    /// Failed sends that reached the route (`ProviderError.usesAttempt`), live and retried. At
+    /// `RetrySelection.automaticAttempts` launch and a returning network stop sending the dictation; the owner's
+    /// Retry still does.
+    public var attempts = 0
     /// The answers billed since this record was read from the store: the store adds each one to the usage ledger once
     /// (by `UsageEntry.id`), so saving the record again adds nothing. A record read back has none.
     public var usage: [UsageEntry] = []
@@ -209,9 +213,11 @@ extension DictationRecord {
 
     /// Records a failed request: `.failed` (retried), with `needsSetup` when only a setting can help,
     /// or `.rejected` when the same request cannot succeed, an empty transcript included: the same audio gets the
-    /// same answer. Errors that are not `ProviderError` count as transient.
+    /// same answer. Errors that are not `ProviderError` count as transient. A send that reached the route uses an
+    /// attempt, as does an error that is not `ProviderError` (a missing audio file fails the same way each time).
     mutating func markFailed(by error: any Error) {
         let providerError = error as? ProviderError
+        if providerError?.usesAttempt ?? true { attempts += 1 }
         needsSetup = providerError?.setupItem
         switch providerError?.recovery ?? .transient {
         case .transient, .needsSetup:

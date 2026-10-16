@@ -302,8 +302,15 @@ public struct RetrySelection: Sendable, Equatable {
         }
     }
 
+    /// A dictation is sent at most this many times in all, live and retried, without the owner: each failed send
+    /// that reached the route may have been billed (`DictationRecord.attempts`). Launch and a returning network skip
+    /// it then; the owner's Retry (the menu, History) still sends it.
+    public static let automaticAttempts = 3
+
     var rule: Rule?
     var ids: Set<DictationID> = []
+    /// Launch or a returning network, not the owner: the rule skips dictations that used their automatic attempts.
+    var isAutomatic = false
 
     /// The menu's Retry: every queued dictation.
     public static let all = Self(rule: .all)
@@ -318,17 +325,21 @@ public struct RetrySelection: Sendable, Equatable {
     }
 
     func includes(_ record: DictationRecord) -> Bool {
-        ids.contains(record.id) || rule?.includes(record) == true
+        if ids.contains(record.id) { return true }
+        guard rule?.includes(record) == true else { return false }
+        return !isAutomatic || record.attempts < Self.automaticAttempts
     }
 
-    /// Two requests in one: the dictations of each. Two different rules cover both only as `.all`.
+    /// Two requests in one: the dictations of each. Two different rules cover both only as `.all`; the rule is capped
+    /// only when every request with a rule was automatic.
     func merged(with other: Self) -> Self {
-        let merged: Rule? =
+        let (merged, isAutomatic): (Rule?, Bool) =
             switch (rule, other.rule) {
-            case (nil, let one), (let one, nil): one
-            case (let one?, let two?): one == two ? one : .all
+            case (nil, _): (other.rule, other.isAutomatic)
+            case (_, nil): (rule, self.isAutomatic)
+            case (let one?, let two?): (one == two ? one : .all, self.isAutomatic && other.isAutomatic)
             }
-        return Self(rule: merged, ids: ids.union(other.ids))
+        return Self(rule: merged, ids: ids.union(other.ids), isAutomatic: isAutomatic)
     }
 }
 

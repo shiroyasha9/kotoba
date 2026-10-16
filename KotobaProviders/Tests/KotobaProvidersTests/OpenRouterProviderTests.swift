@@ -248,6 +248,18 @@ struct OpenRouterProviderTests {
         #expect(transcript == Transcript(text: "hello", usage: usage, model: "microsoft/mai-transcribe-2"))
     }
 
+    /// A usage field of another type (a cost sent as a string) loses only the reported cost: the text stays, and the
+    /// recording's length is priced at the list price.
+    @Test func aUsageBlockThatDoesNotParseKeepsTheText() async throws {
+        let body = #"{"text": "hello", "usage": {"seconds": 9.2, "cost": "0.0003"}}"#
+        let stub = StubHost(reply: .raw(status: 200, body: body))
+
+        let transcript = try await stub.provider().transcribe(stub.request(duration: .milliseconds(9_200)))
+
+        let usage = TranscriptionUsage(audio: .milliseconds(9_200), cost: .estimated(Decimal(100_000) / 360_000_000))
+        #expect(transcript == Transcript(text: "hello", usage: usage, model: "microsoft/mai-transcribe-2"))
+    }
+
     /// Recorded in kotoba-bench-v1 (Grok, a 19.9 s clip): OpenRouter bills an answer with no words. The pipeline
     /// decides it heard no speech; the provider keeps the cost.
     @Test func anEmptyAnswerKeepsItsUsage() async throws {
@@ -265,7 +277,7 @@ struct OpenRouterProviderTests {
     }
 
     @Test(arguments: [
-        (StubReply.raw(status: 200, body: "<html>"), ProviderError.server(status: 200)),
+        (StubReply.raw(status: 200, body: "<html>"), ProviderError.unreadableAnswer(status: 200)),
         (.fixture("error-401", status: 401), .auth(status: 401)),
         (.raw(status: 403, body: ""), .auth(status: 403)),
         (.fixture("error-429", status: 429, headers: ["Retry-After": "7"]), .rateLimited(retryAfter: .seconds(7))),

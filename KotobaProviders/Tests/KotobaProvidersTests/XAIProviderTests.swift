@@ -73,6 +73,17 @@ struct XAIProviderTests {
         #expect(transcript.usage == .init(audio: .seconds(1), cost: .estimated(Decimal(10_000) / 360_000_000)))
     }
 
+    /// A `duration` of another type loses only the count: the text stays, and the recording's length counts.
+    @Test func aDurationThatDoesNotParseKeepsTheText() async throws {
+        let stub = StubHost(reply: .raw(status: 200, body: #"{"text":"hello","duration":"1.0"}"#))
+        stub.settings.route = .xaiGrok
+
+        let transcript = try await stub.provider().transcribe(stub.request(duration: .seconds(2)))
+
+        #expect(transcript.text == "hello")
+        #expect(transcript.usage.audio == .seconds(2))
+    }
+
     @Test func missingXAIKeyNamesTheProviderToSetUp() async {
         let stub = StubHost(reply: .fixture("xai-success"))
         stub.settings.route = .xaiGrok

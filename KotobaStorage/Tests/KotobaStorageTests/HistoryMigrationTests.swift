@@ -196,4 +196,21 @@ struct HistoryMigrationTests {
 
         #expect(try await store.pendingRetries().map(\.output) == [.cleanup(.code)], "\(build)")
     }
+
+    /// The automatic-retry cap adds `attempts`: a queued dictation from before it has used none, and the count it
+    /// gets from now on is kept.
+    @Test(arguments: [("v0.1.0", v010), ("9d69db8", usageBuild), ("410b4e5", retentionBuild)])
+    func aShippedFailedDictationHasUsedNoAttempt(build: String, shape: String) async throws {
+        _ = try oldHistory(shape)
+
+        let store = try HistoryStore(url: url, audio: audio)
+        let queued = try await store.pendingRetries()
+        #expect(queued.count == 1)
+        var failed = try #require(queued.first)
+        #expect(failed.attempts == 0, "\(build)")
+        failed.attempts = 2
+        #expect(try await store.update(failed))
+
+        #expect(try await store.pendingRetries().map(\.attempts) == [2])
+    }
 }

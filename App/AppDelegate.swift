@@ -125,7 +125,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             await dictionaryRead.value
             // Audio left with no row (a crash during a recording) joins this launch's retry.
             await OrphanAudioRecovery.run(in: AppFiles.audio, store: store, launchedAt: launchedAt)
-            await pipeline.retryPending()
+            await pipeline.retryAtLaunch()
             await refreshQueues()
         }
         startHotkeys(feeding: pipeline)

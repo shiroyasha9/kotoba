@@ -31,7 +31,8 @@ public actor HistoryStore: Store {
             audio_deleted INTEGER NOT NULL DEFAULT 0,
             audio_bytes INTEGER,
             cleanup_mode TEXT,
-            polished_text TEXT
+            polished_text TEXT,
+            attempts INTEGER NOT NULL DEFAULT 0
         );
         CREATE INDEX IF NOT EXISTS dictations_status ON dictations (status);
         -- The History window's order, newest first.
@@ -51,15 +52,15 @@ public actor HistoryStore: Store {
         ("model", "TEXT"), ("recovered_at", "REAL"), ("cleaned_text", "TEXT"), ("needs_setup", "TEXT"),
         ("mode", "TEXT NOT NULL DEFAULT 'transcript'"), ("reject_reason", "TEXT"), ("app_bundle_id", "TEXT"),
         ("app_name", "TEXT"), ("audio_deleted", "INTEGER NOT NULL DEFAULT 0"), ("audio_bytes", "INTEGER"),
-        ("cleanup_mode", "TEXT"), ("polished_text", "TEXT"),
+        ("cleanup_mode", "TEXT"), ("polished_text", "TEXT"), ("attempts", "INTEGER NOT NULL DEFAULT 0"),
     ]
 
     private static let columns = """
         id, created_at, audio_path, audio_duration_ms, transcript, model, status, recovered_at, cleaned_text,
         needs_setup, mode, reject_reason, app_bundle_id, app_name, cleanup_mode, polished_text
         """
-    /// What a read returns: the written columns, then the ones only `deleteAudio` writes.
-    private static let readColumns = columns + ", audio_deleted"
+    /// What a read returns: the written columns, then the one only `deleteAudio` writes, then `attempts`.
+    private static let readColumns = columns + ", audio_deleted, attempts"
 
     /// SQL lists of statuses, from `DictationRecord.Status`: the retry queue, the rows whose text reached the owner,
     /// and every row with text.
@@ -117,8 +118,8 @@ public actor HistoryStore: Store {
         _ = try write(
             record,
             sql: """
-                INSERT INTO dictations (\(Self.columns), audio_bytes)
-                VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15, ?16, ?17)
+                INSERT INTO dictations (\(Self.columns), audio_bytes, attempts)
+                VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15, ?16, ?17, ?18)
                 ON CONFLICT (id) DO UPDATE SET
                     audio_path = excluded.audio_path, audio_duration_ms = excluded.audio_duration_ms,
                     transcript = excluded.transcript, model = excluded.model, status = excluded.status,
@@ -126,7 +127,7 @@ public actor HistoryStore: Store {
                     needs_setup = excluded.needs_setup, mode = excluded.mode, reject_reason = excluded.reject_reason,
                     app_bundle_id = excluded.app_bundle_id, app_name = excluded.app_name,
                     cleanup_mode = excluded.cleanup_mode, polished_text = excluded.polished_text,
-                    audio_bytes = excluded.audio_bytes
+                    audio_bytes = excluded.audio_bytes, attempts = excluded.attempts
                 RETURNING id;
                 """)
     }
@@ -138,15 +139,15 @@ public actor HistoryStore: Store {
             sql: """
                 UPDATE dictations SET (
                     audio_path, audio_duration_ms, transcript, model, status, recovered_at, cleaned_text, needs_setup,
-                    mode, reject_reason, app_bundle_id, app_name, cleanup_mode, polished_text, audio_bytes
-                ) = (?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15, ?16, ?17)
+                    mode, reject_reason, app_bundle_id, app_name, cleanup_mode, polished_text, audio_bytes, attempts
+                ) = (?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15, ?16, ?17, ?18)
                 WHERE id = ?1
                 RETURNING id;
                 """)
     }
 
-    /// Runs `sql` with the record's columns as ?1-?16 (`columns` order) and the audio file's size as ?17 (one `stat`,
-    /// about 10 µs, for the Settings size), then replaces its latency marks, in one
+    /// Runs `sql` with the record's columns as ?1-?16 (`columns` order), the audio file's size as ?17 (one `stat`,
+    /// about 10 µs, for the Settings size) and `attempts` as ?18, then replaces its latency marks, in one
     /// transaction; the record's usage entries go to the ledger even when `sql` wrote no row (the dictation was
     /// deleted during a retry, and the answer was still billed). False when `sql` wrote no row.
     private func write(_ record: DictationRecord, sql: String) throws -> Bool {
@@ -165,7 +166,7 @@ public actor HistoryStore: Store {
                     Self.text(record.needsSetup?.rawValue), .text(Self.modeColumn(of: record.output)),
                     Self.text(record.rejectReason?.rawValue), Self.text(record.app?.bundleID),
                     Self.text(record.app?.name), Self.text(record.output.cleanupMode?.rawValue),
-                    Self.text(record.polishedText), bytes,
+                    Self.text(record.polishedText), bytes, .integer(Int64(record.attempts)),
                 ]
             ).isEmpty
             guard isWritten else { return }
@@ -257,35 +258,6 @@ public actor HistoryStore: Store {
         }
     }
 
-    private static func record(from row: [Value], audioFolder: URL) -> DictationRecord? {
-        guard
-            case .text(let idText) = row[0], let uuid = UUID(uuidString: idText),
-            case .real(let createdAt) = row[1],
-            case .text(let path) = row[2],
-            case .integer(let durationMs) = row[3],
-            case .text(let statusText) = row[6], let status = DictationRecord.Status(rawValue: statusText)
-        else { return nil }
-        let recoveredAt: Date? = if case .real(let time) = row[7] { Date(timeIntervalSince1970: time) } else { nil }
-        var record = DictationRecord(
-            id: DictationID(rawValue: uuid),
-            createdAt: Date(timeIntervalSince1970: createdAt),
-            audio: RecordedAudio(file: audioFile(at: path, in: audioFolder), duration: .milliseconds(durationMs)),
-            transcript: string(row[4]),
-            model: string(row[5]),
-            status: status,
-            recoveredAt: recoveredAt,
-            latency: LatencyLog()
-        )
-        record.cleanedText = string(row[8])
-        record.needsSetup = string(row[9]).flatMap(SetupItem.init(rawValue:))
-        record.output = output(modeColumn: string(row[10]), cleanupMode: string(row[14]))
-        record.rejectReason = string(row[11]).flatMap(RejectReason.init(rawValue:))
-        record.app = string(row[12]).map { DictationApp(bundleID: $0, name: string(row[13])) }
-        record.polishedText = string(row[15])
-        record.isAudioDeleted = row[16] == .integer(1)
-        return record
-    }
-
     private func latency(of id: DictationID) throws -> LatencyLog {
         var log = LatencyLog()
         let rows = try database.query(
@@ -337,5 +309,38 @@ extension HistoryStore {
     /// A cleanup row from before per-app modes has no `cleanup_mode`: it was cleaned with the Code prompt.
     static func output(modeColumn: String?, cleanupMode: String?) -> DictationOutput {
         modeColumn == "cleanup" ? .cleanup(cleanupMode.flatMap(AppMode.init(rawValue:)) ?? .code) : .transcript
+    }
+}
+
+extension HistoryStore {
+    /// One row of `readColumns` as a record, with no latency log; nil for a row that does not read.
+    static func record(from row: [Value], audioFolder: URL) -> DictationRecord? {
+        guard
+            case .text(let idText) = row[0], let uuid = UUID(uuidString: idText),
+            case .real(let createdAt) = row[1],
+            case .text(let path) = row[2],
+            case .integer(let durationMs) = row[3],
+            case .text(let statusText) = row[6], let status = DictationRecord.Status(rawValue: statusText)
+        else { return nil }
+        let recoveredAt: Date? = if case .real(let time) = row[7] { Date(timeIntervalSince1970: time) } else { nil }
+        var record = DictationRecord(
+            id: DictationID(rawValue: uuid),
+            createdAt: Date(timeIntervalSince1970: createdAt),
+            audio: RecordedAudio(file: audioFile(at: path, in: audioFolder), duration: .milliseconds(durationMs)),
+            transcript: string(row[4]),
+            model: string(row[5]),
+            status: status,
+            recoveredAt: recoveredAt,
+            latency: LatencyLog()
+        )
+        record.cleanedText = string(row[8])
+        record.needsSetup = string(row[9]).flatMap(SetupItem.init(rawValue:))
+        record.output = output(modeColumn: string(row[10]), cleanupMode: string(row[14]))
+        record.rejectReason = string(row[11]).flatMap(RejectReason.init(rawValue:))
+        record.app = string(row[12]).map { DictationApp(bundleID: $0, name: string(row[13])) }
+        record.polishedText = string(row[15])
+        record.isAudioDeleted = row[16] == .integer(1)
+        if case .integer(let attempts) = row[17] { record.attempts = Int(attempts) }
+        return record
     }
 }

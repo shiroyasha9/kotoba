@@ -93,9 +93,22 @@ final class XAIProvider: RouteClient {
 }
 
 private struct SuccessBody: Decodable {
+    private enum CodingKeys: String, CodingKey {
+        case text
+        case duration
+    }
+
     var text: String?
-    /// Audio seconds, rounded to two decimals.
+    /// Audio seconds, rounded to two decimals; nil also when it does not parse, so the recording's length counts and
+    /// the text is never dropped for it.
     var duration: Double?
+
+    init(from decoder: any Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        text = try container.decodeIfPresent(String.self, forKey: .text)
+        // A count, not the text: another type only means the recording's length is used.
+        duration = try? container.decodeIfPresent(Double.self, forKey: .duration)
+    }
 }
 
 private struct KeyInfo: Decodable {

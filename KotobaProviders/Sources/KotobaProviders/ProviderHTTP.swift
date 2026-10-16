@@ -143,8 +143,9 @@ enum ProviderHTTP {
         return try encoder.encode(value)
     }
 
-    /// The success body of `reply`, or the `ProviderError` for its status (or for a body that does not parse).
-    /// Failures are logged under `label`.
+    /// The success body of `reply`, or the `ProviderError` for its status. A success body that does not parse is
+    /// `.unreadableAnswer`: the route billed it, and sending it again gets the same answer. Failures are logged under
+    /// `label`.
     static func decode<Body: Decodable>(
         _ type: Body.Type,
         from reply: ProviderConnection.Reply,
@@ -159,7 +160,7 @@ enum ProviderHTTP {
         do {
             return try JSONDecoder().decode(type, from: data)
         } catch {
-            throw logged(.server(status: status), label: label)
+            throw logged(.unreadableAnswer(status: status), label: label)
         }
     }
 

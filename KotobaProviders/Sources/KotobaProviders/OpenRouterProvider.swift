@@ -135,10 +135,27 @@ struct XAIOptions: Encodable, Equatable {
     var language: String?
 }
 
-/// A transcription answer.
+/// A transcription answer. A `usage` block that does not parse (a field of another type) is left out, so its cost is
+/// estimated from the list price: the text is what was billed, and it is never dropped for it.
 struct OpenRouterAnswer: Decodable {
+    private enum CodingKeys: String, CodingKey {
+        case text
+        case usage
+    }
+
     var text: String?
     var usage: OpenRouterUsage?
+
+    init(from decoder: any Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        text = try container.decodeIfPresent(String.self, forKey: .text)
+        do {
+            usage = try container.decodeIfPresent(OpenRouterUsage.self, forKey: .usage)
+        } catch {
+            ProviderHTTP.log.error("OpenRouter usage does not parse, the cost is estimated: \(error)")
+            usage = nil
+        }
+    }
 }
 
 /// `GET /key`.

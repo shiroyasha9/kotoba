@@ -145,7 +145,7 @@ public struct TranscriptionUsage: Sendable, Equatable {
 /// Why a transcription failed, in the cases the pipeline acts on. The audio is kept in every case;
 /// `recovery` says what can make the same request succeed later.
 public enum ProviderError: Error, Sendable, Equatable {
-    /// No network, a timeout or a lost connection.
+    /// No network or a lost connection.
     case offline
     /// The route rejected the key (401, 403).
     case auth(status: Int?)
@@ -155,8 +155,11 @@ public enum ProviderError: Error, Sendable, Equatable {
     case keyUnavailable
     /// 429. `retryAfter` comes from the `Retry-After` header when the route sends one.
     case rateLimited(retryAfter: Duration?)
-    /// 408, 5xx, or a success status with a body that does not parse.
+    /// 408 or 5xx.
     case server(status: Int)
+    /// A success status with a body that does not parse: the route billed it, and the same request gets the same
+    /// answer.
+    case unreadableAnswer(status: Int)
     /// The account has no credit left (402). The dictation waits until the owner adds credit.
     case noCredit
     /// Any other 4xx (bad request, payload too large). Retrying the same request gives the same answer.
@@ -189,7 +192,16 @@ public enum ProviderError: Error, Sendable, Equatable {
         switch self {
         case .offline, .keyUnavailable, .rateLimited, .server: .transient
         case .auth, .needsSetup, .noCredit: .needsSetup
-        case .rejected, .emptyTranscript, .noAudio: .permanent
+        case .rejected, .unreadableAnswer, .emptyTranscript, .noAudio: .permanent
+        }
+    }
+
+    /// The request reached the route and may have been billed: it uses one of the dictation's automatic attempts
+    /// (`RetrySelection.automaticAttempts`). No connection, a missing setting or a refusal before any work does not.
+    public var usesAttempt: Bool {
+        switch self {
+        case .server, .unreadableAnswer, .rejected, .emptyTranscript: true
+        case .offline, .auth, .needsSetup, .keyUnavailable, .rateLimited, .noCredit, .noAudio: false
         }
     }
 
@@ -197,7 +209,7 @@ public enum ProviderError: Error, Sendable, Equatable {
     public var rejectReason: RejectReason? {
         switch self {
         case .emptyTranscript, .noAudio: .emptyTranscript
-        case .rejected: .other
+        case .rejected, .unreadableAnswer: .other
         case .offline, .auth, .needsSetup, .noCredit, .keyUnavailable, .rateLimited, .server: nil
         }
     }

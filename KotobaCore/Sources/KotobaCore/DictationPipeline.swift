@@ -143,10 +143,21 @@ public actor DictationPipeline {
     }
 
     /// Transcribes kept dictations into the Recovered list, each send after no dictation is live. With no `selection`
-    /// (launch, the menu), dictations that wait for a setting are included only when the route has everything.
+    /// (the menu), dictations that wait for a setting are included only when the route has everything.
     public func retryPending(_ chosen: RetrySelection? = nil) async {
+        await retryPending(chosen, isAutomatic: false)
+    }
+
+    /// Launch: the menu's Retry, except that a dictation that used its automatic attempts waits for the owner
+    /// (`RetrySelection.automaticAttempts`).
+    public func retryAtLaunch() async {
+        await retryPending(nil, isAutomatic: true)
+    }
+
+    private func retryPending(_ chosen: RetrySelection?, isAutomatic: Bool) async {
         let isSetUp = await ports.missingSetup() == nil
-        let selection = chosen ?? (isSetUp ? .all : .exceptNeedsSetup)
+        var selection = chosen ?? (isSetUp ? .all : .exceptNeedsSetup)
+        selection.isAutomatic = isAutomatic
         let results = await retries.run(
             selection, settings: { await self.settings }, skipping: { await self.inFlight.contains($0) },
             waitUntilQuiet: { await self.waitUntilQuiet() })
@@ -196,7 +207,7 @@ public actor DictationPipeline {
     /// (story 22), as tracked work: this returns at once, so the monitor never waits on a retry (review B7).
     public func networkChanged(isOnline: Bool) async {
         guard await retries.recordNetwork(isOnline: isOnline) else { return }
-        work.track { await self.retryPending(.exceptNeedsSetup) }
+        work.track { await self.retryPending(.exceptNeedsSetup, isAutomatic: true) }
     }
 
     /// The owner edited the dictionary: the next request, paste and retry use it.
