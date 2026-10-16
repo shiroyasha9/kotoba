@@ -138,6 +138,14 @@ custom_rules:
     excluded_match_kinds: [comment, doccomment, string]
     message: "One long-lived URLSession per provider, built in its init; a session per request costs a TLS handshake. Mark that one line with `// swiftlint:disable:next url_session_construction`."
     severity: error
+  window_front:
+    name: "Window to the front"
+    included: ["App/.*\\.swift"]
+    excluded: ["App/WindowFront\\.swift"]
+    regex: "\\b(NSApp|NSApplication\\.shared)\\.activate\\(|\\bmakeKeyAndOrderFront\\("
+    excluded_match_kinds: [comment, doccomment, string]
+    message: "Bring a window to the front with `WindowFront.show(window)`: macOS can refuse the activation request, and then only `orderFrontRegardless` keeps the window in front of the other app."
+    severity: error
   # CODING_STANDARDS.md "User-facing text" rules 3, 5 and 8, on UI strings in App/ only: strings on a line that
   # builds UI (Text(, Button(, NSMenuItem(title:, .toolTip = …) and every string in App/StatusText.swift.
   # Log strings are not on such lines, so they never trip these rules.

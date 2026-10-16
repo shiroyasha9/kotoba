@@ -134,8 +134,7 @@ final class SettingsWindow: NSObject, NSWindowDelegate, NSMenuItemValidation {
         if let id {
             selection.id = id
         }
-        NSApp.activate()
-        window.makeKeyAndOrderFront(nil)
+        WindowFront.show(window)
     }
 
     /// Edit > Find… (⌘F): no view in the window answers it, so AppKit sends it to the window's delegate. SwiftUI's

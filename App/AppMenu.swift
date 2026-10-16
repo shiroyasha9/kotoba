@@ -123,6 +123,8 @@ extension AppDelegate: StatusMenuActions {
     }
 
     func showAbout() {
+        // AppKit builds and orders the About panel itself, so there is no window to give `WindowFront.show`.
+        // swiftlint:disable:next window_front
         NSApp.activate()
         NSApp.orderFrontStandardAboutPanel(nil)
     }

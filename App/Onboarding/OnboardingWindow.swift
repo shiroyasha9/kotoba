@@ -57,8 +57,7 @@ final class OnboardingController: NSObject, NSWindowDelegate {
         let window = window ?? makeWindow(model: model)
         self.model = model
         self.window = window
-        NSApp.activate()
-        window.makeKeyAndOrderFront(nil)
+        WindowFront.show(window)
     }
 
     func windowDidBecomeKey(_ notification: Notification) {

@@ -519,6 +519,27 @@ Rows 450-452 deny file removal in the audio folder of kotoba Dev with an ACL; ro
 | 452 | Run `chmod -a "everyone deny delete_child" ~/Library/Application\ Support/kotoba-dev/audio`; quit and open kotoba Dev | The file from row 450 is gone; History has no new row | |
 | 453 | Select the “Cancelled” row with “No text” and 0:00 from row 423 in History; open its context menu | The row says “No text”, not “No text · audio saved”; **Retry** is dimmed in the toolbar and the menu; **Delete** removes the row | |
 
+### Windows open in front (kotoba Dev, branch fix-window-front)
+
+Start each row with another app in front (a terminal you type in) and no kotoba window open, unless the row says otherwise. Each window must open in front of every other window and take the keys: type at once and the text goes into the kotoba window. It must not stay on top: a click in the terminal puts the terminal in front of it again.
+
+macOS can refuse kotoba's request to become the active app. kotoba then still shows the window in front, but the keys stay in the other app until you click the window. If you see that, write the time (IST, to the second) in the Result column, so the logs can show why macOS refused.
+
+| # | Do this | Expect | Result |
+|---|---|---|---|
+| 460 | Choose menu > **Settings…**; close it, click into the terminal and type; repeat 10 times | Settings opens in front all 10 times, never behind the terminal, and takes the keys | |
+| 461 | Choose menu > **History…**, 5 times as in row 460 | History opens in front each time and takes the keys | |
+| 462 | Dictate once, then choose menu > **Fix Last Dictation…**, 5 times as in row 460 | “Fix Last Dictation” opens in front with the last dictation each time | |
+| 463 | In History, right-click a row > **Fix Dictation…** | “Fix Dictation” opens in front of History | |
+| 464 | With the pill showing a button that opens Settings (for example **Add Key…** with no key saved), click the button | Settings opens on that pane in front. Before the click, the pill never took the keys: the text cursor stayed in the other app | |
+| 465 | While setup is not complete, choose menu > **Finish Setting Up kotoba…** | The setup window opens in front | |
+| 466 | Choose menu > **About kotoba Dev** | The About panel opens. It does not use the new code: write if it opens behind | |
+| 467 | Open Settings, click into the terminal so Settings is behind it, then choose menu > **Settings…** again | The same Settings window comes to the front on the pane you left | |
+| 468 | With no kotoba window open, open kotoba Dev from Spotlight (⌘Space, type “kotoba Dev”, Return) | Settings opens in front and takes the keys | |
+| 469 | As row 468, from Raycast | Settings opens in front and takes the keys | |
+| 470 | With History open behind the terminal, open kotoba Dev from Spotlight | Settings opens in front of History and the terminal | |
+| 471 | Open Settings from the menu, then click into the terminal | The terminal comes in front of Settings; Settings does not float above it | |
+
 ### Rank and cap dictionary words (phase 3)
 
 | # | Do this | Expect | Result |

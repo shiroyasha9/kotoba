@@ -33,8 +33,7 @@ final class HistoryController: NSObject, NSWindowDelegate {
     func show() {
         let window = window ?? makeWindow()
         self.window = window
-        NSApp.activate()
-        window.makeKeyAndOrderFront(nil)
+        WindowFront.show(window)
     }
 
     /// A history write (from `DictationPipeline.historyChanges`): an open window reads the row it names.

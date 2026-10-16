@@ -99,8 +99,8 @@ final class FixLastDictationController: NSObject, NSWindowDelegate {
     }
 
     private func present() {
-        NSApp.activate()
-        window?.makeKeyAndOrderFront(nil)
+        guard let window else { return }
+        WindowFront.show(window)
     }
 
     /// The window and its content; the snapshot run draws the same window.

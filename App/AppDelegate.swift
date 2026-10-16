@@ -145,6 +145,13 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         return store
     }
 
+    /// Opening kotoba again while it runs (Spotlight, Raycast, Finder, `open -a`) shows Settings in front. macOS sends
+    /// the reopen with an activation, and with no window kotoba would be active and show nothing.
+    func applicationShouldHandleReopen(_ sender: NSApplication, hasVisibleWindows flag: Bool) -> Bool {
+        settingsController.show()
+        return false
+    }
+
     /// Quit waits until a live recording or an open Undo window is saved, so no audio is lost.
     func applicationShouldTerminate(_ sender: NSApplication) -> NSApplication.TerminateReply {
         guard let pipeline else { return .terminateNow }
