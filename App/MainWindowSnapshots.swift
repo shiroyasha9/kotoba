@@ -43,7 +43,8 @@ extension MainWindow {
     }
 
     /// The README images (`Pane.readmeSnapshots`, `make readme-images`): the whole window content at one size, as
-    /// `windowSnapshot` draws it, with the sidebar's selected row and labels in explicit colors (`drawsSidebarColors`).
+    /// `windowSnapshot` draws it, with the sidebar's selected row and labels in explicit colors (`drawsSidebarColors`)
+    /// and "on" switches in the accent color (`ActiveSwitchStyle`).
     /// `isScrolledToEnd` shows the end of a pane that scrolls; 610 pt high, General's end then starts at a section.
     static func readmeSnapshot(
         of panes: [Pane], selecting id: Pane.ID, named name: String, isScrolledToEnd: Bool = false
@@ -52,6 +53,7 @@ extension MainWindow {
             MainView(panes: panes, selection: Selection(panes: panes, showing: id))
                 .environment(\.drawsSidebarColors, true)
                 .defaultScrollAnchor(isScrolledToEnd ? .bottom : nil)
+                .toggleStyle(ActiveSwitchStyle())
         }
     }
 
@@ -102,6 +104,28 @@ extension MainWindow {
             return chromes.first { $0.1 != expected }.map { id, chrome in
                 "\(id.title) has \(chrome); \(first.title) has \(expected)"
             }
+        }
+    }
+}
+
+/// The README images' switches: "on" in the accent color, as in the active app. Offscreen AppKit draws an on switch's
+/// track grey, because a snapshot run is never the active app; an off switch draws right, so it stays native. Custom:
+/// a stand-in for the macOS 26 switch (36 x 16 pt, a white capsule knob), as `PillStandIn` stands in for glass.
+private struct ActiveSwitchStyle: ToggleStyle {
+    func makeBody(configuration: Configuration) -> some View {
+        if configuration.isOn {
+            LabeledContent {
+                Capsule()
+                    .fill(Color(nsColor: .controlAccentColor))
+                    .overlay(alignment: .trailing) {
+                        Capsule().fill(.white).frame(width: 22, height: 13).padding(.horizontal, 1.5)
+                    }
+                    .frame(width: 36, height: 16)
+            } label: {
+                configuration.label
+            }
+        } else {
+            Toggle(configuration).toggleStyle(.switch)
         }
     }
 }
