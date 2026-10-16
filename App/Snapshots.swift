@@ -30,6 +30,7 @@ enum Snapshots {
         SettingsPane.microphoneSnapshots,
         SettingsPane.generalSnapshots,
         SettingsPane.usageSnapshots,
+        SettingsPane.insightsSnapshots,
         SettingsPane.modesSnapshots,
         ChordRecorder.snapshots,
         StatusBarItem.snapshots,

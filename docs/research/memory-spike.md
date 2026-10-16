@@ -109,6 +109,21 @@ Spike `spikes/usage-memory/` (`build.sh`, `measure.sh`), built like the History 
 - Store reads (`UsageLedgerTests`, debug build): both periods over 12,000 ledger rows (10,000 dictations) about 18 ms (three statements per period on the ledger's `time` index). The one-time move of kept dictations into the ledger at the first launch after this change: about 165 ms for 10,000. The footprint rows above were measured with the first design (usage columns on `dictations`); the pane and its reads did not change in kind.
 - Hot path: before Cmd-V the pipeline builds one ledger entry per answer, no wait: the word count about 0.4 µs for 50 words and the entry about 0.4 µs (release build, 100,000 runs; the first word count over characters took 11 µs). The entry is written in the save after Cmd-V, in the same transaction. First design, measured: that save went from 91-96 µs to 121-125 µs per dictation (release build, 2,500 saves, 3 runs).
 
+## Insights pane (phase 3, 2026-10-16, 07:00-11:00 IST)
+
+Spike `spikes/insights-memory/` (`build.sh`, `measure.sh`), built like the Usage spike: the real `App/Settings/{SettingsWindow,InsightsPane}.swift` and `App/InstalledApp.swift` plus KotobaCore and KotobaStorage sources, over a temporary history of 10,000 synthetic dictations in 70 days (12,000 ledger rows) and 17 learned words; Settings opens on the Insights pane at 32 s and closes at 45 s. `InsightsNoChart` is the same app without the Swift Charts chart (Charts not linked), so the difference is the cost of Charts. 2 rounds each, two runs: `vmmap --summary` physical footprint (07:00 IST) and `footprint -p` (10:40 IST; it reports about 10 MB more for the same process, rounded to whole MB):
+
+| State | NoChart (vmmap) | Spike (vmmap) | NoChart (footprint) | Spike (footprint) |
+|---|---|---|---|---|
+| Idle 30 s, window never opened | 17.9 / 17.9 MB | 17.9 / 17.9 MB | 28 / 28 MB | 27 / 26 MB |
+| Settings open on Insights | 35.5 / 35.4 MB | 40.7 / 37.9 MB | 45 / 45 MB | 52 / 50 MB |
+| 30 s after close | 34.2 / 31.5 MB | 37.6 / 34.8 MB | 44 / 44 MB | 48 / 46 MB |
+
+- Linking Charts loads it at launch, and costs nothing measurable at idle: the idle rows match with and without it. The app links Charts only for this pane.
+- Opening the pane adds about +17-20 MB without the chart, as for the other Settings panes (SwiftUI's runtime). The chart adds +2.5-7 MB while shown, of which +2-4 MB stays after close.
+- Store reads: the pane's whole read (totals, 30 chart days, a 70-day streak, top apps, learned words) took 16-22 ms in the spike (`swiftc -O`). `InsightsTests.insightsOf10000DictationsStayFast` (10,000 dictations, 3 runs each): 15 ms in release and debug; with 50,000 dictations (a ledger of about a year at 140 dictations a day): 81-83 ms. The cost grows with the ledger: the totals and top apps scan it all (`count(DISTINCT dictation_id)` about a third of it), the chart days read ranges on the `time` index. The read runs on the history store, off the main thread, when the pane appears and after each saved dictation while it is shown; never at idle.
+- Swift Charts logs "Custom UnitPoint values are not supported in AxisValueLabel's anchor property" once per process, also for a chart with default axes (probe, 2026-10-16): Apple's noise, not this pane's axes.
+
 ## Learning from edits (phase 2.6, 2026-10-16)
 
 - `NSSpellChecker`: the first auto-learn loads it. Review measurement (`perf26/spell.swift`, 3 runs): `NSSpellChecker.shared` 7.5-33 ms on first use, first `checkSpelling` 1.2-14 ms, then 0.21-0.26 ms per word; footprint +1.28 to +1.34 MB, kept for the process lifetime. It loads only after an edit the owner made, and never while a dictation records or is sent (`EditLearner`). Idle before the first learn: no change to the floor.

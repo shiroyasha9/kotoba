@@ -471,6 +471,20 @@ The Writing prompt waits for its benchmark (docs/research/per-app-modes.md, ques
 | 349 | Use a direct route (xAI or Azure) with no OpenRouter key; open Settings > **Modes** | “Cleanup needs your OpenRouter key” with **Add Key…**, which opens **Speech**; after you save the key and come back, the note is gone | |
 | 350 | Dictate with the cleanup chord in Notes, press Esc, click into Terminal within 5 s; then History > **Retry** that row | The row names Notes, and the retried text is cleaned as prose (the Esc’s app and mode) | |
 
+### Insights pane (phase 3)
+
+| # | Do this | Expect | Result |
+|---|---|---|---|
+| 351 | On a fresh install, open Settings > **Insights** | “No Insights Yet”; the sidebar shows **Insights** above **Usage** | |
+| 352 | Dictate twice today, then open **Insights** | **Streak** “1 day”, “Today included”; **This week**, **This month** and **All time** equal the sum of the History window’s word counts; today’s bar is the last one in the chart | |
+| 353 | Dictate on two days in a row; on the third day, open **Insights** before you dictate | **Streak** “2 days”, “Dictate today to keep it”; after one dictation: “3 days”, “Today included” | |
+| 354 | Read a 60-word paragraph aloud at your normal pace in one dictation; look at **Words per minute** on a new install | About 60 divided by the recording’s length in minutes (a pause in the middle lowers it) | |
+| 355 | Keep Settings open on **Insights** and dictate | The numbers and today’s bar change when the dictation is pasted, without leaving the pane | |
+| 356 | Correct a pasted word in TextEdit so kotoba learns it (sparkle pill), and add one word with **Fix Last Dictation…**; reopen **Insights** | **Words learned** goes up by 2: “1 from your edits · 1 from Fix Last Dictation” (or more if you had some) | |
+| 357 | Delete a learned word in **Dictionary**, then reopen **Insights** | **Words learned** goes down by 1 | |
+| 358 | Note the figures; in History delete all of today’s dictations; reopen **Insights** | No figure changes (Insights counts from the usage record, which deleting history keeps) | |
+| 359 | Say nothing for 3 s as a dictation (“No speech heard”), then reopen **Insights** | No figure changes: a dictation with no words counts for no streak, word or speed | |
+
 ## Known offscreen-only doubts
 
 The offscreen snapshots (`make snapshots`) show two things that may not happen in the real app. Check them on screen:

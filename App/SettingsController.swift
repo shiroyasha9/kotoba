@@ -16,14 +16,17 @@ final class SettingsController {
     /// The dictionary the Dictionary pane edits; "Fix Last Dictation…" adds to it and the menu counts its suggestions.
     /// Built once the dictionary file is read at launch.
     private(set) var dictionary: DictionaryModel?
+    /// The dictionary's file, whose learned words the Insights pane counts.
+    private var dictionaryStore: DictionaryStore?
     /// The history whose usage ledger the Usage pane sums; set once the database opens at launch.
     var history: HistoryStore?
     /// Takes the Modes pane's changes; set once it is built at launch.
     var pipeline: DictationPipeline?
     /// The last change sent to the pipeline: each waits for the one before, so the pipeline gets them in order.
     private var modesUpdate: Task<Void, Never>?
-    /// The open window's Usage pane model, which reads again after each history write while it is shown.
+    /// The open window's Usage and Insights pane models, which read again after each history write while shown.
     private weak var usage: UsageModel?
+    private weak var insights: InsightsModel?
     /// The open window's General pane model; its History section measures the saved audio again the same way.
     private weak var general: GeneralModel?
 
@@ -46,6 +49,7 @@ final class SettingsController {
         do {
             let store = try DictionaryStore(url: AppFiles.dictionary)
             let loaded = try await store.load()
+            dictionaryStore = store
             await pipeline.updateDictionary(loaded)
             // The model calls this inside its serial save chain, so edits reach the pipeline in order.
             dictionary = DictionaryModel(dictionary: loaded, store: store) { await pipeline.updateDictionary($0) }
@@ -54,10 +58,16 @@ final class SettingsController {
         }
     }
 
-    /// A history write (from `DictationPipeline.historyChanges`): a shown Usage pane or History section reads again.
-    /// Deleted audio changes no usage.
+    /// A history write (from `DictationPipeline.historyChanges`): a shown Usage or Insights pane or History section
+    /// reads again. Deleted audio changes no usage; Insights reads only the ledger, which deleted dictations keep.
     func historyChanged(_ change: HistoryChange) {
-        if case .audioDeleted = change {} else { usage?.historyChanged() }
+        switch change {
+        case .audioDeleted: break
+        case .deleted: usage?.historyChanged()
+        case .saved, .usageAdded:
+            usage?.historyChanged()
+            insights?.historyChanged()
+        }
         general?.audio?.historyChanged()
     }
 
@@ -91,6 +101,12 @@ final class SettingsController {
             let usage = UsageModel { try await history.usage(from: $0, to: .distantFuture) }
             self.usage = usage
             panes.append(.usage(usage))
+            let insights = InsightsModel { [dictionaryStore] now in
+                async let learned = dictionaryStore?.learnedWords() ?? [:]
+                return .init(history: try await history.insights(at: now, in: .current), learned: try await learned)
+            }
+            self.insights = insights
+            panes.append(.insights(insights))
         }
         return panes
     }
