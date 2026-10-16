@@ -1,8 +1,10 @@
+import KotobaCore
 import KotobaProviders
 import SwiftUI
 
-/// One step at a time: a symbol, a title, one or two plain sentences and the step's own control, with the step
-/// dots and Back/Continue at the bottom.
+/// One step at a time: a symbol (kotoba's icon on Welcome), a title, one or two plain sentences and the step's own
+/// control, with the step dots and Back/Continue at the bottom. A grant never moves the window on: the step shows it
+/// and the owner clicks Continue (owner, 2026-10-16).
 struct OnboardingView: View {
     /// A readable line length in the window: every step's text and boxes share it.
     static let textWidth: CGFloat = 420
@@ -14,10 +16,7 @@ struct OnboardingView: View {
     var body: some View {
         VStack(spacing: 0) {
             VStack(spacing: 14) {
-                Image(systemName: symbol)
-                    .font(.largeTitle)
-                    .imageScale(.large)
-                    .foregroundStyle(.tint)
+                icon
                 Text(title)
                     .font(.title)
                     .fontWeight(.semibold)
@@ -32,7 +31,22 @@ struct OnboardingView: View {
                 .padding(.vertical, 14)
         }
         .frame(minWidth: 480, minHeight: 360)
-        .task(id: model.isGrantNew) { await moveOnAfterGrant() }
+        .task { await model.checkWispr() }
+        .wisprImportAlert(model.dictionary, imported: model.wisprImportAnswered)
+    }
+
+    @ViewBuilder private var icon: some View {
+        if model.step == .welcome {
+            Image(nsImage: NSApp.applicationIconImage)
+                .resizable()
+                .frame(width: 88, height: 88)
+                .accessibilityHidden(true)
+        } else {
+            Image(systemName: symbol)
+                .font(.largeTitle)
+                .imageScale(.large)
+                .foregroundStyle(.tint)
+        }
     }
 
     @ViewBuilder private var content: some View {
@@ -41,6 +55,7 @@ struct OnboardingView: View {
         case .microphone: MicrophoneStep(model: model)
         case .accessibility: AccessibilityStep(model: model)
         case .key: KeyStep(model: model)
+        case .wisprImport: WisprImportStep(model: model)
         case .tryIt: TryItStep(model: model)
         case .done: DoneStep(model: model)
         }
@@ -52,6 +67,7 @@ struct OnboardingView: View {
         case .microphone: "mic"
         case .accessibility: "accessibility"
         case .key: "key"
+        case .wisprImport: "character.book.closed"
         case .tryIt: "text.cursor"
         case .done: model.readiness.isComplete ? "checkmark.circle" : "exclamationmark.circle"
         }
@@ -63,6 +79,7 @@ struct OnboardingView: View {
         case .microphone: "Allow the Microphone"
         case .accessibility: "Allow Accessibility"
         case .key: "Connect a Speech Service"
+        case .wisprImport: "Bring Your Words from Wispr Flow"
         case .tryIt: "Try It"
         case .done: model.readiness.isComplete ? "You\u{2019}re Ready" : "Almost Ready"
         }
@@ -72,45 +89,29 @@ struct OnboardingView: View {
         HStack {
             StepDots(model: model)
             Spacer()
-            if model.step.previous != nil {
+            if model.flow.previous(before: model.step) != nil {
                 Button("Back", action: model.goBack)
             }
-            switch model.step {
-            case .welcome:
+            switch OnboardingFlow.footer(on: model.step, isDone: model.isDone(model.step)) {
+            case .getStarted:
                 Button("Get Started", action: model.goForward).keyboardShortcut(.defaultAction)
+            case .continue(let isDefault):
+                // Not the default where Return belongs to the step's text field.
+                Button("Continue", action: model.goForward).keyboardShortcut(isDefault ? .defaultAction : nil)
+            case .notNow:
+                Button("Not Now", action: model.goForward)
+            case .waitsForStep:
+                // Until the grant arrives, the step's own button is the default one; Continue shows where it leads.
+                Button("Continue", action: model.goForward).disabled(true)
             case .done:
                 Button("Done") {
                     model.finish()
                     close()
                 }
                 .keyboardShortcut(.defaultAction)
-            case .key, .tryIt:
-                // No default button here: Return belongs to the text field.
-                Button("Continue", action: model.goForward)
-            case .microphone, .accessibility:
-                // Until the grant arrives, the step's own button is the default one; Return never skips it.
-                if model.isDone(model.step) {
-                    Button("Continue", action: model.goForward).keyboardShortcut(.defaultAction)
-                } else {
-                    Button("Skip for Now", action: model.goForward)
-                }
             }
         }
         .controlSize(.large)
-    }
-
-    /// A grant that arrives while its step shows moves the window on by itself, after the checkmark showed for a
-    /// moment. The app refreshes `Readiness` every second while a kotoba window is open (System Settings sends no
-    /// event); this view only watches it.
-    private func moveOnAfterGrant() async {
-        guard model.isGrantNew else { return }
-        let step = model.step
-        do {
-            try await Task.sleep(for: .seconds(0.8))
-        } catch {
-            return
-        }
-        if model.step == step { model.goForward() }
     }
 }
 
@@ -121,7 +122,7 @@ private struct StepDots: View {
 
     var body: some View {
         HStack(spacing: 6) {
-            ForEach(OnboardingStep.allCases) { step in
+            ForEach(model.flow.steps) { step in
                 Group {
                     if model.isDone(step) {
                         Image(systemName: "checkmark.circle.fill").foregroundStyle(.green)
@@ -136,6 +137,6 @@ private struct StepDots: View {
             }
         }
         .accessibilityElement(children: .ignore)
-        .accessibilityLabel("Step \(model.step.index + 1) of \(OnboardingStep.allCases.count)")
+        .accessibilityLabel("Step \(model.flow.index(of: model.step) + 1) of \(model.flow.steps.count)")
     }
 }

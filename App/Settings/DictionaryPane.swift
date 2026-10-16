@@ -40,18 +40,7 @@ private struct DictionaryPane: View {
         .searchable(text: $search, placement: .toolbar, prompt: "Search words")
         .searchFocused($isSearchFocused)
         .onChange(of: findRequests) { isSearchFocused = true }
-        .alert(Self.importTitle(model.wisprImport), isPresented: isAlertShown, presenting: model.wisprImport) { state in
-            // Each button clears the state itself, so the binding never has to.
-            if case .preview(let preview, _) = state, !preview.isEmpty {
-                Button("Cancel", role: .cancel) { model.wisprImport = nil }
-                Button("Import") { model.applyWisprImport() }
-                    .keyboardShortcut(.defaultAction)
-            } else {
-                Button("OK") { model.wisprImport = nil }
-            }
-        } message: { state in
-            Text(Self.importMessage(state))
-        }
+        .wisprImportAlert(model)
         .sheet(item: $editing) { editing in
             EntryEditor(draft: editing.draft, isNew: editing.row == nil) { draft throws(DictionaryError) in
                 try model.save(draft, replacing: editing.row)
@@ -187,15 +176,68 @@ private struct DictionaryPane: View {
         return "\(words), \(replacements). " + hints
     }
 
-    private var isReading: Bool {
-        if case .reading = model.wisprImport { true } else { false }
+    private var isReading: Bool { model.wisprImport?.isReading == true }
+
+    private func add() {
+        editing = Editing(row: nil, draft: EntryDraft())
     }
 
-    /// The import preview, or why there is none, as an alert until the owner answers.
-    private var isAlertShown: Binding<Bool> {
-        Binding(get: { model.wisprImport != nil && !isReading }, set: { _ in })
+    private func edit(_ row: DictionaryModel.Row) {
+        editing = Editing(row: row, draft: model.draft(for: row))
     }
 
+    private func delete() {
+        guard !selection.isEmpty else { return }
+        model.delete(selection)
+        selection = []
+    }
+}
+
+extension View {
+    /// The Wispr Flow import's preview, or why there is none, as an alert until the owner answers. Settings >
+    /// Dictionary and onboarding show the same alert; onboarding's dictionary is nil until it is read at launch.
+    /// `imported` gets what the import added, or the empty preview when Wispr Flow had nothing new.
+    func wisprImportAlert(
+        _ model: DictionaryModel?, imported: @escaping @MainActor (DictionaryImport) -> Void = { _ in }
+    ) -> some View {
+        let isShown = Binding(get: { model?.wisprImport?.isReading == false }, set: { _ in })
+        return alert(
+            DictionaryPane.importTitle(model?.wisprImport), isPresented: isShown, presenting: model?.wisprImport
+        ) { state in
+            // Each button clears the state itself, so the binding never has to.
+            if case .preview(let preview, _) = state, !preview.isEmpty {
+                Button("Cancel", role: .cancel) { model?.wisprImport = nil }
+                Button("Import") {
+                    if let added = model?.applyWisprImport() {
+                        imported(added)
+                    }
+                }
+                .keyboardShortcut(.defaultAction)
+            } else {
+                Button("OK") {
+                    model?.wisprImport = nil
+                    if case .preview(let preview, _) = state {
+                        imported(preview)
+                    }
+                }
+            }
+        } message: { state in
+            Text(DictionaryPane.importMessage(state))
+        }
+    }
+}
+
+extension DictionaryImport {
+    /// "3 words and 1 replacement", with a zero count left out (CODING_STANDARDS, user-facing text 10). The import
+    /// alert and onboarding's Wispr Flow step say it.
+    var countsText: String {
+        let words = terms.isEmpty ? nil : StatusText.counted(terms.count, "word")
+        let replacements = rules.isEmpty ? nil : StatusText.counted(rules.count, "replacement")
+        return [words, replacements].compactMap { $0 }.joined(separator: " and ")
+    }
+}
+
+extension DictionaryPane {
     static func importTitle(_ state: DictionaryModel.WisprImport?) -> String {
         switch state {
         case .preview(let preview, _) where !preview.isEmpty: "Import from Wispr Flow?"
@@ -218,9 +260,8 @@ private struct DictionaryPane: View {
                 ? ", including \(StatusText.counted(learnedCount, "correction")) Wispr learned from your edits" : ""
             var lines = [
                 preview.isEmpty
-                    ? "Every word in Wispr Flow’s dictionary is already here."
-                    : "Adds \(StatusText.counted(preview.terms.count, "word")) and "
-                        + "\(StatusText.counted(preview.rules.count, "replacement"))\(learned)."
+                    ? "Every word in Wispr Flow’s dictionary is already in kotoba."
+                    : "Adds \(preview.countsText)\(learned)."
             ]
             if preview.duplicateCount > 0 {
                 lines.append("Already in your dictionary: \(StatusText.counted(preview.duplicateCount, "entry")).")
@@ -236,20 +277,6 @@ private struct DictionaryPane: View {
         case .reading:
             return ""
         }
-    }
-
-    private func add() {
-        editing = Editing(row: nil, draft: EntryDraft())
-    }
-
-    private func edit(_ row: DictionaryModel.Row) {
-        editing = Editing(row: row, draft: model.draft(for: row))
-    }
-
-    private func delete() {
-        guard !selection.isEmpty else { return }
-        model.delete(selection)
-        selection = []
     }
 }
 

@@ -150,7 +150,9 @@ final class MainWindowController {
         let audio = audio
         panes.append(
             .microphones(
-                MicrophoneModel(source: .live(microphones, audio: audio)) { Task { await audio.inputMayHaveChanged() } }
+                MicrophoneModel(source: .live(microphones, audio: audio, readiness: readiness)) {
+                    Task { await audio.inputMayHaveChanged() }
+                }
             ))
         panes.append(
             .speech(SpeechSettingsModel(settings: routeSettings, vault: vault, checkKey: router.checkKey(_:for:))))

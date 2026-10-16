@@ -22,6 +22,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private lazy var router = TranscriptionRouter(settings: routeSettings, keys: vault.source(for:))
     lazy var setup = SetupFlow(
         readiness: readiness, routeSettings: routeSettings, vault: vault, router: router,
+        dictionary: { [weak self] in self?.mainWindow.dictionary },
         openSpeechSettings: { [weak self] in self?.mainWindow.show(selecting: .speech) })
     /// Its audio retention is set once the history opens (`AppDefaults.chooseAudioRetention`).
     private var settings = DictationPipeline.Settings(
@@ -122,6 +123,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         watchReleaseApp()
         Task {
             await dictionaryRead.value
+            setup.dictionaryOpened()
             // Audio left with no row (a crash during a recording) joins this launch's retry.
             await OrphanAudioRecovery.run(in: AppFiles.audio, store: store, launchedAt: launchedAt)
             await pipeline.retryPending()

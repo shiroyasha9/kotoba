@@ -103,28 +103,18 @@ extension Chord {
 
     /// The chord in key symbols, as menus and buttons show it: "⌃⌥⌘", "fn", "right ⌥", "⌥Space".
     var title: String {
-        let parts = modifierParts(symbol: \.symbol)
+        let parts = modifierParts
         let modifiers = parts.contains { $0.contains(" ") } ? parts.joined(separator: " ") : parts.joined()
         guard let keyCode else { return modifiers }
         return modifiers + Self.keyName(keyCode)
     }
 
-    /// Whether `title` shows a symbol (⌃ ⌥ ⇧ ⌘ or a key such as ↩) that `spokenTitle` spells out.
-    var hasSymbols: Bool {
-        !modifiers.kinds.subtracting(.function).isEmpty || keyCode.map { Self.specialKeys[Int($0)]?.count == 1 } == true
-    }
-
-    /// The chord in words, once in onboarding: "Control-Option-Command", "right Option", "Option-Space".
-    var spokenTitle: String {
-        (modifierParts(symbol: \.name) + (keyCode.map { [Self.keyName($0)] } ?? [])).joined(separator: "-")
-    }
-
-    private func modifierParts(symbol: KeyPath<ModifierKeys, String>) -> [String] {
+    private var modifierParts: [String] {
         ModifierKeys.allKinds.compactMap { kind in
             let sides = modifiers.intersection(kind)
             guard !sides.isEmpty else { return nil }
             let side = sides == kind ? "" : sides.isSubset(of: .rightSides) ? "right " : "left "
-            return side + kind[keyPath: symbol]
+            return side + kind.symbol
         }
     }
 
@@ -173,16 +163,6 @@ extension ModifierKeys {
         case .option: "⌥"
         case .shift: "⇧"
         default: "⌘"
-        }
-    }
-
-    var name: String {
-        switch self {
-        case .function: "Fn"
-        case .control: "Control"
-        case .option: "Option"
-        case .shift: "Shift"
-        default: "Command"
         }
     }
 }

@@ -76,6 +76,10 @@ The app is open-source (Apache-2.0) and distributed as a notarized DMG on GitHub
 35e. As the owner, I want kotoba Dev to have its own Dock icon, so that I can tell it from the release.
 36. As a user, I want launch at login, so that dictation is always available.
 37. As a user, I want onboarding that grants Microphone, Accessibility and Input Monitoring permissions and explains each, so that setup works the first time.
+37a. As a new user, I want the welcome page to say in three short points why kotoba is worth it (about one second to paste, my names and terms spelled right, private with my own key) and to show both ways to dictate (tap, speak, tap again; or hold while I speak), so that I know what I get before I grant anything (owner, 2026-10-16).
+37b. As a new user, I want each permission step to show the grant and wait for my Continue, so that the window never moves on by itself. The Microphone and Accessibility steps have no Skip: kotoba cannot hear the chord or record without them (owner, 2026-10-16).
+37c. As a user, I want a saved key to show as saved (the masked key, such as "sk-or-v1-…a1b2", with Change… and Remove) in onboarding and in Settings > Speech, so that I never think I must paste it again. The key itself never comes back to the screen.
+37d. As a Wispr Flow user, I want onboarding to offer the Wispr dictionary import as an optional step when Wispr Flow is on my Mac, with the same preview and one-click import as Settings > Dictionary, so that my words carry over before my first dictation.
 38. As a user, I want permissions to survive app updates, so that I do not re-grant them after each release.
 39. As a user, I want a notarized DMG from GitHub Releases, so that macOS opens it without warnings.
 40. As a privacy-minded user, I want no accounts, no analytics and no outbound calls other than to my chosen provider, so that my dictation stays mine.
@@ -147,7 +151,7 @@ The app is open-source (Apache-2.0) and distributed as a notarized DMG on GitHub
 ### Polish and learning (phase 2.5, lead decisions 2026-10-15; owner may override)
 
 Plans: `docs/research/ux-polish.md` (49 items, IDs used below) and `docs/research/auto-learning.md`. Text rules: `CODING_STANDARDS.md`, "User-facing text".
-- Onboarding is its own window, 6 steps (Welcome, Microphone, Accessibility, key with "Get a Key…" and a free key check, Try It, Done with launch at login). It opens on first launch and from "Finish Setting Up kotoba…"; no permission prompt appears before its step. The dictation chord stays ⌃⌥⌘ (no picker in v1). Price text: "a few cents per hour" plus the provider's pricing link.
+- Onboarding is its own window: Welcome, Microphone, Accessibility, key with "Get a Key…" and a free key check, Wispr Flow import (only when Wispr Flow is installed and the dictionary is open), Try It, Done with launch at login. The order and the footer buttons are `OnboardingFlow` in KotobaCore. It opens on first launch and from "Finish Setting Up kotoba…"; no permission prompt appears before its step. A grant shows on its step and the owner clicks Continue; the permission steps have no Skip (0.3.0, stories 37a-37d). Keys show as symbols only. Price text: "a few cents per hour" plus the provider's pricing link.
 - Readiness (mic access, Accessibility, key/endpoint) is one App value used by the menu status line, onboarding and the menu bar icon.
 - Settings panes: General, Speech (was Providers), Dictionary, Microphone. General holds the cleanup chord and model, launch at login (default on), sounds and indicator position; the menu keeps status, Microphone and Speech Model.
 - xAI direct and Azure direct sit under "Advanced" in the Speech pane, with no "untested" label.

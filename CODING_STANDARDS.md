@@ -54,7 +54,7 @@ Reference: the copy deck in `docs/research/ux-polish.md` (sections 4.1-4.6). A n
 1. Brand: always "kotoba", lowercase, also at the start of a sentence.
 2. Capitalisation (Apple HIG): Title Case for menu items, buttons, window and pane titles, section headers. Sentence case for toggle and field labels, footers, help text, pill messages and status lines.
 3. Ellipsis "…" (one character) only on an item that opens a window or needs more input ("Settings…"). Never "...".
-4. Keys: modifier symbols ⌃ ⌥ ⌘ ⇧ fn and ⌘V in UI. Onboarding spells the names once.
+4. Keys: modifier symbols ⌃ ⌥ ⌘ ⇧ fn and ⌘V in UI, never the key names in words, onboarding included (owner, 2026-10-16).
 5. No internal terms in UI: route, keyterm, ZDR, zero-data-retention, needsSetup, provider slugs, API parameter names, "untested", owner-specific numbers, file paths (unless the user must act on one).
 6. An error says what happened and what to do next, names the service ("Couldn't reach OpenRouter"), says when the audio is saved, and puts the fix on a button. Never blame the user.
 7. A pill message fits the 360 pt pill (about 34 characters); the snapshot run fails on truncation. The menu status line uses the same text.

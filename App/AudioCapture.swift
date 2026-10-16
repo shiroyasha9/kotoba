@@ -108,23 +108,21 @@ actor AudioCapture: AudioSource {
         return try startCapture(into: file, levels: levelContinuation)
     }
 
-    /// The Settings mic test (ux-polish MP2): records `duration` into a throwaway file and yields the input
-    /// level until it ends. It yields nothing when the mic is not allowed (no prompt from Settings) or a
-    /// dictation records.
-    func testLevels(for duration: Duration) -> AsyncStream<Float> {
+    /// The Settings mic test (ux-polish MP2): records `duration` into a throwaway file and yields the input level
+    /// until it ends. It does not start when the mic is not allowed (no prompt from Settings), a dictation records, or
+    /// no mic opens; it says which, so the pane never shows a click that did nothing.
+    func test(for duration: Duration) -> MicrophoneTest {
+        guard AVAudioApplication.shared.recordPermission == .granted else { return blocked(.notAllowed) }
+        guard writer == nil else { return blocked(.dictating) }
         let (levels, continuation) = AsyncStream.makeStream(of: Float.self, bufferingPolicy: .bufferingNewest(1))
         let file = URL.temporaryDirectory.appending(path: "kotoba-microphone-test-\(UUID().uuidString).flac")
-        guard AVAudioApplication.shared.recordPermission == .granted, writer == nil else {
-            continuation.finish()
-            return levels
-        }
         do {
             _ = try startCapture(into: file, levels: continuation)
         } catch {
             Log.audio.error("The mic test did not start: \(error)")
-            continuation.finish()
-            return levels
+            return .blocked(.noInput)
         }
+        Log.audio.notice("The mic test started on \(self.currentInput?.name ?? "no mic", privacy: .public)")
         testLevels = continuation
         // A reader that stops early (the pane closed) ends the test; `endTest` does nothing when it already ran.
         continuation.onTermination = { _ in Task { await self.endTest() } }
@@ -133,7 +131,12 @@ actor AudioCapture: AudioSource {
             guard (try? await Task.sleep(for: duration)) != nil else { return }
             await endTest()
         }
-        return levels
+        return .running(levels)
+    }
+
+    private func blocked(_ problem: MicrophoneTest.Problem) -> MicrophoneTest {
+        Log.audio.notice("The mic test did not start: \(String(describing: problem), privacy: .public)")
+        return .blocked(problem)
     }
 
     private func endTest() async {
@@ -304,4 +307,19 @@ actor AudioCapture: AudioSource {
             writer.inputLost()
         }
     }
+}
+
+/// What a click on Test Microphone started, or why it started nothing.
+enum MicrophoneTest: Sendable {
+    enum Problem: Sendable {
+        case notAllowed
+        /// A dictation records; the test would take its mic.
+        case dictating
+        /// No mic opened, or it did not start (logged).
+        case noInput
+    }
+
+    /// The input level 0...1, about ten times a second, until the test ends.
+    case running(AsyncStream<Float>)
+    case blocked(Problem)
 }

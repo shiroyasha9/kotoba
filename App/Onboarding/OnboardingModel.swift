@@ -1,35 +1,12 @@
 import AppKit
+import KotobaCore
 import KotobaProviders
+import KotobaStorage
 import Observation
-
-/// The six first-run steps, in order (docs/research/ux-polish.md, section 3).
-enum OnboardingStep: String, CaseIterable, Identifiable {
-    case welcome
-    case microphone
-    case accessibility
-    case key
-    case tryIt
-    case done
-
-    var id: Self { self }
-
-    /// The position in `allCases`, from 0.
-    var index: Int {
-        Self.allCases.firstIndex(of: self) ?? 0
-    }
-
-    var next: Self? {
-        Self.allCases.indices.contains(index + 1) ? Self.allCases[index + 1] : nil
-    }
-
-    var previous: Self? {
-        index > 0 ? Self.allCases[index - 1] : nil
-    }
-}
 
 /// What the onboarding window shows and does: the step, the key and the actions behind its buttons. Permissions and
 /// setup come from the app's one `Readiness`; the other system calls go through `Source`, so snapshots use fixed
-/// values.
+/// values. The step order and the footer's buttons come from `OnboardingFlow` (KotobaCore).
 @MainActor
 @Observable
 final class OnboardingModel {
@@ -42,8 +19,13 @@ final class OnboardingModel {
         var playsSounds: @MainActor () -> Bool
         var setPlaysSounds: @MainActor (Bool) -> Void
         var openURL: @MainActor (URL) -> Void
+        var isWisprInstalled: @MainActor () async -> Bool
+        /// The dictionary the Wispr Flow step imports into; nil until it is read at launch, or when it did not open.
+        var dictionary: @MainActor () -> DictionaryModel?
 
-        static func live(routeSettings: TranscriptionSettings) -> Self {
+        static func live(
+            routeSettings: TranscriptionSettings, dictionary: @escaping @MainActor () -> DictionaryModel?
+        ) -> Self {
             Self(
                 route: { routeSettings.route },
                 // Default on (docs/spec.md, phase 2.5) until setup is complete; then the real state. A development
@@ -52,14 +34,14 @@ final class OnboardingModel {
                 setLaunchAtLogin: { LaunchAtLogin.change(to: $0) },
                 playsSounds: { AppDefaults.areSoundCuesOn },
                 setPlaysSounds: { AppDefaults.areSoundCuesOn = $0 },
-                openURL: { NSWorkspace.shared.open($0) }
+                openURL: { NSWorkspace.shared.open($0) },
+                isWisprInstalled: { await WisprFlowImport.isInstalled() },
+                dictionary: dictionary
             )
         }
     }
 
-    var step: OnboardingStep {
-        didSet { isShownStepDoneOnEntry = isDone(step) }
-    }
+    var step: OnboardingStep
     let readiness: Readiness
     /// Saves and checks the key, and holds the result line's status.
     let keyChecks: KeyChecks
@@ -71,8 +53,12 @@ final class OnboardingModel {
     }
     /// What keeps the launch-at-login choice from taking effect, shown under its toggle.
     private(set) var loginProblem: LaunchAtLogin.Problem?
-    /// The shown step was already done when it appeared (the owner went Back), so a grant does not move on.
-    private var isShownStepDoneOnEntry: Bool
+    /// The steps in order: Wispr Flow's joins once `checkWispr()` finds it and the dictionary is open.
+    private(set) var flow = OnboardingFlow(isWisprInstalled: false, isDictionaryOpen: false)
+    /// Wispr Flow is on this Mac: `checkWispr()` reads it when the window opens.
+    private var isWisprInstalled = false
+    /// What the Wispr Flow step imported; empty when Wispr Flow had nothing new. Nil until the owner answers.
+    private(set) var wisprImported: DictionaryImport?
     /// Accessibility was asked for once; the next click opens System Settings instead of the prompt again.
     private var hasPromptedAccessibility = false
 
@@ -90,13 +76,13 @@ final class OnboardingModel {
         self.openSpeechSettings = openSpeechSettings
         opensAtLogin = source.opensAtLogin()
         playsSounds = source.playsSounds()
-        isShownStepDoneOnEntry = false
-        isShownStepDoneOnEntry = isDone(step)
     }
 
     var route: TranscriptionRoute { source.route() }
 
     var account: ProviderAccount { route.account }
+
+    var dictionary: DictionaryModel? { source.dictionary() }
 
     /// The step of the first missing thing, for the Done step's way back.
     var firstMissingStep: OnboardingStep? {
@@ -115,24 +101,39 @@ final class OnboardingModel {
         case .microphone: readiness.microphone == .allowed
         case .accessibility: readiness.isAccessibilityAllowed
         case .key: readiness.missingSetup == nil
+        case .wisprImport: wisprImported != nil
         }
-    }
-
-    /// A permission step that showed undone and is now granted: the window moves on by itself.
-    var isGrantNew: Bool {
-        (step == .microphone || step == .accessibility) && !isShownStepDoneOnEntry && isDone(step)
     }
 
     func refresh() {
         readiness.refresh()
     }
 
+    /// Looks for Wispr Flow once, when the window opens.
+    func checkWispr() async {
+        isWisprInstalled = await source.isWisprInstalled()
+        refreshFlow()
+    }
+
+    /// The dictionary was read at launch, after the window opened (first launch opens onboarding first).
+    func dictionaryOpened() {
+        refreshFlow()
+    }
+
+    /// A window that resumed on the Wispr Flow step moves to the next step when the flow has none.
+    private func refreshFlow() {
+        let flow = OnboardingFlow(isWisprInstalled: isWisprInstalled, isDictionaryOpen: dictionary != nil)
+        guard flow != self.flow else { return }
+        self.flow = flow
+        step = flow.resuming(step)
+    }
+
     func goBack() {
-        if let previous = step.previous { step = previous }
+        if let previous = flow.previous(before: step) { step = previous }
     }
 
     func goForward() {
-        if let next = step.next { step = next }
+        if let next = flow.next(after: step) { step = next }
     }
 
     func allowMicrophone() async {
@@ -152,8 +153,13 @@ final class OnboardingModel {
         readiness.openSettings(.microphone)
     }
 
-    func saveKey(_ draft: String) async {
-        await keyChecks.save(draft, for: account)
+    /// The Wispr Flow step's button: reads Wispr Flow's dictionary and shows what it would add, as Settings does.
+    func previewWisprImport() {
+        dictionary?.previewWisprImport()
+    }
+
+    func wisprImportAnswered(_ added: DictionaryImport) {
+        wisprImported = added
     }
 
     func open(_ url: URL) {
@@ -179,15 +185,25 @@ final class OnboardingModel {
 // MARK: - Snapshots
 
 extension OnboardingModel.Source {
-    /// No Keychain, network or setting behind it.
-    static var sample: Self {
+    /// No Keychain, network or setting behind it. `dictionary` stands for the one Wispr Flow imports into.
+    static func sample(dictionary: DictionaryModel? = nil) -> Self {
         Self(
             route: { .openRouterMAI },
             opensAtLogin: { true },
             setLaunchAtLogin: { _ in nil },
             playsSounds: { true },
             setPlaysSounds: { _ in },
-            openURL: { _ in }
+            openURL: { _ in },
+            isWisprInstalled: { dictionary != nil },
+            dictionary: { dictionary }
         )
+    }
+}
+
+extension OnboardingModel {
+    /// Wispr Flow shows as installed without a look on disk (`checkWispr()` runs in a task, which a snapshot skips).
+    func showsWisprInstalled() {
+        isWisprInstalled = true
+        refreshFlow()
     }
 }

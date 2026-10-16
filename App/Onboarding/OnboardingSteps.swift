@@ -1,28 +1,8 @@
+import KotobaCore
 import KotobaProviders
 import SwiftUI
 
-// The six onboarding steps and the small views they share. `OnboardingView` shows one at a time.
-
-/// A line with a symbol in its status color: allowed, off, or a hint.
-private struct StatusLine: View {
-    enum Kind { case good, problem, neutral }
-
-    let text: String
-    let kind: Kind
-
-    init(_ text: String, _ kind: Kind) {
-        self.text = text
-        self.kind = kind
-    }
-
-    var body: some View {
-        switch kind {
-        case .good: StatusLabel(text, systemImage: "checkmark.circle.fill", color: .green)
-        case .problem: StatusLabel(text, systemImage: "exclamationmark.triangle.fill", color: .orange)
-        case .neutral: StatusLabel(text, systemImage: "info.circle", color: .secondary)
-        }
-    }
-}
+// The onboarding steps and the small views they share. `OnboardingView` shows one at a time.
 
 private struct StepText: View {
     let text: String
@@ -41,25 +21,66 @@ private struct StepText: View {
 
 // MARK: - Steps
 
+/// What kotoba is good at, in three short points, and both ways to dictate. Keys show as symbols only (owner,
+/// 2026-10-16).
 struct WelcomeStep: View {
     var body: some View {
-        // Keys are named in words once, here (CODING_STANDARDS, user-facing text 4).
-        StepText(
-            "Tap \(StatusText.dictationChordNamed), speak, and tap again. "
-                + "kotoba types what you said where your cursor is, in about a second."
-        )
-        LabeledContent("Shortcut") {
-            ChordRecorder(chords: .shared, role: .dictation)
+        StepText("Speak in any app, and kotoba types your words where your cursor is.")
+        VStack(alignment: .leading, spacing: 12) {
+            Point("Fast", systemImage: "bolt", text: "Your words appear about one second after you stop.")
+            Point(
+                "Accurate", systemImage: "character.book.closed",
+                text: "Add names and terms to your dictionary, and kotoba spells them your way.")
+            Point(
+                "Private", systemImage: "lock",
+                text: "No account. Your audio goes only to the speech service you choose, with your own key.")
         }
-        .fixedSize()
-        .padding(.top, 4)
-        Label(
-            "No account. Your audio goes only to the speech service you choose, with your own key.", systemImage: "lock"
-        )
-        .font(.callout)
-        .foregroundStyle(.secondary)
-        .frame(maxWidth: OnboardingView.textWidth)
-        .padding(.top, 8)
+        .frame(width: OnboardingView.textWidth, alignment: .leading)
+        .padding(.vertical, 6)
+        Form {
+            Section {
+                LabeledContent("Shortcut") {
+                    ChordRecorder(chords: .shared, role: .dictation)
+                }
+            } footer: {
+                let chord = StatusText.dictationChord
+                Text("Tap \(chord), speak, then tap it again.\nOr hold \(chord) while you speak, and let go.")
+                    .frame(maxWidth: .infinity, alignment: .leading)
+            }
+        }
+        .formStyle(.grouped)
+        .scrollDisabled(true)
+        // A form fills its container; here it is only as tall as its rows.
+        .fixedSize(horizontal: false, vertical: true)
+        .frame(width: OnboardingView.textWidth + 20)
+    }
+
+    /// One selling point: a symbol, a short title and one sentence, as a "What’s New" sheet shows a feature.
+    private struct Point: View {
+        let title: String
+        let systemImage: String
+        let text: String
+
+        init(_ title: String, systemImage: String, text: String) {
+            self.title = title
+            self.systemImage = systemImage
+            self.text = text
+        }
+
+        var body: some View {
+            Label {
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(title).font(.headline)
+                    Text(text).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
+                }
+            } icon: {
+                Image(systemName: systemImage)
+                    .font(.title2)
+                    .foregroundStyle(.tint)
+                    .frame(width: 32)
+            }
+            .multilineTextAlignment(.leading)
+        }
     }
 }
 
@@ -119,7 +140,6 @@ struct AccessibilityStep: View {
 
 struct KeyStep: View {
     let model: OnboardingModel
-    @State private var draft = ""
 
     var body: some View {
         let provider = model.account.title
@@ -128,16 +148,7 @@ struct KeyStep: View {
             .font(.callout)
         Button("Get a Key at \(provider)…") { model.open(model.account.keysPage) }
             .padding(.top, 4)
-        HStack {
-            SecureField("Key", text: $draft, prompt: Text("Paste your \(provider) key"))
-                .labelsHidden()
-                .multilineTextAlignment(.leading)
-                .textFieldStyle(.roundedBorder)
-                .frame(width: 280)
-                .onSubmit(save)
-            Button("Save", action: save)
-                .disabled(draft.trimmingCharacters(in: .whitespaces).isEmpty)
-        }
+        KeyField(account: model.account, keyChecks: model.keyChecks, fieldWidth: 280)
         result
             .font(.callout)
             .frame(minHeight: 34, alignment: .top)
@@ -156,11 +167,42 @@ struct KeyStep: View {
             StatusLine("Key saved", .good)
         }
     }
+}
 
-    private func save() {
-        let key = draft
-        draft = ""
-        Task { await model.saveKey(key) }
+/// Wispr Flow is on this Mac: one click shows what its dictionary would add (the alert Settings > Dictionary shows),
+/// and Import adds it. Optional: "Not Now" moves on, and Settings > Dictionary keeps the same button.
+struct WisprImportStep: View {
+    let model: OnboardingModel
+
+    var body: some View {
+        StepText(
+            "Add the words and replacements from your Wispr Flow dictionary, so kotoba spells them right "
+                + "from the start."
+        )
+        Group {
+            if let added = model.wisprImported {
+                StatusLine(Self.importedText(added), .good)
+            } else if model.dictionary?.wisprImport?.isReading == true {
+                ProgressView().controlSize(.small)
+            } else {
+                Button("Import from Wispr Flow…", action: model.previewWisprImport)
+                    .buttonStyle(.borderedProminent)
+                    .keyboardShortcut(.defaultAction)
+                    .controlSize(.large)
+            }
+        }
+        .padding(.top, 8)
+        if model.wisprImported == nil {
+            Text("You can also do this later in Settings > Dictionary.")
+                .font(.callout)
+                .foregroundStyle(.secondary)
+        }
+    }
+
+    static func importedText(_ added: DictionaryImport) -> String {
+        added.isEmpty
+            ? "Your dictionary already has every word from Wispr Flow."
+            : "Added \(added.countsText)."
     }
 }
 

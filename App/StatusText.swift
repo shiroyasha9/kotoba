@@ -7,11 +7,6 @@ enum StatusText {
     /// The owner's dictation chord; every text that names it uses this, so it follows a new recording.
     @MainActor static var dictationChord: String { HotkeyChords.shared.dictation.title }
     @MainActor static var ready: String { "Tap \(dictationChord) to dictate" }
-    /// The chord with its keys in words when it has symbols: "⌃⌥⌘ (Control-Option-Command)", or "fn".
-    @MainActor static var dictationChordNamed: String {
-        let chord = HotkeyChords.shared.dictation
-        return chord.hasSymbols ? "\(chord.title) (\(chord.spokenTitle))" : chord.title
-    }
     /// The history database cannot be read: the panes' failure state (title and message) and the menu status line.
     static let historyReadFailedTitle = "Couldn’t Read History"
     static let historyReadFailedMessage = "Quit and reopen kotoba."

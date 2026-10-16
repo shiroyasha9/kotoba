@@ -133,11 +133,13 @@ final class SetupFlow {
     let readiness: Readiness
     private let openSpeechSettings: @MainActor () -> Void
     private lazy var onboarding = OnboardingController(
-        readiness: readiness, routeSettings: routeSettings, vault: vault, router: router,
+        readiness: readiness, routeSettings: routeSettings, vault: vault, router: router, dictionary: dictionary,
         openSpeechSettings: openSpeechSettings)
     private let routeSettings: TranscriptionSettings
     private let vault: KeyVault
     private let router: TranscriptionRouter
+    /// The dictionary onboarding's Wispr Flow step imports into; nil until it is read at launch.
+    private let dictionary: @MainActor () -> DictionaryModel?
     private var activations: Task<Void, Never>?
     /// Reads Readiness every second while a kotoba window is open; ends when the last one closes.
     private var windowPoll: Task<Void, Never>?
@@ -145,12 +147,13 @@ final class SetupFlow {
     /// `router` checks a key in onboarding.
     init(
         readiness: Readiness, routeSettings: TranscriptionSettings, vault: KeyVault, router: TranscriptionRouter,
-        openSpeechSettings: @escaping @MainActor () -> Void
+        dictionary: @escaping @MainActor () -> DictionaryModel?, openSpeechSettings: @escaping @MainActor () -> Void
     ) {
         self.readiness = readiness
         self.routeSettings = routeSettings
         self.vault = vault
         self.router = router
+        self.dictionary = dictionary
         self.openSpeechSettings = openSpeechSettings
     }
 
@@ -160,6 +163,11 @@ final class SetupFlow {
     /// Onboarding where the owner left it, or at Welcome.
     func showOnboarding() {
         onboarding.show()
+    }
+
+    /// The dictionary was read at launch, after onboarding may have opened.
+    func dictionaryOpened() {
+        onboarding.dictionaryOpened()
     }
 
     /// "Finish Setting Up kotoba…": onboarding on the first missing step. An Azure endpoint is set in Settings.

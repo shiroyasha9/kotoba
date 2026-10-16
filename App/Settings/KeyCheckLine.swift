@@ -12,40 +12,66 @@ enum KeyStatus: Equatable {
 }
 
 /// The save-then-check sequence of a key field: trim, save through the `KeyVault`, then one free key check. A newer
-/// save or a removal while a check runs wins, so a slow answer never shows for a key that is gone.
+/// save or a removal while a check runs wins, so a slow answer never shows for a key that is gone. It also holds the
+/// masked text of each saved key (`KeyMask`), so a key field shows which key is saved without the key.
 @MainActor
 @Observable
 final class KeyChecks {
     private(set) var status: [ProviderAccount: KeyStatus] = [:]
+    /// The masked saved key per account: set by a save here, or read once from the Keychain by `loadMask(for:)`.
+    private(set) var masks: [ProviderAccount: String] = [:]
 
     @ObservationIgnored private let saveKey: @MainActor (String, ProviderAccount) throws -> Void
     @ObservationIgnored private let removeKey: @MainActor (ProviderAccount) throws -> Void
     /// The router's free key check; nil saves without a check (snapshots).
     @ObservationIgnored private let checkKey: (@MainActor (String, ProviderAccount) async -> KeyCheck)?
+    /// The saved key of an account, read only to mask it; nil when there is none or the Keychain is locked.
+    @ObservationIgnored private let readKey: @MainActor (ProviderAccount) async -> String?
+    /// Whether the Keychain holds a key for the account, without reading it (`KeyVault.hasKey`).
+    @ObservationIgnored private let hasKey: @MainActor (ProviderAccount) -> Bool
     /// Bumped by each save and removal, so an older check's answer is dropped.
     @ObservationIgnored private var generation: [ProviderAccount: Int] = [:]
 
     /// `checkKey` is `TranscriptionRouter.checkKey(_:for:)`.
     convenience init(vault: KeyVault, checkKey: (@MainActor (String, ProviderAccount) async -> KeyCheck)?) {
         self.init(
-            saveKey: { try vault.save($0, for: $1) }, removeKey: { try vault.delete(for: $0) }, checkKey: checkKey)
+            saveKey: { try vault.save($0, for: $1) }, removeKey: { try vault.delete(for: $0) }, checkKey: checkKey,
+            // A missing key and a locked keychain both leave nothing to mask; the field then shows dots.
+            readKey: { try? await vault.source(for: $0).apiKey() }, hasKey: vault.hasKey(for:))
     }
 
     init(
         saveKey: @escaping @MainActor (String, ProviderAccount) throws -> Void,
         removeKey: @escaping @MainActor (ProviderAccount) throws -> Void,
-        checkKey: (@MainActor (String, ProviderAccount) async -> KeyCheck)?
+        checkKey: (@MainActor (String, ProviderAccount) async -> KeyCheck)?,
+        readKey: @escaping @MainActor (ProviderAccount) async -> String?,
+        hasKey: @escaping @MainActor (ProviderAccount) -> Bool
     ) {
         self.saveKey = saveKey
         self.removeKey = removeKey
         self.checkKey = checkKey
+        self.readKey = readKey
+        self.hasKey = hasKey
     }
 
-    /// Fixed results with nothing behind them, for snapshots.
-    static func sample(_ status: [ProviderAccount: KeyStatus]) -> KeyChecks {
-        let checks = KeyChecks(saveKey: { _, _ in }, removeKey: { _ in }, checkKey: nil)
+    /// Fixed results with nothing behind them, for snapshots. `savedKeys` hold a sample key each, masked as a saved
+    /// key is.
+    static func sample(_ status: [ProviderAccount: KeyStatus], savedKeys: Set<ProviderAccount> = []) -> KeyChecks {
+        let checks = KeyChecks(
+            saveKey: { _, _ in }, removeKey: { _ in }, checkKey: nil, readKey: { _ in nil },
+            hasKey: savedKeys.contains)
         checks.status = status
+        for account in savedKeys {
+            checks.masks[account] = KeyMask.text(of: account.sampleKey)
+        }
         return checks
+    }
+
+    /// Whether `account` has a stored key. Reads `status` and `masks`, so a view that asks redraws after each save or
+    /// removal.
+    func isSaved(_ account: ProviderAccount) -> Bool {
+        _ = (status, masks)
+        return hasKey(account)
     }
 
     /// Saves `draft` (trimmed) for `account`, then checks it. Returns false when nothing was saved: an empty draft,
@@ -62,6 +88,7 @@ final class KeyChecks {
             status[account] = .saveFailed
             return false
         }
+        masks[account] = KeyMask.text(of: key)
         guard let checkKey else {
             status[account] = nil
             return true
@@ -81,12 +108,21 @@ final class KeyChecks {
         do {
             try removeKey(account)
             status[account] = nil
+            masks[account] = nil
             return true
         } catch {
             Log.app.error("Cannot remove the \(account.rawValue, privacy: .public) key: \(error)")
             status[account] = .removeFailed
             return false
         }
+    }
+
+    /// Masks a key saved before this window opened, once: one Keychain read, and the key goes no further than here.
+    func loadMask(for account: ProviderAccount) async {
+        guard masks[account] == nil else { return }
+        let current = generation[account]
+        guard let key = await readKey(account), generation[account] == current else { return }
+        masks[account] = KeyMask.text(of: key)
     }
 
     @discardableResult
@@ -157,6 +193,27 @@ struct StatusLabel<Style: ShapeStyle>: View {
             Text(text)
         } icon: {
             Image(systemName: systemImage).foregroundStyle(color)
+        }
+    }
+}
+
+/// A line with a symbol in its status color: allowed, off, or a hint. Onboarding and the Microphone pane use it.
+struct StatusLine: View {
+    enum Kind { case good, problem, neutral }
+
+    let text: String
+    let kind: Kind
+
+    init(_ text: String, _ kind: Kind) {
+        self.text = text
+        self.kind = kind
+    }
+
+    var body: some View {
+        switch kind {
+        case .good: StatusLabel(text, systemImage: "checkmark.circle.fill", color: .green)
+        case .problem: StatusLabel(text, systemImage: "exclamationmark.triangle.fill", color: .orange)
+        case .neutral: StatusLabel(text, systemImage: "info.circle", color: .secondary)
         }
     }
 }

@@ -1,12 +1,13 @@
 import AppKit
+import KotobaCore
 import KotobaProviders
 import SwiftUI
 
-/// The first-run window: six steps, one at a time. Built when it opens and released when it closes, like Settings,
+/// The first-run window: its steps one at a time. Built when it opens and released when it closes, like Settings,
 /// so it costs nothing at idle. The app opens it on first launch and from "Finish Setting Up kotoba…".
 @MainActor
 final class OnboardingController: NSObject, NSWindowDelegate {
-    static let size = NSSize(width: 560, height: 460)
+    static let size = NSSize(width: 560, height: 560)
 
     private enum Key {
         static let isComplete = "onboarding.completed"
@@ -24,19 +25,22 @@ final class OnboardingController: NSObject, NSWindowDelegate {
     private let routeSettings: TranscriptionSettings
     private let vault: KeyVault
     private let router: TranscriptionRouter
+    private let dictionary: @MainActor () -> DictionaryModel?
     private let openSpeechSettings: @MainActor () -> Void
     private var window: NSWindow?
     private var model: OnboardingModel?
 
-    /// `router` checks a saved key with one free request; `openSpeechSettings` opens Settings on the Speech pane.
+    /// `router` checks a saved key with one free request; `dictionary` is the one the Wispr Flow step imports into;
+    /// `openSpeechSettings` opens Settings on the Speech pane.
     init(
         readiness: Readiness, routeSettings: TranscriptionSettings, vault: KeyVault, router: TranscriptionRouter,
-        openSpeechSettings: @escaping @MainActor () -> Void
+        dictionary: @escaping @MainActor () -> DictionaryModel?, openSpeechSettings: @escaping @MainActor () -> Void
     ) {
         self.readiness = readiness
         self.routeSettings = routeSettings
         self.vault = vault
         self.router = router
+        self.dictionary = dictionary
         self.openSpeechSettings = openSpeechSettings
     }
 
@@ -49,7 +53,7 @@ final class OnboardingController: NSObject, NSWindowDelegate {
             ?? OnboardingModel(
                 step: step ?? resumed ?? .welcome, readiness: readiness,
                 keyChecks: KeyChecks(vault: vault, checkKey: router.checkKey(_:for:)),
-                source: .live(routeSettings: routeSettings),
+                source: .live(routeSettings: routeSettings, dictionary: dictionary),
                 openSpeechSettings: openSpeechSettings)
         if let step {
             model.step = step
@@ -59,6 +63,11 @@ final class OnboardingController: NSObject, NSWindowDelegate {
         self.model = model
         self.window = window
         WindowFront.show(window)
+    }
+
+    /// The dictionary was read at launch: an open window can offer the Wispr Flow step now.
+    func dictionaryOpened() {
+        model?.dictionaryOpened()
     }
 
     func windowDidBecomeKey(_ notification: Notification) {
@@ -95,7 +104,8 @@ final class OnboardingController: NSObject, NSWindowDelegate {
 // MARK: - Snapshots
 
 extension OnboardingController {
-    /// Every step as the whole window, plus the states a step changes into (mic off, key checked, all done).
+    /// Every step as the whole window, plus the states a step changes into (mic off, granted, key saved, Wispr Flow
+    /// imported, all done). Wispr Flow shows as installed, so its step is in the flow.
     static func snapshots() -> [Snapshot] {
         let ready = Readiness.sample()
         let first = OnboardingStep.allCases.map { step in
@@ -109,8 +119,17 @@ extension OnboardingController {
             window("onboarding-microphone-denied") { model(.microphone, .sample(microphone: .denied)) },
             window("onboarding-microphone-allowed") { model(.microphone, ready) },
             window("onboarding-accessibility-allowed") { model(.accessibility, ready) },
-            window("onboarding-key-works") { model(.key, ready, keys: [.openRouter: .checked(.valid)]) },
-            window("onboarding-key-no-credit") { model(.key, ready, keys: [.openRouter: .checked(.noCredit)]) },
+            window("onboarding-key-works") { model(.key, ready, keys: [.openRouter: .checked(.valid)], hasKey: true) },
+            window("onboarding-key-no-credit") {
+                model(.key, ready, keys: [.openRouter: .checked(.noCredit)], hasKey: true)
+            },
+            window("onboarding-key-saved-earlier") { model(.key, ready, hasKey: true) },
+            window("onboarding-wisprImport-done") {
+                let model = model(.wisprImport, ready)
+                let (incoming, _) = Pane.sampleWisprImport
+                model.wisprImportAnswered(PersonalDictionary().importPreview(of: incoming))
+                return model
+            },
             window("onboarding-tryIt-works") {
                 let model = model(.tryIt, ready)
                 model.tryItText = "Hello from kotoba."
@@ -120,11 +139,15 @@ extension OnboardingController {
         ]
     }
 
+    /// `hasKey`: an OpenRouter key is saved. Wispr Flow shows as installed.
     private static func model(
-        _ step: OnboardingStep, _ readiness: Readiness, keys: [ProviderAccount: KeyStatus] = [:]
+        _ step: OnboardingStep, _ readiness: Readiness, keys: [ProviderAccount: KeyStatus] = [:], hasKey: Bool = false
     ) -> OnboardingModel {
-        OnboardingModel(
-            step: step, readiness: readiness, keyChecks: .sample(keys), source: .sample, openSpeechSettings: {})
+        let model = OnboardingModel(
+            step: step, readiness: readiness, keyChecks: .sample(keys, savedKeys: hasKey ? [.openRouter] : []),
+            source: .sample(dictionary: Pane.sampleModel(PersonalDictionary())), openSpeechSettings: {})
+        model.showsWisprInstalled()
+        return model
     }
 
     private static func window(_ name: String, _ model: @escaping @MainActor () -> OnboardingModel) -> Snapshot {

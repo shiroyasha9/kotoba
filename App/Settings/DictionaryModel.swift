@@ -20,6 +20,10 @@ final class DictionaryModel {
         case preview(DictionaryImport, WisprFlowImport.Contents)
         case notFound
         case failed(String)
+
+        var isReading: Bool {
+            if case .reading = self { true } else { false }
+        }
     }
 
     private(set) var dictionary: PersonalDictionary
@@ -261,13 +265,16 @@ final class DictionaryModel {
         }
     }
 
-    /// Imports against the dictionary as it is now, not as it was when the preview was shown.
-    func applyWisprImport() {
-        guard case .preview(_, let contents) = wisprImport else { return }
+    /// Imports against the dictionary as it is now, not as it was when the preview was shown. Returns what it added.
+    @discardableResult
+    func applyWisprImport() -> DictionaryImport? {
+        guard case .preview(_, let contents) = wisprImport else { return nil }
         wisprImport = nil
         var updated = dictionary
-        updated.apply(updated.importPreview(of: contents.dictionary))
+        let added = updated.importPreview(of: contents.dictionary)
+        updated.apply(added)
         commit(updated)
+        return added
     }
 
     /// `ids`: suggestions this edit adds, and `candidates`: checked corrections, both stored as added in the same

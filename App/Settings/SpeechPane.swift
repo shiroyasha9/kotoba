@@ -35,9 +35,6 @@ final class SpeechSettingsModel {
     private var revision = 0
 
     @ObservationIgnored private let settings: TranscriptionSettings
-    /// Nil only in a snapshot sample, which has no Keychain behind it.
-    @ObservationIgnored private let vault: KeyVault?
-    @ObservationIgnored private let sampleSavedKeys: Set<ProviderAccount>
     @ObservationIgnored private var changes: (any NSObjectProtocol)?
 
     /// Keys are saved through `vault`, which the router reads and which announces each save for the retry of the
@@ -47,9 +44,7 @@ final class SpeechSettingsModel {
         vault: KeyVault,
         checkKey: (@MainActor (String, ProviderAccount) async -> KeyCheck)? = nil
     ) {
-        self.init(
-            settings: settings, vault: vault, keyChecks: KeyChecks(vault: vault, checkKey: checkKey),
-            sampleSavedKeys: [])
+        self.init(settings: settings, keyChecks: KeyChecks(vault: vault, checkKey: checkKey))
     }
 
     /// Fixed values with no UserDefaults or Keychain behind them, so `make snapshots` gives the same image each run.
@@ -63,20 +58,12 @@ final class SpeechSettingsModel {
         settings.route = route
         settings.isGrokFormatOn = true
         settings.azureEndpoint = azureEndpoint
-        return SpeechSettingsModel(
-            settings: settings, vault: nil, keyChecks: .sample(keyStatus), sampleSavedKeys: savedKeys)
+        return SpeechSettingsModel(settings: settings, keyChecks: .sample(keyStatus, savedKeys: savedKeys))
     }
 
-    private init(
-        settings: TranscriptionSettings,
-        vault: KeyVault?,
-        keyChecks: KeyChecks,
-        sampleSavedKeys: Set<ProviderAccount>
-    ) {
+    private init(settings: TranscriptionSettings, keyChecks: KeyChecks) {
         self.settings = settings
-        self.vault = vault
         self.keyChecks = keyChecks
-        self.sampleSavedKeys = sampleSavedKeys
         changes = NotificationCenter.default.addObserver(
             forName: TranscriptionSettings.didChange, object: nil, queue: .main
         ) { [weak self] _ in
@@ -90,12 +77,6 @@ final class SpeechSettingsModel {
         }
     }
 
-    /// Whether `account` has a stored key. Read after each save or removal, which change `keyChecks.status`.
-    func isSaved(_ account: ProviderAccount) -> Bool {
-        _ = keyChecks.status
-        return vault?.hasKey(for: account) ?? sampleSavedKeys.contains(account)
-    }
-
     /// Writes `text` when it is empty or an Azure Speech endpoint the router accepts; returns false (and keeps the
     /// stored value) otherwise. Called on Return or when the field loses focus, never per keystroke, so a
     /// half-typed host never receives the key or the waiting audio.
@@ -106,14 +87,6 @@ final class SpeechSettingsModel {
         guard text != settings.azureEndpoint else { return true }
         write { settings.azureEndpoint = text }
         return true
-    }
-
-    func saveKey(_ key: String, for account: ProviderAccount) {
-        Task { await keyChecks.save(key, for: account) }
-    }
-
-    func deleteKey(for account: ProviderAccount) {
-        keyChecks.remove(account)
     }
 
     /// `value`, read so that a settings change redraws the view that asked for it.
@@ -133,7 +106,7 @@ private struct SpeechPane: View {
 
     private var account: ProviderAccount { model.route.account }
     private var otherSavedKeys: [ProviderAccount] {
-        ProviderAccount.allCases.filter { $0 != account && model.isSaved($0) }
+        ProviderAccount.allCases.filter { $0 != account && model.keyChecks.isSaved($0) }
     }
 
     var body: some View {
@@ -229,42 +202,23 @@ private struct EndpointField: View {
     }
 }
 
-/// One provider's key: a secure field to replace it, Remove, and what the pane knows about the saved key. A stored
-/// key is never shown.
+/// One provider's key: the shared key field (the masked key once saved), and what the pane knows about the saved key.
 private struct KeyRow: View {
     let account: ProviderAccount
     let label: String
     let model: SpeechSettingsModel
-    @State private var draft = ""
-
-    private var isSaved: Bool { model.isSaved(account) }
 
     var body: some View {
         LabeledContent(label) {
             VStack(alignment: .trailing, spacing: 4) {
-                HStack {
-                    SecureField("Key", text: $draft, prompt: Text(isSaved ? "Paste a new key" : "Paste your key"))
-                        .labelsHidden()
-                        .textFieldStyle(.roundedBorder)
-                        .frame(width: 220)
-                        .onSubmit(save)
-                    Button("Save", action: save).disabled(draft.trimmingCharacters(in: .whitespaces).isEmpty)
-                    // Always shown, so the fields line up; it works only when a key is stored.
-                    Button("Remove", role: .destructive) { model.deleteKey(for: account) }
-                        .disabled(!isSaved)
-                }
+                KeyField(account: account, keyChecks: model.keyChecks)
                 if let status = model.keyChecks.status[account] {
                     KeyCheckLine(status: status, account: account)
-                } else if isSaved {
+                } else if model.keyChecks.isSaved(account) {
                     StatusLabel("Saved", systemImage: "checkmark.circle.fill", color: .green)
                 }
             }
         }
-    }
-
-    private func save() {
-        model.saveKey(draft, for: account)
-        draft = ""
     }
 }
 
@@ -283,11 +237,25 @@ extension Pane {
                         keyStatus: [.openRouter: .checked(.noCredit)])),
                 named: "settings-speech-grok"),
             MainWindow.snapshot(
+                of: .speech(.sample(route: .openRouterMAI, azureEndpoint: "", savedKeys: [])),
+                named: "settings-speech-no-key"),
+            MainWindow.snapshot(
                 of: .speech(
                     .sample(
                         route: .azureMAI, azureEndpoint: "", savedKeys: [.azure],
                         keyStatus: [.azure: .checked(.invalid)])),
                 named: "settings-speech-azure"),
         ]
+    }
+}
+
+extension ProviderAccount {
+    /// A made-up key in the provider's format, for snapshots.
+    var sampleKey: String {
+        switch self {
+        case .openRouter: "sk-or-v1-" + String(repeating: "0", count: 60) + "a1b2"
+        case .xai: "xai-" + String(repeating: "0", count: 76) + "7f3c"
+        case .azure: String(repeating: "0", count: 28) + "9d0e"
+        }
     }
 }

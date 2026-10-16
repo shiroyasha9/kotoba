@@ -59,7 +59,7 @@ UI text in this list is the text in the code at the phase 2 gate (2026-10-15). I
 | 27 | Dictionary > **Import from Wispr Flow…** | "Import from Wispr Flow?" with "Adds N words and M replacements." (with ", including N corrections Wispr learned from your edits" when Wispr has them), "Already in your dictionary: N entries." and "Skips N snippets." | |
 | 28 | Check the counts against Wispr Flow's dictionary | The counts match the words and replacements that are not already in kotoba | |
 | 29 | Click **Import** | The words and replacements show in the list | |
-| 30 | **Import from Wispr Flow…** again | "Nothing New in Wispr Flow": "Every word in Wispr Flow's dictionary is already here." | |
+| 30 | **Import from Wispr Flow…** again | "Nothing New in Wispr Flow": "Every word in Wispr Flow's dictionary is already in kotoba." | |
 | 31 | Click **Cancel** on the preview (on a fresh dictionary) | Nothing is added | |
 
 ## Microphone
@@ -195,14 +195,14 @@ Rows from each agent's phase 2.5 work. The numbers continue the list above.
 | # | Do this | Expect | Result |
 |---|---|---|---|
 | 111 | Fresh setup: run `defaults delete tech.teensy.kotoba.dev onboarding.completed`, remove kotoba Dev's Microphone and Accessibility grants, open kotoba Dev | "Welcome to kotoba" opens, centred, on Welcome; no Microphone or Accessibility prompt shows before its step | |
-| 112 | Microphone step: click **Allow Microphone**, then **Allow** in the prompt | "Microphone allowed" with a checkmark; the window moves to Accessibility by itself in about 1 s | |
+| 112 | Microphone step: click **Allow Microphone**, then **Allow** in the prompt | "Microphone allowed" with a checkmark; the window stays on the step; **Continue** turns on and Return presses it | |
 | 113 | Microphone step, deny instead | "Microphone access is off."; **Open System Settings** opens Privacy & Security > Microphone | |
-| 114 | Turn kotoba Dev on there | The step turns green and moves on without a click | |
+| 114 | Turn kotoba Dev on there | The step turns green within 1 s and stays until you click **Continue** | |
 | 115 | Accessibility step: click **Open Accessibility Settings** | The system prompt shows (kotoba joins the list) | |
 | 116 | Click it again | Privacy & Security > Accessibility opens | |
-| 117 | Turn kotoba Dev on there | The step turns green within 1 s and moves on | |
+| 117 | Turn kotoba Dev on there | The step turns green within 1 s and stays until you click **Continue** | |
 | 118 | Key step: press ⌘V in the key field, then ⌘A | The key pastes, then all of it is selected; no beep | |
-| 119 | Press Return | Same as **Save**: the field clears; the result line shows the key check ("Key works" for a good key) | |
+| 119 | Press Return | Same as **Save**: the field goes; "sk-or-v1-…" and the last four characters of the key show with **Change…** and **Remove**; the result line shows the key check ("Key works" for a good key) | |
 | 120 | Click **Get a Key at OpenRouter…** | openrouter.ai/settings/keys opens | |
 | 121 | Key step: click **See Pricing…** | The pricing page of the current speech model's provider opens (OpenRouter: openrouter.ai/microsoft/mai-transcribe-2) | |
 | 122 | Key step: save a key with no credit | "This key has no credit. Add credit at OpenRouter." with **Add Credit…** | |
@@ -323,7 +323,7 @@ Rows from each agent's phase 2.5 work. The numbers continue the list above.
 | 211 | Click the ↺ button next to a changed shortcut | It goes back to ⌃⌥⌘ (or ⌃⌥⇧⌘ for cleanup) at once | |
 | 212 | Click a shortcut button, then press Esc, or click it again, or switch to another app | Recording stops; the shortcut does not change; ⌃⌥⌘ dictates again at once | |
 | 213 | Change **Dictate**, quit kotoba, open it again | The new chord works and shows in the menu and in Settings | |
-| 214 | First launch (onboarding Welcome): record fn as the shortcut | The text above changes to "Tap fn"; the Try It step and the menu say fn | |
+| 214 | First launch (onboarding Welcome): record fn as the shortcut | The lines under the shortcut change to "Tap fn, speak…" and "Or hold fn…"; the Try It step and the menu say fn | |
 
 ### Submit after paste and Last Dictation (phase 2.6)
 
@@ -659,3 +659,26 @@ Rows 520-535 use kotoba Dev with the release kotoba quit, so Dev keeps its hotke
 | 533 | Start a recording, then choose kotoba Dev > **Quit kotoba Dev** (⌘Q) | Quit waits; the audio is in History after the next launch | |
 | 534 | Turn **Open kotoba when you log in** on. Log out and in | The Dock icon is there; no window opens. The log says “Launched at login” | |
 | 535 | Run the release app and kotoba Dev together | Two Dock icons: the release icon and the blue Dev icon. Dev gives way (its menu says so) | |
+
+## Onboarding and saved keys (0.3.0)
+
+Rows 500-514 use kotoba Dev with the release kotoba quit. A fresh setup: `defaults delete tech.teensy.kotoba.dev onboarding.completed`, remove kotoba Dev's Microphone and Accessibility grants.
+
+| # | Do this | Expect | Result |
+|---|---|---|---|
+| 500 | Fresh setup; open kotoba Dev | Welcome shows kotoba's app icon, "Fast", "Accurate" and "Private" with one line each, the **Shortcut** box, and under it "Tap ⌃⌥⌘, speak, then tap it again." and "Or hold ⌃⌥⌘ while you speak, and let go." No key names in words | |
+| 501 | Microphone step before you allow | No **Skip for Now**; **Continue** is dimmed; Return presses **Allow Microphone** | |
+| 502 | Accessibility step before you allow | No **Skip for Now**; **Continue** is dimmed | |
+| 503 | Key step with a key saved earlier (quit and reopen kotoba Dev on this step) | The masked key ("sk-or-v1-…" and four characters) with **Change…** and **Remove**; "Key saved" under it; no empty key field | |
+| 504 | Click **Change…**, then press Esc | The field shows with the cursor in it and a **Cancel** button; Esc puts the masked key back; the saved key still works | |
+| 505 | Click **Change…**, paste another key (⌘V), press Return | The new key's last four characters show; the key check runs again | |
+| 506 | Click **Remove** | The empty field "Paste your OpenRouter key" shows; the Done step says kotoba has no key | |
+| 507 | With Wispr Flow installed, Continue from the key step | "Bring Your Words from Wispr Flow" shows as a step (7 dots); **Import from Wispr Flow…** shows the same alert as Settings > Dictionary with the counts | |
+| 508 | Click **Import** in the alert | "Added N words and M replacements." with a checkmark; **Continue** is the default button; Settings > Dictionary lists the words | |
+| 509 | Run the Wispr Flow step again after an import | "Nothing New in Wispr Flow"; **OK** shows "Your dictionary already has every word from Wispr Flow." | |
+| 510 | Without Wispr Flow (rename its folder in Application Support), reopen onboarding | No Wispr Flow step; 6 dots | |
+| 511 | Settings > Speech with a saved key | The masked key with **Change…** and **Remove**, and "Saved" or the key check under it | |
+| 512 | Settings > Speech > **Change…**, press ⌘V, then ⌘A | The key pastes (dots), then all of it is selected; no beep | |
+| 513 | Settings > Microphone > **Test Microphone** right after the onboarding grant (first run) | The bar moves for 5 s, the orange dot shows, and "Listening for 5 seconds. Speak to see the level." shows under the row; `log show --last 5m --predicate 'subsystem == "tech.teensy.kotoba.dev" AND category == "audio"'` has "The mic test started on …" | |
+| 514 | Start a dictation, then click **Test Microphone** while it records | "A dictation is recording. Test again when it ends." with an orange warning; the dictation goes on | |
+
