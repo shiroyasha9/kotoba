@@ -153,8 +153,12 @@ struct KeyStep: View {
         StepText("kotoba sends your audio to \(provider), which turns it into text.")
         PriceLine(route: model.route)
             .font(.callout)
-        Button("Get a Key at \(provider)…") { model.open(model.account.keysPage) }
-            .padding(.top, 4)
+        // Hidden once a key is saved, unless the provider refused it: Change… is then the next thing to do, and a second
+        // key button would compete with it.
+        if !model.keyChecks.isSaved(model.account) || model.keyChecks.status[model.account] == .checked(.invalid) {
+            Button("Get a Key at \(provider)…") { model.open(model.account.keysPage) }
+                .padding(.top, 4)
+        }
         KeyField(account: model.account, keyChecks: model.keyChecks, fieldWidth: 280)
         result
             .font(.callout)
@@ -219,7 +223,10 @@ struct TryItStep: View {
 
     var body: some View {
         let chord = HotkeyChords.shared.handsFree.title
-        StepText("Tap \(chord), say \u{201C}Hello from kotoba\u{201D}, then tap \(chord) again.")
+        // Both ways to dictate sit together above the field, so the field's result line below never moves them.
+        StepText(
+            "Tap \(chord), say \u{201C}Hello from kotoba\u{201D}, then tap \(chord) again.\n"
+                + StatusText.holdToDictate(.shared))
         TextField("Try It", text: $model.tryItText, prompt: Text("Your words appear here"), axis: .vertical)
             .labelsHidden()
             .multilineTextAlignment(.leading)
@@ -228,13 +235,12 @@ struct TryItStep: View {
             .frame(width: 360)
             .focused($isFieldFocused)
             .onAppear { isFieldFocused = true }
-        if !model.isDone(.tryIt) {
-            Text(StatusText.holdToDictate(.shared))
-                .font(.callout)
-                .foregroundStyle(.secondary)
-        } else {
-            StatusLine("It works.", .good).font(.callout)
-        }
+        // Always laid out, so the step does not move when the dictation works.
+        let works = model.isDone(.tryIt)
+        StatusLine("It works.", .good)
+            .font(.callout)
+            .opacity(works ? 1 : 0)
+            .accessibilityHidden(!works)
     }
 }
 
