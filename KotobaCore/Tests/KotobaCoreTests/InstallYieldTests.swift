@@ -31,6 +31,18 @@ struct InstallYieldTests {
         #expect(Self.changes([([501], []), ([501], []), ([], [999])]) == ([true, false, false], true))
     }
 
+    @Test func theMenuSaysItGivesWayExceptDuringALiveDictation() {
+        var yield = InstallYield(isRelease: false)
+        #expect(!yield.showsYield(in: .idle))
+        _ = yield.releaseChanged(launched: [501], quit: [])
+
+        #expect(yield.showsYield(in: .idle))
+        #expect(yield.showsYield(in: .failed(DictationID())))
+        #expect(!yield.showsYield(in: .recording(isLong: false)))
+        #expect(!yield.showsYield(in: .transcribing))
+        #expect(!yield.showsYield(in: .undoable))
+    }
+
     /// The whole list replaced at once: the old instance quits and a new one runs, so the build keeps giving way
     /// with no moment of hotkeys on in between.
     @Test func aReplacedListKeepsGivingWay() {

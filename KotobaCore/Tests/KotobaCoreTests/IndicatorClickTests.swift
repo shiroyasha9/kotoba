@@ -29,7 +29,9 @@ struct IndicatorClickTests {
 
     @Test(arguments: rows)
     func aClickIsATapOnlyOnTheRecordingAndIdlePills(_ row: Row) {
-        #expect(IndicatorPlacement.isClickATap(in: row.state, showsIdlePill: row.showsIdlePill) == row.isTap)
+        #expect(
+            IndicatorPlacement.isClickATap(in: row.state, showsIdlePill: row.showsIdlePill, isYielding: false)
+                == row.isTap)
     }
 
     /// A development build that gives way to the release app starts nothing from its idle pill, but a click still stops

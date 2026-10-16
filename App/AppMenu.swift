@@ -21,10 +21,10 @@ extension AppDelegate: StatusMenuActions {
         let status: MenuModel.Status =
             if let launchIssue {
                 .text(launchIssue)
+            } else if releaseWatcher.showsYield(in: state) {
+                .text(StatusText.yieldsToRelease)
             } else if state != .idle {
                 .text(state.statusText(statusContext) ?? "")
-            } else if releaseWatcher.isYielding {
-                .text(StatusText.yieldsToRelease)
             } else {
                 readiness.firstMissing.map { .finishSetup($0.setupText) } ?? .text(StatusText.ready)
             }

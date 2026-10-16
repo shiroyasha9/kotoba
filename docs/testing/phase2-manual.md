@@ -496,7 +496,7 @@ The offscreen snapshots (`make snapshots`) show two things that may not happen i
 ## Gates (after a day of use; each needs the owner's go because it reads the app database)
 
 - `make latency RUN=1` (the release app's database; `DEV=1` for kotoba Dev's): p50 <= 1.0 s and p90 <= 1.5 s from stop to Cmd-V, for 10-20 s dictations, per model. Cleanup-chord dictations are left out.
-- `make memory` (the release app in /Applications; `DEV=1` for kotoba Dev from `make build`, or `PID=<pid>`): idle footprint, compared with the floor in `docs/research/memory-spike.md`. Measure once with the Settings window never opened, and once after it was opened and closed.
+- `make memory` (the release app in /Applications; `DEV=1` for kotoba Dev from `make build`, with the release app quit, or `PID=<pid>`): idle footprint, compared with the floor in `docs/research/memory-spike.md`. Measure once with the Settings window never opened, and once after it was opened and closed.
 
 ## Dev install (kotoba Dev only)
 
@@ -505,5 +505,7 @@ The offscreen snapshots (`make snapshots`) show two things that may not happen i
 | 360 | With kotoba Dev open, open the release kotoba from /Applications | kotoba Dev’s pill shows “Quit kotoba to dictate with kotoba Dev” for 4 s, and its menu’s first line says the same. Tap ⌃⌥⌘, speak, tap: only the release kotoba records, and the text pastes once | |
 | 361 | With “Show indicator: Always” in kotoba Dev, while the release runs, point at and click kotoba Dev’s idle pill | The help tag says “Quit kotoba to dictate with kotoba Dev”; the click starts no dictation | |
 | 362 | Quit the release kotoba; dictate | kotoba Dev records and pastes again; its menu says “Tap ⌃⌥⌘ to dictate” | |
-| 363 | Tap ⌃⌥⌘ in kotoba Dev to start a dictation, then open the release kotoba before you stop | kotoba Dev keeps recording; a click on its pill stops it and pastes. The chord now goes to the release kotoba only | |
+| 363 | Tap ⌃⌥⌘ in kotoba Dev to start a dictation, then open the release kotoba before you stop | kotoba Dev keeps recording; a click on its pill stops it and pastes (Esc and Return no longer reach kotoba Dev). The chord now goes to the release kotoba only. A held ⌃⌥⌘ stops at once and pastes | |
 | 364 | Fresh kotoba Dev setup (`defaults delete tech.teensy.kotoba.dev onboarding.completed`), go to the last step | “Open kotoba when you log in” is off | |
+| 365 | Open the release kotoba first, then open kotoba Dev | kotoba Dev shows the notice of row 360 and does not dictate; quit the release kotoba, and kotoba Dev dictates | |
+| 366 | While the release kotoba runs, change kotoba Dev’s chord in Settings > General; quit the release kotoba; use the new chord | kotoba Dev dictates with the new chord | |

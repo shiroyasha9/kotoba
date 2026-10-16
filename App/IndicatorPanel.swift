@@ -4,7 +4,7 @@ import KotobaCore
 /// The floating recording indicator: a Liquid Glass pill with the state and the mic level, on the
 /// screen that holds the focused window. It sits at one of three anchors (`IndicatorAnchor`), and
 /// the owner drags it between them. With "Show indicator: Always" a small round pill stays at idle, and
-/// a click on it starts and stops a dictation. It never takes focus: a click or drag on it does not
+/// a click on it starts and stops a dictation (not while a development build gives way to the release app). It never takes focus: a click or drag on it does not
 /// activate kotoba or move focus from the app the owner types in, so the paste goes to that app.
 @MainActor
 final class IndicatorPanel {
@@ -13,7 +13,8 @@ final class IndicatorPanel {
 
     /// Called when the owner clicks the pill's button.
     var onAction: ((PillAction) -> Void)?
-    /// A click on the recording pill, or on the idle pill with "Always": AppDelegate sends it as a chord tap.
+    /// A click on the recording pill, or on the idle pill with "Always" (`IndicatorPlacement.isClickATap`): AppDelegate
+    /// sends it as a chord tap.
     var onTap: (() -> Void)?
     /// The pointer held (true) or released (false) the Undo pill. The pipeline owns the Undo window, so
     /// AppDelegate passes this on; the pill's bar holds by itself.
@@ -38,7 +39,7 @@ final class IndicatorPanel {
         }
         set {
             UserDefaults.standard.set(newValue.rawValue, forKey: Self.visibilityKey)
-            if !isNoticeShown, let shown {
+            if notice == nil, let shown {
                 show(shown.state, context: shown.context)
             }
         }
@@ -67,18 +68,18 @@ final class IndicatorPanel {
     private var isRecording = false
     /// The last dictation state, so a visibility change or a finished message can show it again.
     private var shown: (state: DictationState, context: StatusContext)?
-    /// A notice (`show(_:)` with a `PillNotice`) is up; an idle state does not replace it.
-    private var isNoticeShown = false
+    /// The notice up (`show(_:)` with a `PillNotice`); an idle state does not replace it.
+    private var notice: PillNotice?
     /// The pill was clicked to start a dictation, so the recording pill stays on this screen.
     private var isTapPending = false
 
     /// Shows the text and the button `StatusText` gives `state`, or the idle pill, or hides the pill.
     func show(_ state: DictationState, context: StatusContext) {
         shown = (state, context)
-        if state == .idle, isNoticeShown {
+        if state == .idle, notice != nil {
             return
         }
-        isNoticeShown = false
+        notice = nil
         let wasRecording = isRecording
         isRecording = if case .recording = state { true } else { false }
         // A new dictation follows the focused window, unless a click on the pill started it.
@@ -91,8 +92,37 @@ final class IndicatorPanel {
 
     /// Shows `notice` until its timer ends, a click on its button, or the next dictation state.
     func show(_ notice: PillNotice) {
-        isNoticeShown = true
+        self.notice = notice
         present(.init(notice), followsFocus: false)
+    }
+
+    /// Shows `notice` only while the pill is quiet (hidden, or the idle pill), so it never covers a dictation or
+    /// another notice.
+    func showWhenQuiet(_ notice: PillNotice) {
+        if isQuiet {
+            show(notice)
+        }
+    }
+
+    /// Ends `notice` if it is the one up.
+    func end(_ notice: PillNotice) {
+        if self.notice == notice {
+            showQuiet()
+        }
+    }
+
+    /// A new context for the shown state, such as a development build that starts or stops giving way. Only a quiet
+    /// pill redraws now; a dictation's or a notice's pill keeps its text and timer, and the next pill reads it.
+    func contextChanged(_ context: StatusContext) {
+        shown = (shown?.state ?? .idle, context)
+        if notice == nil, isQuiet {
+            showQuiet()
+        }
+    }
+
+    /// Hidden, or the idle pill: no dictation and no notice is on screen.
+    private var isQuiet: Bool {
+        built.map { !$0.panel.isVisible || $0.pill.content.isRound } ?? true
     }
 
     func showLevel(_ level: Float) {
@@ -110,7 +140,7 @@ final class IndicatorPanel {
         let wasVisible = panel.isVisible
         // The idle pill is not about a window, so it skips the window list and takes the pointer's screen.
         if !wasVisible || (followsFocus && dropTargets == nil) {
-            screen = content.isRound ? Self.pointerScreen() : Self.focusedScreen()
+            screen = content.isRound ? NSScreen.withPointer : NSScreen.focused
         }
         place(animated: wasVisible)
         if !wasVisible {
@@ -125,8 +155,8 @@ final class IndicatorPanel {
     }
 
     /// The pill is done with its message: the idle pill with "Always", else nothing.
-    func showQuiet() {
-        isNoticeShown = false
+    private func showQuiet() {
+        notice = nil
         present(
             shown.flatMap { Self.content(for: .idle, context: $0.context, visibility: visibility) }, followsFocus: false
         )
@@ -241,7 +271,7 @@ extension IndicatorPanel {
 extension IndicatorPanel {
     /// Moves the pill to its anchor on `screen`, horizontal or vertical to fit the content.
     private func place(animated: Bool) {
-        guard built != nil, dropTargets == nil, let screen = screen ?? Self.focusedScreen() else { return }
+        guard built != nil, dropTargets == nil, let screen = screen ?? NSScreen.focused else { return }
         let anchor = anchor
         let content = pill.content
         let visibleFrame = ScreenRect(screen.visibleFrame)
@@ -270,44 +300,9 @@ extension IndicatorPanel {
     private func screenParametersChanged() {
         guard built?.panel.isVisible == true else { return }
         if let screen, !NSScreen.screens.contains(screen) {
-            self.screen = Self.focusedScreen()
+            self.screen = NSScreen.focused
         }
         place(animated: false)
-    }
-
-    /// The screen that holds most of the frontmost app's front window, else the screen with the pointer.
-    private static func focusedScreen() -> NSScreen? {
-        let screens = NSScreen.screens
-        if let window = frontmostWindowFrame(),
-            let index = IndicatorPlacement.screenIndex(holding: window, among: screens.map { ScreenRect($0.frame) })
-        {
-            return screens[index]
-        }
-        return pointerScreen()
-    }
-
-    private static func pointerScreen() -> NSScreen? {
-        let mouse = NSEvent.mouseLocation
-        return NSScreen.screens.first { $0.frame.contains(mouse) } ?? NSScreen.main
-    }
-
-    /// The window server lists windows front to back; bounds need no Screen Recording permission.
-    private static func frontmostWindowFrame() -> ScreenRect? {
-        guard let pid = NSWorkspace.shared.frontmostApplication?.processIdentifier,
-            let primary = NSScreen.screens.first,
-            let windows = CGWindowListCopyWindowInfo([.optionOnScreenOnly, .excludeDesktopElements], kCGNullWindowID)
-                as? [[String: Any]]
-        else { return nil }
-        for window in windows {
-            guard window[kCGWindowOwnerPID as String] as? pid_t == pid,
-                window[kCGWindowLayer as String] as? Int == 0,
-                let bounds = window[kCGWindowBounds as String] as? [String: Any],
-                let rect = CGRect(dictionaryRepresentation: bounds as CFDictionary)
-            else { continue }
-            return IndicatorPlacement.screenRect(
-                fromWindowServer: ScreenRect(rect), primaryScreenHeight: primary.frame.height)
-        }
-        return nil
     }
 }
 

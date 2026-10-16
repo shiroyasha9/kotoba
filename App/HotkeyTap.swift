@@ -73,12 +73,14 @@ final class HotkeyTap: Sendable {
     /// and nothing waits for a release the tap cannot see. On, the classifier reads the keys held now, as after a
     /// timeout.
     private func applyEnabled() {
+        let (tap, isEnabled) = state.withLock { ($0.tap, $0.isEnabled) }
+        // Only this thread enables the port, so the call needs no lock; a later change queued another block.
+        if let tap {
+            CGEvent.tapEnable(tap: tap.port, enable: isEnabled)
+        }
         let events = state.withLock { state in
-            if let tap = state.tap {
-                CGEvent.tapEnable(tap: tap.port, enable: state.isEnabled)
-            }
             let keys =
-                state.isEnabled
+                isEnabled
                 ? Self.reenabled(heldChordKey: state.classifier.heldChordKey)
                 : .tapReenabled(modifiers: [], isChordKeyDown: false)
             return state.classifier.classify(keys).events
@@ -147,11 +149,12 @@ final class HotkeyTap: Sendable {
         else { return false }
         let new = InstalledTap(port: port, source: source, hasKeyUp: keyUp)
         CFRunLoopAddSource(CFRunLoopGetCurrent(), source, .commonModes)
-        let old = state.withLock { state in
+        let (old, isEnabled) = state.withLock { state in
             defer { state.tap = new }
-            CGEvent.tapEnable(tap: port, enable: state.isEnabled)
-            return state.tap
+            return (state.tap, state.isEnabled)
         }
+        // A `setEnabled` after the read queued a block that applies it.
+        CGEvent.tapEnable(tap: port, enable: isEnabled)
         if let old {
             CGEvent.tapEnable(tap: old.port, enable: false)
             CFRunLoopRemoveSource(CFRunLoopGetCurrent(), old.source, .commonModes)
@@ -212,13 +215,14 @@ final class HotkeyTap: Sendable {
     /// The system disabled the tap (a slow callback, or user input). Turns it on again unless `setEnabled` turned it
     /// off, and returns the keys held now; nil while it stays off.
     private func reenableAfterTimeout() -> KeyInput? {
-        state.withLock { state in
-            guard state.isEnabled else { return nil }
-            if let tap = state.tap {
-                CGEvent.tapEnable(tap: tap.port, enable: true)
-            }
-            return Self.reenabled(heldChordKey: state.classifier.heldChordKey)
+        let found = state.withLock { state -> (tap: InstalledTap?, chordKey: UInt16?)? in
+            state.isEnabled ? (state.tap, state.classifier.heldChordKey) : nil
         }
+        guard let found else { return nil }
+        if let tap = found.tap {
+            CGEvent.tapEnable(tap: tap.port, enable: true)
+        }
+        return Self.reenabled(heldChordKey: found.chordKey)
     }
 
     /// The keys held now, for a tap that missed events while it was disabled.

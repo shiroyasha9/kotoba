@@ -125,7 +125,7 @@ public enum IndicatorPlacement {
     /// A click on the pill (not its button) is a chord tap: it stops a recording, and with "Show indicator: Always" it
     /// starts one from the idle pill, unless a development build gives way to the release app (`InstallYield`).
     /// Elsewhere it does nothing.
-    public static func isClickATap(in state: DictationState, showsIdlePill: Bool, isYielding: Bool = false) -> Bool {
+    public static func isClickATap(in state: DictationState, showsIdlePill: Bool, isYielding: Bool) -> Bool {
         switch state {
         case .recording: true
         case .idle: showsIdlePill && !isYielding

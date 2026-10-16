@@ -13,6 +13,20 @@ public struct InstallYield: Sendable, Equatable {
 
     public var isYielding: Bool { !isRelease && !releaseProcesses.isEmpty }
 
+    /// Whether the menu says the build gives way in `state`. A live dictation's own text comes first; an outcome (an
+    /// error, Copied) is past, and the next chord goes to the release app.
+    public func showsYield(in state: DictationState) -> Bool {
+        guard isYielding else { return false }
+        switch state {
+        case .recording, .transcribing, .cleaning, .undoable:
+            return false
+        case .idle, .failed, .needsSetup, .rejected, .cleanupFailed, .cleanupTooSlow, .returnSkipped, .copied,
+            .recovered,
+            .captureFailed:
+            return true
+        }
+    }
+
     /// Release instances quit and launched, in one change of the running apps. Returns true when `isYielding` changed,
     /// so a list that names a running instance again, or an unknown one as quit, changes nothing.
     public mutating func releaseChanged(launched: some Sequence<Int32>, quit: some Sequence<Int32>) -> Bool {

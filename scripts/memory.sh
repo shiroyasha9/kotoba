@@ -11,7 +11,7 @@ set -euo pipefail
 FLOOR_MB=16.8  # memory-spike.md, variant C, phys_footprint round 2
 IDLE_S=30
 
-app=${APP:-/Applications/kotoba.app}
+app=${${APP:-/Applications/kotoba.app}%/}
 pid=${PID:-}
 if [[ -z $pid ]]; then
   # `comm` is the executable's full path on macOS; an exact match leaves out other copies of kotoba.
@@ -20,6 +20,7 @@ if [[ -z $pid ]]; then
   (( ${#pids} == 1 )) || { echo "${#pids} processes run $app (pids ${pids[*]}); pass PID=<pid>." >&2; exit 1; }
   pid=${pids[1]}
 fi
+ps -p "$pid" >/dev/null 2>&1 || { echo "No process $pid." >&2; exit 1; }
 uptime_s=$(ps -o etime= -p "$pid" | awk -F'[-:]' '{ s = 0; for (i = 1; i <= NF; i++) s = s * 60 + $i; print s }')
 (( uptime_s >= IDLE_S )) || { echo "kotoba (pid $pid) started ${uptime_s} s ago; idle numbers need ${IDLE_S} s." >&2; exit 1; }
 
