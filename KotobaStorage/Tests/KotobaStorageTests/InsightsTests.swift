@@ -160,20 +160,24 @@ struct InsightsTests {
     }
 
     /// Speed counts the recorded length while the dictation is in History, not the billed audio (MAI rounds it up to
-    /// whole seconds); a deleted dictation counts its billed audio.
+    /// whole seconds); a deleted dictation, or one kept with no length, counts its billed audio; a try with no words
+    /// counts nothing.
     @Test func speedCountsTheRecordedLengthWhileTheDictationIsKept() async throws {
         let store = try makeStore()
-        let kept = try record(at: try date(10, 13), recorded: .milliseconds(11_500), billed: .seconds(12), words: 30)
+        let kept = try record(at: try date(10, 13), recorded: .milliseconds(11_500), billed: .seconds(12), words: 20)
         let deleted = try record(at: try date(10, 12), recorded: .milliseconds(7_200), billed: .seconds(8), words: 15)
-        try await store.save(kept)
-        try await store.save(deleted)
+        let noLength = try record(at: try date(10, 11), recorded: .zero, billed: .seconds(4), words: 10)
+        let silent = try record(at: try date(10, 10), recorded: .seconds(3), billed: .seconds(3), words: 0)
+        for record in [kept, deleted, noLength, silent] {
+            try await store.save(record)
+        }
         try await store.delete([deleted.id])
 
         let insights = try await store.insights(at: try date(10, 14), in: Self.india)
 
         #expect(insights.spokenWords == 45)
-        #expect(insights.speakingTime == .milliseconds(19_500))
-        #expect(insights.wordsPerMinute == 138)
+        #expect(insights.speakingTime == .milliseconds(23_500))
+        #expect(insights.wordsPerMinute == 115)
     }
 
     func record(at time: Date, recorded: Duration, billed: Duration, words: Int, app: DictationApp? = nil) throws

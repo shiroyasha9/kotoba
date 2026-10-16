@@ -25,7 +25,8 @@ public struct DictationInsights: Sendable, Equatable {
     public var wordsThisMonth: Int
     public var words: Int
     /// Words the speech models heard, and the length of those recordings, pauses included: as recorded while the
-    /// dictation is in History, else the audio the speech model billed (MAI rounds it up to whole seconds).
+    /// dictation is in History, else (deleted, or a capture that ended with an error and no length) the audio the
+    /// speech model billed (MAI rounds it up to whole seconds).
     public var spokenWords: Int
     public var speakingTime: Duration
     /// Days in a row with a delivered dictation, up to today when today has one, else up to yesterday.
@@ -80,7 +81,7 @@ extension HistoryStore {
                 coalesce(sum(CASE WHEN l.time >= ?1 AND l.time < ?2 THEN l.words END), 0),
                 coalesce(sum(CASE WHEN l.time >= ?3 AND l.time < ?4 THEN l.words END), 0), coalesce(sum(l.words), 0),
                 coalesce(sum(CASE WHEN \(speech) THEN l.spoken_words END), 0),
-                coalesce(sum(CASE WHEN \(speech) THEN coalesce(d.audio_duration_ms, l.audio_ms) END), 0),
+                coalesce(sum(CASE WHEN \(speech) THEN coalesce(nullif(d.audio_duration_ms, 0), l.audio_ms) END), 0),
                 min(CASE WHEN \(speech) THEN l.time END)
             FROM usage_ledger AS l LEFT JOIN dictations AS d ON \(speech) AND d.id = l.dictation_id;
             """, [week.start, week.end, month.start, month.end].map { .real($0.timeIntervalSince1970) })

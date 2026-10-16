@@ -32,7 +32,8 @@ public struct UsageEntry: Sendable, Equatable, Identifiable {
 
     /// Makes a second write of the same answer a no-op.
     public var id: UUID
-    /// When the answer came: the entry counts in this time's period.
+    /// When the speech answer came, also for its cleanup's entry (which comes seconds later, maybe after midnight): the
+    /// entry counts in this time's period, so a dictation's words never split across two days.
     public var time: Date
     public var dictation: DictationID?
     public var kind: Kind

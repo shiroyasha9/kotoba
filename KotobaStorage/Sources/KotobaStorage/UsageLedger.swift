@@ -2,7 +2,8 @@ import Foundation
 import KotobaCore
 
 /// What kotoba cost and how much it was used between two dates, for the Usage pane: summed from the usage ledger in
-/// SQLite when the pane asks, never at idle. An answer counts in the period of the time it came.
+/// SQLite when the pane asks, never at idle. An answer counts in the period of its entry's time (a cleanup's is its
+/// transcript's).
 public struct UsageSummary: Sendable, Equatable {
     public struct AppWords: Sendable, Equatable {
         /// With the app's name at its newest answer.

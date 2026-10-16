@@ -101,5 +101,9 @@ struct PipelineCleanupDeadlineTests {
         let record = try #require(await world.store.records.first)
         #expect(record.status == .recovered)
         #expect(record.cleanedText == "clean words")
+        // The retry's cleanup came 30 s after the retry's transcript, and is dated with it.
+        let ledger = await world.store.ledger
+        #expect(ledger.map(\.kind) == [.speech, .cleanup])
+        #expect(ledger.map(\.time) == [world.clock.date - 30, world.clock.date - 30])
     }
 }
