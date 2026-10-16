@@ -112,11 +112,15 @@ struct HistoryView: View {
                 .help("Paste the text in the app you were in")
                 .disabled(!model.canPasteAgain(records))
             // A row with no text joins the retry queue; one row with text is transcribed again.
-            Button("Retry", systemImage: "arrow.clockwise") {
-                if model.canRetry(records) { model.retry(records) } else { model.transcribeAgain(records) }
+            if model.againRecord(records) != nil, !model.canRetry(records) {
+                Button("Transcribe Again", systemImage: "arrow.clockwise") { model.transcribeAgain(records) }
+                    .help(Self.transcribeAgainHelp)
+                    .disabled(!model.canTranscribeAgain(records))
+            } else {
+                Button("Retry", systemImage: "arrow.clockwise") { model.retry(records) }
+                    .help("Transcribe the saved audio again")
+                    .disabled(!model.canRetry(records))
             }
-            .help(model.canRetry(records) ? "Transcribe the saved audio again" : Self.transcribeAgainHelp)
-            .disabled(!model.canRetry(records) && !model.canTranscribeAgain(records))
             if model.isPlaying(records) {
                 Button("Stop", systemImage: "stop.fill") { model.togglePlay(records) }
                     .help("Stop the audio")
@@ -250,7 +254,7 @@ struct HistoryRow: View {
                         .foregroundStyle(.secondary)
                         .monospacedDigit()
                 }
-                if let status = HistoryStatus(record, isSending: isSending || isTranscribingAgain) {
+                if let status = HistoryStatus(record, isSending: isSending, isTranscribingAgain: isTranscribingAgain) {
                     Label(status.title, systemImage: status.systemImage)
                         .foregroundStyle(status.isProblem ? AnyShapeStyle(.orange) : AnyShapeStyle(.secondary))
                 }
@@ -287,9 +291,10 @@ struct HistoryStatus {
     /// Asks the owner to act (Retry, or check the mic): drawn in orange.
     let isProblem: Bool
 
-    init?(_ record: DictationRecord, isSending: Bool) {
-        // A row with text is being transcribed again.
-        if isSending, record.status.isTranscribed {
+    /// `isTranscribingAgain`: History's Transcribe Again is sending a row that has its text. A live dictation's row is
+    /// `isSending` only, so it never reads "Transcribing" once it has its text.
+    init?(_ record: DictationRecord, isSending: Bool, isTranscribingAgain: Bool) {
+        if isTranscribingAgain {
             (title, systemImage, isProblem) = ("Transcribing", "ellipsis.circle", false)
             return
         }

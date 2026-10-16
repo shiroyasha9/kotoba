@@ -214,10 +214,14 @@ public struct PipelineActivity: Sendable, Equatable {
     public var isQuiet: Bool
     /// The dictations being sent now: their rows say so and cannot be deleted.
     public var inFlight: Set<DictationID>
+    /// The dictations with text being sent again by History's "Transcribe Again"; nothing is pasted, so they do not
+    /// make the pipeline busy, but their rows say so and cannot be deleted or sent again.
+    public var transcribingAgain: Set<DictationID>
 
-    public init(isQuiet: Bool, inFlight: Set<DictationID>) {
+    public init(isQuiet: Bool, inFlight: Set<DictationID>, transcribingAgain: Set<DictationID> = []) {
         self.isQuiet = isQuiet
         self.inFlight = inFlight
+        self.transcribingAgain = transcribingAgain
     }
 }
 

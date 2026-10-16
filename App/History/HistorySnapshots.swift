@@ -24,7 +24,7 @@ extension Pane {
 extension HistoryController {
     /// Rows of each status over two days, for the History and Home snapshots.
     static func sampleRows() -> [DictationRecord] {
-        let now = Date.now
+        let now = Snapshots.sampleNow
         // A file every Mac has stands in for kept audio, so the failed and cancelled rows read "audio saved"; the row of 0
         // seconds is an orphan with no readable audio, which reads "No text" with no Retry.
         let kept = URL(filePath: "/System/Library/Sounds/Tink.aiff")

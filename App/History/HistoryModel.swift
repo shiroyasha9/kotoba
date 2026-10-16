@@ -43,7 +43,7 @@ final class HistoryModel {
     /// The loaded rows; `HistoryList` decides where each change puts a row.
     private(set) var list = HistoryList() {
         didSet {
-            days = Self.days(of: list.rows)
+            days = Self.days(of: list.rows, now: now())
             selected = list.rows.filter { selection.contains($0.id) }
         }
     }
@@ -79,8 +79,8 @@ final class HistoryModel {
     var pendingDelete: [DictationID]?
     /// A Delete kept some dictations: the window says so.
     var isDeleteFailureShown = false
-    /// Rows with text being transcribed again; they read "Transcribing" until the answer.
-    private(set) var transcribing: Set<DictationID> = []
+    /// Rows with text being transcribed again, as the pipeline reports them; they read "Transcribing" until the answer.
+    var transcribing: Set<DictationID> { activity.transcribingAgain }
     /// A Transcribe Again kept the old text of some rows: the window says so.
     var isTranscribeFailureShown = false
 
@@ -91,23 +91,27 @@ final class HistoryModel {
     /// The search the loaded rows match; nil until a read succeeds, and after a read fails.
     @ObservationIgnored private var loadedSearch: String?
     @ObservationIgnored let apps = InstalledApps()
+    /// The day titles' "Today" and "Yesterday" count from it.
+    @ObservationIgnored private let now: @MainActor () -> Date
 
     init(source: Source?) {
         self.source = source
         playback = AudioPlayback()
+        now = { .now }
     }
 
-    /// For snapshots: fixed rows and no store; `transcribing` rows show as being transcribed again, and `playing`'s
-    /// audio as playing.
+    /// For snapshots: fixed rows and no store, at `Snapshots.sampleNow`; `transcribing` rows show as being transcribed
+    /// again, and `playing`'s audio as playing.
     init(
         rows: [DictationRecord], search: String = "", transcribing: Set<DictationID> = [], playing: DictationID? = nil
     ) {
         source = nil
         playback = AudioPlayback(playing: playing)
+        now = { Snapshots.sampleNow }
         self.search = search
-        self.transcribing = transcribing
+        activity = PipelineActivity(isQuiet: true, inFlight: [], transcribingAgain: transcribing)
         list.replace(with: rows, limit: rows.count + 1)
-        days = Self.days(of: list.rows)
+        days = Self.days(of: list.rows, now: now())
         retryable = Self.kept(rows)
         isLoaded = true
     }
@@ -293,12 +297,10 @@ final class HistoryModel {
     /// Sends the row again with `model` (a route's) or the current speech model (nil).
     func transcribeAgain(_ records: [DictationRecord], model: String? = nil) {
         guard let source, canTranscribeAgain(records), let id = againRecord(records)?.id else { return }
-        transcribing.insert(id)
-        // Weak: a closed window drops the model, and the request still ends in the pipeline.
+        // Weak: a closed window drops the model, and the request still ends in the pipeline, which reports the row in
+        // its activity meanwhile.
         Task { [weak self] in
-            let isDone = await source.transcribeAgain(id, model)
-            self?.transcribing.remove(id)
-            if !isDone { self?.isTranscribeFailureShown = true }
+            if await !source.transcribeAgain(id, model) { self?.isTranscribeFailureShown = true }
         }
     }
 

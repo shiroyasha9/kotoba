@@ -26,7 +26,7 @@ public actor DictationPipeline {
     private let stateContinuation: AsyncStream<DictationState>.Continuation
     private let activityContinuation: AsyncStream<PipelineActivity>.Continuation
     let termReportContinuation: AsyncStream<TermReport>.Continuation
-    private var lastActivity = PipelineActivity(isQuiet: true, inFlight: [])
+    private(set) var lastActivity = PipelineActivity(isQuiet: true, inFlight: [])
     var recording: Recording?
     /// Set while Esc's Undo window is open.
     var paused: UndoWindow<Recording>?
@@ -36,6 +36,8 @@ public actor DictationPipeline {
     var latencies = LatencyRecorder()
     /// Dictations being transcribed in this process; a retry skips them.
     var inFlight: Set<DictationID> = []
+    /// Dictations with text that History's "Transcribe Again" is sending (`PipelineTranscribeAgain.swift`).
+    var transcribingAgain: Set<DictationID> = []
     /// The dictations in flight whose transcript is with the cleaner.
     var cleaning: Set<DictationID> = []
     /// Dictations stopped with Return, or given a Return just after the stop: Return follows their paste.
@@ -274,8 +276,8 @@ extension DictationPipeline {
 
     /// Sends the activity when it changed; every change of a recording, Undo window or dictation in flight comes with
     /// a state change or `finishDictation`.
-    private func announceActivity() {
-        let now = PipelineActivity(isQuiet: isQuiet, inFlight: inFlight)
+    func announceActivity() {
+        let now = PipelineActivity(isQuiet: isQuiet, inFlight: inFlight, transcribingAgain: transcribingAgain)
         guard now != lastActivity else { return }
         lastActivity = now
         activityContinuation.yield(now)

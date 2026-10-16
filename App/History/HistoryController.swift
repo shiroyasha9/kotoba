@@ -61,6 +61,8 @@ final class HistoryController {
     }
 
     func windowClosed() {
+        // The model goes with the window; its audio must not play on with no Stop button.
+        model?.playback.stop()
         changes?.finish()
         applying?.cancel()
         changes = nil
