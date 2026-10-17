@@ -340,8 +340,9 @@ public struct RetrySelection: Sendable, Equatable {
     }
 
     /// A dictation is sent at most this many times in all, live and retried, without the owner: each failed send
-    /// that reached the route may have been billed (`DictationRecord.attempts`). Launch and a returning network skip
-    /// it then; the owner's Retry (the menu, History) still sends it.
+    /// that reached the route may have been billed (`DictationRecord.attempts`). Launch, a returning network, a live
+    /// transcript and a route's wait skip it then; the owner's Retry (the menu, History) still sends it, and so does
+    /// a setting the dictation waits for.
     public static let automaticAttempts = 3
 
     var rule: Rule?
@@ -364,7 +365,9 @@ public struct RetrySelection: Sendable, Equatable {
     func includes(_ record: DictationRecord) -> Bool {
         if ids.contains(record.id) { return true }
         guard rule?.includes(record) == true else { return false }
-        return !isAutomatic || record.attempts < Self.automaticAttempts
+        // A dictation waiting for a setting was last refused before any work, which was not billed: it goes once its
+        // setting is there, whatever its earlier attempts (lead, 2026-10-17).
+        return !isAutomatic || record.needsSetup != nil || record.attempts < Self.automaticAttempts
     }
 
     /// Two requests in one: the dictations of each. Two different rules cover both only as `.all`; the rule is capped

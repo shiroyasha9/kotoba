@@ -107,4 +107,28 @@ struct PipelineRetryCapTests {
 
         #expect(await world.provider.requests.count == 4)
     }
+
+    /// A refusal before any work (no credit, a refused key) was not billed: it never counts toward the cap, and a
+    /// dictation waiting for credit is sent once a live transcript shows the route works, however often it was
+    /// refused or failed before.
+    @Test func aCreditRefusedDictationIsSentAfterALiveTranscriptWhateverItsAttempts() async throws {
+        let world = FakeWorld(transcript: "credit added")
+        let pipeline = world.makePipeline()
+        await world.provider.fail(with: ProviderError.server(status: 503))
+        await pipeline.dictate(world)
+        await pipeline.retryPending()
+        await pipeline.retryPending()
+        await world.provider.fail(with: ProviderError.noCredit)
+        for _ in 0..<3 {
+            await pipeline.retryPending()
+        }
+        let refused = try #require(await world.store.records.first)
+        #expect(refused.needsSetup == .credit)
+        #expect(refused.attempts == 3)
+
+        await world.provider.fail(with: nil)
+        await pipeline.dictate(world)
+
+        #expect(try #require(await world.store.records.first { $0.id == refused.id }).status == .recovered)
+    }
 }
