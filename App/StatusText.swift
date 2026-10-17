@@ -171,7 +171,7 @@ extension DictationState {
     private func outcomeText(_ context: StatusContext) -> String? {
         let provider = context.provider.title
         return switch self {
-        case .failed, .timedOut: queuedText(provider)
+        case .failed, .timedOut, .connectionBlocked: queuedText(provider)
         case .needsSetup(_, .credit): "\(provider) is out of credit. Saved."
         case .needsSetup(_, let item): StatusText.add(item, for: context.provider)
         case .rejected(_, let reason): reason.text(provider: provider)
@@ -187,6 +187,7 @@ extension DictationState {
     /// The dictation is kept and queued: why it was not transcribed.
     private func queuedText(_ provider: String) -> String {
         if case .timedOut = self { return "\(provider) took too long. Saved." }
+        if case .connectionBlocked = self { return "Secure connection blocked. Saved." }
         return "Couldn’t reach \(provider). Saved."
     }
 
@@ -203,7 +204,8 @@ extension DictationState {
         case .clipboardNotKept: "Pasted. Old clipboard too large to keep."
         case .polished(_, isReplaced: true): "Polished"
         case .polished(_, isReplaced: false): "Polished. Copied, press ⌘V"
-        case .idle, .recording, .transcribing, .cleaning, .undoable, .failed, .timedOut, .needsSetup, .rejected,
+        case .idle, .recording, .transcribing, .cleaning, .undoable, .failed, .timedOut, .connectionBlocked,
+            .needsSetup, .rejected,
             .captureFailed, .nothingRecorded, .audioNotSaved, .polishing, .polishFailed:
             nil
         }
@@ -215,7 +217,7 @@ extension DictationState {
         case .undoable: .undo
         case .recording(_, isSilent: true, _):
             context.isMicrophoneOff ? .openMicrophoneSettings : .chooseMicrophone
-        case .failed, .timedOut: .retry
+        case .failed, .timedOut, .connectionBlocked: .retry
         case .needsSetup(_, let item): item.pillAction
         case .recovered: .copy
         case .copied: context.isPasteAllowed ? nil : .allowPasting
@@ -276,6 +278,7 @@ extension RejectReason {
     func text(provider: String) -> String {
         switch self {
         case .emptyTranscript: "No speech heard"
+        case .audioMissing: "Audio file is missing. Can’t retry."
         case .other: "\(provider) refused the audio. Saved."
         }
     }

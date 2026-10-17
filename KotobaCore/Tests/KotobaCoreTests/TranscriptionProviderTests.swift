@@ -17,6 +17,8 @@ struct TranscriptionProviderTests {
         (.emptyTranscript, .permanent),
         (.noAudio, .permanent),
         (.unreadableAnswer(status: 200), .permanent),
+        (.audioMissing, .permanent),
+        (.connectionBlocked, .transient),
     ])
     func eachErrorHasOneWayToRecover(error: ProviderError, recovery: ProviderError.Recovery) {
         #expect(error.recovery == recovery)
@@ -30,6 +32,8 @@ struct TranscriptionProviderTests {
         (.offline, nil),
         (.auth(status: 401), nil),
         (.unreadableAnswer(status: 200), .other),
+        (.audioMissing, .audioMissing),
+        (.connectionBlocked, nil),
     ])
     func onlyAPermanentErrorHasARejectReason(error: ProviderError, reason: RejectReason?) {
         #expect(error.rejectReason == reason)
@@ -46,6 +50,8 @@ struct TranscriptionProviderTests {
         (.needsSetup(provider: "OpenRouter", item: .key), false),
         (.keyUnavailable, false),
         (.noAudio, false),
+        (.audioMissing, false),
+        (.connectionBlocked, false),
     ])
     func onlyASendThatReachedTheRouteUsesAnAttempt(error: ProviderError, usesAttempt: Bool) {
         #expect(error.usesAttempt == usesAttempt)

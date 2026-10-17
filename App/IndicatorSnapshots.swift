@@ -22,6 +22,7 @@ extension IndicatorPanel {
         let id = DictationID()
         let samples: [DictationState] = [
             .idle, .recording(isLong: false), .transcribing, .cleaning, .undoable, .failed(id), .timedOut(id),
+            .connectionBlocked(id),
             .rejected(id, .other),
             .needsSetup(id, .key), .cleanupFailed(id), .cleanupTooSlow(id), .returnSkipped(id), .copied(id),
             .recovered(id), .captureFailed, .nothingRecorded, .audioNotSaved(.diskFull), .audioCut(id, .diskFull),
@@ -120,7 +121,7 @@ extension IndicatorPanel {
                 SnapshotRow(name: "needs-credit", state: .needsSetup(id, .credit)),
             ]
         case .rejected(let id, _):
-            [RejectReason.emptyTranscript, .other].map {
+            [RejectReason.emptyTranscript, .audioMissing, .other].map {
                 SnapshotRow(name: "rejected-\($0.rawValue)", state: .rejected(id, $0))
             }
         case .copied:
@@ -137,7 +138,8 @@ extension IndicatorPanel {
                     name: "captureFailed-denied", state: state,
                     context: StatusContext(provider: .azure, microphone: .denied)),
             ]
-        case .transcribing, .cleaning, .undoable, .failed, .timedOut, .cleanupFailed, .cleanupTooSlow, .returnSkipped,
+        case .transcribing, .cleaning, .undoable, .failed, .timedOut, .connectionBlocked, .cleanupFailed,
+            .cleanupTooSlow, .returnSkipped,
             .recovered, .nothingRecorded:
             [SnapshotRow(name: snapshotName(of: state), state: state)]
         case .audioNotSaved, .audioCut:
@@ -201,15 +203,25 @@ extension IndicatorPanel {
         case .transcribing: "transcribing"
         case .cleaning: "cleaning"
         case .undoable: "undoable"
+        case .failed, .timedOut, .connectionBlocked, .cleanupFailed, .cleanupTooSlow, .returnSkipped, .recovered:
+            outcomeName(of: state)
+        case .idle, .recording, .needsSetup, .rejected, .copied, .captureFailed, .nothingRecorded, .audioNotSaved,
+            .audioCut, .clipboardNotKept, .polishing, .polished, .polishFailed:
+            "\(state)"
+        }
+    }
+
+    /// `snapshotName(of:)` for an outcome that names its dictation.
+    private static func outcomeName(of state: DictationState) -> String {
+        switch state {
         case .failed: "failed"
         case .timedOut: "timedOut"
+        case .connectionBlocked: "connectionBlocked"
         case .cleanupFailed: "cleanupFailed"
         case .cleanupTooSlow: "cleanupTooSlow"
         case .returnSkipped: "returnSkipped"
         case .recovered: "recovered"
-        case .idle, .recording, .needsSetup, .rejected, .copied, .captureFailed, .nothingRecorded, .audioNotSaved,
-            .audioCut, .clipboardNotKept, .polishing, .polished, .polishFailed:
-            "\(state)"
+        default: "\(state)"
         }
     }
 

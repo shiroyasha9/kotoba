@@ -58,6 +58,8 @@ public enum DictationState: Sendable, Equatable {
     case failed(DictationID)
     /// The route did not answer in time (`ProviderError.timedOut`). The audio is kept and queued for retry.
     case timedOut(DictationID)
+    /// The network blocked the secure connection (`ProviderError.connectionBlocked`). The audio is kept and queued.
+    case connectionBlocked(DictationID)
     /// The route refused the request; a retry cannot help. The audio is kept.
     case rejected(DictationID, RejectReason)
     /// The route needs an API key. The audio is kept and retried when the owner saves one.
@@ -100,6 +102,7 @@ public enum DictationState: Sendable, Equatable {
         case .failed where record.needsSetup != nil: .needsSetup(record.id, record.needsSetup ?? .key)
         // "Offline" would send the owner to check a network that works.
         case .failed where record.hasTimedOut: .timedOut(record.id)
+        case .failed where record.isConnectionBlocked: .connectionBlocked(record.id)
         case .failed, .pending: .failed(record.id)
         case .pasted, .cancelled: .idle
         }

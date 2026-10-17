@@ -320,6 +320,8 @@ struct HistoryStatus {
             (title, systemImage, isProblem) = ("Not transcribed", "exclamationmark.triangle.fill", true)
         case .rejected where record.rejectReason == .emptyTranscript:
             (title, systemImage, isProblem) = ("No speech heard", "waveform.slash", true)
+        case .rejected where record.rejectReason == .audioMissing:
+            (title, systemImage, isProblem) = ("Audio missing", "questionmark.folder", true)
         case .rejected:
             (title, systemImage, isProblem) = ("Refused", "exclamationmark.triangle.fill", true)
         }

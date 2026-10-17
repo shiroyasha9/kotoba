@@ -112,6 +112,9 @@ public struct DictationRecord: Sendable, Equatable, Identifiable {
     /// The last failed send timed out (`ProviderError.timedOut`), since this record was read from the store; the store
     /// does not keep it. The pill says so.
     public var hasTimedOut = false
+    /// The last failed send was blocked by the network (`ProviderError.connectionBlocked`), since this record was read
+    /// from the store; the store does not keep it. The pill says so.
+    public var isConnectionBlocked = false
     /// How long the route asked to wait before the next send (`ProviderError.rateLimited`), for the last failed send
     /// since this record was read from the store; the store does not keep it. The pipeline sends again then.
     public var retryAfter: Duration?
@@ -225,6 +228,7 @@ extension DictationRecord {
         let providerError = error as? ProviderError
         if providerError?.usesAttempt ?? true { attempts += 1 }
         hasTimedOut = providerError == .timedOut
+        isConnectionBlocked = providerError == .connectionBlocked
         retryAfter = providerError?.retryAfter
         needsSetup = providerError?.setupItem
         switch providerError?.recovery ?? .transient {

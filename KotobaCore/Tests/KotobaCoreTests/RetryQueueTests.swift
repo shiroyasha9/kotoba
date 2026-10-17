@@ -59,7 +59,7 @@ struct RetryQueueTests {
     /// The next send would fail the same way (no network, a rate limit, a locked key store): the run
     /// stops, and the rest stay queued for the next trigger, unsent and unbilled.
     @Test(arguments: [
-        ProviderError.offline, .rateLimited(retryAfter: .seconds(30)), .keyUnavailable,
+        ProviderError.offline, .connectionBlocked, .rateLimited(retryAfter: .seconds(30)), .keyUnavailable,
     ])
     func aFailureThatHitsEveryDictationStopsTheRun(error: ProviderError) async throws {
         _ = try await queued(.failed)

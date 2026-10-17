@@ -312,6 +312,9 @@ struct OpenRouterProviderTests {
         (.failure(.notConnectedToInternet), .offline),
         (.failure(.timedOut), .timedOut),
         (.failure(.networkConnectionLost), .offline),
+        // A captive portal or a filtering proxy: the network is up, but the secure connection is refused.
+        (.failure(.secureConnectionFailed), .connectionBlocked),
+        (.failure(.serverCertificateUntrusted), .connectionBlocked),
     ])
     func failureMapsToProviderError(reply: StubReply, expected: ProviderError) async {
         let stub = StubHost(reply: reply)
@@ -320,5 +323,18 @@ struct OpenRouterProviderTests {
         await #expect(throws: expected) {
             try await provider.transcribe(stub.request())
         }
+    }
+
+    /// The kept audio file was deleted outside kotoba: nothing is sent, and the same send fails the same way.
+    @Test func aMissingAudioFileSendsNothing() async throws {
+        let stub = StubHost(reply: .fixture("success"))
+        let provider = stub.provider()
+        var request = try stub.request()
+        request.audio = request.audio.deletingLastPathComponent().appending(path: "gone-\(UUID().uuidString).flac")
+
+        await #expect(throws: ProviderError.audioMissing) {
+            try await provider.transcribe(request)
+        }
+        #expect(stub.requests.isEmpty)
     }
 }

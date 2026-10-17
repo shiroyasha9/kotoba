@@ -85,7 +85,12 @@ final class ProviderConnection: Sendable {
                 let file = FileManager.default.temporaryDirectory.appending(path: "kotoba-upload-\(UUID().uuidString)")
                 // The body is a copy of the kept FLAC; losing it to a failed delete costs only temp space.
                 defer { try? FileManager.default.removeItem(at: file) }
-                try write(BodyWriter(file: file))
+                do {
+                    try write(BodyWriter(file: file))
+                } catch let error as CocoaError where [.fileNoSuchFile, .fileReadNoSuchFile].contains(error.code) {
+                    // The kept recording was deleted outside kotoba (the temp body is made first, so it is not this).
+                    throw ProviderError.audioMissing
+                }
                 // Splits the body build from the network time in Instruments and the latency report.
                 Log.signposter.emitEvent("bodyReady")
                 (data, response) = try await session.upload(for: request, fromFile: file, delegate: metrics)
@@ -99,10 +104,20 @@ final class ProviderConnection: Sendable {
             throw ProviderError.timedOut
         } catch let error as URLError where error.code == .cannotFindHost && isHostSetByOwner {
             throw ProviderError.needsSetup(provider: account.title, item: .endpoint)
+        } catch let error as URLError where Self.blockingCodes.contains(error.code) {
+            throw ProviderError.connectionBlocked
         } catch is URLError {
             throw ProviderError.offline
         }
     }
+
+    /// The network is up but refuses the secure connection: a captive portal or a filtering proxy shows its own
+    /// certificate, or the clock is wrong.
+    private static let blockingCodes: Set<URLError.Code> = [
+        .secureConnectionFailed, .serverCertificateUntrusted, .serverCertificateHasBadDate,
+        .serverCertificateHasUnknownRoot, .serverCertificateNotYetValid, .clientCertificateRejected,
+        .clientCertificateRequired,
+    ]
 
     /// One free request with `key` (the one being checked, not the stored one), for the key check. Nil when no
     /// answer came: offline, or a timeout.

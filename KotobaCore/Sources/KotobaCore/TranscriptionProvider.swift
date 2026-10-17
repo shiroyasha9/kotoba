@@ -172,6 +172,11 @@ public enum ProviderError: Error, Sendable, Equatable {
     case emptyTranscript
     /// The recording has no audio (`RecordedAudio.hasAudio`): the pipeline throws it before any request.
     case noAudio
+    /// The kept audio file is gone (deleted outside kotoba): the provider throws it before any request.
+    case audioMissing
+    /// The network refused a secure connection (a captive portal, a filtering proxy): it is up, but no route can be
+    /// reached until the owner deals with it.
+    case connectionBlocked
 
     public enum Recovery: Sendable, Equatable {
         /// Network, server or rate limit: a later retry can succeed.
@@ -194,9 +199,9 @@ public enum ProviderError: Error, Sendable, Equatable {
 
     public var recovery: Recovery {
         switch self {
-        case .offline, .timedOut, .keyUnavailable, .rateLimited, .server: .transient
+        case .offline, .connectionBlocked, .timedOut, .keyUnavailable, .rateLimited, .server: .transient
         case .auth, .needsSetup, .noCredit: .needsSetup
-        case .rejected, .unreadableAnswer, .emptyTranscript, .noAudio: .permanent
+        case .rejected, .unreadableAnswer, .emptyTranscript, .noAudio, .audioMissing: .permanent
         }
     }
 
@@ -206,9 +211,9 @@ public enum ProviderError: Error, Sendable, Equatable {
     /// for it, at no cost.
     public var isSharedByEveryRequest: Bool {
         switch self {
-        case .offline, .rateLimited, .keyUnavailable: true
+        case .offline, .connectionBlocked, .rateLimited, .keyUnavailable: true
         case .timedOut, .auth, .needsSetup, .noCredit, .server, .unreadableAnswer, .rejected, .emptyTranscript,
-            .noAudio:
+            .noAudio, .audioMissing:
             false
         }
     }
@@ -223,7 +228,9 @@ public enum ProviderError: Error, Sendable, Equatable {
     public var usesAttempt: Bool {
         switch self {
         case .server, .timedOut, .unreadableAnswer, .rejected, .emptyTranscript: true
-        case .offline, .auth, .needsSetup, .keyUnavailable, .rateLimited, .noCredit, .noAudio: false
+        case .offline, .connectionBlocked, .auth, .needsSetup, .keyUnavailable, .rateLimited, .noCredit, .noAudio,
+            .audioMissing:
+            false
         }
     }
 
@@ -231,8 +238,11 @@ public enum ProviderError: Error, Sendable, Equatable {
     public var rejectReason: RejectReason? {
         switch self {
         case .emptyTranscript, .noAudio: .emptyTranscript
+        case .audioMissing: .audioMissing
         case .rejected, .unreadableAnswer: .other
-        case .offline, .timedOut, .auth, .needsSetup, .noCredit, .keyUnavailable, .rateLimited, .server: nil
+        case .offline, .connectionBlocked, .timedOut, .auth, .needsSetup, .noCredit, .keyUnavailable, .rateLimited,
+            .server:
+            nil
         }
     }
 }
@@ -241,6 +251,8 @@ public enum ProviderError: Error, Sendable, Equatable {
 public enum RejectReason: String, Sendable {
     /// The route heard no speech, or the recording has no audio to send.
     case emptyTranscript
+    /// The kept audio file is gone, so there is nothing to send.
+    case audioMissing
     case other
 }
 
