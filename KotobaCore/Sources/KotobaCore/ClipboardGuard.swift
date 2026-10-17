@@ -85,7 +85,8 @@ actor ClipboardGuard {
         return Snapshot(changeCount: changeCount, contents: await pasteboard.snapshot())
     }
 
-    /// Writes the transcript as a transient item; the owner's clipboard comes back once the paste target reads it.
+    /// Writes the transcript as a transient item (a step of `paste`, the one paste path; tests call it to place a
+    /// read between the steps); the owner's clipboard comes back once the paste target reads it.
     /// If the owner copied something after `snapshot`, that newer clipboard is the one to restore; one too large to
     /// keep (`PasteboardSnapshot.isTooLarge`) is not restored (`Write.isClipboardKept`), but the read is still waited
     /// for. An earlier paste whose Cmd-V went out and that no app read is replaced here: it learns so (`Unread`, not
@@ -123,6 +124,26 @@ actor ClipboardGuard {
             restoreSoon(write)
         } else {
             pending?.timer = work.schedule(at: deadline) { await self.readWaitEnded(write) }
+        }
+    }
+
+    /// The one paste path, for a dictation, Polish, its Undo, Paste Last and Paste Again: writes `text` as a promised
+    /// transient item over `snapshot`, marks the Cmd-V, sends it with `paster`, and waits for the app's read until
+    /// `deadline`; `unread` hears of a paste no app read. Nil when paste is not allowed: the text stays on the
+    /// clipboard.
+    func paste(
+        _ text: String, over snapshot: Snapshot, with paster: any Paster, readBy deadline: ContinuousClock.Instant,
+        unread: @escaping Unread
+    ) async -> Write? {
+        let write = await writeTransient(text, over: snapshot, unread: unread)
+        willPaste(write, readBy: deadline)
+        do {
+            try await paster.sendPaste()
+            return write
+        } catch {
+            Log.pipeline.error("Paste not allowed, the text is left on the clipboard: \(error)")
+            await copy(text)
+            return nil
         }
     }
 

@@ -162,17 +162,13 @@ struct TranscriptDelivery: Sendable {
             await clipboard.copy(text)
             return (.copied, nil)
         }
-        let write = await clipboard.writeTransient(text, over: snapshot) { await job.pasteWentUnread(text, $0) }
-        await clipboard.willPaste(write, readBy: clock.now + job.settings.readWait)
-        do {
-            try await paster.sendPaste()
-            Self.mark(.pasteSent, at: clock.now, of: job, in: &latency)
-            return (.pasted, write)
-        } catch {
-            Log.pipeline.error("Paste not allowed, transcript left on the clipboard: \(error)")
-            await clipboard.copy(text)
-            return (.copied, nil)
-        }
+        guard
+            let write = await clipboard.paste(
+                text, over: snapshot, with: paster, readBy: clock.now + job.settings.readWait,
+                unread: { await job.pasteWentUnread(text, $0) })
+        else { return (.copied, nil) }
+        Self.mark(.pasteSent, at: clock.now, of: job, in: &latency)
+        return (.pasted, write)
     }
 
     /// One notice line per transcribed dictation. Notice, not info: the system keeps notice lines on disk, so
