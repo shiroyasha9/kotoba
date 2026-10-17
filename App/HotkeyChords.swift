@@ -172,25 +172,49 @@ final class HotkeyChords {
 }
 
 extension Chord {
-    /// "<modifiers>" or "<modifiers>:<key code>", as decimal numbers.
+    /// "<modifiers>", "<modifiers>:<key code>" or "<modifiers>:m<button number>", as decimal numbers. A build before
+    /// mouse chords reads the last as unreadable, so its default applies.
     var storedValue: String {
-        keyCode.map { "\(modifiers.rawValue):\($0)" } ?? "\(modifiers.rawValue)"
+        switch trigger {
+        case .key(let keyCode): "\(modifiers.rawValue):\(keyCode)"
+        case .mouseButton(let button): "\(modifiers.rawValue):m\(button)"
+        case nil: "\(modifiers.rawValue)"
+        }
     }
 
     init?(storedValue: String) {
         let parts = storedValue.split(separator: ":")
         guard let raw = parts.first.flatMap({ UInt16($0) }), parts.count <= 2 else { return nil }
-        let keyCode = parts.count == 2 ? UInt16(parts[1]) : nil
-        if parts.count == 2, keyCode == nil { return nil }
-        self.init(modifiers: ModifierKeys(rawValue: raw), keyCode: keyCode)
+        let modifiers = ModifierKeys(rawValue: raw)
+        guard parts.count == 2 else {
+            self.init(modifiers: modifiers)
+            return
+        }
+        if parts[1].hasPrefix("m") {
+            guard let button = Int(parts[1].dropFirst()), button >= Self.middleMouseButton else { return nil }
+            self.init(modifiers: modifiers, mouseButton: button)
+        } else {
+            guard let keyCode = UInt16(parts[1]) else { return nil }
+            self.init(modifiers: modifiers, keyCode: keyCode)
+        }
     }
 
-    /// The chord in key symbols, as menus and buttons show it: "⌃⌥⌘", "fn", "right ⌥", "⌥Space".
+    /// The chord in key symbols, as menus and buttons show it: "⌃⌥⌘", "fn", "right ⌥", "⌥Space", "⌥ Mouse Button 4".
     var title: String {
         let parts = modifierParts
         let modifiers = parts.contains { $0.contains(" ") } ? parts.joined(separator: " ") : parts.joined()
-        guard let keyCode else { return modifiers }
-        return modifiers + Self.keyName(keyCode)
+        switch trigger {
+        case .key(let keyCode): return modifiers + Self.keyName(keyCode)
+        case .mouseButton(let button):
+            let name = Self.buttonName(button)
+            return modifiers.isEmpty ? name : "\(modifiers) \(name)"
+        case nil: return modifiers
+        }
+    }
+
+    /// As macOS counts mouse buttons, from 1: number 3 is "Mouse Button 4".
+    private static func buttonName(_ button: Int) -> String {
+        button == middleMouseButton ? "Middle Mouse Button" : "Mouse Button \(button + 1)"
     }
 
     private var modifierParts: [String] {

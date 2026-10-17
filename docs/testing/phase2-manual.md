@@ -797,3 +797,18 @@ Rows 860-872 need real apps, a slow target or a lock, which a unit test cannot m
 | 871 | Click the Finder desktop and dictate (no app reads it), then within 10 s dictate into TextEdit | The second dictation pastes; History shows the first as copied, not pasted; ⌘V afterwards pastes your copied word | |
 | 872 | Copy a word. Dictate into TextEdit, press ⌥1 (Polish), then **Undo** on the pill; after each, press ⌘V in a scratch note | Polish and its Undo replace the text in TextEdit; each ⌘V afterwards pastes your copied word | |
 
+
+## Mouse button shortcut (kotoba Dev)
+
+Use a mouse with side buttons (the owner's BSK V3 PRO). If its own software maps the side buttons to keys, turn that off for this test: kotoba must get them as mouse buttons.
+
+| # | Do this | Expect | Result |
+|---|---|---|---|
+| 900 | Settings > General: click the **Push to talk** recorder, then press the back side button over it | The recorder shows “Mouse Button 4” (or the number macOS gives that button) and the note “Apps no longer get Mouse Button 4.”; while it listened, the note said “You can also press a middle or side mouse button.” | |
+| 901 | In TextEdit hold the side button, speak 5 s, let go | The pill and sound come after the hold threshold; the text pastes at the release, as with ⌥ | |
+| 902 | In Safari or Chrome, open a page and then a link, hold the side button 2 s to dictate into the address bar, then press the other side button | The bound button never goes back a page; the other side button still goes forward or back as before | |
+| 903 | Double-click the side button quickly, speak 10 s, click it once | A double click starts hands-free; the single click stops and pastes; one click alone drops with no sound | |
+| 904 | Click the **Hands-free** recorder, hold ⌥ and press the middle button. In TextEdit hold ⌥ and middle-click, speak, then ⌥-middle-click again; in Safari middle-click a link | Hands-free shows “⌥ Middle Mouse Button”; the first ⌥-middle-click starts, the second stops and pastes; a plain middle click still opens the link in a new tab | |
+| 905 | Click the **Clean up** recorder and press a side button | Refused: “Only Hands-free and Push to talk can use a mouse button.”; the old shortcut stays | |
+| 906 | Hold the side button and left-click within the first moment, then hold it and left-click after the pill shows | The early click drops the press (no sound); the late click changes nothing and the dictation goes on | |
+| 907 | Keep the side button for Push to talk and use the mouse for an hour of normal work (scrolling, middle clicks, the other side button); then reset Push to talk | No click feels slower than with the shortcut reset; Activity Monitor shows kotoba Dev's CPU at idle as before | |

@@ -1,14 +1,47 @@
-/// A shortcut the owner records: modifiers alone (⌃⌥⌘, fn, right ⌥) or modifiers with one key (⌥Space).
+/// A shortcut the owner records: modifiers alone (⌃⌥⌘, fn, right ⌥), modifiers with one key (⌥Space), or a middle or
+/// side mouse button, alone or with modifiers (Hands-free and Push to talk only).
 public struct Chord: Sendable, Hashable {
+    /// What goes down with the modifiers and ends the press when it goes up.
+    public enum Trigger: Sendable, Hashable {
+        /// A macOS virtual key code.
+        case key(UInt16)
+        /// A CoreGraphics button number: 2 is the middle button, 3 and up the side and extra ones. Left (0) and right
+        /// (1) are never a chord's: the tap does not listen to them.
+        case mouseButton(Int)
+    }
+
     /// For each modifier kind in the chord, the sides that count: both sides set means either side.
     public var modifiers: ModifierKeys
-    /// The macOS virtual key code pressed with the modifiers; nil for a modifier-only chord.
-    public var keyCode: UInt16?
+    /// nil for a modifier-only chord.
+    public var trigger: Trigger?
 
     public init(modifiers: ModifierKeys, keyCode: UInt16? = nil) {
         self.modifiers = modifiers
-        self.keyCode = keyCode
+        trigger = keyCode.map(Trigger.key)
     }
+
+    public init(modifiers: ModifierKeys = [], mouseButton: Int) {
+        self.modifiers = modifiers
+        trigger = .mouseButton(mouseButton)
+    }
+
+    /// The key pressed with the modifiers; nil for a modifier-only or mouse-button chord.
+    public var keyCode: UInt16? {
+        guard case .key(let keyCode) = trigger else { return nil }
+        return keyCode
+    }
+
+    /// The button pressed with the modifiers; nil for a keyboard chord.
+    public var mouseButton: Int? {
+        guard case .mouseButton(let button) = trigger else { return nil }
+        return button
+    }
+
+    /// The lowest button number a chord may use: the middle button.
+    public static let middleMouseButton = 2
+
+    /// Modifiers alone: held while they are, with no key-up to wait for.
+    var isModifierOnly: Bool { trigger == nil }
 
     /// Hands-free, and push to talk until the owner records its own.
     public static let defaultHandsFree = Self(modifiers: [.control, .option, .command])
@@ -25,17 +58,19 @@ public struct Chord: Sendable, Hashable {
 
     /// A modifier-only chord is down while all of its modifiers are; other modifiers held with it do not matter.
     func isHeld(by held: ModifierKeys) -> Bool {
-        keyCode == nil && modifiers.isSatisfied(by: held)
+        isModifierOnly && modifiers.isSatisfied(by: held)
     }
 
-    /// A key chord is pressed when its key goes down with exactly its modifier kinds held, so ⌥⇧Space is not ⌥Space.
-    func isPressed(by pressed: UInt16, with held: ModifierKeys) -> Bool {
-        pressed == keyCode && held.kinds == modifiers.kinds && modifiers.isSatisfied(by: held)
+    /// A key or mouse-button chord is pressed when its key or button goes down with exactly its modifier kinds held, so
+    /// ⌥⇧Space is not ⌥Space.
+    func isPressed(by pressed: Trigger, with held: ModifierKeys) -> Bool {
+        pressed == trigger && held.kinds == modifiers.kinds && modifiers.isSatisfied(by: held)
     }
 
-    /// How many keys the chord holds: when two chords are held at once, the press follows the one with more.
+    /// How many keys the chord holds (a mouse button counts as one): when two chords are held at once, the press follows
+    /// the one with more.
     var rank: Int {
-        modifiers.kindCount + (keyCode == nil ? 0 : 1)
+        modifiers.kindCount + (isModifierOnly ? 0 : 1)
     }
 }
 
@@ -48,6 +83,9 @@ public enum ChordRole: Sendable, Hashable {
     case pasteLast
     case copyLast
     case polishLast
+
+    /// Hands-free or push to talk: a chord that starts a dictation, the only ones a mouse button may be.
+    public var isDictation: Bool { self == .handsFree || self == .pushToTalk }
 }
 
 /// Why a recorded chord is refused.
@@ -87,13 +125,15 @@ public enum ChordProblem: Sendable, Equatable {
     case polishLastSameAs(ChordRole)
     /// The Polish Last chord holds the modifier-only chord of `role` on the way to its key, as `pasteLastIncludes`.
     case polishLastIncludes(ChordRole)
+    /// A mouse button for cleanup, Paste Last, Copy Last or Polish Last: only the two dictation chords take one.
+    case mouseButtonOnlyForDictation
 }
 
 extension Chord {
     /// One or two modifiers alone (fn has its own note): an app shortcut that uses them opens the mic for a moment
     /// before the press is dropped. The recorder says so.
     public var opensMicBriefly: Bool {
-        keyCode == nil && modifiers != .function && (1...2).contains(modifiers.kindCount)
+        isModifierOnly && modifiers != .function && (1...2).contains(modifiers.kindCount)
     }
 
     /// The first reason the chords cannot be saved, or nil. A chord's own problem comes before a clash. A nil
@@ -112,7 +152,7 @@ extension Chord {
             if let problem = cleanup.ownProblem(as: .cleanup) { return problem }
             for (chord, role) in dictation {
                 if chord == cleanup { return .sameAsCleanup(role) }
-                if cleanup.keyCode == nil, cleanup.modifiers.isImplied(by: chord.modifiers) {
+                if cleanup.isModifierOnly, cleanup.modifiers.isImplied(by: chord.modifiers) {
                     return .dictationIncludesCleanup(role)
                 }
             }
@@ -164,11 +204,12 @@ extension Chord {
     /// classifier tries the dictation and cleanup chords first, so a key press that matches one, or that holds one of
     /// them on the way, never reaches these three.
     private func problem(as last: ChordRole, clashingWith others: [(Chord?, ChordRole)]) -> ChordProblem? {
+        if mouseButton != nil { return .mouseButtonOnlyForDictation }
         guard keyCode != nil else { return .needsKey }
         if let problem = ownProblem(as: last) { return problem }
         for (other, role) in others {
             guard let other else { continue }
-            if other.keyCode == nil, other.modifiers.isSatisfied(by: modifiers) {
+            if other.isModifierOnly, other.modifiers.isSatisfied(by: modifiers) {
                 return Self.clash(of: last, with: role, isSameChord: false)
             }
             if other.keyCode == keyCode, other.modifiers.kinds == modifiers.kinds {
@@ -191,6 +232,10 @@ extension Chord {
     }
 
     private func ownProblem(as role: ChordRole) -> ChordProblem? {
+        // A mouse button is no key the owner types, so it needs no modifier; it starts a dictation only.
+        if mouseButton != nil {
+            return role.isDictation ? nil : .mouseButtonOnlyForDictation
+        }
         guard let keyCode else {
             if modifiers.isEmpty { return .noModifier }
             let isOneKind = ModifierKeys.allKinds.contains(modifiers.kinds)
@@ -273,48 +318,5 @@ public enum KeyCode {
             true
         default: false
         }
-    }
-}
-
-/// What the shortcut recorder makes of the keys pressed while it listens. Modifiers alone are recorded when the
-/// last one goes up, as the most that were down at once; a key is recorded as it goes down, with the modifiers
-/// held then. A side counts only when the right key alone was used: left ⌥ or both make "either ⌥".
-public struct ChordCapture: Sendable {
-    public enum Outcome: Sendable, Equatable {
-        case recorded(Chord)
-        /// Esc with no modifier held.
-        case cancelled
-    }
-
-    /// The modifiers held now, for the recorder to show while it listens.
-    public private(set) var held: ModifierKeys = []
-    private var peak: ModifierKeys = []
-
-    public init() {}
-
-    public mutating func handle(_ input: KeyInput) -> Outcome? {
-        switch input {
-        case .modifiersChanged(let modifiers), .tapReenabled(let modifiers, _):
-            held = modifiers
-            peak.formUnion(modifiers)
-            guard modifiers.isEmpty, !peak.isEmpty else { return nil }
-            return .recorded(Chord(modifiers: Self.sides(peak)))
-        case .keyDown(let keyCode, _, _):
-            if keyCode == KeyCode.escape, held.isEmpty { return .cancelled }
-            return .recorded(Chord(modifiers: Self.sides(held), keyCode: keyCode))
-        case .keyUp, .chordKeyReleased, .posted, .mouseDown:
-            return nil
-        }
-    }
-
-    private static func sides(_ pressed: ModifierKeys) -> ModifierKeys {
-        var chord: ModifierKeys = []
-        for kind in ModifierKeys.allKinds {
-            let sides = pressed.intersection(kind)
-            guard !sides.isEmpty else { continue }
-            let right = kind.intersection(.rightSides)
-            chord.formUnion(sides == right ? right : kind)
-        }
-        return chord
     }
 }

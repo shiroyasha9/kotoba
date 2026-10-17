@@ -4,6 +4,8 @@ import AppKit
 /// that press. AppKit event monitors only observe: no click waits for kotoba, and mouse events need no permission
 /// (NSEvent.h: only key events need Accessibility). The global monitor sees clicks in other apps, the local one clicks
 /// in kotoba's own windows. A click on the indicator pill is left out: it is a chord tap of its own (`HotkeyTap.sendTap`).
+/// While the hotkey tap watches the middle and side buttons (a mouse chord), it reports their clicks and these monitors
+/// leave them out, so a click counts once and the chord's own button never reads as a click.
 @MainActor
 final class MouseDownMonitors {
     /// `HotkeyTap` sets it.
@@ -13,16 +15,19 @@ final class MouseDownMonitors {
     /// Whether a window is the indicator pill's; the app sets it.
     var isPillWindow: (NSWindow?) -> Bool = { _ in false }
     private var monitors: [Any] = []
+    /// What the monitors in place watch; empty while they are off.
+    private var mask: NSEvent.EventTypeMask = []
 
-    /// On while the hotkey tap runs, is enabled and no shortcut recorder listens.
-    func setOn(_ isOn: Bool) {
-        guard isOn == monitors.isEmpty else { return }
-        guard isOn else {
-            monitors.forEach(NSEvent.removeMonitor)
-            monitors = []
-            return
-        }
-        let mask: NSEvent.EventTypeMask = [.leftMouseDown, .rightMouseDown, .otherMouseDown]
+    static let allButtons: NSEvent.EventTypeMask = [.leftMouseDown, .rightMouseDown, .otherMouseDown]
+
+    /// `allButtons` while the hotkey tap runs, is enabled and no shortcut recorder listens, without `.otherMouseDown`
+    /// while the tap watches the middle and side buttons; empty turns the monitors off.
+    func setMask(_ mask: NSEvent.EventTypeMask) {
+        guard mask != self.mask else { return }
+        monitors.forEach(NSEvent.removeMonitor)
+        monitors = []
+        self.mask = mask
+        guard !mask.isEmpty else { return }
         let global = NSEvent.addGlobalMonitorForEvents(matching: mask) { [weak self] _ in
             MainActor.assumeIsolated {
                 self?.onOtherAppMouseDown?()

@@ -94,6 +94,41 @@ struct ChordTests {
             problem: nil),
     ]
 
+    static let mouseFour = Chord(mouseButton: 3)
+
+    /// A middle or side mouse button is a dictation chord's key: it needs no modifier and takes none of the key rules.
+    static let mouseRows: [Row] = [
+        Row(name: "hands-free on a side button", handsFree: mouseFour, problem: nil),
+        Row(name: "push to talk on the middle button", pushToTalk: Chord(mouseButton: 2), problem: nil),
+        Row(
+            name: "push to talk on ⌥ with a side button", pushToTalk: Chord(modifiers: .option, mouseButton: 3),
+            problem: nil),
+        Row(name: "⌘ with a side button", handsFree: Chord(modifiers: .command, mouseButton: 4), problem: nil),
+        Row(name: "both dictation chords on one button", handsFree: mouseFour, pushToTalk: mouseFour, problem: nil),
+        Row(
+            name: "hands-free and push to talk on two side buttons", handsFree: Chord(mouseButton: 4),
+            pushToTalk: mouseFour, problem: nil),
+        Row(name: "cleanup on a side button", cleanup: mouseFour, problem: .mouseButtonOnlyForDictation),
+        Row(name: "Paste Last on a side button", pasteLast: mouseFour, problem: .mouseButtonOnlyForDictation),
+        Row(name: "Copy Last on a side button", copyLast: mouseFour, problem: .mouseButtonOnlyForDictation),
+        Row(name: "Polish Last on a side button", polishLast: mouseFour, problem: .mouseButtonOnlyForDictation),
+        Row(
+            name: "the default Copy Last next to a side button for both dictation chords", handsFree: mouseFour,
+            copyLast: .defaultCopyLast, problem: nil),
+        Row(
+            name: "Paste Last with the modifiers of a side-button chord does not hold it",
+            pushToTalk: Chord(modifiers: [.control, .command], mouseButton: 3),
+            pasteLast: Chord(modifiers: [.control, .command], keyCode: KeyCode.ansiV), problem: nil),
+        Row(
+            name: "a side-button chord that holds the whole cleanup chord",
+            handsFree: Chord(modifiers: [.control, .option, .shift, .command], mouseButton: 3),
+            problem: .dictationIncludesCleanup(.handsFree)),
+    ]
+
+    @Test func theDefaultCopyLastStaysOnNextToMouseChords() {
+        #expect(Chord.copyLast(saved: nil, handsFree: Self.mouseFour, cleanup: .defaultCleanup) == .defaultCopyLast)
+    }
+
     /// Push to talk drops a press shorter than the hold threshold, so one modifier alone may be its chord.
     static let pushToTalkRows: [Row] = [
         Row(name: "push to talk on ⌥ alone", pushToTalk: Chord(modifiers: .option), problem: nil),
@@ -174,7 +209,7 @@ struct ChordTests {
     }
 
     // One array of arrays: a chain of `+` takes the type checker too long.
-    @Test(arguments: [rows, pasteLastRows, copyLastRows, polishLastRows, pushToTalkRows].flatMap { $0 })
+    @Test(arguments: [rows, pasteLastRows, copyLastRows, polishLastRows, pushToTalkRows, mouseRows].flatMap { $0 })
     func problem(_ row: Row) {
         #expect(
             Chord.problem(
@@ -233,6 +268,17 @@ struct ChordCaptureTests {
             ],
             outcome: .recorded(Chord(modifiers: .option, keyCode: KeyCode.escape))),
         Row(name: "modifiers still held record nothing yet", inputs: [.modifiersChanged(.leftOption)], outcome: nil),
+        Row(
+            name: "a mouse button is recorded as it goes down",
+            inputs: [.otherMouseDown(button: 3, modifiers: [])], outcome: .recorded(Chord(mouseButton: 3))),
+        Row(
+            name: "a mouse button with the modifiers held then",
+            inputs: [.modifiersChanged(.leftOption), .otherMouseDown(button: 2, modifiers: .leftOption)],
+            outcome: .recorded(Chord(modifiers: .option, mouseButton: 2))),
+        Row(
+            name: "a left or right button is never a chord",
+            inputs: [.otherMouseDown(button: 0, modifiers: []), .otherMouseDown(button: 1, modifiers: [])],
+            outcome: nil),
     ]
 
     @Test(arguments: rows)
@@ -252,6 +298,7 @@ extension ChordTests {
         (Chord(modifiers: .option), true), (Chord(modifiers: .rightOption), true),
         (Chord.defaultHandsFree, false), (Chord(modifiers: .function), false),
         (Chord(modifiers: [.control, .option], keyCode: KeyCode.space), false),
+        (Chord(modifiers: .option, mouseButton: 3), false),
     ])
     func oneOrTwoModifiersAloneOpenTheMicBriefly(_ chord: Chord, _ opens: Bool) {
         #expect(chord.opensMicBriefly == opens)

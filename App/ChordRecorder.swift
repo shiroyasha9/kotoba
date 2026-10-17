@@ -87,17 +87,26 @@ struct ChordRecorder: View {
         return listener.held.isEmpty ? "Press a shortcut" : Chord(modifiers: listener.held.kinds).title
     }
 
-    /// Why the last recorded chord was refused, or a hint for an fn chord or one that opens the mic briefly. Push to
-    /// talk on the hands-free chord leaves the hint to the hands-free line.
+    /// Why the last recorded chord was refused, or a hint: a dictation recorder that listens also takes a mouse button,
+    /// a mouse button no longer reaches apps, an fn chord or one that opens the mic briefly. Push to talk on the
+    /// hands-free chord leaves the hint to the hands-free line.
     private var note: (text: String, isProblem: Bool)? {
         if let refused = listener.refused {
             return (refused.problem.text(refused.chord, role: role, chords: chords), true)
         }
+        if listener.isListening, role.isDictation {
+            return ("You can also press a middle or side mouse button.", false)
+        }
         if role == .copyLast, let reason = chords.copyLastOffReason {
             return (reason.defaultCopyLastText(chords: chords), false)
         }
-        guard let chord, chord.keyCode == nil else { return nil }
         if role == .pushToTalk, chords.separatePushToTalk == nil { return nil }
+        guard let chord else { return nil }
+        switch chord.trigger {
+        case .key: return nil
+        case .mouseButton: return ("Apps no longer get \(chord.title).", false)
+        case nil: break
+        }
         if chord.modifiers == .function {
             return ("In Keyboard settings, set fn to \u{201C}Do Nothing\u{201D}.", false)
         }
@@ -155,10 +164,12 @@ final class ChordListener {
         held = []
         refused = nil
         isListening = true
-        monitor = NSEvent.addLocalMonitorForEvents(matching: [.flagsChanged, .keyDown, .keyUp]) { [weak self] event in
+        let mask: NSEvent.EventTypeMask = [.flagsChanged, .keyDown, .keyUp, .otherMouseDown, .otherMouseUp]
+        monitor = NSEvent.addLocalMonitorForEvents(matching: mask) { [weak self] event in
             let input = Self.input(event)
             MainActor.assumeIsolated { self?.handle(input, recorded: recorded) }
-            // While listening, no key reaches the window: Return does not press the default button.
+            // While listening, no key or middle or side button reaches the window: Return does not press the default
+            // button, and a side button does not go back.
             return nil
         }
         resignObserver = NotificationCenter.default.addObserver(
@@ -187,6 +198,8 @@ final class ChordListener {
         switch event.type {
         case .flagsChanged: .modifiersChanged(ModifierKeys(eventFlags: UInt64(event.modifierFlags.rawValue)))
         case .keyDown: .keyDown(keyCode: event.keyCode, modifiers: [], isRepeat: event.isARepeat)
+        case .otherMouseDown: .otherMouseDown(button: event.buttonNumber, modifiers: [])
+        case .otherMouseUp: .otherMouseUp(button: event.buttonNumber, modifiers: [])
         default: .keyUp(keyCode: event.keyCode, modifiers: [])
         }
     }
@@ -230,6 +243,7 @@ extension ChordProblem {
             let held = role == dictation ? chord : (chords.chord(dictation) ?? chord)
             let cleanup = role == .cleanup ? chord : (chords.cleanup ?? chord)
             return "\(held.title) includes \(cleanup.title), so every dictation would clean up."
+        case .mouseButtonOnlyForDictation: return "Only Hands-free and Push to talk can use a mouse button."
         case .needsKey, .pasteLastSameAs, .pasteLastIncludes, .copyLastSameAs, .copyLastIncludes, .polishLastSameAs,
             .polishLastIncludes:
             return lastText(chord, role: role, chords: chords)

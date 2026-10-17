@@ -239,8 +239,10 @@ struct HotkeyClassifierTests {
 
     // One array of arrays: a chain of `+` takes the type checker too long.
     @Test(
-        arguments: [rows, missedReleaseRows, returnRows, pasteLastRows, copyLastRows, polishLastRows, splitRows]
-            .flatMap { $0 })
+        arguments: [
+            rows, missedReleaseRows, returnRows, pasteLastRows, copyLastRows, polishLastRows, splitRows, mouseRows,
+        ]
+        .flatMap { $0 })
     func classify(_ row: Row) {
         var keyboard = Keyboard(
             classifier: HotkeyClassifier(
@@ -285,7 +287,9 @@ extension HotkeyClassifierTests {
                 case .keyDown(let keyCode, asHeld, let isRepeat):
                     .keyDown(keyCode: keyCode, modifiers: held, isRepeat: isRepeat)
                 case .keyUp(let keyCode, asHeld): .keyUp(keyCode: keyCode, modifiers: held)
-                case .keyDown, .keyUp, .chordKeyReleased, .posted, .mouseDown: input
+                case .otherMouseDown(let button, asHeld): .otherMouseDown(button: button, modifiers: held)
+                case .otherMouseUp(let button, asHeld): .otherMouseUp(button: button, modifiers: held)
+                case .keyDown, .keyUp, .chordKeyReleased, .posted, .mouseDown, .otherMouseDown, .otherMouseUp: input
                 }
             return classifier.classify(filled)
         }

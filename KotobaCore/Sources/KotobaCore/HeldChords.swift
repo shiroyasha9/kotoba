@@ -2,7 +2,7 @@
 
 extension HotkeyClassifier {
     func isHeld(_ chord: Chord) -> Bool {
-        chord.keyCode == nil ? chord.isHeld(by: modifiers) : heldKeyChord == chord
+        chord.isModifierOnly ? chord.isHeld(by: modifiers) : heldKeyChord == chord
     }
 
     /// What the release of a held chord does, and how many keys the chord has (`Chord.rank`).

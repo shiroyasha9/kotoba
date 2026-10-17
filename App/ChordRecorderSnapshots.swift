@@ -35,6 +35,7 @@ extension ChordRecorder {
                 ChordRecorder(
                     chords: clash, role: .handsFree,
                     listener: ChordListener(refused: (.defaultHandsFree, .dictationIncludesCleanup(.handsFree)))))
+            mouseRows()
             lastRows(chords: chords)
         }
         .formStyle(.grouped)
@@ -61,6 +62,31 @@ extension ChordRecorder {
             ChordRecorder(
                 chords: HotkeyChords(defaults: nil), role: .pushToTalk,
                 listener: ChordListener(refused: (Chord(modifiers: .command), .commonModifierAlone))))
+    }
+
+    /// A side button for push to talk, the middle button with ⌥ for hands-free, the hint while listening, and a mouse
+    /// button refused for cleanup.
+    @MainActor
+    @ViewBuilder
+    private static func mouseRows() -> some View {
+        let sideButton = Chord(mouseButton: 3)
+        row(
+            "Push to talk on a side button",
+            ChordRecorder(chords: HotkeyChords(defaults: nil, pushToTalk: sideButton), role: .pushToTalk))
+        row(
+            "Hands-free on ⌥ and the middle button",
+            ChordRecorder(
+                chords: HotkeyChords(defaults: nil, handsFree: Chord(modifiers: .option, mouseButton: 2)),
+                role: .handsFree))
+        row(
+            "Push to talk listening",
+            ChordRecorder(
+                chords: HotkeyChords(defaults: nil), role: .pushToTalk, listener: ChordListener(isListening: true)))
+        row(
+            "Cleanup on a mouse button",
+            ChordRecorder(
+                chords: HotkeyChords(defaults: nil), role: .cleanup,
+                listener: ChordListener(refused: (sideButton, .mouseButtonOnlyForDictation))))
     }
 
     /// Paste Last off, set, refused for a clash and for no key; Copy Last at its default and refused for a clash.

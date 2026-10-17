@@ -1,43 +1,3 @@
-/// One keyboard event from the event tap.
-public enum KeyInput: Sendable, Hashable {
-    case modifiersChanged(ModifierKeys)
-    /// A key went down, or repeats. `keyCode` is the macOS virtual key code; `modifiers` the event's own flags,
-    /// so a modifier release the tap missed is found at the next key.
-    case keyDown(keyCode: UInt16, modifiers: ModifierKeys, isRepeat: Bool)
-    case keyUp(keyCode: UInt16, modifiers: ModifierKeys)
-    /// The system had disabled the tap and it is back on; a release may have been missed. `modifiers` is the
-    /// state now, `isChordKeyDown` whether the key of a held key chord (`heldChordKey`) is still down.
-    case tapReenabled(modifiers: ModifierKeys, isChordKeyDown: Bool)
-    /// The tap found the key of the held key chord (`heldChordKey`) up although no key-up came, for example
-    /// after Secure Input took the keyboard: the press ended.
-    case chordKeyReleased
-    /// An event kotoba posted itself (its Cmd-V and Return): it passes and changes no state.
-    case posted
-    /// A mouse button went down (left, right or other): a ⌘-click or ⌥-drag makes a press part of a mouse gesture, as
-    /// a typed key does.
-    case mouseDown
-}
-
-/// What the tap does with one keyboard event: the hotkey events to send, if any, and whether to
-/// keep the key from the focused app.
-public struct HotkeyDecision: Sendable, Equatable {
-    /// In order; one modifier change can both press the chord and complete the cleanup chord.
-    public var events: HotkeyEvents
-    public var isSwallowed: Bool
-
-    public init(events: HotkeyEvents, isSwallowed: Bool = false) {
-        self.events = events
-        self.isSwallowed = isSwallowed
-    }
-
-    public init(event: HotkeyEvent, isSwallowed: Bool = false) {
-        self.init(events: HotkeyEvents(event), isSwallowed: isSwallowed)
-    }
-
-    public static let pass = Self(events: [])
-    public static let swallow = Self(events: [], isSwallowed: true)
-}
-
 /// Turns raw keyboard events into hotkey events. The tap keeps one instance behind a lock and
 /// calls `classify` for every event, so this stays constant-time and does not allocate.
 ///
@@ -53,6 +13,9 @@ public struct HotkeyDecision: Sendable, Equatable {
 /// The Paste Last and Polish Last chords (a key with modifiers) report `.pasteLast` and `.polishLast` once every
 /// modifier is up again: a Cmd-V posted while ⌃ is held reaches the app as ⌃⌘V. The Copy Last chord posts no key, so it
 /// reports `.copyLast` at its press.
+///
+/// A Hands-free or Push to talk chord may be a middle or side mouse button: the button is its key, so its down and up
+/// are swallowed as a key chord's are, and every other middle or side button is a click (`.mouseDown`).
 public struct HotkeyClassifier: Sendable {
     /// On while the indicator shows recording. Esc then cancels, and with `isReturnGestureOn` a plain Return
     /// stops with a submit; neither key reaches the app.
@@ -77,7 +40,7 @@ public struct HotkeyClassifier: Sendable {
     /// recording ended in between.
     private var isSubmitKeyDown = false
     private(set) var modifiers: ModifierKeys = []
-    /// The key chord now held. Its key's repeats and its release are swallowed, as its press was.
+    /// The key or mouse-button chord now held. Its key's repeats and its release are swallowed, as its press was.
     private(set) var heldKeyChord: Chord?
     /// The chord the press in progress follows; nil when no press is.
     private var press: RankedGesture?
@@ -111,6 +74,14 @@ public struct HotkeyClassifier: Sendable {
 
     /// The key of the key chord now held, for the tap to check a lost key-up.
     public var heldChordKey: UInt16? { heldKeyChord?.keyCode }
+
+    /// The key or mouse button of the chord now held, for the tap to read its state after a gap.
+    public var heldTrigger: Chord.Trigger? { heldKeyChord?.trigger }
+
+    /// A dictation chord is a mouse button, so the tap needs other-mouse down and up events.
+    public var hasMouseChord: Bool {
+        handsFreeChord.mouseButton != nil || pushToTalkChord?.mouseButton != nil
+    }
 
     /// A press of any chord is in progress.
     public var isPressing: Bool { press != nil }
@@ -153,9 +124,8 @@ public struct HotkeyClassifier: Sendable {
             return HotkeyDecision(events: events)
         case .posted:
             return .pass
-        case .mouseDown:
-            interrupt(&events)
-            return HotkeyDecision(events: events)
+        case .mouseDown, .otherMouseDown, .otherMouseUp:
+            return click(input, &events)
         case .keyDown(let keyCode, let held, let isRepeat):
             sync(held, keyCode: keyCode, &events)
             return keyDown(keyCode, isRepeat: isRepeat, &events)
@@ -163,6 +133,43 @@ public struct HotkeyClassifier: Sendable {
             sync(held, keyCode: keyCode, &events)
             return keyUp(keyCode, &events)
         }
+    }
+
+    /// A click the mouse monitors saw, or a middle or side button from the tap: a mouse chord's button goes down and
+    /// up as its key would, and its up is swallowed as its down was.
+    private mutating func click(_ input: KeyInput, _ events: inout HotkeyEvents) -> HotkeyDecision {
+        switch input {
+        case .otherMouseDown(let button, let held):
+            sync(held, keyCode: nil, &events)
+            return buttonDown(button, &events)
+        case .otherMouseUp(let button, let held):
+            sync(held, keyCode: nil, &events)
+            guard heldTrigger == .mouseButton(button) else { return HotkeyDecision(events: events) }
+            heldKeyChord = nil
+            update(&events)
+            return HotkeyDecision(events: events, isSwallowed: true)
+        default:
+            interrupt(&events)
+            return HotkeyDecision(events: events)
+        }
+    }
+
+    /// The button of a dictation chord presses it, as its key would; any other button, or one while another chord's key
+    /// is held or a recorder listens, is a click and reaches the app.
+    private mutating func buttonDown(_ button: Int, _ events: inout HotkeyEvents) -> HotkeyDecision {
+        let trigger = Chord.Trigger.mouseButton(button)
+        // A new press of the held button means its up was missed, so that press ended.
+        if heldTrigger == trigger {
+            heldKeyChord = nil
+            update(&events)
+        }
+        if !isPaused, heldKeyChord == nil, let chord = chord(pressedBy: trigger) {
+            heldKeyChord = chord
+            update(&events)
+            return HotkeyDecision(events: events, isSwallowed: true)
+        }
+        interrupt(&events)
+        return HotkeyDecision(events: events)
     }
 
     /// The key-up of a submit Return, the Paste Last, Copy Last or Polish Last key or a held chord key is swallowed, as its
@@ -206,7 +213,7 @@ public struct HotkeyClassifier: Sendable {
                 return HotkeyDecision(events: events, isSwallowed: true)
             }
         }
-        if heldChordKey == nil, pressKeyChord(keyCode, &events) {
+        if heldKeyChord == nil, pressKeyChord(keyCode, &events) {
             return HotkeyDecision(events: events, isSwallowed: true)
         }
         // Paste Last and Polish Last wait for their modifiers; a key typed meanwhile makes them part of another shortcut.
@@ -249,24 +256,24 @@ public struct HotkeyClassifier: Sendable {
     /// Holds the hands-free, push-to-talk or cleanup key chord, makes Paste Last or Polish Last due, or copies the last
     /// dictation; false when `keyCode` with the modifiers held is none of them.
     private mutating func pressKeyChord(_ keyCode: UInt16, _ events: inout HotkeyEvents) -> Bool {
-        if let chord = keyChord(pressedBy: keyCode) {
+        if let chord = chord(pressedBy: .key(keyCode)) {
             heldKeyChord = chord
             update(&events)
             return true
         }
-        if copyLastChord?.isPressed(by: keyCode, with: modifiers) == true {
+        if copyLastChord?.isPressed(by: .key(keyCode), with: modifiers) == true {
             copyLastKey = keyCode
             // A Paste Last that waits for its modifiers is part of this other shortcut now, as after any other key.
             dueAtRelease = nil
             events.append(.copyLast)
             return true
         }
-        if polishLastChord?.isPressed(by: keyCode, with: modifiers) == true {
+        if polishLastChord?.isPressed(by: .key(keyCode), with: modifiers) == true {
             polishLastKey = keyCode
             dueAtRelease = .polishLast
             return true
         }
-        guard pasteLastChord?.isPressed(by: keyCode, with: modifiers) == true else { return false }
+        guard pasteLastChord?.isPressed(by: .key(keyCode), with: modifiers) == true else { return false }
         pasteLastKey = keyCode
         dueAtRelease = .pasteLast
         return true
@@ -275,10 +282,10 @@ public struct HotkeyClassifier: Sendable {
     /// Follows a key event's own flags, so a modifier change the tap missed cannot leave a chord down. Only which
     /// kinds are held is taken: the sides stay as the modifier events reported them, since a key event may carry no
     /// side bits. macOS sets the fn flag on arrows, function and navigation keys, so there fn stays as it was.
-    private mutating func sync(_ held: ModifierKeys, keyCode: UInt16, _ events: inout HotkeyEvents) {
+    private mutating func sync(_ held: ModifierKeys, keyCode: UInt16?, _ events: inout HotkeyEvents) {
         var synced: ModifierKeys = []
         for kind in ModifierKeys.allKinds {
-            let isFunctionMarked = kind == .function && KeyCode.carriesFunctionFlag(keyCode)
+            let isFunctionMarked = kind == .function && keyCode.map(KeyCode.carriesFunctionFlag) == true
             let isHeld = isFunctionMarked ? !modifiers.isDisjoint(with: kind) : !held.isDisjoint(with: kind)
             guard isHeld else { continue }
             let tracked = modifiers.intersection(kind)
@@ -289,11 +296,12 @@ public struct HotkeyClassifier: Sendable {
         update(&events)
     }
 
-    /// The chord whose key `keyCode` is, pressed with exactly its modifiers: cleanup first, as before the split.
-    private func keyChord(pressedBy keyCode: UInt16) -> Chord? {
-        if let cleanupChord, cleanupChord.isPressed(by: keyCode, with: modifiers) { return cleanupChord }
-        if let pushToTalkChord, pushToTalkChord.isPressed(by: keyCode, with: modifiers) { return pushToTalkChord }
-        return handsFreeChord.isPressed(by: keyCode, with: modifiers) ? handsFreeChord : nil
+    /// The chord whose key or button `trigger` is, pressed with exactly its modifiers: cleanup first, as before the
+    /// split.
+    private func chord(pressedBy trigger: Chord.Trigger) -> Chord? {
+        if let cleanupChord, cleanupChord.isPressed(by: trigger, with: modifiers) { return cleanupChord }
+        if let pushToTalkChord, pushToTalkChord.isPressed(by: trigger, with: modifiers) { return pushToTalkChord }
+        return handsFreeChord.isPressed(by: trigger, with: modifiers) ? handsFreeChord : nil
     }
 
     private mutating func update(_ events: inout HotkeyEvents) {
