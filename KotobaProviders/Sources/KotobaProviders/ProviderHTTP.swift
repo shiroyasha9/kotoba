@@ -242,8 +242,14 @@ enum ProviderHTTP {
         return String(bytes: data.prefix(200), encoding: .utf8) ?? ""
     }
 
+    /// The label and the error are public; a refusal's message is private, as the body can echo the request
+    /// (keyterms, words of the transcript).
     private static func logged(_ error: ProviderError, label: String) -> ProviderError {
-        log.error("\(label, privacy: .public) failed: \(String(describing: error), privacy: .public)")
+        if case .rejected(let status, let message) = error {
+            log.error("\(label, privacy: .public) failed: rejected \(status): \(message, privacy: .private)")
+        } else {
+            log.error("\(label, privacy: .public) failed: \(String(describing: error), privacy: .public)")
+        }
         return error
     }
 }
