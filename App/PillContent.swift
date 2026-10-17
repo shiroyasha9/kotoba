@@ -91,8 +91,9 @@ extension IndicatorPanel {
             return .init(
                 text: text, color: .secondaryLabelColor, action: action,
                 timer: .init(duration: context.undoWindow, kind: .followsUndoWindow))
-        case .failed, .needsSetup, .rejected, .cleanupFailed, .cleanupTooSlow, .returnSkipped, .recovered, .copied,
-            .captureFailed, .nothingRecorded, .audioNotSaved, .audioCut, .clipboardNotKept, .polished, .polishFailed:
+        case .failed, .timedOut, .needsSetup, .rejected, .cleanupFailed, .cleanupTooSlow, .returnSkipped, .recovered,
+            .copied, .captureFailed, .nothingRecorded, .audioNotSaved, .audioCut, .clipboardNotKept, .polished,
+            .polishFailed:
             return .init(
                 PillNotice(text: text, action: action), color: state.isGoodOutcome ? .systemGreen : .systemOrange)
         }

@@ -18,7 +18,8 @@ final class OpenRouterProvider: RouteClient {
     init(
         apiKey: any APIKeySource,
         baseURL: URL = defaultBaseURL,
-        configuration: URLSessionConfiguration = ProviderHTTP.sessionConfiguration()
+        configuration: URLSessionConfiguration = ProviderHTTP.sessionConfiguration(
+            resourceTimeout: ProviderHTTP.transcriptionResourceTimeout)
     ) {
         connection = ProviderConnection(account: .openRouter, apiKey: apiKey, configuration: configuration)
         self.baseURL = baseURL

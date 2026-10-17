@@ -20,7 +20,7 @@ public struct InstallYield: Sendable, Equatable {
         switch state {
         case .recording, .transcribing, .cleaning, .undoable, .polishing:
             return false
-        case .idle, .failed, .needsSetup, .rejected, .cleanupFailed, .cleanupTooSlow, .returnSkipped, .copied,
+        case .idle, .failed, .timedOut, .needsSetup, .rejected, .cleanupFailed, .cleanupTooSlow, .returnSkipped, .copied,
             .recovered, .captureFailed, .nothingRecorded, .audioNotSaved, .audioCut, .clipboardNotKept, .polished,
             .polishFailed:
             return true

@@ -163,6 +163,7 @@ extension DictationState {
         let provider = context.provider.title
         return switch self {
         case .failed: "Couldn’t reach \(provider). Saved."
+        case .timedOut: "\(provider) took too long. Saved."
         case .needsSetup(_, .credit): "\(provider) is out of credit. Saved."
         case .needsSetup(_, let item): StatusText.add(item, for: context.provider)
         case .rejected(_, let reason): reason.text(provider: provider)
@@ -188,8 +189,8 @@ extension DictationState {
         case .clipboardNotKept: "Pasted. Old clipboard too large to keep."
         case .polished(_, isReplaced: true): "Polished"
         case .polished(_, isReplaced: false): "Polished. Copied, press ⌘V"
-        case .idle, .recording, .transcribing, .cleaning, .undoable, .failed, .needsSetup, .rejected, .captureFailed,
-            .nothingRecorded, .audioNotSaved, .polishing, .polishFailed:
+        case .idle, .recording, .transcribing, .cleaning, .undoable, .failed, .timedOut, .needsSetup, .rejected,
+            .captureFailed, .nothingRecorded, .audioNotSaved, .polishing, .polishFailed:
             nil
         }
     }
@@ -199,7 +200,7 @@ extension DictationState {
         switch self {
         case .undoable: .undo
         case .recording(_, isSilent: true, _): .chooseMicrophone
-        case .failed: .retry
+        case .failed, .timedOut: .retry
         case .needsSetup(_, let item): item.pillAction
         case .recovered: .copy
         case .copied: context.isPasteAllowed ? nil : .allowPasting

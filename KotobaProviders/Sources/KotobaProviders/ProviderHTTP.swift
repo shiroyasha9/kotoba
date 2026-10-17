@@ -58,7 +58,8 @@ final class ProviderConnection: Sendable {
         let network: NetworkTiming?
     }
 
-    /// POSTs `body` to `url` with the key, mapping transport failures to `ProviderError.offline`.
+    /// POSTs `body` to `url` with the key, mapping a timeout to `ProviderError.timedOut` and other transport failures
+    /// to `.offline`.
     func send(_ url: URL, contentType: String, label: String, body: Body) async throws -> Reply {
         let key = try await key()
         var request = URLRequest(url: url)
@@ -84,6 +85,9 @@ final class ProviderConnection: Sendable {
             return Reply(data: data, response: http, network: metrics.timing)
         } catch let error as URLError where error.code == .cancelled {
             throw CancellationError()
+        } catch let error as URLError where error.code == .timedOut {
+            // The network works; the route was slow, and may have taken the audio.
+            throw ProviderError.timedOut
         } catch is URLError {
             throw ProviderError.offline
         }
@@ -126,15 +130,21 @@ enum ProviderHTTP {
     static let log = Logger(subsystem: Log.subsystem, category: "provider")
 
     /// No disk cache or cookies. A request fails at once when offline (the pipeline queues it) instead of waiting
-    /// for connectivity. Upstreams time out after about 60 s, so the resource limit sits just above that.
-    static func sessionConfiguration() -> URLSessionConfiguration {
+    /// for connectivity. Upstreams time out after about 60 s, so the default resource limit sits just above that.
+    static func sessionConfiguration(resourceTimeout: TimeInterval = 75) -> URLSessionConfiguration {
         let configuration = URLSessionConfiguration.ephemeral
         configuration.urlCache = nil
         configuration.waitsForConnectivity = false
         configuration.timeoutIntervalForRequest = 30
-        configuration.timeoutIntervalForResource = 75
+        configuration.timeoutIntervalForResource = resourceTimeout
         return configuration
     }
+
+    /// A transcription's upload grows with the recording, so the pipeline bounds it by the audio's length
+    /// (`DictationPipeline.Settings.transcriptionTimeout(for:)`); the connection allows a minute more than the longest
+    /// bound, so the pipeline's decides and a long recording on a slow uplink is not cut at a fixed time.
+    static let transcriptionResourceTimeout: TimeInterval =
+        (DictationPipeline.Settings.longestTranscription + .seconds(60)) / .seconds(1)
 
     /// Sorted keys and unescaped slashes, so request bodies are stable bytes for the fixture tests.
     static func encode(_ value: some Encodable) throws -> Data {

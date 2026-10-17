@@ -57,12 +57,7 @@ struct TranscriptDelivery: Sendable {
         let pendingRecord = record
         async let savedPending: Void = store.saveOrLog(pendingRecord)
         mark(.uploadStart, at: clock.now)
-        let result: Result<TranscriptionSteps.Transcribed, any Error>
-        do {
-            result = .success(try await steps.transcribe(&record, settings: job.settings))
-        } catch {
-            result = .failure(error)
-        }
+        let result = await Result { try await steps.transcribe(&record, settings: job.settings) }
         mark(.response, at: clock.now)
         if case .success(let transcribed) = result, let network = transcribed.network {
             Self.recordNetwork(network, of: job, in: &latency)
@@ -72,10 +67,13 @@ struct TranscriptDelivery: Sendable {
         var restore: ClipboardGuard.Write?
         var cleanupMiss: TranscriptionSteps.CleanupMiss?
         var submitted: Submitted?
+        var failure: DictationState?
         switch result {
         case .failure(let error):
             Log.pipeline.error("Transcription \(job.id.rawValue) on \(record.model ?? "no answer") failed: \(error)")
             record.markFailed(by: error)
+            // A timeout says so: "offline" would send the owner to check a network that works.
+            if error as? ProviderError == .timedOut { failure = .timedOut(record.id) }
         case .success(let transcribed):
             if let mode = job.output.cleanupMode {
                 await beforeCleanup()
@@ -97,7 +95,8 @@ struct TranscriptDelivery: Sendable {
         // The answers' ledger entries go with this save. A crash between the answer and here (at most the cleanup and
         // the paste, 1-2 s) loses them; the pending row is sent again at the next launch.
         await store.saveOrLog(record)
-        let showing = Self.notice(for: record, of: job, restore, cleanupMiss: cleanupMiss, submitted: submitted)
+        let showing =
+            failure ?? Self.notice(for: record, of: job, restore, cleanupMiss: cleanupMiss, submitted: submitted)
         return Outcome(record: record, restore: restore, showing: showing, isSubmitted: submitted == .sent)
     }
 
@@ -197,5 +196,16 @@ struct TranscriptDelivery: Sendable {
         in latency: inout LatencyLog
     ) {
         latency.mark(mark, at: instant, keyDown: job.keyDown)
+    }
+}
+
+extension Result where Failure == any Error {
+    /// `Result(catching:)` for an async body.
+    init(catching body: () async throws -> Success) async {
+        do {
+            self = .success(try await body())
+        } catch {
+            self = .failure(error)
+        }
     }
 }

@@ -276,6 +276,15 @@ struct OpenRouterProviderTests {
                     model: "x-ai/grok-stt-1.0"))
     }
 
+    /// The pipeline bounds a transcription by its audio's length; the connection's own limit must not cut it first.
+    @Test func theConnectionOutlastsThePipelinesLongestBound() {
+        let configuration = ProviderHTTP.sessionConfiguration(
+            resourceTimeout: ProviderHTTP.transcriptionResourceTimeout)
+        let longest = DictationPipeline.Settings.longestTranscription / .seconds(1)
+        #expect(configuration.timeoutIntervalForResource > longest)
+        #expect(ProviderHTTP.sessionConfiguration().timeoutIntervalForResource == 75)
+    }
+
     @Test(arguments: [
         (StubReply.raw(status: 200, body: "<html>"), ProviderError.unreadableAnswer(status: 200)),
         (.fixture("error-401", status: 401), .auth(status: 401)),
@@ -289,7 +298,7 @@ struct OpenRouterProviderTests {
         (.fixture("error-402", status: 402), .noCredit),
         (.raw(status: 413, body: "Payload Too Large"), .rejected(status: 413, message: "Payload Too Large")),
         (.failure(.notConnectedToInternet), .offline),
-        (.failure(.timedOut), .offline),
+        (.failure(.timedOut), .timedOut),
         (.failure(.networkConnectionLost), .offline),
     ])
     func failureMapsToProviderError(reply: StubReply, expected: ProviderError) async {

@@ -17,7 +17,8 @@ final class XAIProvider: RouteClient {
     init(
         apiKey: any APIKeySource,
         endpoint: URL = defaultEndpoint,
-        configuration: URLSessionConfiguration = ProviderHTTP.sessionConfiguration(),
+        configuration: URLSessionConfiguration = ProviderHTTP.sessionConfiguration(
+            resourceTimeout: ProviderHTTP.transcriptionResourceTimeout),
         makeBoundary: @escaping @Sendable () -> String = Multipart.randomBoundary
     ) {
         connection = ProviderConnection(account: .xai, apiKey: apiKey, configuration: configuration)

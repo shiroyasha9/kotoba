@@ -46,7 +46,8 @@ struct TranscriptionSteps: Sendable {
         var request = settings.request(for: record.audio, at: clock.date)
         request.model = model
         record.sentTerms = request.dictionaryTerms
-        let transcript = try await provider.transcribe(request)
+        let transcript = try await answer(
+            to: request, within: DictationPipeline.Settings.transcriptionTimeout(for: request.duration))
         record.model = transcript.model
         let heard = transcript.text.trimmingCharacters(in: .whitespacesAndNewlines)
         // Matched on what the owner said, before the replacements, so a rule can neither make nor break the phrase.
@@ -63,6 +64,26 @@ struct TranscriptionSteps: Sendable {
         guard !heard.isEmpty else { throw ProviderError.emptyTranscript }
         record.transcript = transcribed.text
         return transcribed
+    }
+
+    /// The provider's answer, or `ProviderError.timedOut` when `limit` passes first on the pipeline clock; the request
+    /// is cancelled then, and the dictation stays queued.
+    private func answer(to request: TranscriptionRequest, within limit: Duration) async throws -> Transcript {
+        try await withThrowingTaskGroup(of: Transcript?.self) { group in
+            group.addTask { [provider] in try await provider.transcribe(request) }
+            group.addTask { [clock, deadline = clock.now + limit] in
+                try await clock.sleep(until: deadline)
+                return nil
+            }
+            // The loser ends at once: the timer's sleep, or the request, which URLSession cancels.
+            defer { group.cancelAll() }
+            // `next()` is nil only for an empty group; the timer's own answer is nil.
+            guard case .some(.some(let transcript)) = try await group.next() else {
+                Log.pipeline.error("No answer within \(limit), the request is cancelled")
+                throw ProviderError.timedOut
+            }
+            return transcript
+        }
     }
 
     /// Sets the record's cleaned text with replacements applied, or nil when there is no cleaner, it failed, it

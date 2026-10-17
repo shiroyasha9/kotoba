@@ -14,7 +14,8 @@ final class AzureProvider: RouteClient {
 
     init(
         apiKey: any APIKeySource,
-        configuration: URLSessionConfiguration = ProviderHTTP.sessionConfiguration(),
+        configuration: URLSessionConfiguration = ProviderHTTP.sessionConfiguration(
+            resourceTimeout: ProviderHTTP.transcriptionResourceTimeout),
         makeBoundary: @escaping @Sendable () -> String = Multipart.randomBoundary
     ) {
         connection = ProviderConnection(

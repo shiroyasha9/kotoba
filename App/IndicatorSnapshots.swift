@@ -21,7 +21,8 @@ extension IndicatorPanel {
     static func snapshots() -> [Snapshot] {
         let id = DictationID()
         let samples: [DictationState] = [
-            .idle, .recording(isLong: false), .transcribing, .cleaning, .undoable, .failed(id), .rejected(id, .other),
+            .idle, .recording(isLong: false), .transcribing, .cleaning, .undoable, .failed(id), .timedOut(id),
+            .rejected(id, .other),
             .needsSetup(id, .key), .cleanupFailed(id), .cleanupTooSlow(id), .returnSkipped(id), .copied(id),
             .recovered(id), .captureFailed, .nothingRecorded, .audioNotSaved(.diskFull), .audioCut(id, .diskFull),
             .clipboardNotKept(id), .polishing, .polished(id, isReplaced: true), .polishFailed(.failed),
@@ -146,8 +147,8 @@ extension IndicatorPanel {
                     name: "captureFailed-denied", state: state,
                     context: StatusContext(provider: .azure, microphone: .denied)),
             ]
-        case .transcribing, .cleaning, .undoable, .failed, .cleanupFailed, .cleanupTooSlow, .returnSkipped, .recovered,
-            .nothingRecorded:
+        case .transcribing, .cleaning, .undoable, .failed, .timedOut, .cleanupFailed, .cleanupTooSlow, .returnSkipped,
+            .recovered, .nothingRecorded:
             [SnapshotRow(name: snapshotName(of: state), state: state)]
         case .audioNotSaved, .audioCut:
             lossRows(of: state)
@@ -193,6 +194,7 @@ extension IndicatorPanel {
         case .cleaning: "cleaning"
         case .undoable: "undoable"
         case .failed: "failed"
+        case .timedOut: "timedOut"
         case .cleanupFailed: "cleanupFailed"
         case .cleanupTooSlow: "cleanupTooSlow"
         case .returnSkipped: "returnSkipped"

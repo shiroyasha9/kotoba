@@ -56,6 +56,8 @@ public enum DictationState: Sendable, Equatable {
     case undoable
     /// Transcription failed. The audio is kept and queued for retry.
     case failed(DictationID)
+    /// The route did not answer in time (`ProviderError.timedOut`). The audio is kept and queued for retry.
+    case timedOut(DictationID)
     /// The route refused the request; a retry cannot help. The audio is kept.
     case rejected(DictationID, RejectReason)
     /// The route needs an API key. The audio is kept and retried when the owner saves one.
@@ -208,6 +210,19 @@ extension DictationPipeline {
         /// still finds the route warm. Warm was measured 45 s after a primer (docs/research/latency-pass.md); 5 s less
         /// is the margin. At most 90 primers per hour of continuous recording.
         public var primerInterval: Duration
+
+        /// The longest a transcription may take before it fails as `ProviderError.timedOut`: 75 s for the upload and
+        /// the route's answer (upstreams time out after about 60 s), plus half the audio's length for a slow uplink (a
+        /// minute of FLAC is about 1.3 MB as base64; at 64 KB/s it uploads in about 21 s), at most
+        /// `longestTranscription`. A real timeout on the pipeline clock, so a long recording is never cut at a fixed
+        /// time.
+        public static func transcriptionTimeout(for audio: Duration) -> Duration {
+            min(.seconds(75) + audio / 2, longestTranscription)
+        }
+
+        /// The bound on `transcriptionTimeout(for:)`; the providers' connections allow a little more, so this one
+        /// decides.
+        public static let longestTranscription = Duration.seconds(30 * 60)
 
         /// The request for one recording, with the language and the keyterms ranked at `now` from these settings.
         func request(for audio: RecordedAudio, at now: Date) -> TranscriptionRequest {

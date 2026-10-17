@@ -147,6 +147,9 @@ public struct TranscriptionUsage: Sendable, Equatable {
 public enum ProviderError: Error, Sendable, Equatable {
     /// No network or a lost connection.
     case offline
+    /// No answer in the time the request allows (`DictationPipeline.Settings.transcriptionTimeout(for:)`, or the
+    /// connection's idle limit): the route may have taken and billed it.
+    case timedOut
     /// The route rejected the key (401, 403).
     case auth(status: Int?)
     /// Something the owner must set in Settings before the route can work: `provider` is its display name.
@@ -190,7 +193,7 @@ public enum ProviderError: Error, Sendable, Equatable {
 
     public var recovery: Recovery {
         switch self {
-        case .offline, .keyUnavailable, .rateLimited, .server: .transient
+        case .offline, .timedOut, .keyUnavailable, .rateLimited, .server: .transient
         case .auth, .needsSetup, .noCredit: .needsSetup
         case .rejected, .unreadableAnswer, .emptyTranscript, .noAudio: .permanent
         }
@@ -200,7 +203,7 @@ public enum ProviderError: Error, Sendable, Equatable {
     /// (`RetrySelection.automaticAttempts`). No connection, a missing setting or a refusal before any work does not.
     public var usesAttempt: Bool {
         switch self {
-        case .server, .unreadableAnswer, .rejected, .emptyTranscript: true
+        case .server, .timedOut, .unreadableAnswer, .rejected, .emptyTranscript: true
         case .offline, .auth, .needsSetup, .keyUnavailable, .rateLimited, .noCredit, .noAudio: false
         }
     }
@@ -210,7 +213,7 @@ public enum ProviderError: Error, Sendable, Equatable {
         switch self {
         case .emptyTranscript, .noAudio: .emptyTranscript
         case .rejected, .unreadableAnswer: .other
-        case .offline, .auth, .needsSetup, .noCredit, .keyUnavailable, .rateLimited, .server: nil
+        case .offline, .timedOut, .auth, .needsSetup, .noCredit, .keyUnavailable, .rateLimited, .server: nil
         }
     }
 }
