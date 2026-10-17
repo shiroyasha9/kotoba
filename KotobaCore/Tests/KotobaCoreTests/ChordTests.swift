@@ -125,6 +125,25 @@ struct ChordTests {
             problem: .dictationIncludesCleanup(.handsFree)),
     ]
 
+    /// Saved as "<modifiers>", "<modifiers>:<key code>" or "<modifiers>:m<button>"; an unreadable value is nil, so the
+    /// default applies.
+    @Test(
+        arguments: [
+            ("7", Chord(modifiers: ModifierKeys(rawValue: 7))),
+            ("12:49", Chord(modifiers: .option, keyCode: KeyCode.space)),
+            ("0:m3", Chord(mouseButton: 3)),
+            ("12:m2", Chord(modifiers: .option, mouseButton: 2)),
+            ("0:m31", Chord(mouseButton: 31)),
+            ("0:m1", nil), ("0:m0", nil), ("0:m", nil), ("0:m32", nil), ("0:m99999999999", nil), ("0:mx", nil),
+            ("0:", nil), ("a", nil), ("0:1:2", nil), ("0:70000", nil),
+        ] as [(String, Chord?)])
+    func aStoredChordReadsBack(_ stored: String, _ chord: Chord?) {
+        #expect(Chord(storedValue: stored) == chord)
+        if let chord {
+            #expect(chord.storedValue == stored)
+        }
+    }
+
     @Test func theDefaultCopyLastStaysOnNextToMouseChords() {
         #expect(Chord.copyLast(saved: nil, handsFree: Self.mouseFour, cleanup: .defaultCleanup) == .defaultCopyLast)
     }

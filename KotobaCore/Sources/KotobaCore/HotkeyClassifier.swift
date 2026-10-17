@@ -124,7 +124,7 @@ public struct HotkeyClassifier: Sendable {
             return HotkeyDecision(events: events)
         case .posted:
             return .pass
-        case .mouseDown, .otherMouseDown, .otherMouseUp:
+        case .mouseDown, .otherMouseDown, .otherMouseUp, .otherMouseDragged:
             return click(input, &events)
         case .keyDown(let keyCode, let held, let isRepeat):
             sync(held, keyCode: keyCode, &events)
@@ -148,6 +148,8 @@ public struct HotkeyClassifier: Sendable {
             heldKeyChord = nil
             update(&events)
             return HotkeyDecision(events: events, isSwallowed: true)
+        case .otherMouseDragged(let button):
+            return heldTrigger == .mouseButton(button) ? HotkeyDecision(events: [], passesAsMove: true) : .pass
         default:
             interrupt(&events)
             return HotkeyDecision(events: events)

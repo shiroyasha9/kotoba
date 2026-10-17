@@ -18,6 +18,7 @@ extension KeyInput {
         case .keyUp: self = .keyUp(keyCode: Self.keyCode(event), modifiers: modifiers)
         case .otherMouseDown: self = .otherMouseDown(button: Self.button(event), modifiers: modifiers)
         case .otherMouseUp: self = .otherMouseUp(button: Self.button(event), modifiers: modifiers)
+        case .otherMouseDragged: self = .otherMouseDragged(button: Self.button(event))
         default: return nil
         }
     }

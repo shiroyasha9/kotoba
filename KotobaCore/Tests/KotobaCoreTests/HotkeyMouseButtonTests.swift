@@ -18,6 +18,10 @@ extension HotkeyClassifierTests {
         .otherMouseUp(button: button, modifiers: modifiers)
     }
 
+    /// The held button's drag goes on as a plain pointer move: hover keeps working, and no drag reaches an app that
+    /// never got the button's down.
+    static let asMove = HotkeyDecision(events: [], passesAsMove: true)
+
     static let mouseRows: [Row] = [
         Row(
             name: "push to talk on a side button: a hold press, its down and up kept from the app",
@@ -140,6 +144,24 @@ extension HotkeyClassifierTests {
             steps: [(buttonDown(back), .pass), (buttonUp(back), .pass)]
         ),
         Row(
+            name: "the held button's drag passes as a pointer move; another button's drag passes as it is",
+            pushToTalkChord: mouseFour,
+            steps: [
+                (buttonDown(back), HotkeyDecision(event: .chordDown(.hold), isSwallowed: true)),
+                (.otherMouseDragged(button: back), asMove), (.otherMouseDragged(button: forward), .pass),
+                (buttonUp(back), HotkeyDecision(event: .chordUp, isSwallowed: true)),
+                (.otherMouseDragged(button: back), .pass),
+            ]
+        ),
+        Row(
+            name: "the bound button's drag after a down that reached the app stays a drag",
+            pushToTalkChord: mouseFour,
+            steps: [
+                (leftOption, .pass), (buttonDown(back), .pass), (.otherMouseDragged(button: back), .pass),
+                (buttonUp(back), .pass),
+            ]
+        ),
+        Row(
             name: "with no mouse chord every button passes",
             steps: [(buttonDown(2), .pass), (buttonUp(2), .pass)]
         ),
@@ -151,6 +173,25 @@ extension HotkeyClassifierTests {
         #expect(HotkeyClassifier(pushToTalkChord: Self.mouseFour, cleanupChord: nil).hasMouseChord)
         #expect(HotkeyClassifier(handsFreeChord: Self.mouseFour, cleanupChord: nil).hasMouseChord)
         #expect(HotkeyClassifier(pushToTalkChord: Self.mouseFour, cleanupChord: nil).hasKeyChord == false)
+    }
+
+    /// Push to talk reset while its button is held: the new tap gets no button events, so the tap finds the button up
+    /// (`.chordKeyReleased`) and key chords work again.
+    @Test
+    func chordsChangeWhileTheButtonIsHeld() {
+        var keyboard = Keyboard(
+            classifier: HotkeyClassifier(
+                handsFreeChord: Self.optionSpace, pushToTalkChord: Self.mouseFour, cleanupChord: nil))
+        #expect(
+            keyboard.press(Self.buttonDown(Self.back))
+                == HotkeyDecision(event: .chordDown(.hold), isSwallowed: true))
+        keyboard.classifier.pushToTalkChord = nil
+        #expect(keyboard.classifier.hasMouseChord == false)
+        #expect(keyboard.press(.chordKeyReleased) == HotkeyDecision(event: .chordUp))
+        #expect(keyboard.classifier.heldTrigger == nil)
+        #expect(keyboard.press(Self.leftOption) == .pass)
+        #expect(
+            keyboard.press(Self.spaceDown) == HotkeyDecision(event: .chordDown(.tapOrHold), isSwallowed: true))
     }
 
     @Test

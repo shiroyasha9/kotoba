@@ -289,7 +289,9 @@ extension HotkeyClassifierTests {
                 case .keyUp(let keyCode, asHeld): .keyUp(keyCode: keyCode, modifiers: held)
                 case .otherMouseDown(let button, asHeld): .otherMouseDown(button: button, modifiers: held)
                 case .otherMouseUp(let button, asHeld): .otherMouseUp(button: button, modifiers: held)
-                case .keyDown, .keyUp, .chordKeyReleased, .posted, .mouseDown, .otherMouseDown, .otherMouseUp: input
+                case .keyDown, .keyUp, .chordKeyReleased, .posted, .mouseDown, .otherMouseDown, .otherMouseUp,
+                    .otherMouseDragged:
+                    input
                 }
             return classifier.classify(filled)
         }

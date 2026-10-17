@@ -26,9 +26,9 @@ public struct ChordCapture: Sendable {
             if keyCode == KeyCode.escape, held.isEmpty { return .cancelled }
             return .recorded(Chord(modifiers: Self.sides(held), keyCode: keyCode))
         case .otherMouseDown(let button, _):
-            guard button >= Chord.middleMouseButton else { return nil }
+            guard Chord.mouseButtons.contains(button) else { return nil }
             return .recorded(Chord(modifiers: Self.sides(held), mouseButton: button))
-        case .keyUp, .chordKeyReleased, .posted, .mouseDown, .otherMouseUp:
+        case .keyUp, .chordKeyReleased, .posted, .mouseDown, .otherMouseUp, .otherMouseDragged:
             return nil
         }
     }

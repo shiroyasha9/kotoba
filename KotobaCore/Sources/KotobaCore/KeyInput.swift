@@ -20,6 +20,8 @@ public enum KeyInput: Sendable, Hashable {
     /// these only while a dictation chord is a mouse button. `modifiers` are the event's own flags.
     case otherMouseDown(button: Int, modifiers: ModifierKeys)
     case otherMouseUp(button: Int, modifiers: ModifierKeys)
+    /// The pointer moved with that button down.
+    case otherMouseDragged(button: Int)
 }
 
 /// What the tap does with one keyboard event: the hotkey events to send, if any, and whether to
@@ -28,10 +30,13 @@ public struct HotkeyDecision: Sendable, Equatable {
     /// In order; one modifier change can both press the chord and complete the cleanup chord.
     public var events: HotkeyEvents
     public var isSwallowed: Bool
+    /// A drag of the held mouse chord's button goes on as a plain pointer move: apps never got that button's down.
+    public var passesAsMove: Bool
 
-    public init(events: HotkeyEvents, isSwallowed: Bool = false) {
+    public init(events: HotkeyEvents, isSwallowed: Bool = false, passesAsMove: Bool = false) {
         self.events = events
         self.isSwallowed = isSwallowed
+        self.passesAsMove = passesAsMove
     }
 
     public init(event: HotkeyEvent, isSwallowed: Bool = false) {

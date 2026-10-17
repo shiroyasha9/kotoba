@@ -19,10 +19,11 @@ import Synchronization
 /// cannot be measured without synthetic input, so whether typing feels the same is an owner-trial check.
 /// Left and right clicks come from `MouseDownMonitors`, not the tap, so no click waits for kotoba. The middle and side
 /// buttons go through the tap only while Hands-free or Push to talk is a mouse button: then it swallows that button's
-/// down and up and reports the other buttons' clicks itself, and the monitors leave them out (`updateMouse`).
-/// The callback's own work for one middle or side button event, measured 2026-10-17 in a `swiftc -O` probe (10,000
-/// down-up pairs, best of 20, 3 runs): 0.09-0.12 µs in the classifier, 0.39-0.42 µs with the event reads and the lock.
-/// Each such click also makes the window server's trip to this tap and back while a mouse chord is set.
+/// down and up, passes its drags as plain moves, reports the other buttons' clicks itself, and the monitors leave them
+/// out (`updateMouse`). The callback's own work, measured 2026-10-17 in a `swiftc -O` probe (10,000 calls, best of 20,
+/// 3 runs): per middle or side button down or up 0.09-0.12 µs in the classifier, 0.39-0.43 µs with the event reads and
+/// the lock; per drag 0.12-0.13 µs. Each such event also makes the window server's trip to this tap and back while a
+/// mouse chord is set.
 final class HotkeyTap: Sendable {
     private struct State {
         var classifier: HotkeyClassifier
@@ -156,10 +157,10 @@ final class HotkeyTap: Sendable {
             if isOn {
                 mask = MouseDownMonitors.allButtons
                 if isTapWatchingOthers { mask.remove(.otherMouseDown) }
-            } else {
-                noteInput()
             }
-            MainActor.assumeIsolated { mouse.setMask(mask) }
+            // A click between the tap's change and the monitors' is seen by neither; count it as input.
+            let isChanged = MainActor.assumeIsolated { mouse.setMask(mask) }
+            if !isOn || isChanged { noteInput() }
         }
     }
 
@@ -289,11 +290,10 @@ final class HotkeyTap: Sendable {
             // An event already queued when `setEnabled` turned the tap off counts for nothing.
             guard state.isEnabled else { return HotkeyDecision.pass }
             let now = ContinuousClock.now
-            // A key chord's key-up can be lost (Secure Input takes the keyboard). While one is held, each event
-            // checks its key, so the press ends at the next event, not at the next press of the key.
-            if let key = state.classifier.heldChordKey, Self.checksHeldKey(input, key),
-                !CGEventSource.keyState(.combinedSessionState, key: key)
-            {
+            // A key chord's key-up can be lost (Secure Input takes the keyboard), and so can a mouse chord's button-up
+            // (the chord changed while it was held, and the new tap watches no button). While one is held, each event
+            // checks its key or button, so the press ends at the next event, not at the next press.
+            if let trigger = state.classifier.heldTrigger, Self.checksHeld(input, trigger), !Self.isDown(trigger) {
                 send(state.classifier.classify(.chordKeyReleased).events, at: now)
             }
             let decision = state.classifier.classify(input)
@@ -301,16 +301,33 @@ final class HotkeyTap: Sendable {
             return decision
         }
         countInput(input, decision)
+        if decision.passesAsMove {
+            // CGEventSetType: apps never got this button's down, so they get a plain move and hover keeps working.
+            event.type = .mouseMoved
+        }
         return decision.isSwallowed ? nil : Unmanaged.passUnretained(event)
     }
 
-    /// Every key event but the held key's own key-up, which ends the press by itself. A mouse chord needs no check:
-    /// Secure Input does not hide mouse events, and its button's state is read when the tap is back (`reenabled`).
-    private static func checksHeldKey(_ input: KeyInput, _ key: UInt16) -> Bool {
+    /// Every key, modifier and button event but the held key's or button's own, which ends the press by itself. Drags
+    /// are left out: they come many times a second, and the held button's own drag shows it is down.
+    private static func checksHeld(_ input: KeyInput, _ trigger: Chord.Trigger) -> Bool {
         switch input {
         case .modifiersChanged, .keyDown: true
-        case .keyUp(let keyCode, _): keyCode != key
-        case .tapReenabled, .chordKeyReleased, .posted, .mouseDown, .otherMouseDown, .otherMouseUp: false
+        case .keyUp(let keyCode, _): trigger != .key(keyCode)
+        case .otherMouseDown(let button, _), .otherMouseUp(let button, _): trigger != .mouseButton(button)
+        case .otherMouseDragged, .tapReenabled, .chordKeyReleased, .posted, .mouseDown: false
+        }
+    }
+
+    /// Whether the held chord's key or button is down now.
+    private static func isDown(_ trigger: Chord.Trigger) -> Bool {
+        switch trigger {
+        case .key(let key): CGEventSource.keyState(.combinedSessionState, key: key)
+        case .mouseButton(let button):
+            // An imported C enum takes any raw value; the classifier holds only `Chord.mouseButtons`.
+            CGMouseButton(rawValue: UInt32(button)).map {
+                CGEventSource.buttonState(.combinedSessionState, button: $0)
+            } ?? false
         }
     }
 
@@ -330,19 +347,9 @@ final class HotkeyTap: Sendable {
     /// The keys held now, and whether the held chord's key or button is still down, for a tap that missed events
     /// while it was disabled.
     private static func reenabled(heldTrigger: Chord.Trigger?) -> KeyInput {
-        let isDown =
-            switch heldTrigger {
-            case .key(let key): CGEventSource.keyState(.combinedSessionState, key: key)
-            case .mouseButton(let button):
-                // An imported C enum takes any raw value, so a side button's number is never nil here.
-                CGMouseButton(rawValue: UInt32(button)).map {
-                    CGEventSource.buttonState(.combinedSessionState, button: $0)
-                } ?? false
-            case nil: false
-            }
-        return .tapReenabled(
+        .tapReenabled(
             modifiers: ModifierKeys(eventFlags: CGEventSource.flagsState(.combinedSessionState).rawValue),
-            isChordKeyDown: isDown)
+            isChordKeyDown: heldTrigger.map(isDown) ?? false)
     }
 
 }
@@ -354,8 +361,10 @@ private struct InstalledTap: @unchecked Sendable {
     let source: CFRunLoopSource
     let mask: CGEventMask
 
+    /// Down, up and drag: the held button's drag becomes a plain move (`HotkeyDecision.passesAsMove`).
     static let otherMouseMask =
         CGEventMask(1 << CGEventType.otherMouseDown.rawValue) | CGEventMask(1 << CGEventType.otherMouseUp.rawValue)
+        | CGEventMask(1 << CGEventType.otherMouseDragged.rawValue)
 
     var watchesOtherButtons: Bool { mask & Self.otherMouseMask != 0 }
 }

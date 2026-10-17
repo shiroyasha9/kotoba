@@ -172,33 +172,6 @@ final class HotkeyChords {
 }
 
 extension Chord {
-    /// "<modifiers>", "<modifiers>:<key code>" or "<modifiers>:m<button number>", as decimal numbers. A build before
-    /// mouse chords reads the last as unreadable, so its default applies.
-    var storedValue: String {
-        switch trigger {
-        case .key(let keyCode): "\(modifiers.rawValue):\(keyCode)"
-        case .mouseButton(let button): "\(modifiers.rawValue):m\(button)"
-        case nil: "\(modifiers.rawValue)"
-        }
-    }
-
-    init?(storedValue: String) {
-        let parts = storedValue.split(separator: ":")
-        guard let raw = parts.first.flatMap({ UInt16($0) }), parts.count <= 2 else { return nil }
-        let modifiers = ModifierKeys(rawValue: raw)
-        guard parts.count == 2 else {
-            self.init(modifiers: modifiers)
-            return
-        }
-        if parts[1].hasPrefix("m") {
-            guard let button = Int(parts[1].dropFirst()), button >= Self.middleMouseButton else { return nil }
-            self.init(modifiers: modifiers, mouseButton: button)
-        } else {
-            guard let keyCode = UInt16(parts[1]) else { return nil }
-            self.init(modifiers: modifiers, keyCode: keyCode)
-        }
-    }
-
     /// The chord in key symbols, as menus and buttons show it: "⌃⌥⌘", "fn", "right ⌥", "⌥Space", "⌥ Mouse Button 4".
     var title: String {
         let parts = modifierParts

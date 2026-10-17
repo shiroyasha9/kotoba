@@ -22,12 +22,14 @@ final class MouseDownMonitors {
 
     /// `allButtons` while the hotkey tap runs, is enabled and no shortcut recorder listens, without `.otherMouseDown`
     /// while the tap watches the middle and side buttons; empty turns the monitors off.
-    func setMask(_ mask: NSEvent.EventTypeMask) {
-        guard mask != self.mask else { return }
+    /// Returns whether the mask changed.
+    @discardableResult
+    func setMask(_ mask: NSEvent.EventTypeMask) -> Bool {
+        guard mask != self.mask else { return false }
         monitors.forEach(NSEvent.removeMonitor)
         monitors = []
         self.mask = mask
-        guard !mask.isEmpty else { return }
+        guard !mask.isEmpty else { return true }
         let global = NSEvent.addGlobalMonitorForEvents(matching: mask) { [weak self] _ in
             MainActor.assumeIsolated {
                 self?.onOtherAppMouseDown?()
@@ -43,5 +45,6 @@ final class MouseDownMonitors {
             return event
         }
         monitors = [global, local].compactMap(\.self)
+        return true
     }
 }
