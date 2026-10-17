@@ -29,6 +29,8 @@ actor AudioCapture: AudioSource {
     /// request during it causes one more pass.
     private var isRebuilding = false
     private var isRebuildRequested = false
+    /// The chosen mic did not open in the middle of a change; its next change builds the input again.
+    private var settling: SettlingInput?
     /// An Undo that waits for the rebuild in progress, so the new input starts after the writer switched its rate.
     private var rebuildWaiters: [CheckedContinuation<Void, Never>] = []
     private let preferences: MicrophonePreferences
@@ -219,23 +221,6 @@ actor AudioCapture: AudioSource {
         return audio
     }
 
-    @discardableResult
-    func discardCapture() async -> Bool {
-        guard let audio = await cancelCapture() else { return true }
-        return await discard(audio)
-    }
-
-    @discardableResult
-    func discard(_ audio: RecordedAudio) async -> Bool {
-        do {
-            try FileManager.default.removeItem(at: audio.file)
-            return true
-        } catch {
-            Log.audio.error("Cannot delete discarded audio: \(error)")
-            return false
-        }
-    }
-
     /// A capture that began in the meantime keeps the input running.
     private func stopInputIfIdle() {
         guard writer == nil else { return }
@@ -251,6 +236,7 @@ actor AudioCapture: AudioSource {
     /// A mic that fails is retried or left out as `InputFormatPolicy.recovery` decides, and the policy
     /// then chooses among the rest, so a failure never opens a Bluetooth default the rule avoids.
     private func makeInput() -> HALInput? {
+        settling = nil
         var devices = AudioDevices.all()
         var attempt = 1
         while let device = preferences.preferredInput(among: devices), devices.contains(device) {
@@ -273,8 +259,11 @@ actor AudioCapture: AudioSource {
                 case .chooseAnother:
                     devices.removeAll { $0.uid == device.uid }
                     attempt = 1
-                case .stop:
+                case .waitForDevice:
                     devices = []
+                    settling = SettlingInput(device: device.id) { [weak self] in
+                        Task { await self?.requestRebuild(reason: "the mic finished its change") }
+                    }
                 }
             }
         }
@@ -318,6 +307,27 @@ actor AudioCapture: AudioSource {
         } catch {
             Log.audio.error("Capture could not continue after the route change: \(error)")
             writer.inputLost()
+        }
+    }
+}
+
+// MARK: - Discarded recordings
+
+extension AudioCapture {
+    @discardableResult
+    func discardCapture() async -> Bool {
+        guard let audio = await cancelCapture() else { return true }
+        return await discard(audio)
+    }
+
+    @discardableResult
+    func discard(_ audio: RecordedAudio) async -> Bool {
+        do {
+            try FileManager.default.removeItem(at: audio.file)
+            return true
+        } catch {
+            Log.audio.error("Cannot delete discarded audio: \(error)")
+            return false
         }
     }
 }

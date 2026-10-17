@@ -817,7 +817,7 @@ Use a mouse with side buttons (the owner's BSK V3 PRO). If its own software maps
 
 ## Low audit fixes (kotoba Dev, 2026-10-17)
 
-Rows 930-934 need a real mic, real source apps or a quit, which a unit test cannot make. Use kotoba Dev with the release kotoba quit.
+Rows 930-935 need a real mic, real source apps or a quit, which a unit test cannot make. Use kotoba Dev with the release kotoba quit.
 
 | # | Do this | Expect | Result |
 |---|---|---|---|
@@ -826,3 +826,4 @@ Rows 930-934 need a real mic, real source apps or a quit, which a unit test cann
 | 932 | Copy a photo in Photos (or a file in Finder). Dictate into TextEdit, then press ⌘V in Finder or a Mail draft | The photo (or file) pastes as before the dictation; the dictation pastes at once, with no wait for the photo | |
 | 933 | Turn Wi-Fi to a slow hotspot, dictate 30 s, and press ⌘Q within a second of the stop | kotoba quits within about 3 s; at the next launch, the dictation is in History as pasted (or copied), not sent again into Recovered | |
 | 934 | Esc a dictation at once after the start tap (before you speak), and let the Undo window close | No new row of 0:00 in History | |
+| 935 | Record from a USB mic. Start a hands-free dictation, speak, and while you speak change the mic's rate in Audio MIDI Setup (48 kHz to 44.1 kHz), keep speaking, then stop | The text has the words from before and after the rate change; the pill does not say “No sound from the mic”. The log may show “Rebuilding the mic input: the mic finished its change” | |

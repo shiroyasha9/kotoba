@@ -62,11 +62,13 @@ struct InputFormatPolicyTests {
             name: "a rate change on the first try is tried once more",
             rejection: .deviceChanged(inputRate: 48_000, deviceRate: 44_100), attempt: 1, expected: .retry),
         RecoveryCase(
-            name: "a rate change on the second try stops, no other mic",
-            rejection: .deviceChanged(inputRate: 48_000, deviceRate: 44_100), attempt: 2, expected: .stop),
+            name: "a rate change on the second try waits for the mic's next change, no other mic",
+            rejection: .deviceChanged(inputRate: 48_000, deviceRate: 44_100), attempt: 2, expected: .waitForDevice),
         RecoveryCase(
             name: "no audio on the first try is tried once more", rejection: .noAudio, attempt: 1, expected: .retry),
-        RecoveryCase(name: "no audio on the second try stops", rejection: .noAudio, attempt: 2, expected: .stop),
+        RecoveryCase(
+            name: "no audio on the second try waits for the mic's next change", rejection: .noAudio, attempt: 2,
+            expected: .waitForDevice),
         RecoveryCase(
             name: "a mic that went away: choose another", rejection: .deviceGone, attempt: 1, expected: .chooseAnother),
         RecoveryCase(

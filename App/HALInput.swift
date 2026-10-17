@@ -3,6 +3,7 @@ import AudioToolbox
 import CoreAudio
 import Foundation
 import KotobaCore
+import Synchronization
 
 /// Mic input from one device through the HAL output unit (AUHAL) with output disabled, as Apple's
 /// TN2091 describes. AVAudioEngine's input node records through an aggregate of the system default
@@ -173,6 +174,56 @@ final class HALInput {
         var size = UInt32(MemoryLayout<Value>.size)
         try check("get property \(property)", AudioUnitGetProperty(unit, property, scope, element, value, &size))
         return value.pointee
+    }
+}
+
+/// A mic whose format was read twice in the middle of a change (`InputRecovery.waitForDevice`). Reports once, on the
+/// main queue, the next change of its rate, its life, its input channels or its input streams' format, so the end of
+/// the change builds the input again; a change comes as a burst of these, and the build that the first one starts
+/// watches again if it is still too early. Its listeners are removed when this is released: at the next input build.
+final class SettlingInput {
+    private let targets: [(object: AudioObjectID, address: AudioObjectPropertyAddress)]
+    private let listener: AudioObjectPropertyListenerBlock
+
+    init(device: AudioObjectID, onChange: @escaping @Sendable () -> Void) {
+        let streams = ((try? AudioHardwareDevice(id: device).streams) ?? []).filter { (try? $0.direction) == .input }
+        targets =
+            [
+                (device, PropertyAddress(kAudioDevicePropertyNominalSampleRate)),
+                (device, PropertyAddress(kAudioDevicePropertyDeviceIsAlive)),
+                (
+                    device,
+                    PropertyAddress(kAudioDevicePropertyStreamConfiguration, scope: kAudioObjectPropertyScopeInput)
+                ),
+            ]
+            + streams.flatMap { stream in
+                [kAudioStreamPropertyVirtualFormat, kAudioStreamPropertyPhysicalFormat].map {
+                    (stream.id, PropertyAddress($0))
+                }
+            }
+        let isReported = Mutex(false)
+        listener = { _, _ in
+            let isFirst = isReported.withLock { isReported in
+                defer { isReported = true }
+                return !isReported
+            }
+            if isFirst { onChange() }
+        }
+        for target in targets {
+            var address = target.address
+            let status = AudioObjectAddPropertyListenerBlock(target.object, &address, .main, listener)
+            if status != noErr {
+                Log.audio.error("Cannot watch the mic's change (\(target.address.mSelector)): \(status)")
+            }
+        }
+    }
+
+    deinit {
+        // A listener that was not added, or a device that went away, returns an error here, which is ignored.
+        for target in targets {
+            var address = target.address
+            AudioObjectRemovePropertyListenerBlock(target.object, &address, .main, listener)
+        }
     }
 }
 

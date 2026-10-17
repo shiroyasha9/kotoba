@@ -4,9 +4,11 @@ public enum InputRecovery: Sendable, Equatable {
     case retry
     /// Leave this mic out and let `InputDevicePolicy` choose again, so the Bluetooth rule still applies.
     case chooseAnother
-    /// No input until the next device event or dictation. No other mic is opened, so a rate change on
-    /// the chosen mic never pulls AirPods (the system default) into the call profile.
-    case stop
+    /// No input until this mic changes again: its format was read twice in the middle of a change, so the end of
+    /// that change (its rate, stream format or life) builds the input again, and the rest of a recording is kept. The
+    /// next device event or dictation builds it too. No other mic is opened, so a rate change on the chosen mic never
+    /// pulls AirPods (the system default) into the call profile.
+    case waitForDevice
 }
 
 /// Whether the mic input's format is safe to record. The input unit converts sample format and
@@ -44,7 +46,7 @@ public enum InputFormatPolicy {
     /// when the input unit itself failed, not the format check.
     public static func recovery(after rejection: Rejection?, attempt: Int) -> InputRecovery {
         switch rejection {
-        case .noAudio, .deviceChanged: attempt < 2 ? .retry : .stop
+        case .noAudio, .deviceChanged: attempt < 2 ? .retry : .waitForDevice
         case .deviceGone, nil: .chooseAnother
         }
     }
