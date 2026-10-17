@@ -199,6 +199,15 @@ public enum ProviderError: Error, Sendable, Equatable {
         }
     }
 
+    /// The next request, for any dictation, would fail the same way now: no network, a rate limit, a key store that
+    /// cannot be read, a route that does not answer. A retry run stops at it (audit C3).
+    public var isSharedByEveryRequest: Bool {
+        switch self {
+        case .offline, .timedOut, .rateLimited, .keyUnavailable: true
+        case .auth, .needsSetup, .noCredit, .server, .unreadableAnswer, .rejected, .emptyTranscript, .noAudio: false
+        }
+    }
+
     /// The request reached the route and may have been billed: it uses one of the dictation's automatic attempts
     /// (`RetrySelection.automaticAttempts`). No connection, a missing setting or a refusal before any work does not.
     public var usesAttempt: Bool {

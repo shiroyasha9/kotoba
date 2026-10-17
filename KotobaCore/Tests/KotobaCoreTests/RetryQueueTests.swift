@@ -54,6 +54,33 @@ struct RetryQueueTests {
         #expect(await world.provider.requests.count == 2)
     }
 
+    /// The next send would fail the same way (no network, a rate limit, no key, a route that does not answer): the run
+    /// stops, and the rest stay queued for the next trigger, unsent and unbilled.
+    @Test(arguments: [
+        ProviderError.offline, .rateLimited(retryAfter: .seconds(30)), .keyUnavailable, .timedOut,
+    ])
+    func aFailureThatHitsEveryDictationStopsTheRun(error: ProviderError) async throws {
+        _ = try await queued(.failed)
+        _ = try await queued(.failed)
+        await world.provider.fail(with: error)
+
+        _ = await run(makeQueue(), .all)
+
+        #expect(await world.provider.requests.count == 1)
+        #expect(try await world.store.pendingRetries().count == 2)
+    }
+
+    /// A failure of one dictation only (its audio, a server error) does not stop the others.
+    @Test func aFailureOfOneDictationDoesNotStopTheRun() async throws {
+        _ = try await queued(.failed)
+        _ = try await queued(.failed)
+        await world.provider.fail(with: ProviderError.server(status: 502))
+
+        _ = await run(makeQueue(), .all)
+
+        #expect(await world.provider.requests.count == 2)
+    }
+
     @Test func aDictationInFlightIsSkipped() async throws {
         let inFlight = try await queued(.pending)
         let queuedOne = try await queued(.failed)

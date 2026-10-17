@@ -74,10 +74,14 @@ public actor RetryQueue {
         for record in queued where selection.includes(record) {
             await waitUntilQuiet()
             guard let fresh = await stillQueued(record.id, isInFlight: isInFlight) else { continue }
-            let retried = await retry(fresh, settings: await settings())
+            let (retried, error) = await retry(fresh, settings: await settings())
             // Deleted from the History pane during the request: it stays deleted and shows no outcome.
-            guard await store.updateOrLog(retried) else { continue }
-            results.append(retried)
+            if await store.updateOrLog(retried) { results.append(retried) }
+            if error?.isSharedByEveryRequest == true {
+                Log.pipeline.info(
+                    "Retry: stopped, the next sends would fail the same way: \(String(describing: error))")
+                break
+            }
         }
         return results
     }
@@ -98,8 +102,12 @@ public actor RetryQueue {
         }
     }
 
-    private func retry(_ record: DictationRecord, settings: DictationPipeline.Settings) async -> DictationRecord {
+    /// The record after the send, and the error when it failed.
+    private func retry(
+        _ record: DictationRecord, settings: DictationPipeline.Settings
+    ) async -> (DictationRecord, ProviderError?) {
         var record = record
+        var failure: ProviderError?
         do {
             let transcribed = try await steps.transcribe(&record, settings: settings)
             if let mode = record.output.cleanupMode {
@@ -112,8 +120,9 @@ public actor RetryQueue {
         } catch {
             Log.pipeline.error("Retry \(record.id.rawValue) on \(record.model ?? "no answer") failed: \(error)")
             record.markFailed(by: error)
+            failure = error as? ProviderError
         }
-        return record
+        return (record, failure)
     }
 
     /// Recovered transcripts from the last 24 h, newest first.
