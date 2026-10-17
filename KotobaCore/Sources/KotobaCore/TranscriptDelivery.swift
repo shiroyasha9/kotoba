@@ -18,7 +18,7 @@ struct TranscriptDelivery: Sendable {
         /// The front app at the stop; a submit Return goes only to it, and the record keeps it.
         var frontAppAtStop: FrontApp?
         /// No app read the paste (`ClipboardGuard.Unread`).
-        let pasteWentUnread: ClipboardGuard.Unread
+        let pasteWentUnread: @Sendable (_ text: String, _ isLeftOnClipboard: Bool) async -> Void
     }
 
     struct Outcome: Sendable {
@@ -166,7 +166,7 @@ struct TranscriptDelivery: Sendable {
             await clipboard.copy(text)
             return (.copied, nil)
         }
-        let write = await clipboard.writeTransient(text, over: snapshot, unread: job.pasteWentUnread)
+        let write = await clipboard.writeTransient(text, over: snapshot) { await job.pasteWentUnread(text, $0) }
         if let write { await clipboard.willPaste(write, readBy: clock.now + job.settings.readWait) }
         do {
             try await paster.sendPaste()

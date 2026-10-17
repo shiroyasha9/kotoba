@@ -248,7 +248,7 @@ public actor DictationPipeline {
     /// the clipboard before the app reads it); when paste is not allowed, the text stays on the clipboard.
     public func pasteAgain(_ text: String, of id: DictationID) async {
         guard isQuiet else { return }
-        switch await pasteThroughClipboard(text) {
+        switch await pasteThroughClipboard(text, of: id) {
         case .pasted: break
         case .clipboardNotKept: emit(.clipboardNotKept(id))
         case .copied: emit(.copied(id))

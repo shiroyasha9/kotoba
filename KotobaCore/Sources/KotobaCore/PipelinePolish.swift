@@ -130,7 +130,7 @@ extension DictationPipeline {
             Log.pipeline.info("Polish: no safe way to replace the text; it goes to the clipboard")
             return .unsafe
         }
-        return .pasted(await pasteThroughClipboard(new))
+        return .pasted(await pasteThroughClipboard(new, of: record.id))
     }
 
     /// A dictation came since Polish began: one records, waits in its Undo window or is sent, or one newer than `id`
@@ -187,11 +187,14 @@ extension DictationPipeline {
         }
     }
 
-    /// Pastes `text` through the clipboard guard, as a dictation does, with no Return, and restores the clipboard
-    /// after `Settings.restoreDelay`.
-    func pasteThroughClipboard(_ text: String) async -> PasteResult {
-        let write = await clipboard.writeTransient(text, over: await clipboard.snapshot())
+    /// Pastes `text` of dictation `id` through the clipboard guard, as a dictation does, with no Return: the clipboard
+    /// comes back once the app read it, and a paste no app read is left on the clipboard (`ClipboardGuard`).
+    func pasteThroughClipboard(_ text: String, of id: DictationID) async -> PasteResult {
+        let write = await clipboard.writeTransient(text, over: await clipboard.snapshot()) { isLeftOnClipboard in
+            await self.pasteWentUnread(text, of: id, marksRow: false, isLeftOnClipboard: isLeftOnClipboard)
+        }
         let target = pasteTarget()
+        if let write { await clipboard.willPaste(write, readBy: ports.clock.now + settings.readWait) }
         do {
             try await ports.paster.sendPaste()
         } catch {
@@ -200,9 +203,7 @@ extension DictationPipeline {
             return .copied
         }
         markPasted(text, at: target)
-        guard let write else { return .clipboardNotKept }
-        work.schedule(at: ports.clock.now + settings.restoreDelay) { await self.clipboard.restore(after: write) }
-        return .pasted
+        return write == nil ? .clipboardNotKept : .pasted
     }
 
     /// Where the owner is just before a ⌘V, so a Cmd-Tab or a click right after it cannot become the paste's place;

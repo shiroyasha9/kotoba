@@ -22,7 +22,9 @@ extension DictationPipeline {
             id: current.id, audio: audio, createdAt: ports.clock.date, keyDown: keyDown, latency: latency,
             clipboard: clipboard, settings: settings, output: current.output,
             frontAppAtStop: current.frontAppAtStop,
-            pasteWentUnread: { await self.pasteWentUnread(current.id, isLeftOnClipboard: $0) })
+            pasteWentUnread: { text, isLeftOnClipboard in
+                await self.pasteWentUnread(text, of: current.id, marksRow: true, isLeftOnClipboard: isLeftOnClipboard)
+            })
         let outcome = await delivery.deliver(
             job,
             beforePaste: { await self.isReadyToPaste(current) },
@@ -50,14 +52,19 @@ extension DictationPipeline {
         if outcome.record.transcript != nil { await setupChanged() }
     }
 
-    /// No app read the dictation's paste (`ClipboardGuard`): its row says copied, not pasted. When the text is still
-    /// on the clipboard, the pill says so if no other dictation shows.
-    private func pasteWentUnread(_ id: DictationID, isLeftOnClipboard: Bool) async {
+    /// No app read a paste of `text` of dictation `id` (`ClipboardGuard.Unread`): it did not land, so Polish never
+    /// deletes it by Backspace. A dictation's own paste (`marksRow`) leaves its row copied, not pasted; Paste Again
+    /// and Polish leave the row as it was. When the text is still on the clipboard, the pill says so if no other
+    /// dictation shows.
+    func pasteWentUnread(_ text: String, of id: DictationID, marksRow: Bool, isLeftOnClipboard: Bool) async {
         Log.pipeline.notice("No app read the paste of \(id.rawValue); left on the clipboard: \(isLeftOnClipboard)")
-        do {
-            try await ports.store.markCopied(id)
-        } catch {
-            Log.pipeline.error("Cannot mark \(id.rawValue) copied: \(error)")
+        if lastPaste?.text == text { lastPaste = nil }
+        if marksRow {
+            do {
+                try await ports.store.markCopied(id)
+            } catch {
+                Log.pipeline.error("Cannot mark \(id.rawValue) copied: \(error)")
+            }
         }
         if isLeftOnClipboard { emitIfQuiet(.copied(id)) }
     }
