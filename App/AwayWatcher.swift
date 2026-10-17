@@ -8,22 +8,18 @@ import KotobaCore
 @MainActor
 enum AwayWatcher {
     private static var relays: [NotificationRelay] = []
+    private static var observers: [any NSObjectProtocol] = []
     private static var feed: Task<Void, Never>?
 
     static func watch(feeding pipeline: DictationPipeline) {
         let (events, sink) = AsyncStream.makeStream(of: (absence: Absence, isAway: Bool).self)
-        func relay(_ absence: Absence, isAway: Bool) -> NotificationRelay {
-            let relay = NotificationRelay { sink.yield((absence, isAway)) }
-            relays.append(relay)
-            return relay
-        }
-        let lock = DistributedNotificationCenter.default()
         for (name, isAway) in [("com.apple.screenIsLocked", true), ("com.apple.screenIsUnlocked", false)] {
-            lock.addObserver(
-                relay(.screenLocked, isAway: isAway), selector: #selector(NotificationRelay.received),
-                name: Notification.Name(name), object: nil, suspensionBehavior: .deliverImmediately)
+            let relay = NotificationRelay { sink.yield((.screenLocked, isAway)) }
+            relays.append(relay)
+            DistributedNotificationCenter.default().addObserver(
+                relay, selector: #selector(NotificationRelay.received), name: Notification.Name(name), object: nil,
+                suspensionBehavior: .deliverImmediately)
         }
-        let workspace = NSWorkspace.shared.notificationCenter
         let watched: [Absence: [(name: Notification.Name, isAway: Bool)]] = [
             .asleep: [(NSWorkspace.willSleepNotification, true), (NSWorkspace.didWakeNotification, false)],
             .sessionInactive: [
@@ -31,11 +27,11 @@ enum AwayWatcher {
                 (NSWorkspace.sessionDidBecomeActiveNotification, false),
             ],
         ]
+        let workspace = NSWorkspace.shared.notificationCenter
         for (absence, notes) in watched {
             for note in notes {
-                workspace.addObserver(
-                    relay(absence, isAway: note.isAway), selector: #selector(NotificationRelay.received),
-                    name: note.name, object: nil)
+                let report: @Sendable (Notification) -> Void = { _ in sink.yield((absence, note.isAway)) }
+                observers.append(workspace.addObserver(forName: note.name, object: nil, queue: nil, using: report))
             }
         }
         // One consumer keeps the reports in order.

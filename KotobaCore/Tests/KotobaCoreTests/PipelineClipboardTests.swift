@@ -17,6 +17,16 @@ struct PipelineClipboardTests {
         #expect(await world.pasteboard.isTransient == false)
     }
 
+    /// A read ends the wait for it: no timer is left to wake at idle.
+    @Test func aReadPasteLeavesNoTimer() async {
+        let world = FakeWorld(transcript: "dictated")
+        let pipeline = world.makePipeline()
+
+        await pipeline.dictate(world)
+
+        #expect(world.clock.deadlines.isEmpty)
+    }
+
     /// Handy #502: a busy app handles Cmd-V seconds later. The clipboard waits for its read, not for a fixed time, so
     /// it never pastes the old clipboard.
     @Test func aSlowAppGetsTheTranscriptAndThenTheClipboardComesBack() async {

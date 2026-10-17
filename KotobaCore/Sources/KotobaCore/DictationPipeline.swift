@@ -165,7 +165,7 @@ public actor DictationPipeline {
             waitUntilQuiet: { await self.waitUntilQuiet() })
         for record in results {
             reportTerms(of: record)
-            if isQuiet { emit(.outcome(of: record)) }
+            emitIfQuiet(.outcome(of: record))
         }
         // A recovered dictation is delivered too: retention's event (story 31).
         if results.contains(where: \.status.isTranscribed) { work.track { await self.deleteExpiredAudio() } }
@@ -261,7 +261,7 @@ public actor DictationPipeline {
         do {
             guard let last = try await ports.store.lastDelivered(), let text = last.latestText else { return }
             await clipboard.copy(text)
-            if isQuiet { emit(.copied(last.id)) }
+            emitIfQuiet(.copied(last.id))
         } catch {
             Log.pipeline.error("Cannot read the last dictation: \(error)")
         }

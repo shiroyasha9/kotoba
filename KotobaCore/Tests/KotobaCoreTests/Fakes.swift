@@ -253,7 +253,7 @@ actor FakePasteboard: Pasteboard {
     func snapshot() async -> PasteboardSnapshot {
         snapshots += 1
         if isOverLimit { return PasteboardSnapshot(items: [], isTooLarge: true) }
-        return PasteboardSnapshot(items: text.map { [["public.utf8-plain-text": Data($0.utf8)]] } ?? [])
+        return text.map(PasteboardSnapshot.plainText) ?? PasteboardSnapshot(items: [])
     }
 
     /// Called at the first read of the transient text on the pasteboard now.

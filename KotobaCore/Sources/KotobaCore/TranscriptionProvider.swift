@@ -200,11 +200,15 @@ public enum ProviderError: Error, Sendable, Equatable {
     }
 
     /// The next request, for any dictation, would fail the same way now: no network, a rate limit, a key store that
-    /// cannot be read, a route that does not answer. A retry run stops at it (audit C3).
+    /// cannot be read. A retry run stops at it (audit C3). Not a timeout: its limit grows with the audio, so a shorter
+    /// dictation behind a long one can still go. Not a refused key or credit: the run marks each dictation as waiting
+    /// for it, at no cost.
     public var isSharedByEveryRequest: Bool {
         switch self {
-        case .offline, .timedOut, .rateLimited, .keyUnavailable: true
-        case .auth, .needsSetup, .noCredit, .server, .unreadableAnswer, .rejected, .emptyTranscript, .noAudio: false
+        case .offline, .rateLimited, .keyUnavailable: true
+        case .timedOut, .auth, .needsSetup, .noCredit, .server, .unreadableAnswer, .rejected, .emptyTranscript,
+            .noAudio:
+            false
         }
     }
 

@@ -24,15 +24,11 @@ extension DictationPipeline {
             frontAppAtStop: current.frontAppAtStop)
         let outcome = await delivery.deliver(
             job,
-            beforePaste: {
-                await self.waitForChordRelease(after: current.stoppingPress)
-                await self.takePasteTarget(for: current.id)
-                return await self.isPresent
-            },
+            beforePaste: { await self.isReadyToPaste(current) },
             beforeCleanup: { await self.cleanupStarted(current.id) },
             isSubmitRequested: { await self.submitRequests.contains(current.id) })
         if let write = outcome.restore {
-            leaveUnread(write) { await self.pasteWentUnread(current.id) }
+            await leaveUnread(write) { await self.pasteWentUnread(current.id) }
         }
         finishDictation(current.id, showing: outcome.showing ?? .outcome(of: outcome.record))
         // Return submitted the field: the text is no longer where it was pasted.
@@ -59,11 +55,8 @@ extension DictationPipeline {
     /// The owner's clipboard comes back when the paste target reads the transcript (`ClipboardGuard`). When no app
     /// read it within `Settings.readWait`, the paste went nowhere: the transcript stays on the clipboard and `unread`
     /// runs.
-    func leaveUnread(_ write: ClipboardGuard.Write, unread: @escaping @Sendable () async -> Void) {
-        work.schedule(at: ports.clock.now + settings.readWait) {
-            guard await self.clipboard.readWaitEnded(write) else { return }
-            await unread()
-        }
+    func leaveUnread(_ write: ClipboardGuard.Write, unread: @escaping @Sendable () async -> Void) async {
+        await clipboard.leaveUnread(write, at: ports.clock.now + settings.readWait, unread: unread)
     }
 
     /// The dictation's text is on the clipboard, not in the app: its row says copied, and the pill says so when no
@@ -116,6 +109,14 @@ extension DictationPipeline {
         } else if let id = lastStopped, inFlight.contains(id) {
             submitRequests.insert(id)
         }
+    }
+
+    /// Once no chord is held, with the place read just before the ⌘V: true when the text may paste, false while the
+    /// owner is away (it waits on the clipboard).
+    private func isReadyToPaste(_ current: Recording) async -> Bool {
+        await waitForChordRelease(after: current.stoppingPress)
+        takePasteTarget(for: current.id)
+        return isPresent
     }
 
     /// A Cmd-V posted while a chord is held reaches the app as Ctrl+Opt+Cmd+V, so the paste waits for every press to

@@ -25,9 +25,15 @@ actor ClipboardGuard {
         let write: Write
         let text: String
         let original: PasteboardSnapshot
+        /// Ends the wait for the read (`leaveUnread`); a read or a newer write cancels it.
+        var timer: Task<Void, Never>?
     }
 
-    private var pending: Waiting?
+    private var pending: Waiting? {
+        didSet {
+            if oldValue?.write != pending?.write { oldValue?.timer?.cancel() }
+        }
+    }
     private var writes = 0
 
     init(pasteboard: any Pasteboard, work: PendingWork) {
@@ -76,11 +82,25 @@ actor ClipboardGuard {
         await pasteboard.restore(pending.original, ifChangeCount: pending.write.changeCount)
     }
 
+    /// After the Cmd-V: when no app read `write` by `deadline`, `unread` runs (`readWaitEnded`). A read first, or a
+    /// newer write, cancels the wait, so a paste that went in leaves no timer behind.
+    func leaveUnread(
+        _ write: Write, at deadline: ContinuousClock.Instant, unread: @escaping @Sendable () async -> Void
+    ) {
+        guard pending?.write == write else { return }
+        pending?.timer = work.schedule(at: deadline) {
+            guard await self.readWaitEnded(write) else { return }
+            await unread()
+        }
+    }
+
     /// No app read `write` in time, so the paste went nowhere: the transcript stays, as a plain copy the owner can
     /// paste (and clipboard managers keep), and the earlier clipboard is not restored (lead, 2026-10-17). True when
     /// the transcript was still there to keep; false when it was read or replaced.
     func readWaitEnded(_ write: Write) async -> Bool {
         guard let pending, pending.write == write else { return false }
+        // Called from the timer itself: it is not cancelled with the wait.
+        self.pending?.timer = nil
         self.pending = nil
         return await pasteboard.restore(.plainText(pending.text), ifChangeCount: write.changeCount)
     }

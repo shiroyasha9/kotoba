@@ -54,10 +54,10 @@ struct RetryQueueTests {
         #expect(await world.provider.requests.count == 2)
     }
 
-    /// The next send would fail the same way (no network, a rate limit, no key, a route that does not answer): the run
+    /// The next send would fail the same way (no network, a rate limit, a locked key store): the run
     /// stops, and the rest stay queued for the next trigger, unsent and unbilled.
     @Test(arguments: [
-        ProviderError.offline, .rateLimited(retryAfter: .seconds(30)), .keyUnavailable, .timedOut,
+        ProviderError.offline, .rateLimited(retryAfter: .seconds(30)), .keyUnavailable,
     ])
     func aFailureThatHitsEveryDictationStopsTheRun(error: ProviderError) async throws {
         _ = try await queued(.failed)
@@ -70,11 +70,13 @@ struct RetryQueueTests {
         #expect(try await world.store.pendingRetries().count == 2)
     }
 
-    /// A failure of one dictation only (its audio, a server error) does not stop the others.
-    @Test func aFailureOfOneDictationDoesNotStopTheRun() async throws {
+    /// A failure of one dictation only (a server error, or a timeout, whose limit grows with the audio) does not stop
+    /// the others.
+    @Test(arguments: [ProviderError.server(status: 502), .timedOut])
+    func aFailureOfOneDictationDoesNotStopTheRun(error: ProviderError) async throws {
         _ = try await queued(.failed)
         _ = try await queued(.failed)
-        await world.provider.fail(with: ProviderError.server(status: 502))
+        await world.provider.fail(with: error)
 
         _ = await run(makeQueue(), .all)
 

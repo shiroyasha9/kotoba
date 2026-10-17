@@ -66,12 +66,14 @@ struct TranscriptionSteps: Sendable {
         return transcribed
     }
 
-    /// The provider's answer, or `ProviderError.timedOut` when `limit` passes first on the pipeline clock; the request
-    /// is cancelled then, and the dictation stays queued.
+    /// The provider's answer, or `ProviderError.timedOut` when `limit` passes first on the pipeline clock. A task group,
+    /// not `FirstOf` as the cleanup's deadline: the request is cancelled then (no late answer is used), and the
+    /// dictation stays queued.
     private func answer(to request: TranscriptionRequest, within limit: Duration) async throws -> Transcript {
-        try await withThrowingTaskGroup(of: Transcript?.self) { group in
+        let deadline = clock.now + limit
+        return try await withThrowingTaskGroup(of: Transcript?.self) { group in
             group.addTask { [provider] in try await provider.transcribe(request) }
-            group.addTask { [clock, deadline = clock.now + limit] in
+            group.addTask { [clock] in
                 try await clock.sleep(until: deadline)
                 return nil
             }
