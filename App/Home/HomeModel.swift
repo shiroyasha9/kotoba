@@ -20,7 +20,10 @@ final class HomeModel {
 
     /// What Home does. The snapshot run passes none and sets the figures itself.
     struct Source {
-        var read: @MainActor (_ now: Date) async throws -> Figures
+        /// The Insights figures at `now`: a scan of the whole ledger (20 ms at 10,000 dictations, progress.md).
+        var readInsights: @MainActor (_ now: Date) async throws -> DictationInsights
+        /// The newest dictations, at most `recentCount`, and whether one reached the owner.
+        var readRows: @MainActor () async throws -> (recent: [DictationRecord], hasLastDictation: Bool)
         var copy: @MainActor (String) async -> Void
         /// Opens the Fix window on the last dictation.
         var fixLast: @MainActor () -> Void
@@ -54,6 +57,8 @@ final class HomeModel {
     let reader: PaneReader<Figures>
     let apps = InstalledApps()
     private let source: Source?
+    /// Nil for snapshots.
+    private let reads: Reads?
     /// Which chart day is today.
     private let now: @MainActor () -> Date
     /// The last Copy, which a pasteboard write ends at once; the next Copy replaces it.
@@ -65,7 +70,9 @@ final class HomeModel {
         identity = .running
         self.source = source
         now = { .now }
-        reader = PaneReader("Home") { try await source.read(.now) }
+        let reads = Reads(source: source)
+        self.reads = reads
+        reader = PaneReader("Home") { try await reads.read(at: .now) }
     }
 
     /// For snapshots: fixed figures, no store, at `Snapshots.sampleNow`.
@@ -74,6 +81,7 @@ final class HomeModel {
         self.chords = chords
         self.identity = identity
         source = nil
+        reads = nil
         now = { Snapshots.sampleNow }
         reader = PaneReader(value: figures)
     }
@@ -88,9 +96,13 @@ final class HomeModel {
         reader.value?.insights.days.last.flatMap { Calendar.current.isDate($0.start, inSameDayAs: now()) ? $0 : nil }
     }
 
-    /// The history was written: a shown Home reads again.
-    func historyChanged() {
-        reader.changed()
+    /// The history was written: a shown Home reads again, the rows alone when the write left the figures as they were
+    /// (the pending save at upload start, a status change). The figures follow the ledger, and a delete takes a
+    /// dictation's recorded length away, as in Insights.
+    func historyChanged(_ change: HistoryChange) {
+        let isDeleted = if case .deleted = change { true } else { false }
+        if change.isUsageAdded || isDeleted { reads?.isInsightsDue = true }
+        if change.isRowChanged || change.isUsageAdded { reader.changed() }
     }
 
     func copy(_ record: DictationRecord) {
@@ -104,5 +116,42 @@ final class HomeModel {
 
     func finishSetup() {
         source?.finishSetup()
+    }
+}
+
+extension HomeModel {
+    /// Reads Home's figures, with the Insights scan only when a write could change them or the day changed (audit E3a):
+    /// the scan runs on the store actor that the next dictation's save needs.
+    @MainActor
+    private final class Reads {
+        let source: Source
+        var isInsightsDue = true
+        private var insights: (value: DictationInsights, day: Date)?
+
+        init(source: Source) {
+            self.source = source
+        }
+
+        func read(at now: Date) async throws -> Figures {
+            async let rows = source.readRows()
+            let current: DictationInsights
+            if !isInsightsDue, let insights, Calendar.current.isDate(insights.day, inSameDayAs: now) {
+                current = insights.value
+            } else {
+                // A write during the scan sets it due again, so the next read scans again.
+                isInsightsDue = false
+                do {
+                    current = try await source.readInsights(now)
+                } catch {
+                    isInsightsDue = true
+                    throw error
+                }
+                insights = (current, now)
+            }
+            let (recent, hasLastDictation) = try await rows
+            return Figures(
+                insights: current, recent: recent, hasLastDictation: hasLastDictation,
+                retryable: HistoryModel.kept(recent))
+        }
     }
 }

@@ -96,9 +96,7 @@ final class MainWindowController {
     /// alone.
     func historyChanged(_ change: HistoryChange) {
         historyPane?.historyChanged(change)
-        if change.isRowChanged || change.isUsageAdded {
-            home?.historyChanged()
-        }
+        home?.historyChanged(change)
         if change.isUsageAdded {
             usage?.ledgerChanged()
         }
@@ -182,16 +180,16 @@ final class MainWindowController {
 
     private var homeSource: HomeModel.Source {
         HomeModel.Source(
-            read: { [weak self] now in
+            readInsights: { [weak self] now in
                 guard let history = self?.history else { throw NoHistory() }
                 // No top apps: Home does not show them.
-                async let insights = history.insights(at: now, in: .current, apps: 0)
+                return try await history.insights(at: now, in: .current, apps: 0)
+            },
+            readRows: { [weak self] in
+                guard let history = self?.history else { throw NoHistory() }
                 async let recent = history.page(limit: HomeModel.recentCount)
                 async let last = history.lastDelivered()
-                let rows = try await recent
-                return .init(
-                    insights: try await insights, recent: rows, hasLastDictation: try await last != nil,
-                    retryable: HistoryModel.kept(rows))
+                return (try await recent, try await last != nil)
             },
             copy: { [weak self] in await self?.pipeline?.copyAgain($0) },
             fixLast: fixLast, finishSetup: finishSetup)
