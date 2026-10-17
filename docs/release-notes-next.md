@@ -12,6 +12,7 @@
 - "Add Word…" in the menu bar menu opens the dictionary with a new word ready to type.
 - The Modes pane shows an example of each mode: what you say and what kotoba pastes.
 - VoiceOver: the indicator is a Start Dictating or Stop Dictating button, and Choose Mic… is its own button.
+- Say "new line" or "new paragraph" to start a new line or an empty line. Turn it on in Settings > General > Paste (off by default).
 
 ### Faster
 

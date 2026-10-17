@@ -831,3 +831,16 @@ Rows 930-939 need a real mic, real source apps or a quit, which a unit test cann
 | 937 | Select a word in Settings (the key field or the Dictionary pane) and press ⌘C, switch to TextEdit, dictate; then run `log show --last 2m --predicate 'process == "kotoba Dev"' \| grep "background thread"` | The dictation pastes, ⌘V afterwards pastes the copied word, and the log has no “synchronous promise fulfillment requested from a background thread” | |
 | 938 | Join a Wi-Fi with a captive portal (a hotel or café login page) without logging in, and dictate | The pill says “Secure connection blocked. Saved.” with **Retry** (or “Couldn’t reach …” if the portal drops the connection); after you log in, **Retry** transcribes it | |
 | 939 | Make a dictation fail (Wi-Fi off), quit kotoba Dev, delete its file in `~/Library/Application Support/kotoba-dev/` (the newest .flac), relaunch with Wi-Fi on | The launch sends nothing for it; History shows it as “Audio missing”; the Dock badge does not count it | |
+
+## Spoken line breaks (kotoba Dev, 2026-10-17)
+
+Rows 940-945 need real speech, a real speech model and real target apps. Turn on Settings > General > **Start a new line when you say “new line”** first, and quit the release kotoba.
+
+| # | Do this | Expect | Result |
+|---|---|---|---|
+| 940 | In TextEdit dictate “Buy milk new line buy eggs new paragraph that’s all” | Three lines: “Buy milk”, “Buy eggs”, an empty line, then “That’s all” (or the same with the speech model’s own punctuation); no space at a line end or start; History shows the same text | |
+| 941 | In TextEdit dictate “Add a new line after the header” | The words paste as said, with no line break | |
+| 942 | Dictate with the cleanup shortcut into Slack (Writing mode): “Hi Ravi new paragraph the report is late new line please send it today” | The cleaned text keeps the empty line and the line break; the words “new line” and “new paragraph” are not in it | |
+| 943 | In Terminal at a zsh prompt, dictate “echo one new line echo two” | Two lines sit in the prompt and nothing runs until you press Return | |
+| 944 | In Terminal, run `cat` (no bracketed paste), dictate “one new line two”, then press ⌃C | “one” runs as a line in `cat` (it echoes back): the known limit for programs without bracketed paste. kotoba sent no Return key (the log has no “Return” line for this dictation) | |
+| 945 | Turn the setting off and dictate “First new line second” | The words paste as said | |
