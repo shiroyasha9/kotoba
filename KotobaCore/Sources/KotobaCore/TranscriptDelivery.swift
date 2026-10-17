@@ -42,12 +42,12 @@ struct TranscriptDelivery: Sendable {
     let clipboard: ClipboardGuard
     let frontApp: @Sendable () -> FrontApp?
 
-    /// `beforePaste` returns when it is safe to post Cmd-V (the chord is released): false when the text must not paste
-    /// now (the owner is away), so it waits on the clipboard. `beforeCleanup` runs as the
+    /// `beforePaste` returns when it is safe to post Cmd-V (the chord is released), with what to do with the text
+    /// (`PasteChoice`). `beforeCleanup` runs as the
     /// transcript goes to the cleaner, so the indicator can say so. `isSubmitRequested` tells, once pasted, whether the
     /// owner stopped with Return or pressed it just after.
     func deliver(
-        _ job: Job, beforePaste: @Sendable () async -> Bool, beforeCleanup: @Sendable () async -> Void = {},
+        _ job: Job, beforePaste: @Sendable () async -> PasteChoice, beforeCleanup: @Sendable () async -> Void = {},
         isSubmitRequested: @Sendable () async -> Bool = { false }
     ) async -> Outcome {
         var latency = job.latency
@@ -148,18 +148,24 @@ struct TranscriptDelivery: Sendable {
         _ text: String,
         job: Job,
         latency: inout LatencyLog,
-        beforePaste: @Sendable () async -> Bool
+        beforePaste: @Sendable () async -> PasteChoice
     ) async -> (DictationRecord.Status, ClipboardGuard.Write?) {
         let (snapshot, readyAt) = await job.clipboard.value
         Self.mark(.snapshotReady, at: readyAt, of: job, in: &latency)
-        let mayPaste = await beforePaste()
+        let choice = await beforePaste()
+        guard choice != .saveOnly else {
+            // Quit returns before a restore could run, so the clipboard is left alone; the row is copied, so Paste
+            // Last finds the text at the next launch.
+            Log.pipeline.info("Not pasted or copied: kotoba is quitting; the text is in History")
+            return (.copied, nil)
+        }
         // The owner went to another app after the stop (a late answer): the text never goes there, it waits on the
         // clipboard (lead, 2026-10-17). With no app known at the stop, or now, nothing says it changed.
         let isFrontAppChanged =
             job.frontAppAtStop.map { atStop in
                 frontApp().map { $0.processID != atStop.processID } ?? false
             } ?? false
-        guard mayPaste, !isFrontAppChanged else {
+        guard choice == .paste, !isFrontAppChanged else {
             Log.pipeline.info("Not pasted (owner away, or another app in front); the text is on the clipboard")
             await clipboard.copy(text)
             return (.copied, nil)
@@ -211,4 +217,13 @@ extension Result where Failure == any Error {
             self = .failure(error)
         }
     }
+}
+
+/// What a dictation does with its text once it may paste.
+enum PasteChoice {
+    case paste
+    /// The owner is away: the text waits on the clipboard.
+    case copy
+    /// kotoba is quitting: the text is only saved.
+    case saveOnly
 }

@@ -15,6 +15,10 @@ public actor RetryQueue {
     private var requested: RetrySelection?
     /// Whether the last network report was offline.
     private var isOffline = false
+    /// Quit began: no send starts from here (`stop`).
+    private var isStopped = false
+    /// The store failed to write during this run: no send starts until the next run, the requested one included.
+    private var isWriteFailed = false
     /// Recovered transcripts the store could not write (a full disk): the menu lists them until the owner copies
     /// them, and no run in this process sends them again. The next launch does, as their rows are still queued.
     private var unsaved: [DictationRecord] = []
@@ -41,11 +45,12 @@ public actor RetryQueue {
             return []
         }
         isRunning = true
+        isWriteFailed = false
         defer { isRunning = false }
 
         var results: [DictationRecord] = []
         var next: RetrySelection? = selection
-        while let current = next {
+        while let current = next, !isStopped, !isWriteFailed {
             results += await runOnce(current, settings: settings, skipping: isInFlight, waitUntilQuiet: waitUntilQuiet)
             next = requested
             requested = nil
@@ -55,6 +60,12 @@ public actor RetryQueue {
 
     /// Records a network report. Returns true when the report ends an outage; the first report is not a return,
     /// because launch already retries.
+    /// Quit: a run in progress ends after the send that is on its way, and no run starts.
+    func stop() {
+        isStopped = true
+        requested = nil
+    }
+
     func recordNetwork(isOnline: Bool) -> Bool {
         defer { isOffline = !isOnline }
         return isOnline && isOffline
@@ -76,6 +87,7 @@ public actor RetryQueue {
         var results: [DictationRecord] = []
         for record in queued where selection.includes(record) {
             await waitUntilQuiet()
+            guard !isStopped else { break }
             guard let fresh = await stillQueued(record.id, isInFlight: isInFlight) else { continue }
             let (retried, error) = await retry(fresh, settings: await settings())
             switch await store.updateOrLog(retried) {
@@ -90,6 +102,7 @@ public actor RetryQueue {
                     results.append(retried)
                 }
                 Log.pipeline.error("Retry: stopped, the store cannot write; the next answer would be lost the same way")
+                isWriteFailed = true
                 return results
             }
             if error?.isSharedByEveryRequest == true {

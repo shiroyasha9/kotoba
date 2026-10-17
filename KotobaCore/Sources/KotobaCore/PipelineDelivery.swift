@@ -119,9 +119,10 @@ extension DictationPipeline {
     }
 
     /// Once no chord is held: true when the text may paste, false while the owner is away (it waits on the clipboard).
-    private func isReadyToPaste(_ current: Recording) async -> Bool {
+    private func isReadyToPaste(_ current: Recording) async -> PasteChoice {
         await waitForChordRelease(after: current.stoppingPress)
-        return isPresent
+        if isQuitting { return .saveOnly }
+        return isPresent ? .paste : .copy
     }
 
     /// A Cmd-V posted while a chord is held reaches the app as Ctrl+Opt+Cmd+V, so the paste waits for every press to
@@ -130,7 +131,7 @@ extension DictationPipeline {
     /// however long; a lost one is repaired at the next key event (`HotkeyMissedReleaseTests`).
     private func waitForChordRelease(after stoppingPress: Int?) async {
         // The owner away (`absenceBegan`) ends the wait: the text is copied, not pasted.
-        while isChordDown, isPresent {
+        while isChordDown, isPresent, !isQuitting {
             let isStoppingPress = press == stoppingPress
             let bound =
                 isStoppingPress

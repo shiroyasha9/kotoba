@@ -127,6 +127,27 @@ struct RetryQueueTests {
         #expect(await world.provider.requests.count == 2)
     }
 
+    /// A retry asked for during the run is dropped too once the store cannot write: its answer would be lost the
+    /// same way.
+    @Test func aStoreThatCannotWriteEndsTheRetryAskedForDuringTheRun() async throws {
+        _ = try await queued(.failed)
+        var waiting = try await queued(.failed)
+        waiting.needsSetup = .key
+        try await world.store.save(waiting)
+        let gate = Gate()
+        await world.provider.hold(at: gate)
+        let queue = makeQueue()
+
+        async let first = run(queue, .exceptNeedsSetup)
+        #expect(await eventually { await gate.hasWaiters })
+        _ = await run(queue, .onlyNeedsSetup)
+        await world.store.failUpdates(with: CocoaError(.fileWriteOutOfSpace))
+        await gate.open()
+        _ = await first
+
+        #expect(await world.provider.requests.count == 1)
+    }
+
     @Test func aRecoveredTranscriptTheStoreCannotWriteLeavesTheMenuOnceCopied() async throws {
         _ = try await queued(.failed)
         await world.store.failUpdates(with: CocoaError(.fileWriteOutOfSpace))

@@ -70,7 +70,8 @@ struct PipelineHistoryTests {
         let cancelled = try #require(await world.store.records.first)
         #expect(cancelled.status == .cancelled && cancelled.isRetryable)
 
-        await pipeline.retry([cancelled.id])
+        // The next launch: a quitting pipeline sends nothing.
+        await world.makePipeline().retry([cancelled.id])
 
         let record = try #require(await world.store.records.first)
         #expect(record.status == .recovered)
@@ -268,7 +269,8 @@ struct PipelineHistoryChangeTests {
         let pipeline = world.makePipeline()
         await pipeline.tap(world)
         await pipeline.handle(.escape)
-        await pipeline.shutdown()
+        world.clock.advance(by: .seconds(5))
+        await pipeline.settle()
         let id = try #require(await world.store.records.first?.id)
         var changes = pipeline.historyChanges.makeAsyncIterator()
         _ = await changes.next()

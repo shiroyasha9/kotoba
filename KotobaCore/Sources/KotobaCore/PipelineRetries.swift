@@ -20,6 +20,7 @@ extension DictationPipeline {
     }
 
     private func retryPending(_ chosen: RetrySelection?, isAutomatic: Bool) async {
+        guard !isQuitting else { return }
         let isSetUp = await ports.missingSetup() == nil
         var selection = chosen ?? (isSetUp ? .all : .exceptNeedsSetup)
         selection.isAutomatic = isAutomatic

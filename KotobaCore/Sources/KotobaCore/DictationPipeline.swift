@@ -78,6 +78,8 @@ public actor DictationPipeline {
     var retryTimer: Task<Void, Never>?
     /// Quit, waiting for the dictations in flight (`shutdown`).
     var quitWaiters = Waiters()
+    /// Quit began: nothing new is sent, recorded or pasted (`shutdown`).
+    var isQuitting = false
     /// Test seam: sound events taken so far (levels, a lost mic, the no-sound deadline). The capture stream gives
     /// tests no other sign that the pipeline took an event, so they wait for this count before they check the state.
     var handledSoundEvents = 0
@@ -111,6 +113,7 @@ public actor DictationPipeline {
     /// `instant` is when the key event happened (the tap's time); nil means now. Tap vs hold and
     /// the latency marks use it, so a slow step before this call does not change them.
     public func handle(_ event: HotkeyEvent, at instant: ContinuousClock.Instant? = nil) async {
+        guard !isQuitting else { return }
         let now = instant ?? ports.clock.now
         switch event {
         case .chordDown(let gesture): await chordDown(gesture, at: now)
@@ -227,8 +230,15 @@ public actor DictationPipeline {
     /// Quit: a live recording is saved `.pending` (transcribed at the next launch, into Recovered),
     /// and a recording in its Undo window is saved `.cancelled`. Nothing is lost. A dictation being sent gets up to
     /// `quitWait` for its answer, so its billed text is saved and the next launch does not send it again; one that
-    /// takes longer stays `.pending`.
+    /// takes longer stays `.pending`. From the start nothing new is sent (a send now could be billed now and again at
+    /// the next launch), recorded or pasted: quit returns before a clipboard restore could run.
     public func shutdown() async {
+        isQuitting = true
+        retryTimer?.cancel()
+        retryTimer = nil
+        await retries.stop()
+        // A paste waiting for a chord release saves its text instead.
+        releaseWaiters.resumeAll()
         if let current = paused {
             paused = nil
             current.timer.cancel()

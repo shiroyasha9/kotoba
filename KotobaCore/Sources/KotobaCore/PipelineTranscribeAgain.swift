@@ -15,7 +15,7 @@ extension DictationPipeline {
     /// not write the new text. The dictation then keeps its text and its status.
     public func transcribeAgain(_ id: DictationID, model: String? = nil) async -> Bool {
         // Polish writes the text it read before its request: the two never overlap.
-        guard !inFlight.contains(id), !transcribingAgain.contains(id), !isPolishing else { return false }
+        guard !isQuitting, !inFlight.contains(id), !transcribingAgain.contains(id), !isPolishing else { return false }
         transcribingAgain.insert(id)
         announceActivity()
         defer {
