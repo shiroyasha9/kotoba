@@ -105,6 +105,9 @@ actor SystemPasteboard: KotobaCore.Pasteboard {
         return pasteboard.changeCount
     }
 
+    /// Writes every type back in its order, the nspasteboard.org markers included: a password a manager copied comes
+    /// back concealed and transient, so managers still skip it (lead, 2026-10-17: it was the owner's clipboard, so it
+    /// comes back; the manager's own timed clear no longer sees its change count).
     func restore(_ snapshot: PasteboardSnapshot, ifChangeCount changeCount: Int) -> Bool {
         guard pasteboard.changeCount == changeCount else { return false }
         promised = nil
