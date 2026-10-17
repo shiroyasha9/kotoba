@@ -5,6 +5,7 @@
 - Polish rewrites your last dictation shorter and clearer, with nothing lost. Choose "Polish Last Dictation" in the menu, or record a shortcut for it in Settings > General (off until you do). Where kotoba can find the text, it replaces it in place, with Undo for 8 seconds; otherwise the polished text goes to your clipboard. It uses DeepSeek V4.1 Flash through OpenRouter, with Gemini 3.5 Flash-Lite as a fallback, on endpoints that keep no data.
 - "View Changes…" in History shows, word by word, what cleanup and Polish changed.
 - Copy Last copies your last dictation with ⌃⌘C; change it in Settings > General. If a dictation shortcut you recorded clashes with ⌃⌘C, Copy Last turns off and says why.
+- Hands-free and Push to talk can use a middle or side mouse button, alone or with modifiers. Record it in Settings > General like a key. While it is your shortcut, apps no longer get that button.
 - Double-tap your Push to talk shortcut to dictate hands-free, until your next press. This works when Push to talk has its own shortcut.
 - History can play a dictation's saved audio (or press Space) and show the file in Finder.
 - Transcribe Again in History sends a dictation's saved audio once more, with the current speech model or another one whose key you saved. The new text replaces the old; nothing is pasted.
