@@ -1,6 +1,6 @@
 # Polish: model and prompt
 
-Status: bench, 2026-10-17 (03:24-04:30 IST). Agent `polish-bench`. Paid: USD 1.50 on OpenRouter (cap raised from USD 1.50 to 3.00 during the run); 4 Codex pilot jobs (2.38 credits) before the judge moved to OpenRouter. Inputs: the owner's Wispr Flow Polish history (read-only copy of Wispr's database), the cleanup research (`cleanup-llms.md`, `cleanup-prompts.md`, `per-app-modes.md`) and the bench harness in `bench/`. Personal text, outputs and per-row scores stay in the runbooks folder `<runbooks>/2026-10-17-kotoba-polish/`; this file has the method, the prompt and aggregate numbers only.
+Status: bench, 2026-10-17 (03:24-04:30 IST). Agent `polish-bench`. Paid: USD 1.50 on OpenRouter (cap raised from USD 1.50 to 3.00 during the run); 4 Codex pilot jobs (2.38 credits) before the judge moved to OpenRouter. Second judge (section 5.3): Codex, 2026-10-17 14:14-14:36 IST, agent `polish-judge`, 141.9 Codex credits on the owner's ChatGPT plan, no API spend. Inputs: the owner's Wispr Flow Polish history (read-only copy of Wispr's database), the cleanup research (`cleanup-llms.md`, `cleanup-prompts.md`, `per-app-modes.md`) and the bench harness in `bench/`. Personal text, outputs and per-row scores stay in the runbooks folder `<runbooks>/2026-10-17-kotoba-polish/`; this file has the method, the prompt and aggregate numbers only.
 
 ## Summary
 
@@ -9,7 +9,8 @@ Status: bench, 2026-10-17 (03:24-04:30 IST). Agent `polish-bench`. Paid: USD 1.5
 - The trade is length against loss. The fast models that cut most (gpt-oss-120b, Wispr's own model, at 0.49; Qwen 3.8 27B at 0.55) lose the most (75.6% and 81.7% kept). gpt-oss also writes non-ASCII hyphens (U+2011) in 62-84% of outputs, the same defect as 80% of Wispr's outputs, which breaks identifiers in a terminal.
 - DeepSeek without a host pin went to 11 hosts with total p50 from 1.0 s to 8.6 s per host (p90 8.6 s overall). Pin the host.
 - A length target in the prompt (v3) made 3 of 4 models lose more; two examples (v2) helped Gemini most (82.4% to 90.5% kept on the 25 dev inputs).
-- Limits: one sample per (model, input); 40 of the 80 test inputs; one judge model (GPT-6 Luna). See unresolved questions.
+- A second judge (Codex: checklists by GPT-6.1 Sol, verdicts by GPT-6 Luna, 645 shared rows) gives the same order: Spearman 0.98 over the 8 test variants. DeepSeek on Together keeps 96.3% of items under it (Gemini Flash-Lite 87.4%, Wispr 86.6%), and its lead over Gemini (+7.2 points per input, 95% interval 4.9 to 9.5) and Wispr (+8.9) is the same under both judges (section 5.3).
+- Limits: one sample per (model, input); model rewrites on 40 of the 80 test inputs (Wispr's own output is judged on all 80). See unresolved questions.
 
 ## 1. What Polish is
 
@@ -34,7 +35,7 @@ Four signals per output. Wispr's own output gets the same scores, as a reference
 3. **Concision.** Output words over input words, median per variant.
 4. **Added content and answering (judge).** Statements, requests, names or steps that the input does not support; and whether the output answers or does the task instead of rewriting it. The judge also gives a 1-5 clarity score (how easy the output is for a coding agent to act on).
 
-Judge: OpenAI GPT-6 Luna at medium reasoning through OpenRouter, zero-data-retention endpoints (Azure), JSON schema output. It is not a candidate, so no model grades its own rewrites. A first pilot with Claude Haiku 5.5 as judge "corrected" speech-to-text names in its checklists (for example a misheard package name written as the real one), so a rewrite that guessed the same name looked faithful; the checklist brief now says to copy every name as the text spells it. Check against the Codex pilot (checklist by GPT-6.1 Sol, verdicts by GPT-6 Luna in Codex) on the one input both scored: both judges flag the same gpt-oss losses (a deferred decision, a stated doubt, the final summary; Codex 4 lost, 1 weakened, 1 changed; OpenRouter 3 lost, 4 weakened). The Codex verdict passed every Haiku item; the OpenRouter judge flagged one changed name in the Haiku output (a misheard package name replaced by a guessed one), which the rubric counts as changed. The judge is one model, one sample per output: read differences of a few points as noise.
+Judge: OpenAI GPT-6 Luna at medium reasoning through OpenRouter, zero-data-retention endpoints (Azure), JSON schema output. It is not a candidate, so no model grades its own rewrites. A first pilot with Claude Haiku 5.5 as judge "corrected" speech-to-text names in its checklists (for example a misheard package name written as the real one), so a rewrite that guessed the same name looked faithful; the checklist brief now says to copy every name as the text spells it. Check against the Codex pilot (checklist by GPT-6.1 Sol, verdicts by GPT-6 Luna in Codex) on the one input both scored: both judges flag the same gpt-oss losses (a deferred decision, a stated doubt, the final summary; Codex 4 lost, 1 weakened, 1 changed; OpenRouter 3 lost, 4 weakened). The Codex verdict passed every Haiku item; the OpenRouter judge flagged one changed name in the Haiku output (a misheard package name replaced by a guessed one), which the rubric counts as changed. Each judge gives one sample per output: read differences of a few points as noise. Section 5.3 has the full second-judge run.
 
 Judge rubric (the full briefs and JSON schemas are in the runbooks folder, `judge/`):
 
@@ -150,6 +151,40 @@ v2 was picked: the largest gain (Gemini: 82.4% to 90.5% kept, lost items per row
 - DeepSeek per host, unpinned (total p50): Together 1.04 s (n = 7), PrimeIntellect 1.01 s, Relace 1.04 s (one call 12.5 s), CoreWeave 8.6 s (n = 5, max 22.8 s). The pinned Together run had no call over 1.45 s.
 - Exact-token misses the judge also sees: Wispr and gpt-oss drop slash commands (Wispr dropped a `/grill-me` 9 times in 105 rows) and numbers (percentages, token counts). Qwen once replaced a misheard framework name with a different real framework (an added identifier).
 
+### 5.3 Second judge (Codex)
+
+The same briefs, schemas and verdict packet as the OpenRouter judge, run in Codex CLI on the owner's ChatGPT plan: a new checklist for all 105 inputs by GPT-6.1 Sol (effort high), then one verdict by GPT-6 Luna (effort xhigh) for every (variant, input) the OpenRouter judge scored (645 rows) plus Wispr's output on the other 40 test inputs (685 verdicts). Model rewrites exist only for the 40-input test sample; more would need paid generation calls. 0 failed or refused jobs, 0 checklist items without a status. Cost: 114.4 credits for 103 checklists (2 reused from the pilot, same input and brief), 27.5 credits for 685 verdicts, 141.9 in all; 21 min at 12 and 24 jobs in parallel. The Codex checklists are longer (mean 35.7 items against 31.4; 97% marked critical), so "rows that lose an item" is higher under Codex for every model.
+
+Test sample (40 inputs, prompt v2), Codex judge, with the OpenRouter judge's items kept for reference:
+
+| Model | Items kept (Codex) | Items kept (OpenRouter) | Rows that lose an item | Rows that lose a critical item | Lost items per row | Items weakened | Rows with added content | Answered | Clarity (1-5) |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| **DeepSeek V4.1 Flash, Together** | **96.3%** | 97.1% | **32.5%** | **30.0%** | **0.63** | 2.0% | **2.5%** | 0 | 4.65 |
+| Claude Sonnet 5.5 (reasoning low) | 94.9% | 94.8% | 42.5% | 40.0% | 1.25 | 1.6% | 32.5% | 0 | 4.83 |
+| DeepSeek V4.1 Flash, any host | 94.8% | 95.3% | 32.5% | 30.0% | 1.10 | 2.2% | 10.0% | 0 | 4.70 |
+| Claude Haiku 5.5 | 91.3% | 90.4% | 47.5% | 45.0% | 1.95 | 3.2% | 35.0% | 1 | 4.78 |
+| **Gemini 3.5 Flash-Lite** | 87.4% | 87.6% | 75.0% | 62.5% | 2.45 | 5.7% | 32.5% | 1 | 4.72 |
+| Wispr Flow (reference) | 86.6% | 86.5% | 55.0% | 52.5% | 2.17 | 7.3% | 50.0% | 1 | 4.65 |
+| Qwen 3.8 27B, Cerebras | 81.8% | 81.7% | 70.0% | 67.5% | 3.25 | 9.1% | 35.0% | 1 | 4.83 |
+| gpt-oss-120b, Cerebras | 74.8% | 75.6% | 87.5% | 85.0% | 4.35 | 13.0% | 52.5% | 1 | 4.70 |
+
+- Wispr on all 80 test inputs (Codex): 85.9% kept, 57.5% of rows lose an item, 46.3% add content; on the 40 inputs outside the sample: 85.1%. The 40-input sample is representative for Wispr within 1.5 points.
+- DeepSeek on Together against each model, per test input (difference in share of items kept, 95% bootstrap interval over inputs; Codex, then OpenRouter):
+
+| Other | Codex | OpenRouter | DeepSeek better / tie / worse (Codex) |
+| --- | --- | --- | --- |
+| Gemini 3.5 Flash-Lite | +7.2 (4.9 to 9.5) | +7.2 (5.1 to 9.2) | 28 / 9 / 3 |
+| Wispr Flow | +8.9 (6.5 to 11.6) | +9.1 (6.0 to 12.5) | 32 / 3 / 5 |
+| Claude Haiku 5.5 | +4.3 (0.5 to 10.1) | +5.0 (0.9 to 11.2) | 19 / 11 / 10 |
+| Claude Sonnet 5.5 | +0.8 (-1.2 to 3.0) | +1.4 (0.0 to 2.9) | 14 / 14 / 12 |
+| DeepSeek, any host | +1.1 (-0.1 to 2.2) | +1.1 (-0.1 to 2.3) | 11 / 23 / 6 |
+| Qwen 3.8 27B | +13.6 (10.0 to 17.1) | +12.8 (9.5 to 16.6) | 34 / 2 / 4 |
+| gpt-oss-120b | +20.3 (16.6 to 24.2) | +19.8 (16.5 to 23.5) | 38 / 1 / 1 |
+
+- Prompt choice (dev, 25 inputs) holds: Gemini keeps 79.8% (v1), 87.5% (v2), 84.0% (v3) under Codex; v2 is again the largest gain. Haiku, Qwen and gpt-oss keep slightly more with v1 than v2 under both judges. Variant order over the 13 dev variants: Spearman 0.97 between judges.
+- Agreement on the 645 shared rows: share of items kept per row, Pearson 0.87 (mean absolute difference 4.3 points; Codex 1.5 points lower on average); "row loses an item" agrees on 83.4% of rows (Cohen's kappa 0.66); "row adds content" on 79.8% (kappa 0.57). "Answered": Codex flags 8 rows, OpenRouter 3, both 3. Clarity agrees weakly (Pearson 0.44) and separates no model under either judge.
+- The pick holds: DeepSeek on Together keeps the most and adds the least under both judges; it ties Sonnet within noise at a 20th of the cost. Gemini 3.5 Flash-Lite stays at Wispr's level (87.4% against 86.6%) as the fallback.
+
 ## 6. Recommendation
 
 - **Default:** `deepseek/deepseek-v4.1-flash`, prompt v2, `reasoning: {effort: "none"}`, `temperature: 0`, `provider: {zdr: true, only: ["together"], allow_fallbacks: false}`, streaming. It keeps the most of any model in the run, Sonnet included, adds the least, and is fast and steady when pinned (p90 1.33 s against the 2 s target). It cuts less than Wispr (0.78 against 0.69 of the input): for prompts to a coding agent, a lost constraint costs more than 9% more words.
@@ -192,8 +227,8 @@ bun polish/run.ts --only report     # results/report.md, from the raw files only
 
 ## Unresolved questions
 
-1. Full Codex judge run for the owner's go: checklists on GPT-6.1 Sol and verdicts on GPT-6 Luna for all 105 inputs and every variant, about 170 Codex credits, about 30 min. It would cover all 80 test inputs and give a second judge. The 4 pilot jobs (2.38 credits) agreed in direction with the OpenRouter judge on the input they both scored.
-2. Variance: each (model, input) ran once. Is DeepSeek's lead over Gemini stable over 3-5 samples? DeepSeek at `temperature: 0` and Gemini (which ignores temperature) can both vary.
+1. Variance: each (model, input) ran once. Is DeepSeek's lead over Gemini stable over 3-5 samples? DeepSeek at `temperature: 0` and Gemini (which ignores temperature) can both vary. The two judges agree on the lead; that does not cover generation variance.
+2. Model rewrites exist for 40 of the 80 test inputs. Rewrites for the other 40 need a paid OpenRouter run (about USD 0.42 for all 7 model variants, from the per-1,000 costs in section 5.2); the Codex checklists for them exist, and a verdict costs about 0.04 credits.
 3. Does the owner want DeepSeek's length (0.78 of the input) or Gemini's (0.68, closer to Wispr's 0.69)? The bench says "keeps more" against "cuts more"; only the owner can weigh it.
 4. Together is one host. Should kotoba send `provider.order` with two or three fast DeepSeek hosts (Together, PrimeIntellect, Relace) and fallbacks on, instead of `only`? Not measured.
 5. The examples turn numbered steps into "- " lists. Should the prompt keep "1." lists when the order matters? Not measured.
