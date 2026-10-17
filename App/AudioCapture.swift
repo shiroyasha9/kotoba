@@ -29,6 +29,8 @@ actor AudioCapture: AudioSource {
     /// request during it causes one more pass.
     private var isRebuilding = false
     private var isRebuildRequested = false
+    /// An Undo that waits for the rebuild in progress, so the new input starts after the writer switched its rate.
+    private var rebuildWaiters: [CheckedContinuation<Void, Never>] = []
     private let preferences: MicrophonePreferences
     /// The mic the input records from; a device change rebuilds only when this changes. Kept under a
     /// lock too, so the menu and Settings can read it without waiting on the actor.
@@ -169,8 +171,11 @@ actor AudioCapture: AudioSource {
     func endCapture() async -> RecordedAudio? {
         guard let writer else { return nil }
         self.writer = nil
-        // Keep the hardware cycle that holds the stop moment, so the last word is not cut.
-        let audio = await writer.stop(after: mach_absolute_time())
+        // Keep the hardware cycle that holds the stop moment, so the last word is not cut. With no input running (none
+        // opened, or a rebuild in progress) that cycle never comes: what arrived is written at once, not after the
+        // writer's 300 ms guard.
+        let isInputRunning = input != nil && !isRebuilding
+        let audio = await isInputRunning ? writer.stop(after: mach_absolute_time()) : writer.stopNow()
         // Stopping the input runs after the audio goes to upload.
         Task {
             self.stopInputIfIdle()
@@ -186,6 +191,10 @@ actor AudioCapture: AudioSource {
     }
 
     func resumeCapture() async throws {
+        // A rebuild during the Undo window leaves the new input stopped (paused) once the writer switched its rate.
+        while isRebuilding {
+            await withCheckedContinuation { rebuildWaiters.append($0) }
+        }
         guard let writer, let input else { throw CaptureError.notCapturing }
         do {
             try input.start()
@@ -278,11 +287,14 @@ actor AudioCapture: AudioSource {
         isRebuildRequested = true
         guard !isRebuilding else { return }
         isRebuilding = true
-        defer { isRebuilding = false }
         while isRebuildRequested {
             isRebuildRequested = false
             await rebuildInput()
         }
+        isRebuilding = false
+        let waiting = rebuildWaiters
+        rebuildWaiters = []
+        for waiter in waiting { waiter.resume() }
     }
 
     private func rebuildInput() async {

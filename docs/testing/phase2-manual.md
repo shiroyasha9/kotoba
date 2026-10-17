@@ -814,3 +814,15 @@ Use a mouse with side buttons (the owner's BSK V3 PRO). If its own software maps
 | 907 | Keep the side button for Push to talk and use the mouse for an hour of normal work (scrolling, middle clicks, middle-button drags such as panning, the other side button); then reset Push to talk | No click or drag feels slower than with the shortcut reset; Activity Monitor shows kotoba Dev's CPU at idle as before | |
 | 908 | Hold the side button to dictate in TextEdit, press and let go of ⌥ while you speak, then let go of the button | The dictation goes on through ⌥ and pastes at the button's release (kotoba reads the button as down) | |
 | 909 | With the side button for Push to talk, open Settings > General, hold the side button over the window and, while you hold it, click Reset on Push to talk; let go, then tap ⌃⌥⌘ and type a few keys | ⌃⌥⌘ starts and stops a dictation as usual; no key is lost or stuck | |
+
+## Low audit fixes (kotoba Dev, 2026-10-17)
+
+Rows 930-934 need a real mic, real source apps or a quit, which a unit test cannot make. Use kotoba Dev with the release kotoba quit.
+
+| # | Do this | Expect | Result |
+|---|---|---|---|
+| 930 | Start a hands-free dictation on AirPods, speak, and while you speak start a FaceTime call (the mic changes rate), then stop | The stop takes under half a second; the text has what you said before the call. Repeat with Esc during the call and **Undo** on the pill: the recording goes on with no click or pitch jump | |
+| 931 | Copy styled text from Pages or Safari (bold and a link). Dictate into TextEdit, then press ⌘V in a rich TextEdit note | The styled text pastes with its bold and link, not as plain text | |
+| 932 | Copy a photo in Photos (or a file in Finder). Dictate into TextEdit, then press ⌘V in Finder or a Mail draft | The photo (or file) pastes as before the dictation; the dictation pastes at once, with no wait for the photo | |
+| 933 | Turn Wi-Fi to a slow hotspot, dictate 30 s, and press ⌘Q within a second of the stop | kotoba quits within about 3 s; at the next launch, the dictation is in History as pasted (or copied), not sent again into Recovered | |
+| 934 | Esc a dictation at once after the start tap (before you speak), and let the Undo window close | No new row of 0:00 in History | |
