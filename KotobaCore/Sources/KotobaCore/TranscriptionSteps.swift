@@ -54,7 +54,9 @@ struct TranscriptionSteps: Sendable {
         // Matched on what the owner said, before the replacements, so a rule can neither make nor break a command.
         let (said, submits) = settings.isSubmitPhraseOn ? SubmitPhrase.split(heard) : (heard, false)
         // Before the cleanup too: the cleaner gets the breaks, not words it could drop as noise.
-        let raw = settings.isLineBreakPhraseOn ? LineBreakPhrase.apply(to: said) : said
+        let raw =
+            settings.isLineBreakPhraseOn
+            ? LineBreakPhrase.apply(to: said, capitalizes: settings.modes.mode(for: record.app) != .code) : said
         let transcribed = Transcribed(
             raw: raw, text: settings.dictionary.applyReplacements(to: raw), answeredAt: clock.date, submits: submits,
             network: transcript.network)

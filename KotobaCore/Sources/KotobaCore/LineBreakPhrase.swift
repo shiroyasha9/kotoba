@@ -8,7 +8,7 @@ import Foundation
 ///
 /// The text before the command keeps its punctuation ("Dear Bob," stays); the spaces before the break, and the
 /// spaces and the punctuation the speech model put after the command, go. When the transcript is sentence-cased, the
-/// word after a break gets a capital letter, unless it already has one ("iPhone" stays). The text never starts or ends
+/// word after a break gets a capital letter, unless it already has one ("iPhone" stays) or the app is in Code mode. The text never starts or ends
 /// with a break, so a last "new line" never reaches a terminal as Enter; a command alone ("New line.") stays text, as
 /// a submit phrase alone does.
 enum LineBreakPhrase {
@@ -37,10 +37,11 @@ enum LineBreakPhrase {
     /// Left out after the command: "New line. Second point" is "\nSecond point".
     private static let droppedAfter: Set<Character> = [".", ",", ";", ":", "!", "?", "…"]
 
-    /// `text` with each command as its line breaks.
-    static func apply(to text: String) -> String {
+    /// `text` with each command as its line breaks. `capitalizes` is false for an app in Code mode (lead, 2026-10-17):
+    /// a terminal or an editor takes the next word as said ("npm install", not "Npm install").
+    static func apply(to text: String, capitalizes: Bool) -> String {
         guard let regex else { return text }
-        let isSentenceCased = text.first(where: \.isLetter)?.isUppercase == true
+        let isSentenceCased = capitalizes && text.first(where: \.isLetter)?.isUppercase == true
         var result = ""
         var cursor = text.startIndex
         var hasBreak = false

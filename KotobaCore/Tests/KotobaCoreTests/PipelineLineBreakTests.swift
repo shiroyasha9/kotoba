@@ -82,4 +82,22 @@ struct PipelineLineBreakTests {
 
         #expect(try #require(await world.store.records.first).transcript == "Line one.\nLine two.")
     }
+
+    /// Terminals and editors (Code mode) take commands and identifiers as said; other apps get a capital after a break.
+    @Test func codeAppsGetNoCapitalAfterABreak() async {
+        let modes = ModeRules(apps: ["test.app200": .writing])
+        let code = FakeWorld(transcript: "Run it new line npm install.")
+        let inCode = code.makePipeline(cleaner: nil, modes: modes)
+        await inCode.updateLineBreakPhrase(isOn: true)
+        let writing = FakeWorld(transcript: "Dear Bob new line thanks for the update.")
+        writing.frontApp.activate(200)
+        let inWriting = writing.makePipeline(cleaner: nil, modes: modes)
+        await inWriting.updateLineBreakPhrase(isOn: true)
+
+        await inCode.dictate(code)
+        await inWriting.dictate(writing)
+
+        #expect(await code.paster.pasted == ["Run it\nnpm install."])
+        #expect(await writing.paster.pasted == ["Dear Bob\nThanks for the update."])
+    }
 }

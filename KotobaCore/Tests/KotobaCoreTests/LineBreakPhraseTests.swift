@@ -54,11 +54,17 @@ struct LineBreakPhraseTests {
 
     @Test(arguments: breaks)
     func turnsTheCommandIntoBreaks(_ testCase: Case) {
-        #expect(LineBreakPhrase.apply(to: testCase.heard) == testCase.text)
+        #expect(LineBreakPhrase.apply(to: testCase.heard, capitalizes: true) == testCase.text)
     }
 
     @Test(arguments: text)
     func leavesOtherUsesAsText(_ testCase: Case) {
-        #expect(LineBreakPhrase.apply(to: testCase.heard) == testCase.text)
+        #expect(LineBreakPhrase.apply(to: testCase.heard, capitalizes: true) == testCase.text)
+    }
+
+    /// Code mode: the word after a break keeps the case the speech model gave it.
+    @Test func leavesTheCaseWhenItDoesNotCapitalize() {
+        let text = LineBreakPhrase.apply(to: "Run it new line npm install.", capitalizes: false)
+        #expect(text == "Run it\nnpm install.")
     }
 }
