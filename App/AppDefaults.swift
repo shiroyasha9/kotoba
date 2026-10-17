@@ -17,6 +17,7 @@ enum AppDefaults {
         case polishLastChord = "hotkey.polishLastChord"
         case microphoneOrder = "microphone.order"
         case submitPhrase = "paste.submitPhrase"
+        case lineBreakPhrase = "paste.lineBreakPhrase"
         case learnsFromEdits = "dictionary.learnsFromEdits"
         case indicatorAnchor = "indicator.anchor"
         case indicatorVisibility = "indicator.visibility"
@@ -55,6 +56,12 @@ enum AppDefaults {
     static var isSubmitPhraseOn: Bool {
         get { UserDefaults.standard.bool(forKey: Key.submitPhrase.rawValue) }
         set { UserDefaults.standard.set(newValue, forKey: Key.submitPhrase.rawValue) }
+    }
+
+    /// "new line" and "new paragraph" become line breaks (`LineBreakPhrase`). Off until the owner turns it on.
+    static var isLineBreakPhraseOn: Bool {
+        get { UserDefaults.standard.bool(forKey: Key.lineBreakPhrase.rawValue) }
+        set { UserDefaults.standard.set(newValue, forKey: Key.lineBreakPhrase.rawValue) }
     }
 
     /// "Learn from my edits": after a paste, kotoba follows the field and adds the words the owner fixes. On by

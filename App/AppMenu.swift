@@ -115,8 +115,8 @@ extension AppDelegate: StatusMenuActions {
         lastDictation?.perform(.polish)
     }
 
-    func submitPhraseChanged(isOn: Bool) {
-        submitPhraseChanges.continuation.yield(isOn)
+    func pasteSettingChanged(_ change: PasteSetting) {
+        pasteSettingChanges.continuation.yield(change)
     }
 
     func openSuggestions() {

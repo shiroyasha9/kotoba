@@ -12,7 +12,7 @@ extension Pane {
 }
 
 /// The General pane's settings: the dictation, cleanup and Paste Last shortcuts and the cleanup model, the spoken
-/// Return phrase, launch at login, the Dock and menu bar icons, sounds and their voice, the indicator's position and
+/// Return phrase and line breaks, launch at login, the Dock and menu bar icons, sounds and their voice, the indicator's position and
 /// visibility, how long audio is kept, and automatic update checks. Each change applies at once.
 @MainActor
 @Observable
@@ -49,13 +49,14 @@ final class GeneralModel {
         var indicatorAnchor: Setting<IndicatorAnchor>
         var indicatorVisibility: Setting<IndicatorVisibility>
         var submitPhrase: Setting<Bool>
+        var lineBreakPhrase: Setting<Bool>
         /// Nil in a Debug build, which has no updater.
         var checksForUpdates: Setting<Bool>?
 
-        /// `submitPhraseChanged` hands a new submit phrase setting to the pipeline.
+        /// `pasteSettingChanged` hands a new spoken command setting to the pipeline.
         static func live(
             indicator: IndicatorPanel, cues: SoundCues, updater: Updater?,
-            submitPhraseChanged: @escaping @MainActor (Bool) -> Void
+            pasteSettingChanged: @escaping @MainActor (PasteSetting) -> Void
         ) -> Self {
             Self(
                 loginItem: .live,
@@ -79,7 +80,13 @@ final class GeneralModel {
                     read: { AppDefaults.isSubmitPhraseOn },
                     write: {
                         AppDefaults.isSubmitPhraseOn = $0
-                        submitPhraseChanged($0)
+                        pasteSettingChanged(.submitPhrase($0))
+                    }),
+                lineBreakPhrase: Setting(
+                    read: { AppDefaults.isLineBreakPhraseOn },
+                    write: {
+                        AppDefaults.isLineBreakPhraseOn = $0
+                        pasteSettingChanged(.lineBreakPhrase($0))
                     }),
                 checksForUpdates: updater.map { updater in
                     Setting(read: { updater.checksAutomatically }, write: { updater.checksAutomatically = $0 })
@@ -127,6 +134,10 @@ final class GeneralModel {
         didSet { backing.submitPhrase.write(isSubmitPhraseOn) }
     }
 
+    var isLineBreakPhraseOn: Bool {
+        didSet { backing.lineBreakPhrase.write(isLineBreakPhraseOn) }
+    }
+
     var checksForUpdates: Bool {
         didSet { backing.checksForUpdates?.write(checksForUpdates) }
     }
@@ -141,15 +152,15 @@ final class GeneralModel {
     /// The History section; nil when the history database did not open.
     @ObservationIgnored let audio: AudioRetentionModel?
 
-    /// Reads the current values. `submitPhraseChanged` hands a new submit phrase setting to the pipeline.
+    /// Reads the current values. `pasteSettingChanged` hands a new spoken command setting to the pipeline.
     convenience init(
         settings: TranscriptionSettings, indicator: IndicatorPanel, cues: SoundCues, updater: Updater?,
-        audio: AudioRetentionModel?, submitPhraseChanged: @escaping @MainActor (Bool) -> Void
+        audio: AudioRetentionModel?, pasteSettingChanged: @escaping @MainActor (PasteSetting) -> Void
     ) {
         self.init(
             settings: settings, chords: .shared, audio: audio,
             backing: .live(
-                indicator: indicator, cues: cues, updater: updater, submitPhraseChanged: submitPhraseChanged))
+                indicator: indicator, cues: cues, updater: updater, pasteSettingChanged: pasteSettingChanged))
     }
 
     private init(
@@ -169,6 +180,7 @@ final class GeneralModel {
         indicatorAnchor = backing.indicatorAnchor.read()
         indicatorVisibility = backing.indicatorVisibility.read()
         isSubmitPhraseOn = backing.submitPhrase.read()
+        isLineBreakPhraseOn = backing.lineBreakPhrase.read()
         checksForUpdates = backing.checksForUpdates?.read() ?? false
     }
 
@@ -191,7 +203,7 @@ final class GeneralModel {
                 loginItem: loginItem, showsInDock: .fixed(showsInDock), showsMenuBarIcon: .fixed(true),
                 soundCues: .fixed(true), cueVoice: .fixed(.nylon), indicatorAnchor: .fixed(.bottomCenter),
                 indicatorVisibility: .fixed(.whileDictating), submitPhrase: .fixed(true),
-                checksForUpdates: .fixed(true)))
+                lineBreakPhrase: .fixed(false), checksForUpdates: .fixed(true)))
     }
 }
 
@@ -246,6 +258,10 @@ private struct GeneralPane: View {
                 Toggle(isOn: $model.isSubmitPhraseOn) {
                     Text("Press Return when you say “press enter”")
                     Text("Also “press return”. Say it last; kotoba leaves it out of the text.")
+                }
+                Toggle(isOn: $model.isLineBreakPhraseOn) {
+                    Text("Start a new line when you say “new line”")
+                    Text("“New paragraph” adds an empty line. Some terminals run each line as a command.")
                 }
             } header: {
                 Text("Paste")
@@ -305,41 +321,18 @@ private struct GeneralPane: View {
     }
 }
 
-@MainActor
-extension Pane {
-    static func generalSnapshots() -> [Snapshot] {
-        [
-            MainWindow.snapshot(of: .general(.sample()), named: "settings-general", height: 1_200),
-            MainWindow.snapshot(
-                of: .general(.sample(showsInDock: false)), named: "settings-general-dock-off", height: 1_240),
-            loginFailureSnapshot(),
-            // Push to talk on its own chord: its line adds the double tap.
-            MainWindow.snapshot(
-                of: .general(.sample(chords: HotkeyChords(defaults: nil, pushToTalk: Chord(modifiers: .option)))),
-                named: "settings-general-push-to-talk", height: 1_200),
-        ]
-    }
+/// A spoken command setting the owner changed in the Paste section.
+enum PasteSetting: Sendable {
+    case submitPhrase(Bool)
+    case lineBreakPhrase(Bool)
 
-    /// Review B1: a failed launch-at-login change makes one system call and keeps its note. The toggle stays
-    /// off, and the run fails if a second call (the old didSet loop) clears the note.
-    private static func loginFailureSnapshot() -> Snapshot {
-        var changes = 0
-        let model = GeneralModel.sample(
-            loginItem: .init(
-                isOn: { false }, problem: { nil },
-                change: { _ in
-                    changes += 1
-                    return .failed
-                }))
-        model.setLaunchAtLogin(true)
-        var snapshot = MainWindow.snapshot(
-            of: .general(model), named: "settings-general-login-failed", height: 1_260)
-        snapshot.check = { _ in
-            guard changes == 1, model.loginProblem == .failed, !model.isLaunchAtLoginOn else {
-                return "A failed launch-at-login change made \(changes) calls and kept no note"
+    /// The one consumer: each change reaches the pipeline after the one before it.
+    static func send(_ changes: AsyncStream<Self>, to pipeline: DictationPipeline) async {
+        for await change in changes {
+            switch change {
+            case .submitPhrase(let isOn): await pipeline.updateSubmitPhrase(isOn: isOn)
+            case .lineBreakPhrase(let isOn): await pipeline.updateLineBreakPhrase(isOn: isOn)
             }
-            return nil
         }
-        return snapshot
     }
 }

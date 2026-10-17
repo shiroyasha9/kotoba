@@ -28,6 +28,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private var settings = DictationPipeline.Settings(
         audioDirectory: AppFiles.audio,
         isSubmitPhraseOn: AppDefaults.isSubmitPhraseOn,
+        isLineBreakPhraseOn: AppDefaults.isLineBreakPhraseOn,
         modes: AppDefaults.modeRules
     )
     lazy var indicator = IndicatorPanel()
@@ -52,8 +53,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     var lastDictation: LastDictation?
     private var queueRefresh: Task<Void, Never>?
     private var isQueueRefreshDue = false
-    /// The submit phrase toggle, in click order, to the pipeline (one consumer, as for the Undo holds).
-    let submitPhraseChanges = AsyncStream.makeStream(of: Bool.self)
+    /// The spoken command toggles, in click order, to the pipeline (one consumer, as for the Undo holds).
+    let pasteSettingChanges = AsyncStream.makeStream(of: PasteSetting.self)
     /// The History section's retention choices and "Delete Audio Now…", in click order, to the pipeline.
     let audioRequests = AsyncStream.makeStream(of: AudioRequest.self)
     /// Menu previews from the last 24 h, newest first; full transcripts stay in the store until copied.
@@ -76,7 +77,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
                     app.store.map { .live(requests: app.audioRequests.continuation, store: $0) }
                 }
             ) {
-                self?.submitPhraseChanged(isOn: $0)
+                self?.pasteSettingChanged($0)
             }
         })
 
@@ -190,11 +191,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
                 await pipeline.holdUndoWindow(isHeld)
             }
         }
-        Task { [submitPhrases = submitPhraseChanges.stream] in
-            for await isOn in submitPhrases {
-                await pipeline.updateSubmitPhrase(isOn: isOn)
-            }
-        }
+        Task { [pasteSettings = pasteSettingChanges.stream] in await PasteSetting.send(pasteSettings, to: pipeline) }
         Task { [audioRequests = audioRequests.stream] in await AudioRequest.send(audioRequests, to: pipeline) }
         // A click on the idle or recording pill is a chord tap; the front app keeps focus, so the paste goes there.
         indicator.onTap = { [hotkeys] in hotkeys.sendTap() }
