@@ -217,7 +217,7 @@ extension DictationRecord {
     /// Records a failed request: `.failed` (retried), with `needsSetup` when only a setting can help,
     /// or `.rejected` when the same request cannot succeed, an empty transcript included: the same audio gets the
     /// same answer. Errors that are not `ProviderError` count as transient. A send that reached the route uses an
-    /// attempt, as does an error that is not `ProviderError` (a missing audio file fails the same way each time).
+    /// attempt, as does an error that is not `ProviderError`, as it may fail the same way each time.
     mutating func markFailed(by error: any Error) {
         let providerError = error as? ProviderError
         if providerError?.usesAttempt ?? true { attempts += 1 }

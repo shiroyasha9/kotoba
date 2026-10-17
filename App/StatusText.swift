@@ -50,12 +50,15 @@ enum StatusText {
         "kotoba hears nothing from \(microphone ?? "the mic"). Check that it is on and not muted."
     }
 
-    /// The pill when the owner's endpoint does not resolve: it names the host, so a typo in it shows, when the text
-    /// fits the pill (about 34 characters); else the host's first label, the resource name the owner typed; else no
-    /// name.
+    /// About the longest pill message that fits beside its button in the 360 pt pill (CODING_STANDARDS.md, "User-facing
+    /// text" 7); the snapshot run checks the samples.
+    static let pillCharacters = 34
+
+    /// The pill when the owner's endpoint does not resolve: it names the host's first label, the resource name the
+    /// owner typed, so a typo in it shows; a name too long for the pill is left out.
     static func hostNotFound(_ host: String) -> String {
-        let named = [host, String(host.prefix { $0 != "." })].map { "Couldn’t find \($0). Saved." }
-        return named.first { $0.count <= 34 } ?? "Endpoint not found. Saved."
+        let named = "Couldn’t find \(host.prefix { $0 != "." }). Saved."
+        return named.count <= pillCharacters ? named : "Endpoint not found. Saved."
     }
 
     /// The pill when the mic gives nothing because Microphone access was turned off (at a press, or while recording).

@@ -58,8 +58,13 @@ actor ClipboardGuard {
     private var pending: Waiting? {
         didSet {
             if oldValue?.write != pending?.write { oldValue?.timer?.cancel() }
+            if pending == nil { restoreWaiters.resumeAll() }
         }
     }
+    /// Quit, waiting for the paste that waits for its restore (`waitUntilRestored(by:)`).
+    private var restoreWaiters = Waiters()
+    /// Test seam: whether quit waits for a restore.
+    var isQuitWaiting: Bool { !restoreWaiters.isEmpty }
     private var writes = 0
     /// A write read early while its `writeTransient` was still on its way, before `pending` held it.
     private var earlyReadNumber: Int?
@@ -150,6 +155,19 @@ actor ClipboardGuard {
             await copy(text)
             return nil
         }
+    }
+
+    /// Quit: returns once no paste waits for its read and restore, or at `deadline`. An unread paste's text then stays
+    /// (AppKit hands over every promise at quit).
+    func waitUntilRestored(by deadline: ContinuousClock.Instant) async {
+        guard pending != nil else { return }
+        let bound = work.schedule(at: deadline) { await self.endRestoreWait() }
+        await withCheckedContinuation { restoreWaiters.add($0) }
+        bound.cancel()
+    }
+
+    private func endRestoreWait() {
+        restoreWaiters.resumeAll()
     }
 
     /// Leaves `text` on the clipboard for the owner to paste, with no restore.

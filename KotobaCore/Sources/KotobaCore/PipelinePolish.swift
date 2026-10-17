@@ -8,7 +8,7 @@ extension DictationPipeline {
     /// rewrite with no paste. A failed, cut or late answer pastes nothing. Every answer is billed as a `polish` entry,
     /// with no words.
     public func polishLast() async {
-        guard isQuiet, transcribingAgain.isEmpty, let polisher = ports.polisher else { return }
+        guard isQuiet, !isQuitting, transcribingAgain.isEmpty, let polisher = ports.polisher else { return }
         isPolishing = true
         emit(.polishing)
         // An LLM's rewrite is not the owner's edit: the learning session of the last paste ends here.
@@ -22,7 +22,7 @@ extension DictationPipeline {
     /// (an earlier polish, or the dictation's own text); when the polished text is no longer there as pasted, the old
     /// text goes to the clipboard. History goes back to the text from before either way.
     public func undoPolish(_ id: DictationID) async {
-        guard isQuiet, transcribingAgain.isEmpty else { return }
+        guard isQuiet, !isQuitting, transcribingAgain.isEmpty else { return }
         isPolishing = true
         announceActivity()
         let outcome = await revertPolish(of: id)

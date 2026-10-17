@@ -85,12 +85,7 @@ final class ProviderConnection: Sendable {
                 let file = FileManager.default.temporaryDirectory.appending(path: "kotoba-upload-\(UUID().uuidString)")
                 // The body is a copy of the kept FLAC; losing it to a failed delete costs only temp space.
                 defer { try? FileManager.default.removeItem(at: file) }
-                do {
-                    try write(BodyWriter(file: file))
-                } catch let error as CocoaError where [.fileNoSuchFile, .fileReadNoSuchFile].contains(error.code) {
-                    // The kept recording was deleted outside kotoba (the temp body is made first, so it is not this).
-                    throw ProviderError.audioMissing
-                }
+                try write(BodyWriter(file: file))
                 // Splits the body build from the network time in Instruments and the latency report.
                 Log.signposter.emitEvent("bodyReady")
                 (data, response) = try await session.upload(for: request, fromFile: file, delegate: metrics)
@@ -302,9 +297,15 @@ final class BodyWriter {
         try output.write(contentsOf: data)
     }
 
-    /// Copies `file` as is, or as base64 text.
+    /// Copies `file` as is, or as base64 text. A file that is gone (the kept recording deleted outside kotoba) throws
+    /// `ProviderError.audioMissing`.
     func write(contentsOf file: URL, base64: Bool = false) throws {
-        let input = try FileHandle(forReadingFrom: file)
+        let input: FileHandle
+        do {
+            input = try FileHandle(forReadingFrom: file)
+        } catch let error as CocoaError where [.fileNoSuchFile, .fileReadNoSuchFile].contains(error.code) {
+            throw ProviderError.audioMissing
+        }
         defer { try? input.close() }  // Read-only: closing cannot lose data.
         // FileHandle's autoreleased read buffers must drain per chunk, not after the whole upload body.
         while try autoreleasepool(invoking: {

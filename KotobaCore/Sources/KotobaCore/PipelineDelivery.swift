@@ -35,7 +35,7 @@ extension DictationPipeline {
             })
         let outcome = await delivery.deliver(
             job,
-            beforePaste: { await self.isReadyToPaste(current) },
+            beforePaste: { await self.pasteChoice(after: current) },
             beforeCleanup: { await self.cleanupStarted(current.id) },
             isSubmitRequested: { await self.submitRequests.contains(current.id) })
         finishDictation(current.id, showing: outcome.showing ?? .outcome(of: outcome.record))
@@ -118,8 +118,9 @@ extension DictationPipeline {
         }
     }
 
-    /// Once no chord is held: true when the text may paste, false while the owner is away (it waits on the clipboard).
-    private func isReadyToPaste(_ current: Recording) async -> PasteChoice {
+    /// Once no chord is held, what the text does: it pastes, waits on the clipboard while the owner is away, or is only
+    /// saved while kotoba quits.
+    private func pasteChoice(after current: Recording) async -> PasteChoice {
         await waitForChordRelease(after: current.stoppingPress)
         if isQuitting { return .saveOnly }
         return isPresent ? .paste : .copy

@@ -26,7 +26,7 @@ extension DictationPipeline {
         selection.isAutomatic = isAutomatic
         let results = await retries.run(
             selection, settings: { await self.settings }, skipping: { await self.inFlight.contains($0) },
-            waitUntilQuiet: { await self.waitUntilQuiet() })
+            waitUntilQuiet: { await self.waitUntilQuiet() }, sending: { await self.retrySendChanged($0) })
         // The run stops at the route's wait, so it is the last result's.
         if let wait = results.last?.lastError?.retryAfter { scheduleRetry(after: wait) }
         for record in results {
@@ -50,10 +50,11 @@ extension DictationPipeline {
         await retryPending(.only(ids))
     }
 
-    /// A key, an endpoint or credit arrived: once the route has everything, the waiting dictations are sent once each.
+    /// A key, an endpoint or credit arrived: once the route has everything, the waiting dictations are sent once each,
+    /// and the failed ones within their automatic attempts: a new endpoint fixes a host that was not found.
     public func setupChanged() async {
         guard await ports.missingSetup() == nil else { return }
-        await retryPending(.onlyNeedsSetup)
+        await retryPending(.all, isAutomatic: true)
     }
 
     /// A live dictation got its text: the route works, credit included, so the dictations that waited for it are sent
@@ -73,6 +74,7 @@ extension DictationPipeline {
     /// The route asked to wait `wait` before the next send: the waiting dictations go then, as tracked work on the
     /// pipeline clock, unless a newer wait replaced this one.
     func scheduleRetry(after wait: Duration) {
+        guard !isQuitting else { return }
         let bounds = Self.retryAfterBounds
         let delay = min(max(wait, bounds.lowerBound), bounds.upperBound)
         retryTimer?.cancel()

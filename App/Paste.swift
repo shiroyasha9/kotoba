@@ -27,13 +27,15 @@ actor SystemPasteboard: KotobaCore.Pasteboard {
     private let pasteboard: NSPasteboard
     private let name: NSPasteboard.Name
     /// Whether kotoba's own windows may have written the clipboard at this change count (`OwnClipboardWrites`).
-    private let isOwnWrite: @MainActor @Sendable (Int) -> Bool
+    private let isOwnWrite: @Sendable (Int) -> Bool
+    /// The change count after this adapter's last write: plain data written here, which any thread can read.
+    private var writtenCount: Int?
     /// The promise of the latest transient write, kept until the next write: the item does not keep its provider.
     private var promised: PromisedText?
 
     init(
         name: NSPasteboard.Name = .general,
-        isOwnWrite: @escaping @MainActor @Sendable (Int) -> Bool = { OwnClipboardWrites.shared.mayInclude($0) }
+        isOwnWrite: @escaping @Sendable (Int) -> Bool = { OwnClipboardWrites.shared.mayInclude($0) }
     ) {
         self.name = name
         self.isOwnWrite = isOwnWrite
@@ -49,7 +51,7 @@ actor SystemPasteboard: KotobaCore.Pasteboard {
     /// main thread synchronously ("synchronous promise fulfillment requested from a background thread").
     func snapshot() async -> PasteboardSnapshot {
         let changeCount = pasteboard.changeCount
-        guard await isOwnWrite(changeCount) else { return Self.snapshot(of: pasteboard) }
+        guard changeCount != writtenCount, isOwnWrite(changeCount) else { return Self.snapshot(of: pasteboard) }
         return await MainActor.run { [name] in Self.snapshot(of: NSPasteboard(name: name)) }
     }
 
@@ -83,7 +85,7 @@ actor SystemPasteboard: KotobaCore.Pasteboard {
         promised = nil
         pasteboard.clearContents()
         pasteboard.setString(text, forType: .string)
-        return pasteboard.changeCount
+        return wrote()
     }
 
     /// The text is promised, not written: the pasteboard asks kotoba for it at the first read, on the main thread
@@ -102,7 +104,14 @@ actor SystemPasteboard: KotobaCore.Pasteboard {
         item.setDataProvider(promise, forTypes: [.string])
         promised = promise
         pasteboard.writeObjects([item])
-        return pasteboard.changeCount
+        return wrote()
+    }
+
+    /// Notes this write's change count (`writtenCount`) and returns it.
+    private func wrote() -> Int {
+        let count = pasteboard.changeCount
+        writtenCount = count
+        return count
     }
 
     /// Writes every type back in its order, the nspasteboard.org markers included: a password a manager copied comes
@@ -122,44 +131,66 @@ actor SystemPasteboard: KotobaCore.Pasteboard {
         if !items.isEmpty {
             pasteboard.writeObjects(items)
         }
+        _ = wrote()
         return true
     }
 }
 
 /// Whether kotoba's own windows may have written the clipboard (a ⌘C in Settings or the Fix window). They write on the
-/// main thread, and only while kotoba is active, so a change count that moved during an active spell may be theirs;
-/// kotoba's own pastes and restores move it too, and only cost a read on the main thread then. Starts with the app.
-@MainActor
-final class OwnClipboardWrites {
+/// main thread, and only while kotoba is active, so a change count that moved during an active spell may be theirs.
+/// The notifications keep the counts under a lock, so a snapshot asks with no hop to the main thread.
+final class OwnClipboardWrites: Sendable {
     static let shared = OwnClipboardWrites()
 
-    /// The change count when kotoba last became active.
-    private var countAtActivation: Int?
-    /// The change count when kotoba last resigned active, if it moved during that spell.
-    private var countAtResign: Int?
-    private var observers: [NSObjectProtocol] = []
+    private struct Spells {
+        var isActive = false
+        /// The change count when kotoba last became active.
+        var countAtActivation: Int?
+        /// The change count when kotoba last resigned active, if it moved during that spell.
+        var countAtResign: Int?
+    }
 
-    private init() {
-        let center = NotificationCenter.default
-        countAtActivation = NSApp.isActive ? NSPasteboard.general.changeCount : nil
-        observers = [
-            center.addObserver(forName: NSApplication.didBecomeActiveNotification, object: nil, queue: .main) { _ in
-                MainActor.assumeIsolated { self.countAtActivation = NSPasteboard.general.changeCount }
-            },
-            center.addObserver(forName: NSApplication.didResignActiveNotification, object: nil, queue: .main) { _ in
-                MainActor.assumeIsolated {
-                    let count = NSPasteboard.general.changeCount
-                    if count != self.countAtActivation { self.countAtResign = count }
-                }
-            },
-        ]
+    private let spells = Mutex(Spells())
+    /// The observers of activation, kept for the app's life, as `shared` is.
+    private let relays = Mutex<[NotificationRelay]>([])
+
+    /// Called once at launch: until then no count counts as kotoba's.
+    @MainActor
+    func start() {
+        if NSApp.isActive { becameActive() }
+        let active = NotificationRelay { [self] in becameActive() }
+        let resigned = NotificationRelay { [self] in resignedActive() }
+        NotificationCenter.default.addObserver(
+            active, selector: #selector(NotificationRelay.received), name: NSApplication.didBecomeActiveNotification,
+            object: nil)
+        NotificationCenter.default.addObserver(
+            resigned, selector: #selector(NotificationRelay.received),
+            name: NSApplication.didResignActiveNotification, object: nil)
+        relays.withLock { $0 = [active, resigned] }
+    }
+
+    private func resignedActive() {
+        let count = NSPasteboard.general.changeCount
+        spells.withLock { spells in
+            spells.isActive = false
+            if count != spells.countAtActivation { spells.countAtResign = count }
+        }
+    }
+
+    private func becameActive() {
+        let count = NSPasteboard.general.changeCount
+        spells.withLock { spells in
+            spells.isActive = true
+            spells.countAtActivation = count
+        }
     }
 
     /// A count kotoba's windows may have written: one that moved in this active spell, or the one an earlier spell
     /// left (a ⌘C in kotoba, a switch away and back with no copy elsewhere).
     func mayInclude(_ changeCount: Int) -> Bool {
-        if changeCount == countAtResign { return true }
-        return NSApp.isActive && changeCount != countAtActivation
+        spells.withLock { spells in
+            changeCount == spells.countAtResign || (spells.isActive && changeCount != spells.countAtActivation)
+        }
     }
 }
 

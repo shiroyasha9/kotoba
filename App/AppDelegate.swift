@@ -89,7 +89,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         CGEventPaster.trackKeyboardLayout()
         FrontAppObserver.track()
         // From launch, so a ⌘C in kotoba's windows before the first dictation is known.
-        _ = OwnClipboardWrites.shared
+        OwnClipboardWrites.shared.start()
         CGEventPaster.warmUp()
         mainMenu.install()
         statusItem = DockAndMenuBar.shared.attach(StatusBarItem(target: self) { [weak self] in self?.menuModel() })

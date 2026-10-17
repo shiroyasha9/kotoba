@@ -59,6 +59,7 @@ struct PipelineQuitTests {
         await world.provider.fail(with: nil)
 
         await pipeline.shutdown()
+        #expect(await pipeline.retryTimer == nil)
         world.clock.advance(by: .seconds(30))
         await pipeline.settle()
 
@@ -77,10 +78,14 @@ struct PipelineQuitTests {
 
         async let run: Void = pipeline.retryPending()
         #expect(await eventually { await gate.hasWaiters })
-        await pipeline.shutdown()
+        async let quit: Void = pipeline.shutdown()
+        #expect(await eventually { await pipeline.quitWaiters.count == 1 })
         await gate.open()
-        await run
+        await quit
 
+        // Quit waited for the send on its way: its billed answer is saved, and the next launch does not send it.
+        #expect(await world.store.records.filter { $0.status == .recovered }.count == 1)
+        await run
         #expect(await world.provider.requests.count == 3)
     }
 
@@ -135,5 +140,52 @@ struct PipelineQuitTests {
 
         #expect(await world.store.records.isEmpty)
         #expect(await world.audio.discarded == (await world.audio.files))
+    }
+
+    /// Quit returns before a clipboard restore could run, so nothing pastes from the menu once it began.
+    @Test func pasteLastAndPasteAgainDoNothingOnceQuitBegan() async throws {
+        let world = FakeWorld(transcript: "said")
+        let pipeline = world.makePipeline()
+        await pipeline.dictate(world)
+        world.clock.advance(by: .seconds(1))
+        await pipeline.settle()
+        let id = try #require(await world.store.records.first?.id)
+        let pastes = await world.paster.pasteCount
+
+        await pipeline.shutdown()
+        await pipeline.pasteLast()
+        await pipeline.pasteAgain("said", of: id)
+        await pipeline.polishLast()
+
+        #expect(await world.paster.pasteCount == pastes)
+    }
+
+    /// A paste that went out before quit gets its restore before quit returns, so the owner's clipboard comes back.
+    @Test func quitWaitsForTheRestoreOfAPasteThatWentOut() async {
+        let world = FakeWorld(transcript: "pasted")
+        let pipeline = world.makePipeline()
+        await world.paster.readLater()
+        await pipeline.dictate(world)
+
+        async let quit: Void = pipeline.shutdown()
+        #expect(await eventually { await pipeline.clipboard.isQuitWaiting })
+        _ = await world.pasteboard.appReads()
+        await quit
+
+        #expect(await world.pasteboard.text == "user's clipboard")
+    }
+
+    @Test func quitWaitsForARestoreNoLongerThanItsBound() async {
+        let world = FakeWorld(transcript: "pasted")
+        let pipeline = world.makePipeline()
+        await world.paster.readLater()
+        await pipeline.dictate(world)
+
+        async let quit: Void = pipeline.shutdown()
+        #expect(await eventually { await pipeline.clipboard.isQuitWaiting })
+        world.clock.advance(by: DictationPipeline.quitWait)
+        await quit
+
+        #expect(await world.pasteboard.text == "pasted")
     }
 }

@@ -80,6 +80,8 @@ public actor DictationPipeline {
     var quitWaiters = Waiters()
     /// Quit began: nothing new is sent, recorded or pasted (`shutdown`).
     var isQuitting = false
+    /// The kept dictation a retry is sending now; quit waits for its answer as for a live one.
+    var retrySending: DictationID?
     /// Test seam: sound events taken so far (levels, a lost mic, the no-sound deadline). The capture stream gives
     /// tests no other sign that the pipeline took an event, so they wait for this count before they check the state.
     var handledSoundEvents = 0
@@ -189,7 +191,7 @@ public actor DictationPipeline {
 
     /// "Paste Last Dictation", from the menu or its chord: pastes the newest delivered dictation again (`pasteAgain`).
     public func pasteLast() async {
-        guard isQuiet else { return }
+        guard isQuiet, !isQuitting else { return }
         do {
             guard let last = try await ports.store.lastDelivered(), let text = last.latestText else { return }
             await pasteAgain(text, of: last.id)
@@ -202,7 +204,7 @@ public actor DictationPipeline {
     /// History's "Paste Again"). Only between dictations, with none in flight (its paste would replace this text on
     /// the clipboard before the app reads it); when paste is not allowed, the text stays on the clipboard.
     public func pasteAgain(_ text: String, of id: DictationID) async {
-        guard isQuiet else { return }
+        guard isQuiet, !isQuitting else { return }
         switch await pasteThroughClipboard(text, of: id) {
         case .pasted: break
         case .clipboardNotKept: emit(.clipboardNotKept(id))
@@ -230,8 +232,9 @@ public actor DictationPipeline {
     /// Quit: a live recording is saved `.pending` (transcribed at the next launch, into Recovered),
     /// and a recording in its Undo window is saved `.cancelled`. Nothing is lost. A dictation being sent gets up to
     /// `quitWait` for its answer, so its billed text is saved and the next launch does not send it again; one that
-    /// takes longer stays `.pending`. From the start nothing new is sent (a send now could be billed now and again at
-    /// the next launch), recorded or pasted: quit returns before a clipboard restore could run.
+    /// takes longer stays `.pending`; a retry being sent gets the same wait, and a paste that went out gets its restore.
+    /// From the start nothing new is sent (a send now could be billed now and again at the next launch), recorded or
+    /// pasted: the paste of an answer that comes during the wait would return before its restore.
     public func shutdown() async {
         isQuitting = true
         retryTimer?.cancel()
@@ -248,10 +251,23 @@ public actor DictationPipeline {
             endRecording(current)
             await keep(current, audio: await endCapture(of: current), as: .pending)
         }
-        guard !inFlight.isEmpty else { return }
-        let bound = work.schedule(at: ports.clock.now + Self.quitWait) { await self.endQuitWait() }
-        await withCheckedContinuation { quitWaiters.add($0) }
-        bound.cancel()
+        let deadline = ports.clock.now + Self.quitWait
+        if !isSendDone {
+            let bound = work.schedule(at: deadline) { await self.endQuitWait() }
+            await withCheckedContinuation { quitWaiters.add($0) }
+            bound.cancel()
+        }
+        // A paste that went out before quit began gets its restore, so the owner's clipboard comes back.
+        await clipboard.waitUntilRestored(by: deadline)
+    }
+
+    /// No live dictation and no retry is being sent.
+    var isSendDone: Bool { inFlight.isEmpty && retrySending == nil }
+
+    /// A retry send starts (`id`) or its result is saved (nil).
+    func retrySendChanged(_ id: DictationID?) {
+        retrySending = id
+        if isQuitting, isSendDone { quitWaiters.resumeAll() }
     }
 
     /// Most dictations get their answer in about a second; quit must not hang on a slow route.
@@ -277,7 +293,7 @@ extension DictationPipeline {
         inFlight.remove(id)
         cleaning.remove(id)
         submitRequests.remove(id)
-        if inFlight.isEmpty { quitWaiters.resumeAll() }
+        if isSendDone { quitWaiters.resumeAll() }
         // With another dictation in flight the state may not change, but this one is no longer sent.
         announceActivity()
         defer { resumeQuietWaiters() }
