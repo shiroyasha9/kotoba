@@ -32,7 +32,7 @@ extension DictationPipeline {
             beforeCleanup: { await self.cleanupStarted(current.id) },
             isSubmitRequested: { await self.submitRequests.contains(current.id) })
         if let write = outcome.restore {
-            work.schedule(at: ports.clock.now + settings.restoreDelay) { await self.clipboard.restore(after: write) }
+            leaveUnread(write) { await self.pasteWentUnread(current.id) }
         }
         finishDictation(current.id, showing: outcome.showing ?? .outcome(of: outcome.record))
         // Return submitted the field: the text is no longer where it was pasted.
@@ -54,6 +54,32 @@ extension DictationPipeline {
         if outcome.record.status.isTranscribed { work.track { await self.deleteExpiredAudio() } }
         // A transcript proves the route works, credit included: the dictations that waited are sent (decision 6).
         if outcome.record.transcript != nil { await setupChanged() }
+    }
+
+    /// The owner's clipboard comes back when the paste target reads the transcript (`ClipboardGuard`). When no app
+    /// read it within `Settings.readWait`, the paste went nowhere: the transcript stays on the clipboard and `unread`
+    /// runs.
+    func leaveUnread(_ write: ClipboardGuard.Write, unread: @escaping @Sendable () async -> Void) {
+        work.schedule(at: ports.clock.now + settings.readWait) {
+            guard await self.clipboard.readWaitEnded(write) else { return }
+            await unread()
+        }
+    }
+
+    /// The dictation's text is on the clipboard, not in the app: its row says copied, and the pill says so when no
+    /// other dictation shows.
+    private func pasteWentUnread(_ id: DictationID) async {
+        Log.pipeline.notice("No app read the paste of \(id.rawValue); the text is left on the clipboard")
+        do {
+            try await ports.store.markCopied(id)
+        } catch {
+            Log.pipeline.error("Cannot mark \(id.rawValue) copied: \(error)")
+        }
+        emitIfQuiet(.copied(id))
+    }
+
+    func emitIfQuiet(_ newState: DictationState) {
+        if isQuiet { emit(newState) }
     }
 
     /// After the paste: which keyterms the request sent, and which the delivered text has. Over every keyterm, sent or

@@ -1,5 +1,5 @@
-/// The owner's clipboard around a paste: a snapshot at chord-down, the transcript written as a
-/// transient item, and a restore only if nothing else replaced it (docs/spec.md, "Paste").
+/// The owner's clipboard around a paste: a snapshot at the announcement, the transcript written as a transient item,
+/// and a restore once the paste target read it, only if nothing else replaced it (docs/spec.md, "Paste").
 actor ClipboardGuard {
     /// The clipboard as it was, and its change count at that moment.
     struct Snapshot: Sendable {
@@ -13,19 +13,31 @@ actor ClipboardGuard {
     /// A transient write that waits for its restore.
     struct Write: Sendable, Equatable {
         let changeCount: Int
+        /// Tells this write's read from an earlier one's, whose read can arrive after this write.
+        let number: Int
     }
 
     private let pasteboard: any Pasteboard
-    /// The latest transient write and the clipboard it replaced.
-    private var pending: (write: Write, original: PasteboardSnapshot)?
-
-    init(pasteboard: any Pasteboard) {
-        self.pasteboard = pasteboard
+    /// Runs the restore that a read sets off, so `settle()` waits for it.
+    private let work: PendingWork
+    /// The latest transient write, its text, and the clipboard it replaced.
+    private struct Waiting {
+        let write: Write
+        let text: String
+        let original: PasteboardSnapshot
     }
 
-    /// Taken at chord-down, while capture starts, because reading promised data can be slow. While
-    /// an earlier paste still waits to restore, the pasteboard holds that transcript, so the earlier
-    /// snapshot is the owner's clipboard.
+    private var pending: Waiting?
+    private var writes = 0
+
+    init(pasteboard: any Pasteboard, work: PendingWork) {
+        self.pasteboard = pasteboard
+        self.work = work
+    }
+
+    /// Taken at the announcement, while capture runs, because reading promised data can be slow. While an earlier
+    /// paste still waits to restore, the pasteboard holds that transcript, so the earlier snapshot is the owner's
+    /// clipboard.
     func snapshot() async -> Snapshot {
         let changeCount = await pasteboard.changeCount
         if let pending, pending.write.changeCount == changeCount {
@@ -34,27 +46,42 @@ actor ClipboardGuard {
         return Snapshot(changeCount: changeCount, contents: await pasteboard.snapshot())
     }
 
-    /// Writes the transcript as a transient item. If the owner copied something after `snapshot`,
-    /// that newer clipboard is the one to restore. Nil when there is nothing to restore: the clipboard was too large
-    /// to keep (`PasteboardSnapshot.isTooLarge`).
+    /// Writes the transcript as a transient item; the owner's clipboard comes back once an app reads it. If the owner
+    /// copied something after `snapshot`, that newer clipboard is the one to restore. Nil when there is nothing to
+    /// restore: the clipboard was too large to keep (`PasteboardSnapshot.isTooLarge`).
     func writeTransient(_ text: String, over snapshot: Snapshot) async -> Write? {
         let isUnchanged = await pasteboard.changeCount == snapshot.changeCount
         let original = isUnchanged ? snapshot.contents : await self.snapshot().contents
-        let write = Write(changeCount: await pasteboard.write(text, isTransient: true))
-        pending = original.isTooLarge ? nil : (write, original)
+        writes += 1
+        let number = writes
+        let changeCount = await pasteboard.writeTransient(text) { [work] in
+            work.track { await self.read(number) }
+        }
+        let write = Write(changeCount: changeCount, number: number)
+        pending = original.isTooLarge ? nil : Waiting(write: write, text: text, original: original)
         return pending?.write
     }
 
     /// Leaves `text` on the clipboard for the owner to paste, with no restore.
     func copy(_ text: String) async {
         pending = nil
-        _ = await pasteboard.write(text, isTransient: false)
+        _ = await pasteboard.write(text)
     }
 
-    /// Puts the owner's clipboard back, unless something replaced `write` since.
-    func restore(after write: Write) async {
-        guard let pending, pending.write == write else { return }
+    /// The paste target read write `number`: the owner's clipboard comes back, unless something replaced the
+    /// transcript since.
+    private func read(_ number: Int) async {
+        guard let pending, pending.write.number == number else { return }
         self.pending = nil
-        await pasteboard.restore(pending.original, ifChangeCount: write.changeCount)
+        await pasteboard.restore(pending.original, ifChangeCount: pending.write.changeCount)
+    }
+
+    /// No app read `write` in time, so the paste went nowhere: the transcript stays, as a plain copy the owner can
+    /// paste (and clipboard managers keep), and the earlier clipboard is not restored (lead, 2026-10-17). True when
+    /// the transcript was still there to keep; false when it was read or replaced.
+    func readWaitEnded(_ write: Write) async -> Bool {
+        guard let pending, pending.write == write else { return false }
+        self.pending = nil
+        return await pasteboard.restore(.plainText(pending.text), ifChangeCount: write.changeCount)
     }
 }

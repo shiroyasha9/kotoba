@@ -27,12 +27,9 @@ struct PipelinePasteAgainTests {
         let pipeline = world.makePipeline()
 
         await pipeline.pasteAgain("Fix the login bug.", of: DictationID())
-        #expect(await world.paster.pasted == ["Fix the login bug."])
-        #expect(await world.pasteboard.isTransient)
-
-        world.clock.advance(by: .seconds(1))
         await pipeline.settle()
 
+        #expect(await world.paster.pasted == ["Fix the login bug."])
         #expect(await world.pasteboard.text == "user's clipboard")
         #expect(await world.paster.keystrokes == [.commandV])
     }
@@ -45,6 +42,22 @@ struct PipelinePasteAgainTests {
 
         await pipeline.pasteAgain("Fix the login bug.", of: id)
         world.clock.advance(by: .seconds(5))
+        await pipeline.settle()
+
+        #expect(await world.pasteboard.text == "Fix the login bug.")
+        #expect(await world.pasteboard.isTransient == false)
+        #expect(await pipeline.state == .copied(id))
+    }
+
+    /// History's Paste Again into an app that never reads it: the text stays on the clipboard and the pill says so.
+    @Test func pasteAgainNoAppReadLeavesTheTextCopied() async {
+        let world = FakeWorld(transcript: "unused")
+        await world.paster.readLater()
+        let pipeline = world.makePipeline()
+        let id = DictationID()
+
+        await pipeline.pasteAgain("Fix the login bug.", of: id)
+        world.clock.advance(by: .seconds(10))
         await pipeline.settle()
 
         #expect(await world.pasteboard.text == "Fix the login bug.")
@@ -65,19 +78,12 @@ struct PipelinePasteAgainTests {
     @Test func pasteLastChordPastesTheLastDictationAndRestoresTheClipboard() async {
         let world = FakeWorld(transcript: "Fix the login bug.")
         let pipeline = world.makePipeline()
-        await pipeline.tap(world)
-        await pipeline.tap(world)
-        await pipeline.settle()
-        world.clock.advance(by: .seconds(1))
-        await pipeline.settle()
+        await pipeline.dictate(world)
 
         await pipeline.handle(.pasteLast)
         await pipeline.settle()
-        #expect(await world.paster.pasted == ["Fix the login bug.", "Fix the login bug."])
-        #expect(await world.pasteboard.isTransient)
 
-        world.clock.advance(by: .seconds(1))
-        await pipeline.settle()
+        #expect(await world.paster.pasted == ["Fix the login bug.", "Fix the login bug."])
         #expect(await world.pasteboard.text == "user's clipboard")
         #expect(await world.paster.keystrokes == [.commandV, .commandV])
     }

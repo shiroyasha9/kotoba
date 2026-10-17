@@ -94,7 +94,7 @@ final class FixLastDictationController: NSObject, NSWindowDelegate {
         window?.close()
         let model = FixLastDictationModel(
             pasted: text, learner: dictionary().map(FixLastDictationModel.Learner.live)
-        ) { [pasteboard] in _ = await pasteboard.write($0, isTransient: false) }
+        ) { [pasteboard] in _ = await pasteboard.write($0) }
         let window = Self.window(showing: model, title: fixing.title) { [weak self] in self?.window?.close() }
         window.delegate = self
         // Centred at its tallest (`FixLastDictationView` starts there); the content then sets the height, and the top

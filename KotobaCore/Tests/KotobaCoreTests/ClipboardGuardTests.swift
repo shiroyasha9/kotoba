@@ -3,89 +3,85 @@ import Testing
 @testable import KotobaCore
 
 struct ClipboardGuardTests {
-    @Test func theClipboardFromChordDownComesBack() async throws {
-        let pasteboard = FakePasteboard(text: "owner's")
-        let clipboard = ClipboardGuard(pasteboard: pasteboard)
+    let pasteboard = FakePasteboard(text: "owner's")
+    let work = PendingWork(clock: ManualClock())
+    var clipboard: ClipboardGuard { ClipboardGuard(pasteboard: pasteboard, work: work) }
 
-        let snapshot = await clipboard.snapshot()
-        let write = try #require(await clipboard.writeTransient("dictated", over: snapshot))
+    /// The paste target reads the transcript; the restore it sets off has run.
+    func appReads() async -> String? {
+        let text = await pasteboard.appReads()
+        await work.settle()
+        return text
+    }
+
+    @Test func theClipboardComesBackOnceTheTranscriptIsRead() async throws {
+        let clipboard = clipboard
+
+        _ = try #require(await clipboard.writeTransient("dictated", over: await clipboard.snapshot()))
         #expect(await pasteboard.text == "dictated")
         #expect(await pasteboard.isTransient)
-        await clipboard.restore(after: write)
+        #expect(await appReads() == "dictated")
 
         #expect(await pasteboard.text == "owner's")
     }
 
     @Test func aCopyBeforeTheWriteIsWhatComesBack() async throws {
-        let pasteboard = FakePasteboard(text: "owner's")
-        let clipboard = ClipboardGuard(pasteboard: pasteboard)
+        let clipboard = clipboard
 
         let snapshot = await clipboard.snapshot()
         await pasteboard.userCopies("copied while speaking")
-        let write = try #require(await clipboard.writeTransient("dictated", over: snapshot))
-        await clipboard.restore(after: write)
+        _ = try #require(await clipboard.writeTransient("dictated", over: snapshot))
+        _ = await appReads()
 
         #expect(await pasteboard.text == "copied while speaking")
     }
 
     @Test func aCopyAfterTheWriteIsKept() async throws {
-        let pasteboard = FakePasteboard(text: "owner's")
-        let clipboard = ClipboardGuard(pasteboard: pasteboard)
+        let clipboard = clipboard
 
         let write = try #require(await clipboard.writeTransient("dictated", over: await clipboard.snapshot()))
         await pasteboard.userCopies("copied after")
-        await clipboard.restore(after: write)
+        _ = await appReads()
 
+        #expect(await clipboard.readWaitEnded(write) == false)
         #expect(await pasteboard.text == "copied after")
     }
 
     @Test func aSnapshotDuringAPendingRestoreIsTheOwnersClipboard() async throws {
-        let pasteboard = FakePasteboard(text: "owner's")
-        let clipboard = ClipboardGuard(pasteboard: pasteboard)
+        let clipboard = clipboard
 
-        let first = try #require(await clipboard.writeTransient("one", over: await clipboard.snapshot()))
-        let second = try #require(await clipboard.writeTransient("two", over: await clipboard.snapshot()))
-        await clipboard.restore(after: first)
-        #expect(await pasteboard.text == "two")
-        await clipboard.restore(after: second)
+        _ = try #require(await clipboard.writeTransient("one", over: await clipboard.snapshot()))
+        _ = try #require(await clipboard.writeTransient("two", over: await clipboard.snapshot()))
+        #expect(await appReads() == "two")
 
         #expect(await pasteboard.text == "owner's")
     }
 
     @Test func aCopyCancelsThePendingRestore() async throws {
-        let pasteboard = FakePasteboard(text: "owner's")
-        let clipboard = ClipboardGuard(pasteboard: pasteboard)
+        let clipboard = clipboard
 
         let write = try #require(await clipboard.writeTransient("dictated", over: await clipboard.snapshot()))
         await clipboard.copy("dictated")
-        await clipboard.restore(after: write)
+        _ = await appReads()
 
+        #expect(await clipboard.readWaitEnded(write) == false)
         #expect(await pasteboard.text == "dictated")
         #expect(await pasteboard.isTransient == false)
     }
 
-    @Test func aRestoreThatRacesTheNextWriteLeavesTheNewTranscript() async throws {
-        let pasteboard = FakePasteboard(text: "owner's")
-        let clipboard = ClipboardGuard(pasteboard: pasteboard)
-        let first = try #require(await clipboard.writeTransient("A", over: await clipboard.snapshot()))
-        let snapshotForB = await clipboard.snapshot()
+    @Test func anUnreadTranscriptStaysAsAPlainCopy() async throws {
+        let clipboard = clipboard
 
-        // B's write lands, and A's restore runs before B's write call returns.
-        let writeGate = Gate()
-        await pasteboard.holdNextWriteReturn(at: writeGate)
-        async let writingB = clipboard.writeTransient("B", over: snapshotForB)
-        #expect(await eventually { await writeGate.hasWaiters })
-        await clipboard.restore(after: first)
-        await writeGate.open()
-        _ = await writingB
+        let write = try #require(await clipboard.writeTransient("dictated", over: await clipboard.snapshot()))
 
-        #expect(await pasteboard.text == "B")
+        #expect(await clipboard.readWaitEnded(write))
+        #expect(await pasteboard.text == "dictated")
+        #expect(await pasteboard.isTransient == false)
     }
 
     @Test func aClipboardOverTheLimitIsNotKept() async {
-        let pasteboard = FakePasteboard(text: "a huge image")
         await pasteboard.holdMoreThanTheLimit()
-        let clipboard = ClipboardGuard(pasteboard: pasteboard)
+        let clipboard = clipboard
 
         let write = await clipboard.writeTransient("dictated", over: await clipboard.snapshot())
 

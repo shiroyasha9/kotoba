@@ -21,7 +21,8 @@ struct TranscriptDelivery: Sendable {
 
     struct Outcome: Sendable {
         let record: DictationRecord
-        /// A transient write to restore after `Settings.restoreDelay`; nil when nothing was pasted.
+        /// A transient write to restore once the app read it (`DictationPipeline.leaveUnread`); nil when nothing was
+        /// pasted.
         let restore: ClipboardGuard.Write?
         /// What the indicator shows instead of the record's usual outcome (for example `.cleanupFailed`).
         var showing: DictationState?

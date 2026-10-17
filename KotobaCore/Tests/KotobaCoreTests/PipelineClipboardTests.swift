@@ -6,33 +6,70 @@ import Testing
 /// Clipboard snapshot, transient write and restore.
 struct PipelineClipboardTests {
 
-    @Test func theClipboardComesBackAfterTheRestoreDelay() async {
+    @Test func theClipboardComesBackOnceTheAppReadTheText() async {
         let world = FakeWorld(transcript: "dictated", clipboard: "user's clipboard")
         let pipeline = world.makePipeline()
 
         await pipeline.dictate(world)
-        #expect(await world.pasteboard.text == "dictated")
-        #expect(await world.pasteboard.isTransient)
 
-        world.clock.advance(by: .milliseconds(999))
+        #expect(await world.paster.pasted == ["dictated"])
+        #expect(await world.pasteboard.text == "user's clipboard")
+        #expect(await world.pasteboard.isTransient == false)
+    }
+
+    /// Handy #502: a busy app handles Cmd-V seconds later. The clipboard waits for its read, not for a fixed time, so
+    /// it never pastes the old clipboard.
+    @Test func aSlowAppGetsTheTranscriptAndThenTheClipboardComesBack() async {
+        let world = FakeWorld(transcript: "dictated", clipboard: "user's clipboard")
+        let pipeline = world.makePipeline()
+        await world.paster.readLater()
+
+        await pipeline.dictate(world)
+        world.clock.advance(by: .seconds(9))
         await pipeline.settle()
-        #expect(await world.pasteboard.text == "dictated")
+        let read = await world.pasteboard.appReads()
+        await pipeline.settle()
 
+        #expect(read == "dictated")
+        #expect(await world.pasteboard.text == "user's clipboard")
+    }
+
+    /// No app read the text within `Settings.readWait`: the paste went nowhere, so the text stays on the clipboard
+    /// (lead, 2026-10-17) and the pill says so; the earlier clipboard is gone.
+    @Test func aPasteNoAppReadLeavesTheTextOnTheClipboard() async throws {
+        let world = FakeWorld(transcript: "dictated", clipboard: "user's clipboard")
+        let pipeline = world.makePipeline()
+        await world.paster.readLater()
+
+        await pipeline.dictate(world)
+        world.clock.advance(by: .milliseconds(9_999))
+        await pipeline.settle()
+        let stateBefore = await pipeline.state
         world.clock.advance(by: .milliseconds(1))
         await pipeline.settle()
-        #expect(await world.pasteboard.text == "user's clipboard")
+
+        #expect(stateBefore == .idle)
+        #expect(await world.pasteboard.text == "dictated")
+        #expect(await world.pasteboard.isTransient == false)
+        #expect(await world.pasteboard.appReads() == "dictated")
+        let record = try #require(await world.store.records.first)
+        #expect(record.status == .copied)
+        #expect(await pipeline.state == .copied(record.id))
     }
 
     @Test func aCopyAfterThePasteIsNotOverwritten() async {
         let world = FakeWorld(transcript: "dictated")
         let pipeline = world.makePipeline()
+        await world.paster.readLater()
 
         await pipeline.dictate(world)
         await world.pasteboard.userCopies("copied later")
-        world.clock.advance(by: .seconds(1))
+        await world.pasteboard.appReads()
+        world.clock.advance(by: .seconds(10))
         await pipeline.settle()
 
         #expect(await world.pasteboard.text == "copied later")
+        #expect(await pipeline.state == .idle)
     }
 
     @Test func aSecondPasteDoesNotWaitAndTheOriginalClipboardComesBack() async {
@@ -43,9 +80,6 @@ struct PipelineClipboardTests {
         world.clock.advance(by: .milliseconds(300))
         await pipeline.dictate(world)
         #expect(await world.paster.pasted == ["dictated", "dictated"])
-
-        world.clock.advance(by: .seconds(1))
-        await pipeline.settle()
         #expect(await world.pasteboard.text == "user's clipboard")
     }
 

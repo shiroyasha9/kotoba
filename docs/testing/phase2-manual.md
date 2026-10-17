@@ -167,7 +167,7 @@ UI text in this list is the text in the code at the phase 2 gate (2026-10-15). I
 
 | # | Do this | Expect | Result |
 |---|---|---|---|
-| 98 | Start a dictation, copy something during recording, stop | Transcript pastes; after 1 s your new copy is on the clipboard | |
+| 98 | Start a dictation, copy something during recording, stop | Transcript pastes; right after it pasted, your new copy is on the clipboard | |
 | 99 | Stop a dictation, copy something before the text pastes | Your new copy is on the clipboard after the restore | |
 | 100 | Dictate twice quickly | Both paste; your original clipboard comes back | |
 
@@ -349,7 +349,7 @@ Rows from each agent's phase 2.5 work. The numbers continue the list above.
 | 247 | Tap the chord, speak, press ⇧Return | The recording goes on; the app gets ⇧Return as usual | |
 | 248 | Press Return with no dictation running, and press Esc during a recording | Return reaches the app as usual; Esc still cancels with Undo | |
 | 249 | Turn Wi-Fi off, tap the chord, speak, press Return; turn Wi-Fi on and retry | The dictation goes to **Recovered Dictations**; no Return is sent | |
-| 288 | In Slack, tap the chord, say "hello. Press enter.", tap the chord, and click TextEdit within 1 s | "hello." pastes into TextEdit; no Return; the pill shows "Return not pressed: app changed" | |
+| 288 | In Slack, tap the chord, say "hello. Press enter.", tap the chord, and click TextEdit within 1 s | Nothing pastes into TextEdit and no Return; the pill shows “Copied. Press ⌘V to paste.”; ⌘V pastes "hello." | |
 | 289 | Tap the chord to stop, and press Return at once (within about 0.1 s) | One Return, after the paste; the Return is not lost | |
 | 290 | Start a long dictation, stop it, and during "Transcribing" choose menu > **Paste Last Dictation** | Nothing pastes from the menu; the new dictation pastes once | |
 
@@ -776,3 +776,21 @@ Polish sends the last dictation to OpenRouter (DeepSeek V4.1 Flash, about USD 0.
 | 811 | Row 810 with VoiceOver on (⌘F5), move to the text | VoiceOver reads the text with “removed:” and “added:” before the changed words | |
 | 812 | Settings > Usage after a polish | “DeepSeek V4.1 Flash · Polish model” with a cost; the dictation and word counts did not change | |
 | 813 | In Slack, dictate, then ⌥1 | Write which: replaced (“Polished” with Undo) or copied (“Polished. Copied, press ⌘V”) | |
+
+## Core audit fixes (kotoba Dev, 2026-10-17)
+
+Rows 770-779 need real apps, a slow target or a lock, which a unit test cannot make. Use kotoba Dev with the release kotoba quit. Read the log with `log show --last 5m --predicate 'subsystem == "tech.teensy.kotoba.dev"'`.
+
+| # | Do this | Expect | Result |
+|---|---|---|---|
+| 770 | Copy a word. Dictate into Terminal, Slack, Cursor, Safari and TextEdit, one each; after each, press ⌘V in a scratch note | Each app gets the transcript; each ⌘V afterwards pastes your copied word (restored right after the app read the text) | |
+| 771 | Copy a word. Start a build in Xcode (or any load that makes Slack or Cursor slow), dictate into that app, and stop while it is busy | The app pastes the transcript, never your copied word, however late; then ⌘V elsewhere pastes your word | |
+| 772 | With your clipboard manager running (Raycast, Maccy, Paste or Alfred, note which), copy a word, dictate into TextEdit | The transcript pastes; the manager's history has no transcript entry; ⌘V afterwards pastes your word. If the manager reads the transient text at once (an early read), note it: the restore then follows its read | |
+| 773 | Click the Finder desktop (no text field), copy a word, dictate | Nothing pastes; after 10 s the pill says “Copied. Press ⌘V to paste.”; ⌘V in TextEdit pastes the transcript; History shows it as copied | |
+| 774 | Hold ⌥ (push to talk) for dictation A, release, then at once hold ⌥ again for dictation B and speak for 5 s, release | A pastes as soon as you release B's hold (not as ⌃⌥⌘V, no beep), then B pastes after it | |
+| 775 | Dictate into Slack, and switch to TextEdit before the text arrives (turn Wi-Fi off for the stop, then on after the switch) | Nothing pastes into TextEdit; the pill says “Copied. Press ⌘V to paste.” | |
+| 776 | Start a hands-free dictation, speak, lock the screen (⌃⌘Q); unlock | Recording stopped at the lock; nothing was typed into the lock screen; after unlock the pill says “Copied. Press ⌘V to paste.” and ⌘V pastes what you said | |
+| 777 | Start a hands-free dictation, speak, close the lid (or Apple menu > Sleep); wake | The recording stopped at sleep; the text is copied, or (no network at wake) the dictation is in History as failed and is sent when the network returns | |
+| 778 | Use the network link conditioner (or a slow hotspot) at about 1 Mbps up; dictate 3 min | The text pastes (no fixed 75 s cut). With the uplink cut mid-upload, the pill says “OpenRouter took too long. Saved.” or “Couldn’t reach OpenRouter. Saved.”, not both | |
+| 779 | Make a dictation fail three times with a server error (owner trial only if one occurs naturally), then relaunch | The relaunch does not send it again; History **Retry** still sends it | |
+

@@ -169,13 +169,21 @@ actor FakePaster: Paster {
         onNextPaste = action
     }
 
+    /// The focused app reads the clipboard at each Cmd-V, unless it is busy (`readLater`): then the test reads for
+    /// it with `FakePasteboard.appReads()`.
+    private var isReadingAtOnce = true
+
+    func readLater() {
+        isReadingAtOnce = false
+    }
+
     func sendPaste() async throws {
         if let error { throw error }
         onNextPaste?()
         onNextPaste = nil
         pasteCount += 1
         keystrokes.append(.commandV)
-        if let text = await pasteboard?.text {
+        if isReadingAtOnce, let text = await pasteboard?.appReads() {
             pasted.append(text)
         }
     }
@@ -248,9 +256,29 @@ actor FakePasteboard: Pasteboard {
         return PasteboardSnapshot(items: text.map { [["public.utf8-plain-text": Data($0.utf8)]] } ?? [])
     }
 
-    func write(_ text: String, isTransient transient: Bool) async -> Int {
+    /// Called at the first read of the transient text on the pasteboard now.
+    private var onRead: (@Sendable () -> Void)?
+
+    /// An app reads the clipboard (a paste target at its Cmd-V); the first read of a transient text tells its writer.
+    @discardableResult
+    func appReads() -> String? {
+        onRead?()
+        onRead = nil
+        return text
+    }
+
+    func write(_ text: String) async -> Int {
+        await write(text, isTransient: false, onRead: nil)
+    }
+
+    func writeTransient(_ text: String, onRead: @escaping @Sendable () -> Void) async -> Int {
+        await write(text, isTransient: true, onRead: onRead)
+    }
+
+    private func write(_ text: String, isTransient transient: Bool, onRead: (@Sendable () -> Void)?) async -> Int {
         self.text = text
         isTransient = transient
+        self.onRead = onRead
         count += 1
         let written = count
         if let gate = writeReturnGate {
@@ -260,17 +288,20 @@ actor FakePasteboard: Pasteboard {
         return written
     }
 
-    func restore(_ snapshot: PasteboardSnapshot, ifChangeCount changeCount: Int) async {
-        guard count == changeCount else { return }
-        text = snapshot.items.first?["public.utf8-plain-text"].flatMap { String(bytes: $0, encoding: .utf8) }
+    func restore(_ snapshot: PasteboardSnapshot, ifChangeCount changeCount: Int) async -> Bool {
+        guard count == changeCount else { return false }
+        text = snapshot.items.first?[PasteboardSnapshot.plainTextType].flatMap { String(bytes: $0, encoding: .utf8) }
         isTransient = false
+        onRead = nil
         count += 1
+        return true
     }
 
     /// Another app copied something.
     func userCopies(_ text: String) {
         self.text = text
         isTransient = false
+        onRead = nil
         count += 1
     }
 }

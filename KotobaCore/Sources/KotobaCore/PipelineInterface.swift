@@ -184,8 +184,10 @@ extension DictationPipeline {
         /// no history row and no error. Measured on the audio written, Undo's resumed part included, not on the key
         /// times. Wispr Flow discards under about 0.5 s.
         public var minimumRecording: Duration
-        /// Slow apps read the pasteboard late; restoring sooner can paste the old clipboard.
-        public var restoreDelay: Duration
+        /// The longest the clipboard waits for the paste target to read the transcript. The restore follows the
+        /// read, never a fixed time, because a busy app reads late and would paste the old clipboard (Handy #502). An
+        /// app that read nothing by then never got the paste: the transcript stays on the clipboard.
+        public var readWait: Duration
         /// The longest a paste waits for the release of the press that stopped the dictation (a Cmd-V with the chord
         /// held reaches the app as ⌃⌥⌘V). A release after a stop tap comes within `tapThreshold`; the tap repairs a
         /// lost release only at the next key event, which does not come while the owner waits for the text, so the
@@ -240,7 +242,7 @@ extension DictationPipeline {
             longRecordingWarning: Duration = .seconds(600),
             noSoundWarning: Duration = .seconds(2),
             minimumRecording: Duration = .milliseconds(500),
-            restoreDelay: Duration = .seconds(1),
+            readWait: Duration = .seconds(10),
             chordReleaseWait: Duration = .seconds(2),
             undoWindow: Duration = .seconds(5),
             cleanupDeadline: Duration = .seconds(5),
@@ -258,7 +260,7 @@ extension DictationPipeline {
             self.longRecordingWarning = longRecordingWarning
             self.noSoundWarning = noSoundWarning
             self.minimumRecording = minimumRecording
-            self.restoreDelay = restoreDelay
+            self.readWait = readWait
             self.chordReleaseWait = chordReleaseWait
             self.undoWindow = undoWindow
             self.cleanupDeadline = cleanupDeadline
