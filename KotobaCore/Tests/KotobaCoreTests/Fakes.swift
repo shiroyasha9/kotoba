@@ -308,7 +308,8 @@ actor FakePasteboard: Pasteboard {
 
     func restore(_ snapshot: PasteboardSnapshot, ifChangeCount changeCount: Int) async -> Bool {
         guard count == changeCount else { return false }
-        text = snapshot.items.first?[PasteboardSnapshot.plainTextType].flatMap { String(bytes: $0, encoding: .utf8) }
+        text = snapshot.items.first?.first { $0.type == PasteboardSnapshot.plainTextType }
+            .flatMap { String(bytes: $0.data, encoding: .utf8) }
         isTransient = false
         onRead = nil
         count += 1

@@ -33,17 +33,29 @@ public protocol Pasteboard: Sendable {
     func restore(_ snapshot: PasteboardSnapshot, ifChangeCount changeCount: Int) async -> Bool
 }
 
-/// Every item on the pasteboard, each as a map from type identifier to data.
+/// Every item on the pasteboard, each as its types and their data in the item's order: an app that pastes takes the
+/// first type it reads, so rich text written back in another order can paste as plain text.
 public struct PasteboardSnapshot: Sendable, Equatable {
+    /// One type of an item and its data.
+    public struct Representation: Sendable, Equatable {
+        public var type: String
+        public var data: Data
+
+        public init(type: String, data: Data) {
+            self.type = type
+            self.data = data
+        }
+    }
+
     /// The most a snapshot holds in memory (lead, 2026-10-17). A larger clipboard (a big image, a long spreadsheet
     /// range) is not kept: the dictation still pastes, and the earlier clipboard is gone.
     public static let byteLimit = 64 * 1024 * 1024
 
-    public var items: [[String: Data]]
+    public var items: [[Representation]]
     /// The clipboard held more than `byteLimit`; `items` is empty and nothing is restored.
     public var isTooLarge: Bool
 
-    public init(items: [[String: Data]], isTooLarge: Bool = false) {
+    public init(items: [[Representation]], isTooLarge: Bool = false) {
         self.items = items
         self.isTooLarge = isTooLarge
     }
@@ -53,6 +65,6 @@ public struct PasteboardSnapshot: Sendable, Equatable {
 
     /// One item with `text` as plain text.
     public static func plainText(_ text: String) -> Self {
-        Self(items: [[plainTextType: Data(text.utf8)]])
+        Self(items: [[Representation(type: plainTextType, data: Data(text.utf8))]])
     }
 }

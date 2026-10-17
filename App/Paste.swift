@@ -41,9 +41,9 @@ actor SystemPasteboard: KotobaCore.Pasteboard {
     /// read: the pasteboard tells no size before the data. File promises are skipped (`filePromiseTypes`).
     func snapshot() -> PasteboardSnapshot {
         var byteCount = 0
-        var items: [[String: Data]] = []
+        var items: [[PasteboardSnapshot.Representation]] = []
         for item in pasteboard.pasteboardItems ?? [] {
-            var types: [String: Data] = [:]
+            var types: [PasteboardSnapshot.Representation] = []
             for type in item.types where !Self.isFilePromise(type) {
                 guard let data = item.data(forType: type) else { continue }
                 byteCount += data.count
@@ -51,7 +51,7 @@ actor SystemPasteboard: KotobaCore.Pasteboard {
                     Log.app.notice("The clipboard holds over \(byteCount) bytes; kotoba will not keep it")
                     return PasteboardSnapshot(items: [], isTooLarge: true)
                 }
-                types[type.rawValue] = data
+                types.append(.init(type: type.rawValue, data: data))
             }
             if !types.isEmpty { items.append(types) }
         }
@@ -94,8 +94,8 @@ actor SystemPasteboard: KotobaCore.Pasteboard {
         pasteboard.clearContents()
         let items = snapshot.items.map { types in
             let item = NSPasteboardItem()
-            for (type, data) in types {
-                item.setData(data, forType: NSPasteboard.PasteboardType(type))
+            for representation in types {
+                item.setData(representation.data, forType: NSPasteboard.PasteboardType(representation.type))
             }
             return item
         }
