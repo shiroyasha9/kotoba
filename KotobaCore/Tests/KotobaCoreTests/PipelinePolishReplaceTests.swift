@@ -26,6 +26,25 @@ struct PipelinePolishReplaceTests {
         #expect(await pipeline.state == .polished(id, isReplaced: true))
     }
 
+    /// No app read the last paste: it did not land, so Backspace would delete the owner's own text. The polished text
+    /// goes to the clipboard.
+    @Test func aPasteNoAppReadIsNeverDeletedByBackspace() async throws {
+        let world = FakeWorld(transcript: Self.spoken)
+        let pipeline = world.makePipeline(
+            polisher: FakePolisher(answer: Self.polished), selector: FakeSelector(), input: FakeInput())
+        await world.paster.readLater()
+        await pipeline.dictate(world)
+        world.clock.advance(by: .seconds(10))
+        await pipeline.settle()
+
+        await pipeline.polishLast()
+
+        let id = try #require(await world.store.records.first?.id)
+        #expect(await world.paster.keystrokes == [.commandV])
+        #expect(await world.pasteboard.text == Self.polished)
+        #expect(await pipeline.state == .polished(id, isReplaced: false))
+    }
+
     @Test(arguments: [FakeInput.Change.typed, .clicked, .otherWindow, .otherApp])
     func anyChangeSinceThePasteLeavesThePolishOnTheClipboard(_ change: FakeInput.Change) async throws {
         let world = FakeWorld(transcript: Self.spoken)

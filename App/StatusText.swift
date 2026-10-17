@@ -162,8 +162,7 @@ extension DictationState {
     private func outcomeText(_ context: StatusContext) -> String? {
         let provider = context.provider.title
         return switch self {
-        case .failed: "Couldn’t reach \(provider). Saved."
-        case .timedOut: "\(provider) took too long. Saved."
+        case .failed, .timedOut: queuedText(provider)
         case .needsSetup(_, .credit): "\(provider) is out of credit. Saved."
         case .needsSetup(_, let item): StatusText.add(item, for: context.provider)
         case .rejected(_, let reason): reason.text(provider: provider)
@@ -174,6 +173,12 @@ extension DictationState {
         case .polishFailed(let failure): failure.text
         default: deliveredText
         }
+    }
+
+    /// The dictation is kept and queued: why it was not transcribed.
+    private func queuedText(_ provider: String) -> String {
+        if case .timedOut = self { return "\(provider) took too long. Saved." }
+        return "Couldn’t reach \(provider). Saved."
     }
 
     /// The text reached the owner, with a note on how.

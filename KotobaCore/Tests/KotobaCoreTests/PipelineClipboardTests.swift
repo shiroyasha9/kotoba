@@ -68,7 +68,8 @@ struct PipelineClipboardTests {
     }
 
     /// A clipboard manager that ignores the transient marker reads the text before the Cmd-V: its read is not the
-    /// paste target's, so the clipboard does not come back early (the target would paste the old one).
+    /// paste target's, so the clipboard does not come back at once (the target would paste the old one). That read
+    /// took the signal, so the clipboard comes back 1 s after the Cmd-V, and the row stays pasted.
     @Test func anEarlyReaderIsNotThePasteTarget() async throws {
         let world = FakeWorld(transcript: "dictated", clipboard: "user's clipboard")
         await world.pasteboard.readEachWriteAsAManager()
@@ -76,12 +77,16 @@ struct PipelineClipboardTests {
 
         await pipeline.dictate(world)
         let afterThePaste = await world.pasteboard.text
+        world.clock.advance(by: .seconds(1))
+        await pipeline.settle()
         world.clock.advance(by: .seconds(10))
         await pipeline.settle()
 
         #expect(await world.paster.pasted == ["dictated"])
         #expect(afterThePaste == "dictated")
-        #expect(await world.pasteboard.text == "dictated")
+        #expect(await world.pasteboard.text == "user's clipboard")
+        #expect(try #require(await world.store.records.first).status == .pasted)
+        #expect(await pipeline.state == .idle)
     }
 
     /// A pasted into a busy app that never read it, then B: A's row says copied, not pasted; B's read brings the

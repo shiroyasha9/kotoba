@@ -213,4 +213,29 @@ struct HistoryMigrationTests {
 
         #expect(try await store.pendingRetries().map(\.attempts) == [2])
     }
+
+    /// v0.3.1 gets both columns this release adds, `polished_text` and `attempts`, on one open; each keeps its value.
+    @Test func aV031HistoryGetsThePolishedTextAndAttemptsColumns() async throws {
+        let database = try SQLiteDatabase(url: url)
+        try database.execute(Self.retentionBuild)
+        // v0.3.1 added `cleanup_mode` to the retention build's shape.
+        try database.execute("ALTER TABLE dictations ADD COLUMN cleanup_mode TEXT;")
+        let (pasted, failed) = (UUID(), UUID())
+        try database.run(
+            """
+            INSERT INTO dictations (id, created_at, audio_path, audio_duration_ms, transcript, status)
+            VALUES (?1, ?3, '/tmp/a.flac', 1000, 'ship it', 'pasted'), (?2, ?3, '/tmp/b.flac', 1000, NULL, 'failed');
+            """,
+            [.text(pasted.uuidString), .text(failed.uuidString), .real(Self.now.timeIntervalSince1970)])
+
+        let store = try HistoryStore(url: url, audio: audio)
+        var queued = try #require(try await store.queuedRecord(DictationID(rawValue: failed)))
+        #expect(queued.attempts == 0)
+        queued.attempts = 2
+        #expect(try await store.update(queued))
+        #expect(try await store.setPolishedText("Ship it.", of: DictationID(rawValue: pasted), usage: []))
+
+        #expect(try await store.queuedRecord(DictationID(rawValue: failed))?.attempts == 2)
+        #expect(try await store.transcribedRecord(DictationID(rawValue: pasted))?.polishedText == "Ship it.")
+    }
 }

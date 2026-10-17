@@ -5,23 +5,25 @@ import Testing
 
 struct ClipboardGuardTests {
     let pasteboard = FakePasteboard(text: "owner's")
-    let work = PendingWork(clock: ManualClock())
+    let clock = ManualClock()
+    let work: PendingWork
     let clipboard: ClipboardGuard
     /// What each dictation learned about its unread paste, in order: true when left on the clipboard.
     let unread = UnreadReports()
 
     init() {
-        clipboard = ClipboardGuard(pasteboard: pasteboard, work: work)
+        work = PendingWork(clock: clock)
+        clipboard = ClipboardGuard(pasteboard: pasteboard, work: work, clock: clock)
     }
 
     /// Writes `text` and sends its Cmd-V.
     func paste(_ text: String) async throws -> ClipboardGuard.Write {
-        let write = try #require(await write(text))
-        await clipboard.willPaste(write, readBy: .now + .seconds(10))
+        let write = await write(text)
+        await clipboard.willPaste(write, readBy: clock.now + .seconds(10))
         return write
     }
 
-    func write(_ text: String) async -> ClipboardGuard.Write? {
+    func write(_ text: String) async -> ClipboardGuard.Write {
         await clipboard.writeTransient(text, over: await clipboard.snapshot()) { [unread] isLeft in
             unread.add(isLeft)
         }
@@ -46,8 +48,8 @@ struct ClipboardGuardTests {
     @Test func aCopyBeforeTheWriteIsWhatComesBack() async throws {
         let snapshot = await clipboard.snapshot()
         await pasteboard.userCopies("copied while speaking")
-        let write = try #require(await clipboard.writeTransient("dictated", over: snapshot) { _ in })
-        await clipboard.willPaste(write, readBy: .now + .seconds(10))
+        let write = await clipboard.writeTransient("dictated", over: snapshot) { _ in }
+        await clipboard.willPaste(write, readBy: clock.now + .seconds(10))
         _ = await appReads()
 
         #expect(await pasteboard.text == "copied while speaking")
@@ -82,17 +84,49 @@ struct ClipboardGuardTests {
         #expect(unread.list.isEmpty)
     }
 
-    /// A read before the Cmd-V went out is a clipboard manager's, not the paste target's: nothing comes back early.
-    @Test func aReadBeforeTheCmdVIsNotThePasteTargets() async throws {
-        let write = try #require(await write("dictated"))
+    /// A read before the Cmd-V went out is a clipboard manager's, not the paste target's: nothing comes back at
+    /// once. That read took the signal, so the clipboard comes back 1 s after the Cmd-V, and the paste is not taken
+    /// for unread.
+    @Test func aReadBeforeTheCmdVRestoresOneSecondAfterIt() async throws {
+        let write = await write("dictated")
         _ = await appReads()
-        await clipboard.willPaste(write, readBy: .now + .seconds(10))
+        await clipboard.willPaste(write, readBy: clock.now + .seconds(10))
         _ = await appReads()
+        clock.advance(by: .milliseconds(999))
+        await work.settle()
+        let beforeTheSecond = await pasteboard.text
+        clock.advance(by: .milliseconds(1))
+        await work.settle()
 
-        #expect(await pasteboard.text == "dictated")
-        await clipboard.readWaitEnded(write)
-        #expect(await pasteboard.text == "dictated")
-        #expect(unread.list == [true])
+        #expect(beforeTheSecond == "dictated")
+        #expect(await pasteboard.text == "owner's")
+        clock.advance(by: .seconds(10))
+        await work.settle()
+        #expect(unread.list.isEmpty)
+    }
+
+    /// The early read's report reaches the guard after the Cmd-V went out: the same 1 s rule.
+    @Test func anEarlyReadReportedAfterTheCmdVRestoresOneSecondAfter() async throws {
+        let write = await write("dictated")
+        await pasteboard.appReads()
+        await clipboard.willPaste(write, readBy: clock.now + .seconds(10))
+        await work.settle()
+        clock.advance(by: .seconds(1))
+        await work.settle()
+
+        #expect(await pasteboard.text == "owner's")
+        #expect(unread.list.isEmpty)
+    }
+
+    /// A read early, then B within the 1 s: A was probably pasted, so it is not reported unread.
+    @Test func aPasteReadEarlyAndReplacedIsNotReported() async throws {
+        let write = await write("A")
+        _ = await appReads()
+        await clipboard.willPaste(write, readBy: clock.now + .seconds(10))
+        _ = try await paste("B")
+        await work.settle()
+
+        #expect(unread.list.isEmpty)
     }
 
     /// A pasted and unread, then B replaces it: A learns it was not pasted (not left on the clipboard).
@@ -125,13 +159,20 @@ struct ClipboardGuardTests {
         #expect(unread.list == [true])
     }
 
-    @Test func aClipboardOverTheLimitIsNotKept() async {
+    /// Too large to keep: the read still ends the wait (no restore, nothing to report), and a paste no app read is
+    /// still reported.
+    @Test func aClipboardOverTheLimitIsNotKeptButTheReadIsWaitedFor() async throws {
         await pasteboard.holdMoreThanTheLimit()
 
-        let write = await write("dictated")
-
-        #expect(write == nil)
+        let first = try await paste("dictated")
+        #expect(first.isClipboardKept == false)
+        #expect(await appReads() == "dictated")
         #expect(await pasteboard.text == "dictated")
+        let unreadOne = try await paste("second")
+        await clipboard.readWaitEnded(unreadOne)
+
+        #expect(await pasteboard.text == "second")
+        #expect(unread.list == [true])
     }
 }
 

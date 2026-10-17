@@ -35,6 +35,27 @@ struct PipelineTimeoutTests {
         #expect(await pipeline.state == .timedOut(record.id))
     }
 
+    /// A retry that times out says so too, not "Couldn’t reach".
+    @Test func aRetryThatTimesOutSaysSo() async throws {
+        let world = FakeWorld(transcript: "later")
+        let pipeline = world.makePipeline()
+        await world.provider.fail(with: ProviderError.offline)
+        await pipeline.dictate(world)
+        await world.provider.fail(with: nil)
+        let gate = Gate()
+        await world.provider.hold(at: gate)
+
+        async let retried: Void = pipeline.retryPending()
+        #expect(await eventually { await gate.hasWaiters })
+        world.clock.advance(by: .seconds(80))
+        await retried
+        await gate.open()
+
+        let record = try #require(await world.store.records.first)
+        #expect(record.status == .failed)
+        #expect(await pipeline.state == .timedOut(record.id))
+    }
+
     @Test func anAnswerInTimeCancelsTheBound() async throws {
         let world = FakeWorld(transcript: "in time")
         let pipeline = world.makePipeline()

@@ -194,7 +194,7 @@ extension DictationPipeline {
             await self.pasteWentUnread(text, of: id, marksRow: false, isLeftOnClipboard: isLeftOnClipboard)
         }
         let target = pasteTarget()
-        if let write { await clipboard.willPaste(write, readBy: ports.clock.now + settings.readWait) }
+        await clipboard.willPaste(write, readBy: ports.clock.now + settings.readWait)
         do {
             try await ports.paster.sendPaste()
         } catch {
@@ -203,7 +203,7 @@ extension DictationPipeline {
             return .copied
         }
         markPasted(text, at: target)
-        return write == nil ? .clipboardNotKept : .pasted
+        return write.isClipboardKept ? .pasted : .clipboardNotKept
     }
 
     /// Where the owner is just before a ⌘V, so a Cmd-Tab or a click right after it cannot become the paste's place;

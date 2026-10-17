@@ -71,13 +71,10 @@ struct TranscriptDelivery: Sendable {
         var restore: ClipboardGuard.Write?
         var cleanupMiss: TranscriptionSteps.CleanupMiss?
         var submitted: Submitted?
-        var failure: DictationState?
         switch result {
         case .failure(let error):
             Log.pipeline.error("Transcription \(job.id.rawValue) on \(record.model ?? "no answer") failed: \(error)")
             record.markFailed(by: error)
-            // A timeout says so: "offline" would send the owner to check a network that works.
-            if error as? ProviderError == .timedOut { failure = .timedOut(record.id) }
         case .success(let transcribed):
             if let mode = job.output.cleanupMode {
                 await beforeCleanup()
@@ -99,14 +96,13 @@ struct TranscriptDelivery: Sendable {
         // The answers' ledger entries go with this save. A crash between the answer and here (at most the cleanup and
         // the paste, 1-2 s) loses them; the pending row is sent again at the next launch.
         await store.saveOrLog(record)
-        let showing =
-            failure ?? Self.notice(for: record, of: job, restore, cleanupMiss: cleanupMiss, submitted: submitted)
+        let showing = Self.notice(for: record, of: job, restore, cleanupMiss: cleanupMiss, submitted: submitted)
         return Outcome(record: record, restore: restore, showing: showing, isSubmitted: submitted == .sent)
     }
 
     /// A copied transcript needs the owner's Cmd-V, so "Copied" wins over the cleanup note. A Return the owner asked
     /// for and did not get wins over the cleanup note too, and the cleanup note over a cut recording's. Lost audio
-    /// matters more than a lost clipboard (a paste with no `restore` did not keep the earlier clipboard).
+    /// matters more than a lost clipboard (`Write.isClipboardKept`).
     private static func notice(
         for record: DictationRecord, of job: Job, _ restore: ClipboardGuard.Write?,
         cleanupMiss: TranscriptionSteps.CleanupMiss?, submitted: Submitted?
@@ -119,7 +115,7 @@ struct TranscriptDelivery: Sendable {
         case nil: break
         }
         if let loss = job.audio.loss { return .audioCut(record.id, loss) }
-        return restore == nil ? .clipboardNotKept(record.id) : nil
+        return restore?.isClipboardKept == false ? .clipboardNotKept(record.id) : nil
     }
 
     /// Return right after the Cmd-V, into the same event stream; the chord is already released. True when sent.
@@ -167,7 +163,7 @@ struct TranscriptDelivery: Sendable {
             return (.copied, nil)
         }
         let write = await clipboard.writeTransient(text, over: snapshot) { await job.pasteWentUnread(text, $0) }
-        if let write { await clipboard.willPaste(write, readBy: clock.now + job.settings.readWait) }
+        await clipboard.willPaste(write, readBy: clock.now + job.settings.readWait)
         do {
             try await paster.sendPaste()
             Self.mark(.pasteSent, at: clock.now, of: job, in: &latency)

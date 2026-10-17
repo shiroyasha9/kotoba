@@ -13,7 +13,8 @@ struct RetryQueueTests {
                 work: PendingWork(clock: world.clock)),
             store: world.store,
             clock: world.clock,
-            clipboard: ClipboardGuard(pasteboard: world.pasteboard, work: PendingWork(clock: world.clock))
+            clipboard: ClipboardGuard(
+                pasteboard: world.pasteboard, work: PendingWork(clock: world.clock), clock: world.clock)
         )
     }
 

@@ -17,6 +17,8 @@ extension DictationPipeline {
     /// waits on the clipboard ("Copied").
     public func absenceBegan(_ absence: Absence) {
         absences.insert(absence)
+        // A paste waiting for a release that the lock may swallow ends its wait now and copies.
+        releaseWaiters.resumeAll()
         guard let recording else { return }
         Log.pipeline.info("The owner is away: the recording stops and its text will wait on the clipboard")
         stop(recording, at: ports.clock.now)

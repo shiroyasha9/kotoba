@@ -41,6 +41,30 @@ struct PipelineAwayTests {
         #expect(try #require(await world.store.records.first).status == .copied)
     }
 
+    /// A paste waits for the release of the next push-to-talk press; the screen locks while it is held, and its
+    /// release is lost. The lock ends the wait: the text is copied, never pasted after the unlock.
+    @Test func aPasteWaitingForAReleaseLostAtTheLockIsCopied() async throws {
+        let world = FakeWorld(transcript: "Ship it.")
+        let pipeline = world.makePipeline()
+        let gate = Gate()
+        await world.provider.hold(at: gate)
+        await pipeline.tap(world)
+        await pipeline.tap(world)
+        #expect(await eventually { await gate.hasWaiters })
+        await pipeline.handle(.chordDown(.tapOrHold))
+        await gate.open()
+        #expect(await eventually { await pipeline.releaseWaiters.count == 1 })
+
+        await pipeline.absenceBegan(.screenLocked)
+        try #require(await eventually { await pipeline.releaseWaiters.isEmpty })
+        await pipeline.settle()
+        await pipeline.absenceEnded(.screenLocked)
+
+        #expect(await world.paster.keystrokes == [])
+        let first = try #require(await world.store.records.first)
+        #expect(first.status == .copied)
+    }
+
     /// Locked and asleep at once: only the end of both brings pasting back.
     @Test func pastingComesBackWhenEveryAbsenceEnded() async {
         let world = FakeWorld(transcript: "Back.")

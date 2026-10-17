@@ -98,6 +98,8 @@ public enum DictationState: Sendable, Equatable {
         case .rejected: .rejected(record.id, record.rejectReason ?? .other)
         case .copied: .copied(record.id)
         case .failed where record.needsSetup != nil: .needsSetup(record.id, record.needsSetup ?? .key)
+        // "Offline" would send the owner to check a network that works.
+        case .failed where record.hasTimedOut: .timedOut(record.id)
         case .failed, .pending: .failed(record.id)
         case .pasted, .cancelled: .idle
         }

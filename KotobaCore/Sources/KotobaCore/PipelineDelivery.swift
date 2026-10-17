@@ -122,7 +122,8 @@ extension DictationPipeline {
     /// for `Settings.chordReleaseWait` at most. A later press (the next push-to-talk hold) holds it until its release,
     /// however long; a lost one is repaired at the next key event (`HotkeyMissedReleaseTests`).
     private func waitForChordRelease(after stoppingPress: Int?) async {
-        while isChordDown {
+        // The owner away (`absenceBegan`) ends the wait: the text is copied, not pasted.
+        while isChordDown, isPresent {
             let isStoppingPress = press == stoppingPress
             let bound =
                 isStoppingPress
