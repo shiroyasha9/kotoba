@@ -25,6 +25,14 @@
 - A cleanup or Polish answer that was cut off is never pasted. A cut cleanup pastes the raw transcript instead.
 - Automatic retries stop after 3 tries, then the dictation waits for your Retry. An answer kotoba cannot read is no longer sent again.
 - Long recordings get more time to transcribe, and a slow answer says "OpenRouter took too long. Saved." instead of looking offline.
+- Failed dictations are sent again sooner: when the speech service asks kotoba to wait (a rate limit or an outage), once that wait has passed, and when your next dictation goes through.
+- A dictation waiting for a key or credit is sent as soon as you add it, even after 3 tries.
+- Quitting waits up to 3 seconds for a dictation that is being sent, and never pastes. A text that arrives during quit is kept in History as "Not pasted", and Paste Last finds it.
+- With Microphone access turned off while kotoba runs, the indicator says "Microphone access is off" with a button to open System Settings, and the silent recording is not sent or billed.
+- The microphone opens again when its sample rate changes during a dictation, so the rest of the recording is not silent.
+- New messages say what went wrong and keep the audio: "Secure connection blocked. Saved." (for example, a Wi-Fi sign-in page), "Couldn’t find <host>. Saved." (a name that does not resolve, such as a mistyped Azure resource), and "Audio file is missing. Can’t retry."
+- Azure: a 403 now says you are out of credit, not that the key is wrong.
+- Your restored clipboard keeps its formats in their original order, so rich text pastes as rich text. File promises are skipped.
 - Only one copy of kotoba runs. Opening it again brings up the running one.
 - If you turn off Accessibility for kotoba, a dictation goes to the clipboard instead of pasting nowhere, and the shortcut works again as soon as you turn it back on.
 - When the disk is full, the indicator says so, and kotoba pastes the part it saved.

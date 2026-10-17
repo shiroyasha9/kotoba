@@ -83,7 +83,7 @@ kotoba is a native, open-source alternative to Wispr Flow, built for developers 
 
 ### Never lose a dictation
 
-- A failed dictation keeps its audio and retries when the network comes back, up to 3 times, then waits for your Retry. After a crash, kotoba transcribes the lost recording at the next launch.
+- A failed dictation keeps its audio and retries when the network or the speech service comes back, up to 3 times, then waits for your Retry. After a crash, kotoba transcribes the lost recording at the next launch.
 - Locking the screen or putting the Mac to sleep stops the recording and transcribes what you said.
 - History keeps every dictation, with search, Copy, Paste Again and Retry. Play its saved audio, or transcribe it again with the current or another speech model.
 - Paste or copy your last dictation from the menu or with its own shortcut (Copy Last is ⌃⌘C).
