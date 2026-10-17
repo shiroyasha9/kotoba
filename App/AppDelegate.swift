@@ -98,15 +98,14 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             ports: .init(
                 audio: audio,
                 provider: router,
-                paster: CGEventPaster(),
-                pasteboard: SystemPasteboard(),
-                clock: SystemClock(),
+                paster: CGEventPaster(), pasteboard: SystemPasteboard(), clock: SystemClock(),
                 store: store,
                 cleaner: cleaner,
                 missingSetup: { [vault, routeSettings] in routeSettings.missingSetup(hasKey: vault.hasKey(for:)) },
                 readback: learner.readback,
                 // The polisher shares the cleanup connection: OpenRouter's chat keeps one URLSession.
-                frontApp: { FrontAppObserver.current }, polisher: cleaner.polisher(), selector: AXPastedTextSelector()
+                frontApp: { FrontAppObserver.current }, polisher: cleaner.polisher(), selector: AXPastedTextSelector(),
+                inputMark: { [hotkeys] in hotkeys.inputMark() }
             ),
             settings: settings
         )

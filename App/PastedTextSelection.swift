@@ -10,8 +10,8 @@ import KotobaCore
 ///
 /// It selects only in an editable field (its value and selection can be set): a terminal's text area is read-only,
 /// and a ⌘V there pastes at the prompt, not over a selection. The selection is read back before it counts, so an app
-/// that reports success and selects nothing (Electron's false successes) leaves the old selection, and Polish pastes
-/// as new text.
+/// that reports success and selects nothing (Electron's false successes) leaves the old selection, and Polish tries
+/// Backspace or the clipboard (`PolishPlacement`).
 struct AXPastedTextSelector: PastedTextSelector {
     /// Longer fields are not read (UTF-16 units): a whole document read through Accessibility takes long.
     private static let maxLength = 200_000

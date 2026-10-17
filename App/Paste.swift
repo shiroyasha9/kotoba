@@ -76,6 +76,8 @@ struct CGEventPaster: Paster {
     enum PasteError: Error {
         case notAllowed
         case noEvent
+        /// The owner holds a modifier that would change each Backspace.
+        case modifierHeld
     }
 
     private static let vKeyCode = Mutex(CGKeyCode(kVK_ANSI_V))
@@ -124,6 +126,21 @@ struct CGEventPaster: Paster {
         try Self.post(CGKeyCode(kVK_Return), flags: [])
     }
 
+    /// Backspace is the same key in every layout. Posted before the Cmd-V into the same event stream, so the app
+    /// deletes before it pastes. All or none: every check comes before the first press, and one event pair is posted
+    /// `count` times. A modifier the owner holds would join each press (⌥⌫ deletes a word), so then nothing is posted.
+    func sendBackspaces(_ count: Int) async throws {
+        let held = CGEventSource.flagsState(.combinedSessionState)
+        guard held.isDisjoint(with: [.maskCommand, .maskAlternate, .maskControl, .maskShift]) else {
+            throw PasteError.modifierHeld
+        }
+        let (keyDown, keyUp) = try Self.events(CGKeyCode(kVK_Delete), flags: [])
+        for _ in 0..<count {
+            keyDown.post(tap: .cghidEventTap)
+            keyUp.post(tap: .cghidEventTap)
+        }
+    }
+
     /// Marks every event kotoba posts, so the hotkey tap lets its own Cmd-V and Return pass ("kotoba" in ASCII).
     static let postedEventTag: Int64 = 0x6B6F_746F_6261
 
@@ -133,6 +150,13 @@ struct CGEventPaster: Paster {
     /// 0.6 µs, `swiftc -O` probe, 2026-10-17); the first call in a process (about 11 ms) runs at launch, in
     /// `Readiness`. `CGPreflightPostEventAccess` costs about 3 ms a call.
     private static func post(_ keyCode: CGKeyCode, flags: CGEventFlags) throws {
+        let (keyDown, keyUp) = try events(keyCode, flags: flags)
+        keyDown.post(tap: .cghidEventTap)
+        keyUp.post(tap: .cghidEventTap)
+    }
+
+    /// One tagged key-down and key-up, once Accessibility is allowed.
+    private static func events(_ keyCode: CGKeyCode, flags: CGEventFlags) throws -> (CGEvent, CGEvent) {
         guard AXIsProcessTrusted() else { throw PasteError.notAllowed }
         let source = shared.source
         guard
@@ -143,8 +167,7 @@ struct CGEventPaster: Paster {
             event.flags = flags
             event.setIntegerValueField(.eventSourceUserData, value: postedEventTag)
         }
-        keyDown.post(tap: .cghidEventTap)
-        keyUp.post(tap: .cghidEventTap)
+        return (keyDown, keyUp)
     }
 
     /// Finds the key that types `character` in the current layout while ⌘ is held: the paste is ⌘V, and a layout

@@ -66,7 +66,7 @@ struct TranscriptionSteps: Sendable {
     }
 
     /// Sets the record's cleaned text with replacements applied, or nil when there is no cleaner, it failed, it
-    /// answered no words or its answer was cut (`CleanedText.isComplete`): the raw transcript is used then, and the
+    /// answered no words or its answer was cut (`RewrittenText.isComplete`): the raw transcript is used then, and the
     /// cleanup is not retried. An answer's usage goes to the record, empty or not, dated with the transcript's answer:
     /// its word change counts on the same day as the words it changes, even when it comes after midnight. The replacements run once, on the cleaner's output, so a
     /// rule such as "kotoba" -> "kotoba.app" does not grow twice.
@@ -97,11 +97,11 @@ struct TranscriptionSteps: Sendable {
             Log.pipeline.error("Cleanup \(id.rawValue): no cleaner, using the raw transcript")
             return .failure(.failed)
         }
-        let cleaned: CleanedText
+        let cleaned: RewrittenText
         // The keyterms the transcription sent, so the cleaner's list stays within the same cap.
         let terms =
             record.sentTerms ?? TermRanking.keyterms(of: settings.dictionary, use: settings.termUse, at: clock.date)
-        let request: @Sendable () async throws -> CleanedText = {
+        let request: @Sendable () async throws -> RewrittenText = {
             try await cleaner.clean(raw, vocabulary: terms, mode: mode)
         }
         switch await answer(to: request, for: record, at: transcribed.answeredAt, deadline: deadline) {
@@ -138,9 +138,9 @@ struct TranscriptionSteps: Sendable {
     /// cancelled: a late answer was billed, so its cost goes to the ledger when it comes, with no words delivered,
     /// dated `time` (its transcript's answer).
     private func answer(
-        to request: @escaping @Sendable () async throws -> CleanedText, for record: DictationRecord, at time: Date,
+        to request: @escaping @Sendable () async throws -> RewrittenText, for record: DictationRecord, at time: Date,
         deadline: Duration?
-    ) async -> Deadlined<CleanedText> {
+    ) async -> Deadlined<RewrittenText> {
         guard let deadline else {
             do {
                 return .answered(.success(try await request()))

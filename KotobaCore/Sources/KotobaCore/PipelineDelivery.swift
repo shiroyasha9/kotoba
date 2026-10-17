@@ -30,6 +30,12 @@ extension DictationPipeline {
             work.schedule(at: ports.clock.now + settings.restoreDelay) { await self.clipboard.restore(after: write) }
         }
         finishDictation(current.id, showing: outcome.showing ?? .outcome(of: outcome.record))
+        // Return submitted the field: the text is no longer where it was pasted.
+        if outcome.isSubmitted {
+            lastPaste = nil
+        } else if outcome.record.status == .pasted, let text = outcome.record.deliveredText {
+            markPasted(text)
+        }
         // Learning reads the field only between dictations, and not after a Return submitted it.
         if let readback = ports.readback, outcome.record.status == .pasted, !outcome.isSubmitted, recording == nil,
             paused == nil, let text = outcome.record.deliveredText

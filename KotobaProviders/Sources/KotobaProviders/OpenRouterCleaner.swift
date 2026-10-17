@@ -47,12 +47,12 @@ public final class OpenRouterCleaner: TextCleaner {
     }
 
     /// `vocabulary` comes within the route limits (`PersonalDictionary.keyterms`); `mode` picks the system prompt.
-    public func clean(_ transcript: String, vocabulary: [String], mode: AppMode) async throws -> CleanedText {
+    public func clean(_ transcript: String, vocabulary: [String], mode: AppMode) async throws -> RewrittenText {
         let model = settings.cleanupModel
         let label = "cleanup \(model.rawValue) \(mode.rawValue)"
         let request = Self.request(transcript, vocabulary: vocabulary, mode: mode, model: model)
         let answer = try await ChatAnswer.send(request, on: connection, at: baseURL, label: label)
-        return CleanedText(
+        return RewrittenText(
             text: answer.text, model: model.rawValue, cost: answer.usage?.cost(of: model), isComplete: answer.isComplete
         )
     }

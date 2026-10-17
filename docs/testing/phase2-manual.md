@@ -759,9 +759,15 @@ Polish sends the last dictation to OpenRouter (DeepSeek V4.1 Flash, about USD 0.
 | 800 | Settings > General > “Polish last dictation”: click **Use ⌥1** | The shortcut shows ⌥1; Home lists “Polish last dictation ⌥1” | |
 | 801 | Copy some text. In TextEdit, dictate a rambling request of 30 s with a file name in it, then press ⌥1 | The pill shows “Polishing”, then “Polished” with Undo. The dictation in TextEdit is replaced by a shorter text with the same file name; ⌘V after 2 s pastes the text you copied. The log has “the text to replace is selected” | |
 | 802 | Right after row 801, click **Undo** on the pill | The text from before Polish is back in TextEdit; History’s row has no “Polished” note | |
-| 803 | In cmux (a Claude Code prompt), dictate, then press ⌥1 | The pill says “Polished. Pasted as new text”; the polished text appears after your dictation (a terminal cannot select it). Write whether this is good enough | |
-| 804 | In TextEdit, dictate, change one word of the pasted text, then press ⌥1 | “Polished. Pasted as new text”: your edited text stays as you left it | |
-| 805 | Press ⌥1 and switch to another app at once | The pill says “Copied. Press ⌘V to paste.”; ⌘V pastes the polished text; nothing pasted in either app | |
+| 803 | cmux, a Claude Code prompt with some words you typed first: dictate one or two short sentences (under 800 characters, one line), touch nothing, press ⌥1 | Your typed words stay; the dictation is replaced by the polished text; “Polished” with Undo. Click Undo: the dictation is back. The log has “the text to replace is not found” | |
+| 804 | Row 803 with a long dictation (over 800 characters, or Claude Code shows “[Pasted text #1 +N lines]”) | Nothing changes in the prompt; “Polished. Copied, press ⌘V”; ⌘V pastes the polished text. Then press Backspace once on a “[Pasted text …]” item and write what it deletes (the whole item, or one character): this decides a follow-up | |
+| 805 | Row 803, but press an arrow key (or click in the prompt) before ⌥1 | Nothing changes in the prompt; “Polished. Copied, press ⌘V” | |
+| 814 | Plain zsh in cmux (no Claude Code): type `echo `, dictate a short sentence, touch nothing, press ⌥1 | `echo ` stays and the dictation is replaced by the polished text; nothing runs | |
+| 815 | A browser text field (Chrome or Safari), dictate, touch nothing, press ⌥1 | Replaced (“Polished” with Undo), by selection or by Backspace. Write which the log names (“selected” or “not found”) | |
+| 816 | In TextEdit, dictate, change one word of the pasted text, then press ⌥1 | Your edited text stays as you left it; “Polished. Copied, press ⌘V” | |
+| 817 | Press ⌥1 and switch to another app at once | “Polished. Copied, press ⌘V”; ⌘V pastes the polished text; nothing pasted in either app | |
+| 819 | Terminal.app with Shell > Secure Keyboard Entry on: dictate, touch nothing, press ⌥1. Turn it off afterwards | Nothing changes in the prompt; “Polished. Copied, press ⌘V” | |
+| 818 | Speech model Azure MAI-Transcribe-2 (Advanced), remove the OpenRouter key, press ⌥1 | The pill says “Add your OpenRouter key” with **Add Key…**; it opens Speech with an “OpenRouter Key for Cleanup and Polish” section where the key can be pasted | |
 | 806 | Menu bar menu > **Polish Last Dictation** | As row 801 | |
 | 807 | Turn Wi-Fi off, press ⌥1 | “Couldn’t polish. Nothing changed.” with Retry; nothing pasted. Turn Wi-Fi on and click Retry: as row 801 | |
 | 808 | Start a dictation (tap the chord), then press ⌥1 while it records | Nothing happens: the pill stays “Listening” | |
@@ -769,4 +775,4 @@ Polish sends the last dictation to OpenRouter (DeepSeek V4.1 Flash, about USD 0.
 | 810 | History: right-click the polished row > **View Changes…**, in light and dark appearance | A sheet with “Transcript → Polished” (and the cleanup pairs for a cleanup dictation); removed words struck through in red, added words underlined in green; Done closes it | |
 | 811 | Row 810 with VoiceOver on (⌘F5), move to the text | VoiceOver reads the text with “removed:” and “added:” before the changed words | |
 | 812 | Settings > Usage after a polish | “DeepSeek V4.1 Flash · Polish model” with a cost; the dictation and word counts did not change | |
-| 813 | In Slack or a Chrome text field, dictate, then ⌥1 | Write which: replaced (“Polished” with Undo) or added (“Polished. Pasted as new text”) | |
+| 813 | In Slack, dictate, then ⌥1 | Write which: replaced (“Polished” with Undo) or copied (“Polished. Copied, press ⌘V”) | |

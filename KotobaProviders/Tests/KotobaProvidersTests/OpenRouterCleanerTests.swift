@@ -118,9 +118,10 @@ struct OpenRouterCleanerTests {
 
         #expect(
             cleaned
-                == CleanedText(
+                == RewrittenText(
                     text: "Can you open auth.ts and check why login fails when I pass --debug?\n",
-                    model: "google/gemini-3.5-flash-lite", cost: .reported(try #require(Decimal(string: "0.0000431")))))
+                    model: "google/gemini-3.5-flash-lite", cost: .reported(try #require(Decimal(string: "0.0000431"))),
+                    isComplete: true))
     }
 
     /// No `usage.cost`: the token counts at the model's list price.

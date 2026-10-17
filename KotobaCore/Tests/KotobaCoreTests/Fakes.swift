@@ -171,14 +171,22 @@ actor FakePaster: Paster {
         }
     }
 
-    enum Keystroke: Equatable { case commandV, returnKey }
+    enum Keystroke: Equatable {
+        case commandV, returnKey
+        case backspaces(Int)
+    }
 
-    /// Every Cmd-V and Return, in the order the focused app got them.
+    /// Every Cmd-V, Return and run of Backspaces, in the order the focused app got them.
     private(set) var keystrokes: [Keystroke] = []
 
     func sendReturn() async throws {
         if let error { throw error }
         keystrokes.append(.returnKey)
+    }
+
+    func sendBackspaces(_ count: Int) async throws {
+        if let error { throw error }
+        keystrokes.append(.backspaces(count))
     }
 }
 

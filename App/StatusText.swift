@@ -187,7 +187,7 @@ extension DictationState {
         case .audioCut(_, .other): "Pasted what was saved. Some audio was lost."
         case .clipboardNotKept: "Pasted. Old clipboard too large to keep."
         case .polished(_, isReplaced: true): "Polished"
-        case .polished(_, isReplaced: false): "Polished. Pasted as new text"
+        case .polished(_, isReplaced: false): "Polished. Copied, press ⌘V"
         case .idle, .recording, .transcribing, .cleaning, .undoable, .failed, .needsSetup, .rejected, .captureFailed,
             .nothingRecorded, .audioNotSaved, .polishing, .polishFailed:
             nil

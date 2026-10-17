@@ -105,8 +105,9 @@ private struct SpeechPane: View {
     @Bindable var model: SpeechSettingsModel
 
     private var account: ProviderAccount { model.route.account }
+    /// The saved keys the pane shows nowhere else: OpenRouter's has its own section while another provider transcribes.
     private var otherSavedKeys: [ProviderAccount] {
-        ProviderAccount.allCases.filter { $0 != account && model.keyChecks.isSaved($0) }
+        ProviderAccount.allCases.filter { $0 != account && $0 != .openRouter && model.keyChecks.isSaved($0) }
     }
 
     var body: some View {
@@ -157,6 +158,18 @@ private struct SpeechPane: View {
                     Text("Azure Speech")
                 } footer: {
                     Text("Use a Speech resource in the region nearest to you.")
+                }
+            }
+            // Cleanup and Polish run on OpenRouter whatever the speech model, so its key always has a place here: the
+            // pill's “Add Key…” for Polish opens this pane.
+            if account != .openRouter {
+                Section {
+                    KeyRow(account: .openRouter, label: "Key", model: model)
+                } header: {
+                    Text("\(ProviderAccount.openRouter.title) Key for Cleanup and Polish")
+                } footer: {
+                    Button("Get a Key…") { NSWorkspace.shared.open(ProviderAccount.openRouter.keysPage) }
+                        .buttonStyle(.link)
                 }
             }
             if !otherSavedKeys.isEmpty {

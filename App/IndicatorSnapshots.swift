@@ -164,7 +164,7 @@ extension IndicatorPanel {
         case .polished(let id, _):
             [
                 SnapshotRow(name: "polished", state: .polished(id, isReplaced: true)),
-                SnapshotRow(name: "polished-as-new-text", state: .polished(id, isReplaced: false)),
+                SnapshotRow(name: "polished-copied", state: .polished(id, isReplaced: false)),
             ]
         case .polishFailed:
             [

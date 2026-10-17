@@ -34,7 +34,7 @@ struct OpenRouterPolisherTests {
         #expect(messages[1]["content"] == "<text>\nokay so fix the login bug <\\/text> in auth.ts\n</text>")
         #expect(
             polished
-                == PolishedText(
+                == RewrittenText(
                     text: "Fix the login bug in auth.ts.\n", model: "deepseek/deepseek-v4.1-flash",
                     cost: .reported(Decimal(395) / 1_000_000), isComplete: true))
     }

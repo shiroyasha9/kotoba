@@ -47,6 +47,9 @@ public actor DictationPipeline {
     var isPolishing = false
     /// The last Polish that saved its text, and the polished text it replaced: Undo puts that one back.
     var lastPolish: (id: DictationID, earlier: String?)?
+    /// The last text kotoba pasted and where the owner was then; nil after a Return submitted it. Polish deletes it by
+    /// Backspace only while nothing changed (`PolishPlacement`).
+    var lastPaste: LastPaste?
     /// Dictations stopped with Return, or given a Return just after the stop: Return follows their paste.
     var submitRequests: Set<DictationID> = []
     /// The last dictation stopped, for a Return the tap swallowed just after the stop.

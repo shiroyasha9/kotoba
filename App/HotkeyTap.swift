@@ -36,6 +36,13 @@ final class HotkeyTap: Sendable {
     let disabledByUserInput: AsyncStream<Void>
     private let disabledContinuation: AsyncStream<Void>.Continuation
     private let state: Mutex<State>
+    /// The owner's key-downs that reached an app and clicks in other apps, for Polish's replace by Backspace
+    /// (`inputMark`). It also moves each time the tap or the mouse monitors stop observing, so a gap never reads as
+    /// "no input".
+    private let inputCount = Atomic<UInt64>(0)
+    /// `inputCount` when the tap saw kotoba's last posted ⌘V: the input since then is counted where the event stream
+    /// put it, before or after that paste, however late the pipeline asks.
+    private let inputAtPaste = Atomic<UInt64>(0)
     /// On while the tap runs, is enabled and no recorder listens.
     @MainActor let mouse = MouseDownMonitors()
 
@@ -53,6 +60,7 @@ final class HotkeyTap: Sendable {
         (disabledByUserInput, disabledContinuation) = AsyncStream.makeStream(bufferingPolicy: .bufferingNewest(1))
         chords.tap = self
         mouse.onMouseDown = { [weak self] in self?.sendMouseDown() }
+        mouse.onOtherAppMouseDown = { [weak self] in self?.noteInput() }
     }
 
     /// `isPaused` is on while a shortcut recorder listens: no chord counts.
@@ -132,6 +140,7 @@ final class HotkeyTap: Sendable {
     private func updateMouse() {
         DispatchQueue.main.async { [self] in
             let isOn = state.withLock { $0.tap != nil && $0.isEnabled && !$0.classifier.isPaused }
+            if !isOn { noteInput() }
             MainActor.assumeIsolated { mouse.setOn(isOn) }
         }
     }
@@ -232,10 +241,12 @@ final class HotkeyTap: Sendable {
         switch type {
         case .tapDisabledByTimeout, .tapDisabledByUserInput:
             if type == .tapDisabledByUserInput { disabledContinuation.yield() }
+            // Keys went by while the tap was off.
+            noteInput()
             guard let reenabled = reenableAfterTimeout() else { return Unmanaged.passUnretained(event) }
             input = reenabled
         case _ where event.getIntegerValueField(.eventSourceUserData) == CGEventPaster.postedEventTag:
-            input = .posted
+            input = posted(type, event)
         case .flagsChanged:
             input = .modifiersChanged(ModifierKeys(eventFlags: event.flags.rawValue))
         case .keyDown:
@@ -263,7 +274,37 @@ final class HotkeyTap: Sendable {
             send(decision.events, at: now)
             return decision
         }
+        countInput(input, decision)
         return decision.isSwallowed ? nil : Unmanaged.passUnretained(event)
+    }
+
+    /// A key-down that reaches an app is the owner's input (`inputCount`); a chord the tap swallows is not.
+    private func countInput(_ input: KeyInput, _ decision: HotkeyDecision) {
+        guard case .keyDown = input, !decision.isSwallowed else { return }
+        noteInput()
+    }
+
+    private func noteInput() {
+        inputCount.add(1, ordering: .relaxed)
+    }
+
+    /// An event kotoba posted: its ⌘V (the only posted key with ⌘) marks the paste for `inputMark`.
+    private func posted(_ type: CGEventType, _ event: CGEvent) -> KeyInput {
+        if type == .keyDown, event.flags.contains(.maskCommand) {
+            inputAtPaste.store(inputCount.load(ordering: .relaxed), ordering: .relaxed)
+        }
+        return .posted
+    }
+
+    /// The front app and window and the owner's input since kotoba's last ⌘V (`DictationPipeline.Ports.inputMark`).
+    /// Nil whenever the tap cannot see every key: it is off, a recorder listens, or Secure Input hides the keys.
+    func inputMark() -> InputMark? {
+        let isObserving = state.withLock { $0.tap != nil && $0.isEnabled && !$0.classifier.isPaused }
+        guard isObserving, !IsSecureEventInputEnabled(), let front = FrontAppObserver.current,
+            let window = FrontWindow.info(of: front.processID)?[kCGWindowNumber as String] as? Int
+        else { return nil }
+        let since = inputCount.load(ordering: .relaxed) - inputAtPaste.load(ordering: .relaxed)
+        return InputMark(processID: front.processID, window: window, inputSincePaste: since)
     }
 
     /// Every key event but the held key's own key-up, which ends the press by itself.

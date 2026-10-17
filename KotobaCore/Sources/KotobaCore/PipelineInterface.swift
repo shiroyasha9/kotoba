@@ -82,7 +82,8 @@ public enum DictationState: Sendable, Equatable {
     case clipboardNotKept(DictationID)
     /// Polish sent the last dictation to the LLM; the paste follows.
     case polishing
-    /// Polish pasted its text: over the old text (`isReplaced`, Undo can bring it back), or at the insertion point.
+    /// Polish replaced the old text with its own (`isReplaced`, Undo can bring it back), or left it on the clipboard
+    /// because it could not replace it safely.
     case polished(DictationID, isReplaced: Bool)
     /// Polish pasted nothing and changed nothing.
     case polishFailed(PolishFailure)
@@ -121,8 +122,11 @@ extension DictationPipeline {
         public let frontApp: @Sendable () -> FrontApp?
         /// Rewrites the last dictation on the owner's request; nil leaves Polish off.
         public let polisher: (any TextPolisher)?
-        /// Selects the text Polish replaces; nil pastes Polish's text at the insertion point.
+        /// Selects the text Polish replaces; nil leaves only the replace by Backspace.
         public let selector: (any PastedTextSelector)?
+        /// The front app and window and the owner's input count now; nil when unknown. Polish replaces by Backspace only
+        /// when it did not change since kotoba's paste (`PolishPlacement`).
+        public let inputMark: @Sendable () -> InputMark?
 
         public init(
             audio: any AudioSource,
@@ -136,7 +140,8 @@ extension DictationPipeline {
             readback: EditReadback? = nil,
             frontApp: @escaping @Sendable () -> FrontApp? = { nil },
             polisher: (any TextPolisher)? = nil,
-            selector: (any PastedTextSelector)? = nil
+            selector: (any PastedTextSelector)? = nil,
+            inputMark: @escaping @Sendable () -> InputMark? = { nil }
         ) {
             self.audio = audio
             self.provider = provider
@@ -150,6 +155,7 @@ extension DictationPipeline {
             self.frontApp = frontApp
             self.polisher = polisher
             self.selector = selector
+            self.inputMark = inputMark
         }
     }
 

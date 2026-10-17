@@ -43,7 +43,7 @@ public final class OpenRouterPolisher: TextPolisher {
 
     /// DeepSeek first; after a server error, a rate limit or a refusal (no host could take it), Gemini once. A missing
     /// key, no credit or no network fails at once: the other model would fail the same way.
-    public func polish(_ text: String) async throws -> PolishedText {
+    public func polish(_ text: String) async throws -> RewrittenText {
         do {
             return try await polish(text, with: .deepSeekFlash)
         } catch let error as ProviderError where Self.isFallbackCase(error) {
@@ -59,11 +59,11 @@ public final class OpenRouterPolisher: TextPolisher {
         }
     }
 
-    private func polish(_ text: String, with model: PolishModel) async throws -> PolishedText {
+    private func polish(_ text: String, with model: PolishModel) async throws -> RewrittenText {
         let label = "polish \(model.rawValue)"
         let answer = try await ChatAnswer.send(
             Self.request(text, model: model), on: connection, at: baseURL, label: label)
-        return PolishedText(
+        return RewrittenText(
             text: answer.text, model: model.rawValue, cost: answer.usage?.cost(of: model),
             isComplete: answer.isComplete)
     }

@@ -2,8 +2,8 @@ import Foundation
 
 extension DictationPipeline {
     /// "Polish Last Dictation", from the menu or its chord (docs/spec.md, "Polish and View Changes"): rewrites the
-    /// newest delivered dictation's latest text (`DictationRecord.latestText`) and pastes the rewrite, over the old text
-    /// when the selector finds it unchanged in the focused field, else at the insertion point. Only between dictations
+    /// newest delivered dictation's latest text (`DictationRecord.latestText`) and pastes the rewrite in place of the old
+    /// text, selected or deleted by Backspace (`PolishPlacement`), else leaves it on the clipboard. Only between dictations
     /// and not while History sends one again; a dictation that starts during the request wins, and History keeps the
     /// rewrite with no paste. A failed, cut or late answer pastes nothing. Every answer is billed as a `polish` entry,
     /// with no words.
@@ -43,7 +43,7 @@ extension DictationPipeline {
         guard let record = await lastDelivered(), let text = record.latestText, !text.isEmpty else {
             return .polishFailed(.nothingToPolish)
         }
-        let answer: PolishedText
+        let answer: RewrittenText
         switch await polisherAnswer(from: polisher, to: text, for: record) {
         case .answered(.success(let polished)):
             answer = polished
@@ -63,16 +63,17 @@ extension DictationPipeline {
         }
         guard await ports.store.setPolishedTextOrLog(polished, of: record.id, usage: usage) else { return nil }
         lastPolish = (record.id, earlier: record.polishedText)
-        if let front, ports.frontApp()?.processID != front.processID {
-            // Another app came to the front: a paste there could land in the wrong field.
+        // Another app in front: a paste there could land in the wrong field.
+        let isSameApp = front == nil || ports.frontApp()?.processID == front?.processID
+        switch isSameApp ? await put(polished, replacing: text, of: record) : .unsafe {
+        case .pasted(let result):
+            return result.state(of: record.id, pasted: .polished(record.id, isReplaced: true))
+        case .unsafe:
             await clipboard.copy(polished)
-            return .copied(record.id)
+            return .polished(record.id, isReplaced: false)
+        case .overtaken:
+            return nil
         }
-        let isReplaced = await ports.selector?.select(text, in: record.app) ?? false
-        // The answer and the selection both took time: a dictation since then pastes first.
-        guard await !isOvertaken(record.id) else { return nil }
-        return await pasteThroughClipboard(polished).state(
-            of: record.id, pasted: .polished(record.id, isReplaced: isReplaced))
     }
 
     private func revertPolish(of id: DictationID) async -> DictationState? {
@@ -84,11 +85,47 @@ extension DictationPipeline {
             await ports.store.setPolishedTextOrLog(earlier, of: id, usage: [])
         else { return nil }
         lastPolish = nil
-        guard await ports.selector?.select(polished, in: record.app) == true, await !isOvertaken(id) else {
+        switch await put(original, replacing: polished, of: record) {
+        case .pasted(let result):
+            return result.state(of: id, pasted: .idle)
+        case .unsafe:
             await clipboard.copy(original)
             return .copied(id)
+        case .overtaken:
+            return nil
         }
-        return await pasteThroughClipboard(original).state(of: id, pasted: .idle)
+    }
+
+    private enum Put {
+        case pasted(PasteResult)
+        /// No safe way to replace the old text: the clipboard gets the new one.
+        case unsafe
+        /// A dictation came while the request and the selection took their time: it wins, nothing more happens.
+        case overtaken
+    }
+
+    /// Pastes `new` in place of `old`, the text of `record` that kotoba pasted: over the selection when the selector
+    /// finds `old`, else after Backspaces when nothing changed since that paste (`PolishPlacement`).
+    private func put(_ new: String, replacing old: String, of record: DictationRecord) async -> Put {
+        let isSelected = await ports.selector?.select(old, in: record.app) ?? false
+        guard await !isOvertaken(record.id) else { return .overtaken }
+        switch PolishPlacement.choose(
+            replacing: old, isSelected: isSelected, lastPaste: lastPaste, now: ports.inputMark())
+        {
+        case .overSelection:
+            break
+        case .backspaces(let count):
+            do {
+                try await ports.paster.sendBackspaces(count)
+            } catch {
+                Log.pipeline.error("Polish: Backspace not allowed: \(error)")
+                return .unsafe
+            }
+        case .clipboard:
+            Log.pipeline.info("Polish: no safe way to replace the text; it goes to the clipboard")
+            return .unsafe
+        }
+        return .pasted(await pasteThroughClipboard(new))
     }
 
     /// A dictation came since Polish began: one records, waits in its Undo window or is sent, or one newer than `id`
@@ -110,9 +147,9 @@ extension DictationPipeline {
     /// The polisher's answer, or `.tooSlow` when `Settings.polishDeadline` passes first on the pipeline clock. A late
     /// answer was billed, so its cost goes to the ledger when it comes.
     private func polisherAnswer(from polisher: any TextPolisher, to text: String, for record: DictationRecord) async
-        -> Deadlined<PolishedText>
+        -> Deadlined<RewrittenText>
     {
-        let request: @Sendable () async throws -> PolishedText = { try await polisher.polish(text) }
+        let request: @Sendable () async throws -> RewrittenText = { try await polisher.polish(text) }
         let (store, clock, id, app) = (ports.store, ports.clock, record.id, record.app)
         return await work.answer(to: request, within: settings.polishDeadline, on: clock) { late in
             await store.addUsageOrLog([Self.usage(of: late, for: id, app: app, at: clock.date)], of: id)
@@ -120,7 +157,7 @@ extension DictationPipeline {
     }
 
     /// Polish's ledger entry: its cost, with no words, so Insights still counts the dictation once.
-    private static func usage(of answer: PolishedText, for id: DictationID, app: DictationApp?, at time: Date)
+    private static func usage(of answer: RewrittenText, for id: DictationID, app: DictationApp?, at time: Date)
         -> UsageEntry
     {
         UsageEntry(
@@ -156,8 +193,14 @@ extension DictationPipeline {
             await clipboard.copy(text)
             return .copied
         }
+        markPasted(text)
         guard let write else { return .clipboardNotKept }
         work.schedule(at: ports.clock.now + settings.restoreDelay) { await self.clipboard.restore(after: write) }
         return .pasted
+    }
+
+    /// Remembers `text` as the last paste, with where the owner was right after it.
+    func markPasted(_ text: String) {
+        lastPaste = ports.inputMark().map { LastPaste(text: text, mark: $0) }
     }
 }

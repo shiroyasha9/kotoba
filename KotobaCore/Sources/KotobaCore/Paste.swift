@@ -6,6 +6,9 @@ public protocol Paster: Sendable {
     /// Return with no modifiers, posted right after a Cmd-V into the same event stream, so the app gets it after
     /// the paste.
     func sendReturn() async throws
+    /// Backspace `count` times with no modifiers, before a Cmd-V in the same event stream: Polish deletes the text
+    /// kotoba pasted where it cannot select it (a terminal).
+    func sendBackspaces(_ count: Int) async throws
 }
 
 /// The general pasteboard. The pipeline writes the transcript, pastes, and restores the

@@ -40,18 +40,6 @@ struct PipelinePolishTests {
         #expect(await world.pasteboard.text == "user's clipboard")
     }
 
-    @Test func textNotFoundInTheFieldPastesAsNewText() async throws {
-        let world = FakeWorld(transcript: Self.spoken)
-        let pipeline = world.makePipeline(polisher: FakePolisher(answer: Self.polished), selector: FakeSelector())
-        await pipeline.dictate(world)
-
-        await pipeline.polishLast()
-
-        let id = try #require(await world.store.records.first?.id)
-        #expect(await world.paster.pasted == [Self.spoken, Self.polished])
-        #expect(await pipeline.state == .polished(id, isReplaced: false))
-    }
-
     @Test func aCutAnswerPastesNothingAndIsBilled() async throws {
         let world = FakeWorld(transcript: Self.spoken)
         let polisher = FakePolisher(answer: "Fix the", cost: .reported(1), isComplete: false)
@@ -231,7 +219,7 @@ struct PipelinePolishTests {
         let id = try #require(await world.store.records.first?.id)
         #expect(await world.paster.pasted == [Self.spoken])
         #expect(await world.pasteboard.text == Self.polished)
-        #expect(await pipeline.state == .copied(id))
+        #expect(await pipeline.state == .polished(id, isReplaced: false))
     }
 
     @Test func lastDictationActionsAndTheNextPolishUseThePolishedText() async {
@@ -328,10 +316,10 @@ actor FakePolisher: TextPolisher {
         result = .success(text)
     }
 
-    func polish(_ text: String) async throws -> PolishedText {
+    func polish(_ text: String) async throws -> RewrittenText {
         texts.append(text)
         await gate?.pass()
-        return PolishedText(text: try result.get(), model: "fake/polisher", cost: cost, isComplete: isComplete)
+        return RewrittenText(text: try result.get(), model: "fake/polisher", cost: cost, isComplete: isComplete)
     }
 }
 
@@ -355,11 +343,14 @@ actor FakeSelector: PastedTextSelector {
 }
 
 extension FakeWorld {
-    func makePipeline(polisher: any TextPolisher, selector: any PastedTextSelector) -> DictationPipeline {
+    func makePipeline(
+        polisher: any TextPolisher, selector: any PastedTextSelector, input: FakeInput? = nil
+    ) -> DictationPipeline {
         DictationPipeline(
             ports: .init(
                 audio: audio, provider: provider, paster: paster, pasteboard: pasteboard, clock: clock, store: store,
-                frontApp: { [frontApp] in frontApp.current }, polisher: polisher, selector: selector),
+                frontApp: { [frontApp] in frontApp.current }, polisher: polisher, selector: selector,
+                inputMark: { input?.current }),
             settings: .init(audioDirectory: URL(filePath: "/tmp/kotoba-tests"), noSoundWarning: .seconds(3_600))
         )
     }

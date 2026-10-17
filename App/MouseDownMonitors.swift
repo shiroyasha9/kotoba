@@ -8,6 +8,8 @@ import AppKit
 final class MouseDownMonitors {
     /// `HotkeyTap` sets it.
     var onMouseDown: (@Sendable () -> Void)?
+    /// A click in another app, which can move the insertion point there; `HotkeyTap` counts it.
+    var onOtherAppMouseDown: (@Sendable () -> Void)?
     /// Whether a window is the indicator pill's; the app sets it.
     var isPillWindow: (NSWindow?) -> Bool = { _ in false }
     private var monitors: [Any] = []
@@ -22,7 +24,10 @@ final class MouseDownMonitors {
         }
         let mask: NSEvent.EventTypeMask = [.leftMouseDown, .rightMouseDown, .otherMouseDown]
         let global = NSEvent.addGlobalMonitorForEvents(matching: mask) { [weak self] _ in
-            MainActor.assumeIsolated { self?.onMouseDown?() }
+            MainActor.assumeIsolated {
+                self?.onOtherAppMouseDown?()
+                self?.onMouseDown?()
+            }
         }
         let local = NSEvent.addLocalMonitorForEvents(matching: mask) { [weak self] event in
             let window = event.window
