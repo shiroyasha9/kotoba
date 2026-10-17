@@ -148,6 +148,28 @@ struct RetryQueueTests {
         #expect(await world.provider.requests.count == 1)
     }
 
+    /// Quit: `stop` reports the send on its way, and `sendEnded` returns only once it saved its answer, so quit never
+    /// takes a billed send for done; no send starts after `stop`.
+    @Test func stopWaitsForTheSendOnItsWay() async throws {
+        let first = try await queued(.failed)
+        _ = try await queued(.failed)
+        let gate = Gate()
+        await world.provider.hold(at: gate)
+        let queue = makeQueue()
+
+        async let run = run(queue, .all)
+        #expect(await eventually { await gate.hasWaiters })
+        #expect(await queue.stop())
+        async let ended: Void = queue.sendEnded()
+        #expect(await eventually { await queue.sendEndWaiters.count == 1 })
+        await gate.open()
+        await ended
+
+        #expect(await world.store.records.first { $0.id == first.id }?.status == .recovered)
+        _ = await run
+        #expect(await world.provider.requests.count == 1)
+    }
+
     @Test func aRecoveredTranscriptTheStoreCannotWriteLeavesTheMenuOnceCopied() async throws {
         _ = try await queued(.failed)
         await world.store.failUpdates(with: CocoaError(.fileWriteOutOfSpace))

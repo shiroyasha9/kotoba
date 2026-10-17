@@ -191,4 +191,49 @@ struct PipelineQuitTests {
 
         #expect(await world.pasteboard.text == "pasted")
     }
+
+    @Test func quitWaitsForARetrySendNoLongerThanItsBound() async throws {
+        let world = FakeWorld(transcript: "later")
+        let pipeline = world.makePipeline()
+        await world.provider.fail(with: ProviderError.server(status: 503))
+        await pipeline.dictate(world)
+        await world.provider.fail(with: nil)
+        let gate = Gate()
+        await world.provider.hold(at: gate)
+        async let run: Void = pipeline.retryPending()
+        #expect(await eventually { await gate.hasWaiters })
+
+        async let quit: Void = pipeline.shutdown()
+        #expect(await eventually { await pipeline.quitWaiters.count == 1 })
+        world.clock.advance(by: DictationPipeline.quitWait)
+        await quit
+
+        #expect(try #require(await world.store.records.first).status == .failed)
+        await gate.open()
+        await run
+    }
+
+    /// A retry run that waits for a live dictation to end sends nothing once quit began.
+    @Test func aWaitingRetryRunSendsNothingOnceQuitBegan() async throws {
+        let world = FakeWorld(transcript: "live")
+        let pipeline = world.makePipeline()
+        await world.provider.fail(with: ProviderError.server(status: 503))
+        await pipeline.dictate(world)
+        await world.provider.fail(with: nil)
+        let gate = Gate()
+        await world.provider.hold(at: gate)
+        await pipeline.tap(world)
+        await pipeline.tap(world)
+        #expect(await eventually { await gate.hasWaiters })
+        async let run: Void = pipeline.retryPending()
+        #expect(await eventually { await pipeline.quietWaiters.count == 1 })
+
+        async let quit: Void = pipeline.shutdown()
+        #expect(await eventually { await pipeline.quitWaiters.count == 1 })
+        await gate.open()
+        await quit
+        await run
+
+        #expect(await world.provider.requests.count == 2)
+    }
 }

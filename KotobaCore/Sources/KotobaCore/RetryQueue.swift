@@ -17,6 +17,10 @@ public actor RetryQueue {
     private var isOffline = false
     /// Quit began: no send starts from here (`stop`).
     private var isStopped = false
+    /// A send is on its way: marked in the same step as the `isStopped` check, so `stop` never misses it.
+    private var isSending = false
+    /// Quit, waiting for the send on its way to save its answer (`sendEnded`).
+    private(set) var sendEndWaiters = Waiters()
     /// Recovered transcripts the store could not write (a full disk): the menu lists them until the owner copies
     /// them, and no run in this process sends them again. The next launch does, as their rows are still queued.
     private var unsaved: [DictationRecord] = []
@@ -32,13 +36,11 @@ public actor RetryQueue {
     /// records in order. Before each send it waits until no dictation is live (`waitUntilQuiet`), and
     /// it skips a dictation that is in flight or no longer queued. A call during a run returns at
     /// once; its selection runs after the current one, in the same call.
-    /// `sending` hears the dictation whose send starts, and nil once its result is saved, so quit can wait for it.
     func run(
         _ selection: RetrySelection,
         settings: @Sendable () async -> DictationPipeline.Settings,
         skipping isInFlight: @Sendable (DictationID) async -> Bool,
-        waitUntilQuiet: @Sendable () async -> Void = {},
-        sending: @Sendable (DictationID?) async -> Void = { _ in }
+        waitUntilQuiet: @Sendable () async -> Void = {}
     ) async -> [DictationRecord] {
         guard !isRunning else {
             requested = requested.map { $0.merged(with: selection) } ?? selection
@@ -51,7 +53,7 @@ public actor RetryQueue {
         var next: RetrySelection? = selection
         while let current = next, !isStopped {
             let (records, isEnded) = await runOnce(
-                current, settings: settings, skipping: isInFlight, waitUntilQuiet: waitUntilQuiet, sending: sending)
+                current, settings: settings, skipping: isInFlight, waitUntilQuiet: waitUntilQuiet)
             results += records
             // The store cannot write: the selection asked for meanwhile would lose its answers the same way.
             next = isEnded ? nil : requested
@@ -60,15 +62,21 @@ public actor RetryQueue {
         return results
     }
 
-    /// Quit: a run in progress ends after the send that is on its way, and no run starts.
-    func stop() {
+    /// Quit: no run or send starts from here. Returns whether a send is on its way (`sendEnded` waits for it).
+    func stop() -> Bool {
         isStopped = true
         requested = nil
+        return isSending
+    }
+
+    /// Returns once the send on its way, if any, saved its answer, so the next launch does not send it again.
+    func sendEnded() async {
+        guard isSending else { return }
+        await withCheckedContinuation { sendEndWaiters.add($0) }
     }
 
     /// Records a network report. Returns true when the report ends an outage; the first report is not a return,
     /// because launch already retries.
-
     func recordNetwork(isOnline: Bool) -> Bool {
         defer { isOffline = !isOnline }
         return isOnline && isOffline
@@ -78,8 +86,7 @@ public actor RetryQueue {
         _ selection: RetrySelection,
         settings: @Sendable () async -> DictationPipeline.Settings,
         skipping isInFlight: @Sendable (DictationID) async -> Bool,
-        waitUntilQuiet: @Sendable () async -> Void,
-        sending: @Sendable (DictationID?) async -> Void
+        waitUntilQuiet: @Sendable () async -> Void
     ) async -> (records: [DictationRecord], isEnded: Bool) {
         let queued: [DictationRecord]
         do {
@@ -95,10 +102,11 @@ public actor RetryQueue {
             let settings = await settings()
             // Read last before the send: quit can begin during the awaits above.
             guard !isStopped else { break }
-            await sending(fresh.id)
+            isSending = true
             let (retried, error) = await retry(fresh, settings: settings)
             let update = await store.updateOrLog(retried)
-            await sending(nil)
+            isSending = false
+            sendEndWaiters.resumeAll()
             switch update {
             case .written:
                 results.append(retried)

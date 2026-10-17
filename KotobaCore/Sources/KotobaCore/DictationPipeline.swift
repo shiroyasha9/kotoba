@@ -73,15 +73,15 @@ public actor DictationPipeline {
     var captureEnd: Task<RecordedAudio?, Never>?
     var audioDeletion = AudioDeletion()
     /// Retries waiting until no dictation is live.
-    private var quietWaiters = Waiters()
+    private(set) var quietWaiters = Waiters()
     /// The run the route asked for with its wait (`scheduleRetry(after:)`); a newer wait replaces it.
     var retryTimer: Task<Void, Never>?
     /// Quit, waiting for the dictations in flight (`shutdown`).
     var quitWaiters = Waiters()
     /// Quit began: nothing new is sent, recorded or pasted (`shutdown`).
     var isQuitting = false
-    /// The kept dictation a retry is sending now; quit waits for its answer as for a live one.
-    var retrySending: DictationID?
+    /// Quit waits for the retry send on its way (`RetryQueue.sendEnded`), as for a live dictation.
+    var isRetrySending = false
     /// Test seam: sound events taken so far (levels, a lost mic, the no-sound deadline). The capture stream gives
     /// tests no other sign that the pipeline took an event, so they wait for this count before they check the state.
     var handledSoundEvents = 0
@@ -239,7 +239,14 @@ public actor DictationPipeline {
         isQuitting = true
         retryTimer?.cancel()
         retryTimer = nil
-        await retries.stop()
+        if await retries.stop() {
+            isRetrySending = true
+            // Tracked, so the quit wait below bounds it: a send on its way can take long.
+            work.track {
+                await self.retries.sendEnded()
+                await self.retrySendEnded()
+            }
+        }
         // A paste waiting for a chord release saves its text instead.
         releaseWaiters.resumeAll()
         if let current = paused {
@@ -262,12 +269,11 @@ public actor DictationPipeline {
     }
 
     /// No live dictation and no retry is being sent.
-    var isSendDone: Bool { inFlight.isEmpty && retrySending == nil }
+    var isSendDone: Bool { inFlight.isEmpty && !isRetrySending }
 
-    /// A retry send starts (`id`) or its result is saved (nil).
-    func retrySendChanged(_ id: DictationID?) {
-        retrySending = id
-        if isQuitting, isSendDone { quitWaiters.resumeAll() }
+    private func retrySendEnded() {
+        isRetrySending = false
+        if isSendDone { quitWaiters.resumeAll() }
     }
 
     /// Most dictations get their answer in about a second; quit must not hang on a slow route.
