@@ -32,6 +32,12 @@ peak=$(mb "$(print -r -- "$summary" | awk -F': *' '/^Physical footprint \(peak\)
 echo "kotoba pid $pid, up ${uptime_s} s"
 footprint -p "$pid" 2>/dev/null | awk '/Footprint:/ { sub(/^.*Footprint: */, ""); print "footprint:          " $0 }'
 echo "physical footprint: ${now} MB (peak ${peak} MB)"
+# Launch Services sets it from LSEnvironment (project.yml); a launch from the shell runs without it.
+if ps -E -ww -o command= -p "$pid" | grep -q 'MallocSpaceEfficient=1'; then
+  echo "allocator:          space efficient"
+else
+  echo "allocator:          default (a build without LSEnvironment, or launched from the shell)"
+fi
 echo "floor (spike C):    ${FLOOR_MB} MB, delta $(awk -v a="$now" -v b="$FLOOR_MB" 'BEGIN { printf "%+.1f", a - b }') MB"
 
 if [[ -n ${MEMORY_LIMIT_MB:-} ]] && awk -v a="$now" -v b="$MEMORY_LIMIT_MB" 'BEGIN { exit !(a > b) }'; then
