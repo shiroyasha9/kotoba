@@ -177,6 +177,9 @@ public enum ProviderError: Error, Sendable, Equatable {
     /// The network refused a secure connection (a captive portal, a filtering proxy): it is up, but no route can be
     /// reached until the owner deals with it.
     case connectionBlocked
+    /// A host the owner typed (Azure's endpoint) does not resolve: a wrong resource name, or DNS down on a live
+    /// network. Kept transient (lead, 2026-10-17); the pill names the host so a wrong endpoint shows.
+    case hostNotFound(host: String)
 
     public enum Recovery: Sendable, Equatable {
         /// Network, server or rate limit: a later retry can succeed.
@@ -199,7 +202,7 @@ public enum ProviderError: Error, Sendable, Equatable {
 
     public var recovery: Recovery {
         switch self {
-        case .offline, .connectionBlocked, .timedOut, .keyUnavailable, .rateLimited, .server: .transient
+        case .offline, .connectionBlocked, .hostNotFound, .timedOut, .keyUnavailable, .rateLimited, .server: .transient
         case .auth, .needsSetup, .noCredit: .needsSetup
         case .rejected, .unreadableAnswer, .emptyTranscript, .noAudio, .audioMissing: .permanent
         }
@@ -211,7 +214,7 @@ public enum ProviderError: Error, Sendable, Equatable {
     /// for it, at no cost.
     public var isSharedByEveryRequest: Bool {
         switch self {
-        case .offline, .connectionBlocked, .rateLimited, .keyUnavailable: true
+        case .offline, .connectionBlocked, .hostNotFound, .rateLimited, .keyUnavailable: true
         case .timedOut, .auth, .needsSetup, .noCredit, .server, .unreadableAnswer, .rejected, .emptyTranscript,
             .noAudio, .audioMissing:
             false
@@ -228,8 +231,8 @@ public enum ProviderError: Error, Sendable, Equatable {
     public var usesAttempt: Bool {
         switch self {
         case .server, .timedOut, .unreadableAnswer, .rejected, .emptyTranscript: true
-        case .offline, .connectionBlocked, .auth, .needsSetup, .keyUnavailable, .rateLimited, .noCredit, .noAudio,
-            .audioMissing:
+        case .offline, .connectionBlocked, .hostNotFound, .auth, .needsSetup, .keyUnavailable, .rateLimited, .noCredit,
+            .noAudio, .audioMissing:
             false
         }
     }
@@ -240,8 +243,8 @@ public enum ProviderError: Error, Sendable, Equatable {
         case .emptyTranscript, .noAudio: .emptyTranscript
         case .audioMissing: .audioMissing
         case .rejected, .unreadableAnswer: .other
-        case .offline, .connectionBlocked, .timedOut, .auth, .needsSetup, .noCredit, .keyUnavailable, .rateLimited,
-            .server:
+        case .offline, .connectionBlocked, .hostNotFound, .timedOut, .auth, .needsSetup, .noCredit, .keyUnavailable,
+            .rateLimited, .server:
             nil
         }
     }

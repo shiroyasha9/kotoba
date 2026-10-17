@@ -109,15 +109,9 @@ public struct DictationRecord: Sendable, Equatable, Identifiable {
     /// `RetrySelection.automaticAttempts` launch and a returning network stop sending the dictation; the owner's
     /// Retry still does.
     public var attempts = 0
-    /// The last failed send timed out (`ProviderError.timedOut`), since this record was read from the store; the store
-    /// does not keep it. The pill says so.
-    public var hasTimedOut = false
-    /// The last failed send was blocked by the network (`ProviderError.connectionBlocked`), since this record was read
-    /// from the store; the store does not keep it. The pill says so.
-    public var isConnectionBlocked = false
-    /// How long the route asked to wait before the next send (`ProviderError.rateLimited`), for the last failed send
-    /// since this record was read from the store; the store does not keep it. The pipeline sends again then.
-    public var retryAfter: Duration?
+    /// Why the last send failed, since this record was read from the store; the store does not keep it. The pill says
+    /// why (a timeout, a blocked connection, a host not found), and the pipeline sends again after the route's wait.
+    public var lastError: ProviderError?
     /// The answers billed since this record was read from the store: the store adds each one to the usage ledger once
     /// (by `UsageEntry.id`), so saving the record again adds nothing. A record read back has none.
     public var usage: [UsageEntry] = []
@@ -227,9 +221,7 @@ extension DictationRecord {
     mutating func markFailed(by error: any Error) {
         let providerError = error as? ProviderError
         if providerError?.usesAttempt ?? true { attempts += 1 }
-        hasTimedOut = providerError == .timedOut
-        isConnectionBlocked = providerError == .connectionBlocked
-        retryAfter = providerError?.retryAfter
+        lastError = providerError
         needsSetup = providerError?.setupItem
         switch providerError?.recovery ?? .transient {
         case .transient, .needsSetup:

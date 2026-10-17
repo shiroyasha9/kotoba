@@ -23,8 +23,8 @@ final class ProviderConnection: Sendable {
     let account: ProviderAccount
     private let apiKey: any APIKeySource
     private let keyHeader: KeyHeader
-    /// The owner typed the host (Azure's resource endpoint): a host that does not resolve is a wrong setting, not
-    /// offline.
+    /// The owner typed the host (Azure's resource endpoint): a host that does not resolve may be a typo, so the pill
+    /// names it instead of saying offline.
     private let isHostSetByOwner: Bool
     private let session: URLSession
     private let interfaces = InterfaceMemo()
@@ -64,7 +64,7 @@ final class ProviderConnection: Sendable {
     }
 
     /// POSTs `body` to `url` with the key, mapping a timeout to `ProviderError.timedOut`, a host the owner typed that
-    /// does not resolve to `.needsSetup` (the endpoint), and other transport failures to `.offline`. `idleTimeout`
+    /// does not resolve to `.hostNotFound`, and other transport failures to `.offline`. `idleTimeout`
     /// replaces the session's idle limit for this request only.
     func send(
         _ url: URL, contentType: String, label: String, body: Body, idleTimeout: TimeInterval? = nil
@@ -103,7 +103,7 @@ final class ProviderConnection: Sendable {
             // The network works; the route was slow, and may have taken the audio.
             throw ProviderError.timedOut
         } catch let error as URLError where error.code == .cannotFindHost && isHostSetByOwner {
-            throw ProviderError.needsSetup(provider: account.title, item: .endpoint)
+            throw ProviderError.hostNotFound(host: url.host() ?? url.absoluteString)
         } catch let error as URLError where Self.blockingCodes.contains(error.code) {
             throw ProviderError.connectionBlocked
         } catch is URLError {

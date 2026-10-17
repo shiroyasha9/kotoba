@@ -60,6 +60,8 @@ public enum DictationState: Sendable, Equatable {
     case timedOut(DictationID)
     /// The network blocked the secure connection (`ProviderError.connectionBlocked`). The audio is kept and queued.
     case connectionBlocked(DictationID)
+    /// The owner's endpoint `host` does not resolve (`ProviderError.hostNotFound`). The audio is kept and queued.
+    case hostNotFound(DictationID, host: String)
     /// The route refused the request; a retry cannot help. The audio is kept.
     case rejected(DictationID, RejectReason)
     /// The route needs an API key. The audio is kept and retried when the owner saves one.
@@ -101,10 +103,19 @@ public enum DictationState: Sendable, Equatable {
         case .copied: .copied(record.id)
         case .failed where record.needsSetup != nil: .needsSetup(record.id, record.needsSetup ?? .key)
         // "Offline" would send the owner to check a network that works.
-        case .failed where record.hasTimedOut: .timedOut(record.id)
-        case .failed where record.isConnectionBlocked: .connectionBlocked(record.id)
-        case .failed, .pending: .failed(record.id)
+        case .failed: queued(record)
+        case .pending: .failed(record.id)
         case .pasted, .cancelled: .idle
+        }
+    }
+
+    /// A queued dictation, by why its last send failed. "Offline" would send the owner to check a network that works.
+    private static func queued(_ record: DictationRecord) -> Self {
+        switch record.lastError {
+        case .timedOut: .timedOut(record.id)
+        case .connectionBlocked: .connectionBlocked(record.id)
+        case .hostNotFound(let host): .hostNotFound(record.id, host: host)
+        default: .failed(record.id)
         }
     }
 }

@@ -84,7 +84,8 @@ extension IndicatorPanel {
             return .init(
                 text: text, color: .secondaryLabelColor, action: action,
                 timer: .init(duration: context.undoWindow, kind: .followsUndoWindow))
-        case .failed, .timedOut, .connectionBlocked, .needsSetup, .rejected, .cleanupFailed, .cleanupTooSlow,
+        case .failed, .timedOut, .connectionBlocked, .hostNotFound, .needsSetup, .rejected, .cleanupFailed,
+            .cleanupTooSlow,
             .returnSkipped, .recovered,
             .copied, .captureFailed, .nothingRecorded, .audioNotSaved, .audioCut, .clipboardNotKept, .polished,
             .polishFailed:

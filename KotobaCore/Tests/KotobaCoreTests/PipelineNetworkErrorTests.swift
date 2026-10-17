@@ -20,6 +20,24 @@ struct PipelineNetworkErrorTests {
         #expect(await pipeline.state == .connectionBlocked(record.id))
     }
 
+    /// The owner's endpoint does not resolve: a typo in it, or DNS down. The pill names the host, and the dictation
+    /// stays in the automatic retries, as no request reached a route.
+    @Test func aHostThatDoesNotResolveIsNamedAndRetried() async throws {
+        let world = FakeWorld(transcript: "found")
+        let pipeline = world.makePipeline()
+        await world.provider.fail(with: ProviderError.hostNotFound(host: "myspeech.cognitiveservices.azure.com"))
+        await pipeline.dictate(world)
+        let record = try #require(await world.store.records.first)
+        #expect(record.status == .failed)
+        #expect(record.attempts == 0)
+        #expect(await pipeline.state == .hostNotFound(record.id, host: "myspeech.cognitiveservices.azure.com"))
+
+        await world.provider.fail(with: nil)
+        await pipeline.retryAtLaunch()
+
+        #expect(try #require(await world.store.records.first).status == .recovered)
+    }
+
     /// The audio file was deleted outside kotoba: nothing can be sent, so it leaves the queue and is not retried.
     @Test func aMissingAudioFileIsRejectedAndNotRetried() async throws {
         let world = FakeWorld(transcript: "unused")

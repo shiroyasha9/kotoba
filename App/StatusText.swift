@@ -50,6 +50,14 @@ enum StatusText {
         "kotoba hears nothing from \(microphone ?? "the mic"). Check that it is on and not muted."
     }
 
+    /// The pill when the owner's endpoint does not resolve: it names the host, so a typo in it shows, when the text
+    /// fits the pill (about 34 characters); else the host's first label, the resource name the owner typed; else no
+    /// name.
+    static func hostNotFound(_ host: String) -> String {
+        let named = [host, String(host.prefix { $0 != "." })].map { "Couldn’t find \($0). Saved." }
+        return named.first { $0.count <= 34 } ?? "Endpoint not found. Saved."
+    }
+
     /// The pill when the mic gives nothing because Microphone access was turned off (at a press, or while recording).
     static let microphoneOff = "Microphone access is off"
     /// The silent recording pill's help tag when Microphone access is off.
@@ -171,7 +179,7 @@ extension DictationState {
     private func outcomeText(_ context: StatusContext) -> String? {
         let provider = context.provider.title
         return switch self {
-        case .failed, .timedOut, .connectionBlocked: queuedText(provider)
+        case .failed, .timedOut, .connectionBlocked, .hostNotFound: queuedText(provider)
         case .needsSetup(_, .credit): "\(provider) is out of credit. Saved."
         case .needsSetup(_, let item): StatusText.add(item, for: context.provider)
         case .rejected(_, let reason): reason.text(provider: provider)
@@ -188,6 +196,7 @@ extension DictationState {
     private func queuedText(_ provider: String) -> String {
         if case .timedOut = self { return "\(provider) took too long. Saved." }
         if case .connectionBlocked = self { return "Secure connection blocked. Saved." }
+        if case .hostNotFound(_, let host) = self { return StatusText.hostNotFound(host) }
         return "Couldn’t reach \(provider). Saved."
     }
 
@@ -205,7 +214,7 @@ extension DictationState {
         case .polished(_, isReplaced: true): "Polished"
         case .polished(_, isReplaced: false): "Polished. Copied, press ⌘V"
         case .idle, .recording, .transcribing, .cleaning, .undoable, .failed, .timedOut, .connectionBlocked,
-            .needsSetup, .rejected,
+            .hostNotFound, .needsSetup, .rejected,
             .captureFailed, .nothingRecorded, .audioNotSaved, .polishing, .polishFailed:
             nil
         }
@@ -217,7 +226,7 @@ extension DictationState {
         case .undoable: .undo
         case .recording(_, isSilent: true, _):
             context.isMicrophoneOff ? .openMicrophoneSettings : .chooseMicrophone
-        case .failed, .timedOut, .connectionBlocked: .retry
+        case .failed, .timedOut, .connectionBlocked, .hostNotFound: .retry
         case .needsSetup(_, let item): item.pillAction
         case .recovered: .copy
         case .copied: context.isPasteAllowed ? nil : .allowPasting

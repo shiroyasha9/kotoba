@@ -22,7 +22,7 @@ extension IndicatorPanel {
         let id = DictationID()
         let samples: [DictationState] = [
             .idle, .recording(isLong: false), .transcribing, .cleaning, .undoable, .failed(id), .timedOut(id),
-            .connectionBlocked(id),
+            .connectionBlocked(id), .hostNotFound(id, host: "x"),
             .rejected(id, .other),
             .needsSetup(id, .key), .cleanupFailed(id), .cleanupTooSlow(id), .returnSkipped(id), .copied(id),
             .recovered(id), .captureFailed, .nothingRecorded, .audioNotSaved(.diskFull), .audioCut(id, .diskFull),
@@ -114,12 +114,8 @@ extension IndicatorPanel {
             []
         case .recording:
             recordingRows
-        case .needsSetup(let id, _):
-            [
-                SnapshotRow(name: "needs-key", state: .needsSetup(id, .key)),
-                SnapshotRow(name: "needs-endpoint", state: .needsSetup(id, .endpoint)),
-                SnapshotRow(name: "needs-credit", state: .needsSetup(id, .credit)),
-            ]
+        case .needsSetup(let id, _), .hostNotFound(let id, _):
+            setupRows(of: id)
         case .rejected(let id, _):
             [RejectReason.emptyTranscript, .audioMissing, .other].map {
                 SnapshotRow(name: "rejected-\($0.rawValue)", state: .rejected(id, $0))
@@ -169,6 +165,21 @@ extension IndicatorPanel {
         ]
     }
 
+    /// What the route needs from the owner, and an endpoint whose host does not resolve: named by its first label when
+    /// that fits, else not named.
+    private static func setupRows(of id: DictationID) -> [SnapshotRow] {
+        [
+            SnapshotRow(name: "needs-key", state: .needsSetup(id, .key)),
+            SnapshotRow(name: "needs-endpoint", state: .needsSetup(id, .endpoint)),
+            SnapshotRow(name: "needs-credit", state: .needsSetup(id, .credit)),
+            SnapshotRow(
+                name: "hostNotFound-label", state: .hostNotFound(id, host: "kotoba-asr.cognitiveservices.azure.com")),
+            SnapshotRow(
+                name: "hostNotFound-unnamed",
+                state: .hostNotFound(id, host: "my-speech-resource.cognitiveservices.azure.com")),
+        ]
+    }
+
     /// Polish's states: the replaced and the new-text outcome, and each failure.
     private static func polishRows(for state: DictationState) -> [SnapshotRow] {
         switch state {
@@ -205,7 +216,8 @@ extension IndicatorPanel {
         case .undoable: "undoable"
         case .failed, .timedOut, .connectionBlocked, .cleanupFailed, .cleanupTooSlow, .returnSkipped, .recovered:
             outcomeName(of: state)
-        case .idle, .recording, .needsSetup, .rejected, .copied, .captureFailed, .nothingRecorded, .audioNotSaved,
+        case .idle, .recording, .needsSetup, .hostNotFound, .rejected, .copied, .captureFailed, .nothingRecorded,
+            .audioNotSaved,
             .audioCut, .clipboardNotKept, .polishing, .polished, .polishFailed:
             "\(state)"
         }
@@ -221,7 +233,8 @@ extension IndicatorPanel {
         case .cleanupTooSlow: "cleanupTooSlow"
         case .returnSkipped: "returnSkipped"
         case .recovered: "recovered"
-        case .idle, .recording, .transcribing, .cleaning, .undoable, .needsSetup, .rejected, .copied, .captureFailed,
+        case .idle, .recording, .transcribing, .cleaning, .undoable, .needsSetup, .hostNotFound, .rejected, .copied,
+            .captureFailed,
             .nothingRecorded, .audioNotSaved, .audioCut, .clipboardNotKept, .polishing, .polished, .polishFailed:
             "\(state)"
         }

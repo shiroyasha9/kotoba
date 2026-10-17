@@ -19,6 +19,7 @@ struct TranscriptionProviderTests {
         (.unreadableAnswer(status: 200), .permanent),
         (.audioMissing, .permanent),
         (.connectionBlocked, .transient),
+        (.hostNotFound(host: "x.cognitiveservices.azure.com"), .transient),
     ])
     func eachErrorHasOneWayToRecover(error: ProviderError, recovery: ProviderError.Recovery) {
         #expect(error.recovery == recovery)
@@ -52,6 +53,7 @@ struct TranscriptionProviderTests {
         (.noAudio, false),
         (.audioMissing, false),
         (.connectionBlocked, false),
+        (.hostNotFound(host: "x.cognitiveservices.azure.com"), false),
     ])
     func onlyASendThatReachedTheRouteUsesAnAttempt(error: ProviderError, usesAttempt: Bool) {
         #expect(error.usesAttempt == usesAttempt)

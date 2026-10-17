@@ -28,7 +28,7 @@ extension DictationPipeline {
             selection, settings: { await self.settings }, skipping: { await self.inFlight.contains($0) },
             waitUntilQuiet: { await self.waitUntilQuiet() })
         // The run stops at the route's wait, so it is the last result's.
-        if let wait = results.last?.retryAfter { scheduleRetry(after: wait) }
+        if let wait = results.last?.lastError?.retryAfter { scheduleRetry(after: wait) }
         for record in results {
             reportTerms(of: record)
             emitIfQuiet(.outcome(of: record))

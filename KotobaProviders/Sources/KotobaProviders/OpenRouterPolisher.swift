@@ -55,7 +55,8 @@ public final class OpenRouterPolisher: TextPolisher {
     static func isFallbackCase(_ error: ProviderError) -> Bool {
         switch error {
         case .server, .timedOut, .unreadableAnswer, .rateLimited, .rejected: true
-        case .offline, .connectionBlocked, .auth, .needsSetup, .keyUnavailable, .noCredit, .emptyTranscript, .noAudio,
+        case .offline, .connectionBlocked, .hostNotFound, .auth, .needsSetup, .keyUnavailable, .noCredit,
+            .emptyTranscript, .noAudio,
             .audioMissing:
             false
         }
