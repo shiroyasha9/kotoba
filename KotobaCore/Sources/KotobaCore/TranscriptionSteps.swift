@@ -2,11 +2,12 @@ import Foundation
 import Synchronization
 
 /// The text steps a live dictation and a retry share: transcribe with the dictionary terms, remove a submit phrase,
-/// apply the replacements, and for a cleanup dictation clean the raw transcript.
+/// make spoken line breaks, apply the replacements, and for a cleanup dictation clean the raw transcript.
 struct TranscriptionSteps: Sendable {
     /// A transcript with the dictionary replacements applied.
     struct Transcribed: Sendable {
-        /// What the provider heard, without a submit phrase and before replacements; the cleaner gets this.
+        /// What the provider heard, without a submit phrase, with spoken line breaks made (`LineBreakPhrase`) and
+        /// before replacements; the cleaner gets this.
         let raw: String
         let text: String
         /// When the answer came: its ledger entry's time, which the cleanup's entry takes too.
@@ -50,8 +51,10 @@ struct TranscriptionSteps: Sendable {
             to: request, within: DictationPipeline.Settings.transcriptionTimeout(for: request.duration))
         record.model = transcript.model
         let heard = transcript.text.trimmingCharacters(in: .whitespacesAndNewlines)
-        // Matched on what the owner said, before the replacements, so a rule can neither make nor break the phrase.
-        let (raw, submits) = settings.isSubmitPhraseOn ? SubmitPhrase.split(heard) : (heard, false)
+        // Matched on what the owner said, before the replacements, so a rule can neither make nor break a command.
+        let (said, submits) = settings.isSubmitPhraseOn ? SubmitPhrase.split(heard) : (heard, false)
+        // Before the cleanup too: the cleaner gets the breaks, not words it could drop as noise.
+        let raw = settings.isLineBreakPhraseOn ? LineBreakPhrase.apply(to: said) : said
         let transcribed = Transcribed(
             raw: raw, text: settings.dictionary.applyReplacements(to: raw), answeredAt: clock.date, submits: submits,
             network: transcript.network)

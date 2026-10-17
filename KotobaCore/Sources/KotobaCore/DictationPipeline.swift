@@ -189,6 +189,11 @@ public actor DictationPipeline {
         settings.isSubmitPhraseOn = isOn
     }
 
+    /// The owner turned spoken line breaks on or off: the next transcript uses it.
+    public func updateLineBreakPhrase(isOn: Bool) async {
+        settings.isLineBreakPhraseOn = isOn
+    }
+
     /// "Paste Last Dictation", from the menu or its chord: pastes the newest delivered dictation again (`pasteAgain`).
     public func pasteLast() async {
         guard isQuiet, !isQuitting else { return }

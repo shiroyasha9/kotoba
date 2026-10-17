@@ -87,3 +87,63 @@ extension DictationPipeline {
         await retryPending(.exceptNeedsSetup, isAutomatic: true)
     }
 }
+
+/// Which kept dictations a retry sends again: the ones a rule picks, and the ones the owner chose.
+public struct RetrySelection: Sendable, Equatable {
+    enum Rule: Sendable, Equatable {
+        case all
+        case exceptNeedsSetup
+        case onlyNeedsSetup
+
+        func includes(_ record: DictationRecord) -> Bool {
+            switch self {
+            case .all: true
+            case .exceptNeedsSetup: record.needsSetup == nil
+            case .onlyNeedsSetup: record.needsSetup != nil
+            }
+        }
+    }
+
+    /// A dictation is sent at most this many times in all, live and retried, without the owner: each failed send
+    /// that reached the route may have been billed (`DictationRecord.attempts`). Launch, a returning network, a live
+    /// transcript and a route's wait skip it then; the owner's Retry (the menu, History) still sends it, and so does
+    /// a setting the dictation waits for.
+    public static let automaticAttempts = 3
+
+    var rule: Rule?
+    var ids: Set<DictationID> = []
+    /// Launch or a returning network, not the owner: the rule skips dictations that used their automatic attempts.
+    var isAutomatic = false
+
+    /// The menu's Retry: every queued dictation.
+    public static let all = Self(rule: .all)
+    /// Launch without a key: dictations that wait for a key stay waiting.
+    public static let exceptNeedsSetup = Self(rule: .exceptNeedsSetup)
+    /// The owner saved a key: only the dictations that waited for one, once each.
+    public static let onlyNeedsSetup = Self(rule: .onlyNeedsSetup)
+
+    /// The History pane's Retry: the chosen queued dictations.
+    public static func only(_ ids: Set<DictationID>) -> Self {
+        Self(rule: nil, ids: ids)
+    }
+
+    func includes(_ record: DictationRecord) -> Bool {
+        if ids.contains(record.id) { return true }
+        guard rule?.includes(record) == true else { return false }
+        // A dictation waiting for a setting was last refused before any work, which was not billed: it goes once its
+        // setting is there, whatever its earlier attempts (lead, 2026-10-17).
+        return !isAutomatic || record.needsSetup != nil || record.attempts < Self.automaticAttempts
+    }
+
+    /// Two requests in one: the dictations of each. Two different rules cover both only as `.all`; the rule is capped
+    /// only when every request with a rule was automatic.
+    func merged(with other: Self) -> Self {
+        let (merged, isAutomatic): (Rule?, Bool) =
+            switch (rule, other.rule) {
+            case (nil, _): (other.rule, other.isAutomatic)
+            case (_, nil): (rule, self.isAutomatic)
+            case (let one?, let two?): (one == two ? one : .all, self.isAutomatic && other.isAutomatic)
+            }
+        return Self(rule: merged, ids: ids.union(other.ids), isAutomatic: isAutomatic)
+    }
+}
