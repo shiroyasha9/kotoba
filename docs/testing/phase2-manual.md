@@ -817,7 +817,7 @@ Use a mouse with side buttons (the owner's BSK V3 PRO). If its own software maps
 
 ## Low audit fixes (kotoba Dev, 2026-10-17)
 
-Rows 930-936 need a real mic, real source apps or a quit, which a unit test cannot make. Use kotoba Dev with the release kotoba quit.
+Rows 930-939 need a real mic, real source apps or a quit, which a unit test cannot make. Use kotoba Dev with the release kotoba quit.
 
 | # | Do this | Expect | Result |
 |---|---|---|---|
@@ -828,3 +828,6 @@ Rows 930-936 need a real mic, real source apps or a quit, which a unit test cann
 | 934 | Esc a dictation at once after the start tap (before you speak), and let the Undo window close | No new row of 0:00 in History | |
 | 935 | Record from a USB mic. Start a hands-free dictation, speak, and while you speak change the mic's rate in Audio MIDI Setup (48 kHz to 44.1 kHz), keep speaking, then stop | The text has the words from before and after the rate change; the pill does not say “No sound from the mic”. The log may show “Rebuilding the mic input: the mic finished its change” | |
 | 936 | Start a hands-free dictation, then turn kotoba Dev off in System Settings > Privacy & Security > Microphone while it records | Within about 2 s the pill says “Microphone access is off” with **Open System Settings…** (no level meter), not “No sound from the mic”. Stop: no “Transcribing”, no History row, and the pill says “Microphone access is off” again. Turn access back on before the next row | |
+| 937 | Select a word in Settings (the key field or the Dictionary pane) and press ⌘C, switch to TextEdit, dictate; then run `log show --last 2m --predicate 'process == "kotoba Dev"' \| grep "background thread"` | The dictation pastes, ⌘V afterwards pastes the copied word, and the log has no “synchronous promise fulfillment requested from a background thread” | |
+| 938 | Join a Wi-Fi with a captive portal (a hotel or café login page) without logging in, and dictate | The pill says “Secure connection blocked. Saved.” with **Retry** (or “Couldn’t reach …” if the portal drops the connection); after you log in, **Retry** transcribes it | |
+| 939 | Make a dictation fail (Wi-Fi off), quit kotoba Dev, delete its file in `~/Library/Application Support/kotoba-dev/` (the newest .flac), relaunch with Wi-Fi on | The launch sends nothing for it; History shows it as “Audio missing”; the Dock badge does not count it | |
