@@ -68,7 +68,7 @@ extension IndicatorPanel {
             $0.accessibilityRole() == .button
         }
         let label = content.click.map(StatusText.pillClickLabel)
-        let taps = buttons.filter { !($0 is NSView) }
+        let taps = buttons.filter { $0 is PillTapTarget }
         guard taps.map({ $0.accessibilityLabel() }) == (label.map { [$0] } ?? []) else {
             return "VoiceOver gets \(taps.count) click buttons, not one \"\(label ?? "none")\""
         }

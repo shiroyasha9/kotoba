@@ -62,20 +62,26 @@ final class FirstClickHostingView: NSHostingView<PillButton> {
 }
 
 /// The pill's click as a VoiceOver button over the whole pill; a press is the click (`onClick`). Custom: an AppKit
-/// view that handles its own mouse events has no control to expose.
-final class PillTapElement: NSAccessibilityElement {
+/// view that handles its own mouse events has no control to expose. A view under the pill's content, not an
+/// `NSAccessibilityElement`: a view is a main-actor object like the pill, so the pill's hit test can hand it over
+/// (`IndicatorPillView.accessibilityHitTest`). It takes no mouse event.
+final class PillTapTarget: NSView {
     private weak var pill: IndicatorPillView?
 
     init(pill: IndicatorPillView) {
         self.pill = pill
-        super.init()
+        super.init(frame: .zero)
+        setAccessibilityElement(false)
         setAccessibilityRole(.button)
-        setAccessibilityParent(pill)
     }
 
-    override func accessibilityFrame() -> NSRect {
-        guard let pill else { return .zero }
-        return NSAccessibility.screenRect(fromView: pill, rect: pill.bounds)
+    @available(*, unavailable)
+    required init?(coder: NSCoder) {
+        fatalError("PillTapTarget is built in code")
+    }
+
+    override func hitTest(_ point: NSPoint) -> NSView? {
+        nil
     }
 
     override func accessibilityPerformPress() -> Bool {

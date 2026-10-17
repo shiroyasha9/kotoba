@@ -76,7 +76,8 @@ final class IndicatorPillView: NSView {
             // The click button comes and goes with the state; VoiceOver reads the pill's children again. Not gated on
             // VoiceOver: with it off the post costs about 80 ns, and reading `isVoiceOverEnabled` about 660 ns.
             if content.click != oldValue.click {
-                tapElement.setAccessibilityLabel(content.click.map(StatusText.pillClickLabel))
+                tapTarget.setAccessibilityElement(content.click != nil)
+                tapTarget.setAccessibilityLabel(content.click.map(StatusText.pillClickLabel))
                 NSAccessibility.post(element: self, notification: .layoutChanged)
             }
         }
@@ -105,7 +106,7 @@ final class IndicatorPillView: NSView {
     private let symbolView = NSImageView()
     private let label = NSTextField(labelWithString: "")
     private let actionButton = FirstClickHostingView(rootView: PillButton())
-    private lazy var tapElement = PillTapElement(pill: self)
+    private lazy var tapTarget = PillTapTarget(pill: self)
     private let spinner = NSProgressIndicator()
     private let roundIcon = NSImageView()
     private var pressStart: NSPoint?
@@ -160,6 +161,10 @@ final class IndicatorPillView: NSView {
         glass.cornerRadius = IndicatorPlacement.cornerRadius
         glass.contentView = container
         addSubview(glass)
+        // Under the content, over the whole pill: VoiceOver's click button.
+        tapTarget.frame = bounds
+        tapTarget.autoresizingMask = [.width, .height]
+        addSubview(tapTarget, positioned: .below, relativeTo: glass)
         trackPointer(isInside: false)
         applyLayout()
     }
@@ -224,19 +229,29 @@ final class IndicatorPillView: NSView {
     override func accessibilityChildren() -> [Any]? {
         let children = super.accessibilityChildren() ?? []
         guard content.click != nil else { return children }
-        return [tapElement] + children.filter { $0 as AnyObject !== roundIcon && $0 as AnyObject !== roundIcon.cell }
+        let others = children.filter {
+            $0 as AnyObject !== roundIcon && $0 as AnyObject !== roundIcon.cell && $0 as AnyObject !== tapTarget
+        }
+        return [tapTarget] + others
     }
 
     /// VoiceOver's pointer: the action button where it is, the click button over the rest of the pill, so exploring
-    /// the pill reaches Stop Dictating and not only its text. `point` is in screen coordinates.
+    /// the pill reaches Stop Dictating and not only its text. `point` is in screen coordinates. AppKit asks on the main
+    /// thread, through a method the SDK declares without isolation (an `NSObject` category); both answers are views,
+    /// main-actor objects, so they can leave `assumeIsolated`.
     override func accessibilityHitTest(_ point: NSPoint) -> Any? {
+        if let target = MainActor.assumeIsolated({ hitTarget(at: point) }) { return target }
+        return super.accessibilityHitTest(point)
+    }
+
+    /// The view under `point`, or nil to leave the pointer to AppKit.
+    private func hitTarget(at point: NSPoint) -> NSView? {
         if !actionButton.isHidden,
-            NSAccessibility.screenRect(fromView: actionButton, rect: actionButton.bounds)
-                .contains(point)
+            NSAccessibility.screenRect(fromView: actionButton, rect: actionButton.bounds).contains(point)
         {
             return actionButton
         }
-        return content.click == nil ? super.accessibilityHitTest(point) : tapElement
+        return content.click == nil ? nil : tapTarget
     }
 
     // MARK: Mouse
