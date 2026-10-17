@@ -219,10 +219,15 @@ extension DictationPipeline {
         resumeQuietWaiters()
     }
 
-    /// Saves a recording that is not transcribed now, with its audio and latency marks.
+    /// Saves a recording that is not transcribed now, with its audio and latency marks. One with no audio (Esc or quit
+    /// before the first buffer) has nothing to send or play: its file is discarded and no row is kept.
     func keep(_ current: Recording, audio: RecordedAudio?, as status: DictationRecord.Status) async {
         let latency = latencies.take(current.id).log
         guard let audio else { return }
+        guard audio.hasAudio else {
+            await remember(current.id, unless: await ports.audio.discard(audio))
+            return
+        }
         var record = DictationRecord(
             id: current.id, createdAt: ports.clock.date, audio: audio, transcript: nil, status: status, latency: latency
         )

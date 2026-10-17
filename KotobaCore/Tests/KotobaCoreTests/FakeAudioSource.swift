@@ -90,7 +90,7 @@ actor FakeAudioSource: AudioSource {
     func cancelCapture() async -> RecordedAudio? {
         isCapturing = false
         continuation?.finish()
-        return files.last.map { RecordedAudio(file: $0, duration: .seconds(1)) }
+        return files.last.map { RecordedAudio(file: $0, duration: recordedLength) }
     }
 
     func pauseCapture() async {

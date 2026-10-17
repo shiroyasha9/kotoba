@@ -194,4 +194,20 @@ struct PipelineUndoTests {
         await relaunched.retryPending()
         #expect(try #require(await world.store.records.first).status == .recovered)
     }
+
+    /// Esc before the first buffer: nothing was recorded, so the final cancel keeps no row of 0 s and no file
+    /// (audit B5b).
+    @Test func aCancelWithNoAudioKeepsNoRow() async throws {
+        let world = FakeWorld(transcript: "unused")
+        let pipeline = world.makePipeline()
+        await world.audio.record(.zero)
+
+        await pipeline.tap(world)
+        await pipeline.handle(.escape)
+        world.clock.advance(by: .seconds(5))
+        await pipeline.settle()
+
+        #expect(await world.store.records.isEmpty)
+        #expect(await world.audio.discarded == (await world.audio.files))
+    }
 }

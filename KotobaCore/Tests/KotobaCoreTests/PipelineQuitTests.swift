@@ -53,4 +53,17 @@ struct PipelineQuitTests {
 
         #expect(await pipeline.quitWaiters.isEmpty)
     }
+
+    /// Quit before the first buffer: no row of 0 s for the next launch to send, and no file (audit B5b).
+    @Test func quitBeforeAnyAudioKeepsNoRow() async throws {
+        let world = FakeWorld(transcript: "unused")
+        let pipeline = world.makePipeline()
+        await world.audio.record(.zero)
+        await pipeline.tap(world)
+
+        await pipeline.shutdown()
+
+        #expect(await world.store.records.isEmpty)
+        #expect(await world.audio.discarded == (await world.audio.files))
+    }
 }
