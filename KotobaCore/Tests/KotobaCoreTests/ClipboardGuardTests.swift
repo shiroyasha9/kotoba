@@ -13,7 +13,7 @@ struct ClipboardGuardTests {
 
     init() {
         work = PendingWork(clock: clock)
-        clipboard = ClipboardGuard(pasteboard: pasteboard, work: work, clock: clock)
+        clipboard = ClipboardGuard(pasteboard: pasteboard, paster: FakePaster(), work: work, clock: clock)
     }
 
     /// Writes `text` and sends its Cmd-V.

@@ -51,6 +51,8 @@ actor ClipboardGuard {
     }
 
     private let pasteboard: any Pasteboard
+    /// Sends the ⌘V of `paste`, the one paste path.
+    private let paster: any Paster
     /// Runs the restore that a read sets off, so `settle()` waits for it.
     private let work: PendingWork
     private var pending: Waiting? {
@@ -68,8 +70,9 @@ actor ClipboardGuard {
     /// signal (Jot and FreeFlow use 1 s too).
     static let earlyReadRestoreDelay = Duration.seconds(1)
 
-    init(pasteboard: any Pasteboard, work: PendingWork, clock: any PipelineClock) {
+    init(pasteboard: any Pasteboard, paster: any Paster, work: PendingWork, clock: any PipelineClock) {
         self.pasteboard = pasteboard
+        self.paster = paster
         self.work = work
         self.clock = clock
     }
@@ -128,15 +131,17 @@ actor ClipboardGuard {
     }
 
     /// The one paste path, for a dictation, Polish, its Undo, Paste Last and Paste Again: writes `text` as a promised
-    /// transient item over `snapshot`, marks the Cmd-V, sends it with `paster`, and waits for the app's read until
-    /// `deadline`; `unread` hears of a paste no app read. Nil when paste is not allowed: the text stays on the
-    /// clipboard.
+    /// transient item over `snapshot`, marks the Cmd-V, runs `beforeSend` (the paste's place is read there, right
+    /// before the ⌘V, so a window switch during the write cannot leave a wrong place), sends it, and
+    /// waits for the app's read until `deadline`; `unread` hears of a paste no app read. Nil when paste is not allowed:
+    /// the text stays on the clipboard.
     func paste(
-        _ text: String, over snapshot: Snapshot, with paster: any Paster, readBy deadline: ContinuousClock.Instant,
-        unread: @escaping Unread
+        _ text: String, over snapshot: Snapshot, readBy deadline: ContinuousClock.Instant,
+        beforeSend: @Sendable () async -> Void, unread: @escaping Unread
     ) async -> Write? {
         let write = await writeTransient(text, over: snapshot, unread: unread)
         willPaste(write, readBy: deadline)
+        await beforeSend()
         do {
             try await paster.sendPaste()
             return write

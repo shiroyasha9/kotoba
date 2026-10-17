@@ -90,7 +90,8 @@ public actor DictationPipeline {
         self.ports = ports
         self.settings = settings
         work = PendingWork(clock: ports.clock)
-        clipboard = ClipboardGuard(pasteboard: ports.pasteboard, work: work, clock: ports.clock)
+        clipboard = ClipboardGuard(
+            pasteboard: ports.pasteboard, paster: ports.paster, work: work, clock: ports.clock)
         let steps = TranscriptionSteps(
             provider: ports.provider, cleaner: ports.cleaner, clock: ports.clock, store: ports.store, work: work)
         delivery = TranscriptDelivery(

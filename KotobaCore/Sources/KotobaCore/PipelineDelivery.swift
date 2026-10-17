@@ -22,6 +22,7 @@ extension DictationPipeline {
             id: current.id, audio: audio, createdAt: ports.clock.date, keyDown: keyDown, latency: latency,
             clipboard: clipboard, settings: settings, output: current.output,
             frontAppAtStop: current.frontAppAtStop,
+            takePastePlace: { await self.takePasteTarget(for: current.id) },
             pasteWentUnread: { text, isLeftOnClipboard in
                 await self.pasteWentUnread(text, of: current.id, marksRow: true, isLeftOnClipboard: isLeftOnClipboard)
             })
@@ -109,11 +110,9 @@ extension DictationPipeline {
         }
     }
 
-    /// Once no chord is held, with the place read just before the ⌘V: true when the text may paste, false while the
-    /// owner is away (it waits on the clipboard).
+    /// Once no chord is held: true when the text may paste, false while the owner is away (it waits on the clipboard).
     private func isReadyToPaste(_ current: Recording) async -> Bool {
         await waitForChordRelease(after: current.stoppingPress)
-        takePasteTarget(for: current.id)
         return isPresent
     }
 

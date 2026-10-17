@@ -17,6 +17,8 @@ struct TranscriptDelivery: Sendable {
         let output: DictationOutput
         /// The front app at the stop; a submit Return goes only to it, and the record keeps it.
         var frontAppAtStop: FrontApp?
+        /// Reads the paste's place, right before the ⌘V (`ClipboardGuard.paste`).
+        let takePastePlace: @Sendable () async -> Void
         /// No app read the paste (`ClipboardGuard.Unread`).
         let pasteWentUnread: @Sendable (_ text: String, _ isLeftOnClipboard: Bool) async -> Void
     }
@@ -164,8 +166,8 @@ struct TranscriptDelivery: Sendable {
         }
         guard
             let write = await clipboard.paste(
-                text, over: snapshot, with: paster, readBy: clock.now + job.settings.readWait,
-                unread: { await job.pasteWentUnread(text, $0) })
+                text, over: snapshot, readBy: clock.now + job.settings.readWait,
+                beforeSend: job.takePastePlace, unread: { await job.pasteWentUnread(text, $0) })
         else { return (.copied, nil) }
         Self.mark(.pasteSent, at: clock.now, of: job, in: &latency)
         return (.pasted, write)

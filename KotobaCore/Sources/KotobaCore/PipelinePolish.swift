@@ -190,13 +190,12 @@ extension DictationPipeline {
     /// Pastes `text` of dictation `id` through the clipboard guard, as a dictation does, with no Return: the clipboard
     /// comes back once the app read it, and a paste no app read is left on the clipboard (`ClipboardGuard`).
     func pasteThroughClipboard(_ text: String, of id: DictationID) async -> PasteResult {
-        let snapshot = await clipboard.snapshot()
-        let target = pasteTarget()
-        guard
-            let write = await clipboard.paste(
-                text, over: snapshot, with: ports.paster, readBy: ports.clock.now + settings.readWait,
-                unread: { await self.pasteWentUnread(text, of: id, marksRow: false, isLeftOnClipboard: $0) })
-        else { return .copied }
+        let write = await clipboard.paste(
+            text, over: await clipboard.snapshot(), readBy: ports.clock.now + settings.readWait,
+            beforeSend: { await self.takePasteTarget(for: id) },
+            unread: { await self.pasteWentUnread(text, of: id, marksRow: false, isLeftOnClipboard: $0) })
+        let target = pasteTargets.removeValue(forKey: id)
+        guard let write else { return .copied }
         markPasted(text, at: target)
         return write.isClipboardKept ? .pasted : .clipboardNotKept
     }

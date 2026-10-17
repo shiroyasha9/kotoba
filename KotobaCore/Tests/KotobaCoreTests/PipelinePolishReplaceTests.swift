@@ -45,6 +45,25 @@ struct PipelinePolishReplaceTests {
         #expect(await pipeline.state == .polished(id, isReplaced: false))
     }
 
+    /// The owner switches windows between kotoba's clipboard write and its ⌘V, so the paste lands in the new window,
+    /// then goes back. The place is read right before the ⌘V, so Polish sees a change and sends no Backspace into the
+    /// window that never got the paste.
+    @Test func aFocusChangeBetweenTheWriteAndTheCmdVGivesNoBackspace() async throws {
+        let world = FakeWorld(transcript: Self.spoken)
+        let input = FakeInput()
+        let pipeline = world.makePipeline(
+            polisher: FakePolisher(answer: Self.polished), selector: FakeSelector(), input: input)
+        let window = input.current.window
+        await world.pasteboard.whenWritingTransient { input.apply(.otherWindow) }
+        await pipeline.dictate(world)
+        input.returnToWindow(window)
+
+        await pipeline.polishLast()
+
+        #expect(await world.paster.keystrokes == [.commandV])
+        #expect(await world.pasteboard.text == Self.polished)
+    }
+
     @Test(arguments: [FakeInput.Change.typed, .clicked, .otherWindow, .otherApp])
     func anyChangeSinceThePasteLeavesThePolishOnTheClipboard(_ change: FakeInput.Change) async throws {
         let world = FakeWorld(transcript: Self.spoken)
@@ -134,6 +153,11 @@ final class FakeInput: Sendable {
     private let mark = Mutex(InputMark(processID: 100, window: 7, inputSincePaste: 0))
 
     var current: InputMark { mark.withLock { $0 } }
+
+    /// The owner brings `window` of the same app back to the front.
+    func returnToWindow(_ window: Int) {
+        mark.withLock { $0.window = window }
+    }
 
     func apply(_ change: Change) {
         mark.withLock { mark in

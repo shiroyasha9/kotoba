@@ -278,8 +278,17 @@ actor FakePasteboard: Pasteboard {
         isManagerReading = true
     }
 
+    /// Runs once, at the next transient write: what the owner does between the write and the Cmd-V.
+    private var onNextTransientWrite: (@Sendable () -> Void)?
+
+    func whenWritingTransient(_ action: @escaping @Sendable () -> Void) {
+        onNextTransientWrite = action
+    }
+
     func writeTransient(_ text: String, onRead: @escaping @Sendable () -> Void) async -> Int {
         let written = await write(text, isTransient: true, onRead: onRead)
+        onNextTransientWrite?()
+        onNextTransientWrite = nil
         if isManagerReading { appReads() }
         return written
     }
