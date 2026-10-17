@@ -23,10 +23,13 @@ struct PipelineQuitTests {
         let record = try #require(await world.store.records.first)
         #expect(record.transcript == "almost lost")
         // Quit returns before a restore could run: the text is not pasted and the clipboard is left alone (lead,
-        // 2026-10-17). Paste Last finds it at the next launch.
-        #expect(record.status == .copied)
+        // 2026-10-17). The row says so, and Paste Last finds it at the next launch.
+        #expect(record.status == .notPasted)
         #expect(await world.paster.pasteCount == 0)
         #expect(await world.pasteboard.text == "user's clipboard")
+
+        await world.makePipeline().pasteLast()
+        #expect(await world.paster.pasted == ["almost lost"])
     }
 
     /// Nothing new is sent once quit began: what is sent now could be billed now and again at the next launch.

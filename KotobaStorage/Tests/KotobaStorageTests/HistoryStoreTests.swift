@@ -306,3 +306,16 @@ struct HistoryStoreTests {
         #expect(try await store.record(DictationID()) == nil)
     }
 }
+
+extension HistoryStoreTests {
+    /// A dictation answered while kotoba quit was saved, not pasted: Paste Last at the next launch finds it.
+    @Test func aRowNotPastedAtQuitIsTheLastDelivered() async throws {
+        let store = try HistoryStore(url: url, audio: audio)
+        try await store.save(record(.pasted, at: 1_800_000_000))
+        var saved = record(.notPasted, at: 1_800_000_100)
+        saved.transcript = "said as kotoba quit"
+        try await store.save(saved)
+
+        #expect(try await store.lastDelivered()?.id == saved.id)
+    }
+}

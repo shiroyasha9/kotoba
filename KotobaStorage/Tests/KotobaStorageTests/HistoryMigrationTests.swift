@@ -215,6 +215,19 @@ struct HistoryMigrationTests {
     }
 
     /// v0.3.1 gets both columns this release adds, `polished_text` and `attempts`, on one open; each keeps its value.
+    /// The kept-audio index of 0.3.x left out rows saved at a quit (`notPasted`): it is replaced, so retention still
+    /// reads an index whose rows match its query.
+    @Test func aShippedKeptAudioIndexIsReplaced() throws {
+        _ = try oldHistory(Self.retentionBuild)
+
+        _ = try HistoryStore(url: url, audio: audio)
+
+        let indexes = try SQLiteDatabase(url: url)
+            .query("SELECT name, sql FROM sqlite_master WHERE type = 'index' AND name LIKE 'dictations_kept_audio%';")
+        #expect(indexes.map { $0[0].string } == ["dictations_kept_audio_2"])
+        #expect(indexes.first?[1].string?.contains("'notPasted'") == true)
+    }
+
     @Test func aV031HistoryGetsThePolishedTextAndAttemptsColumns() async throws {
         let database = try SQLiteDatabase(url: url)
         try database.execute(Self.retentionBuild)

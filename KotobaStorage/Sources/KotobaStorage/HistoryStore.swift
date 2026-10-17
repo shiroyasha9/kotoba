@@ -65,7 +65,7 @@ public actor HistoryStore: Store {
     /// SQL lists of statuses, from `DictationRecord.Status`: the retry queue, the rows whose text reached the owner,
     /// and every row with text.
     private static let retryable = sqlList([.pending, .failed])
-    private static let delivered = sqlList([.pasted, .copied])
+    private static let delivered = sqlList([.pasted, .copied, .notPasted])
     private static let transcribed = sqlList(DictationRecord.Status.allCases.filter(\.isTranscribed))
     /// The kept rows the History pane's Retry puts back in the queue.
     private static let requeued = sqlList([.cancelled, .rejected])

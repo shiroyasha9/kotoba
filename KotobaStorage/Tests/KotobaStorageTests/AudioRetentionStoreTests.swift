@@ -57,7 +57,7 @@ struct AudioRetentionStoreTests {
 
         let expired = rows.filter { retention.isExpired($0, at: now) }
         #expect(deleted == Set(expired.map(\.id)))
-        #expect(Set(expired.map(\.status)) == [.pasted, .copied, .recovered])
+        #expect(Set(expired.map(\.status)) == [.pasted, .copied, .notPasted, .recovered])
         for row in rows {
             let isExpired = expired.contains { $0.id == row.id }
             #expect(FileManager.default.fileExists(atPath: row.audio.file.path) == !isExpired)
@@ -236,7 +236,7 @@ struct AudioRetentionStoreTests {
         for query in [HistoryStore.expiredAudioQuery(after: false), HistoryStore.expiredAudioQuery(after: true)] {
             let plan = try database.query(
                 "EXPLAIN QUERY PLAN " + query, [.real(0), .integer(500), .real(0), .text("")])
-            #expect(plan.contains { $0.last?.string?.contains("INDEX dictations_kept_audio ") == true })
+            #expect(plan.contains { $0.last?.string?.contains("INDEX dictations_kept_audio_2 ") == true })
         }
     }
 

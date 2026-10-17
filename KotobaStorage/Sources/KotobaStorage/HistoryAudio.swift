@@ -31,9 +31,10 @@ extension HistoryStore {
 
     /// A partial index that holds only the audio still kept (about one period of dictations), in batch order. A change
     /// to `keptAudio` or its columns needs a new index name and the old one dropped here: `IF NOT EXISTS` keeps an
-    /// index of the same name as it was.
+    /// index of the same name as it was. `dictations_kept_audio` (0.3.x) left out `notPasted`.
     static let keptAudioIndex = """
-        CREATE INDEX IF NOT EXISTS dictations_kept_audio ON dictations (\(transcribedAt), id) WHERE \(keptAudio);
+        DROP INDEX IF EXISTS dictations_kept_audio;
+        CREATE INDEX IF NOT EXISTS dictations_kept_audio_2 ON dictations (\(transcribedAt), id) WHERE \(keptAudio);
         """
 
     /// One batch, oldest text first; `after` adds the cursor's condition as ?3 and ?4.

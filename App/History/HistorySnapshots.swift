@@ -82,6 +82,10 @@ extension HistoryController {
                     + "section three needs another week for testing on older Macs before we can commit to a date.",
                 minutesAgo: 60 * 26, seconds: 21, app: ("com.apple.MobileSMS", "Messages"), isAudioDeleted: true),
             row("See you at six.", minutesAgo: 60 * 27, seconds: 2, app: nil, isAudioDeleted: true),
+            // Answered while kotoba quit: saved, not pasted.
+            row(
+                "Book the room for the review.", minutesAgo: 60 * 28, seconds: 3, app: ("com.apple.Notes", "Notes"),
+                status: .notPasted),
         ]
     }
 }

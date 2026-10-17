@@ -17,8 +17,8 @@ public protocol Store: Sendable {
     /// Records with status `.recovered` and `recoveredAt` at or after `cutoff`, newest first. For
     /// the menu, so their latency logs may be left empty.
     func recovered(since cutoff: Date) async throws -> [DictationRecord]
-    /// The newest dictation whose text reached the owner (`.pasted` or `.copied`), by `createdAt`, with no latency
-    /// log; nil when there is none. "Paste Last Dictation" pastes its `latestText`.
+    /// The newest dictation whose text reached the owner (`.pasted`, `.copied`, or `.notPasted` at a quit), by
+    /// `createdAt`, with no latency log; nil when there is none. "Paste Last Dictation" pastes its `latestText`.
     func lastDelivered() async throws -> DictationRecord?
     /// Sets one record's status to `.copied`, keeping everything else.
     func markCopied(_ id: DictationID) async throws
@@ -63,6 +63,8 @@ public struct DictationRecord: Sendable, Equatable, Identifiable {
         case pasted
         /// The transcript is on the clipboard but was not pasted.
         case copied
+        /// The transcript came while kotoba quit: saved, not pasted, and the clipboard left alone. Paste Last finds it.
+        case notPasted
         /// A retry transcribed it. It waits in the menu until the owner copies it.
         case recovered
         case cancelled
@@ -76,7 +78,7 @@ public struct DictationRecord: Sendable, Equatable, Identifiable {
         /// statuses keep their audio until the owner deletes the dictation.
         public var isTranscribed: Bool {
             switch self {
-            case .pasted, .copied, .recovered: true
+            case .pasted, .copied, .notPasted, .recovered: true
             case .pending, .failed, .cancelled, .rejected: false
             }
         }

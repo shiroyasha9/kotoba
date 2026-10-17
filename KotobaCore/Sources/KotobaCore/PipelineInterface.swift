@@ -104,7 +104,8 @@ public enum DictationState: Sendable, Equatable {
         case .failed where record.needsSetup != nil: .needsSetup(record.id, record.needsSetup ?? .key)
         case .failed: queued(record)
         case .pending: .failed(record.id)
-        case .pasted, .cancelled: .idle
+        // A row saved during a quit shows nothing: the app is going.
+        case .pasted, .notPasted, .cancelled: .idle
         }
     }
 

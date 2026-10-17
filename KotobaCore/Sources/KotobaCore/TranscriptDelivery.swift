@@ -154,10 +154,10 @@ struct TranscriptDelivery: Sendable {
         Self.mark(.snapshotReady, at: readyAt, of: job, in: &latency)
         let choice = await beforePaste()
         guard choice != .saveOnly else {
-            // Quit returns before a restore could run, so the clipboard is left alone; the row is copied, so Paste
-            // Last finds the text at the next launch.
+            // Quit returns before a restore could run, so the clipboard is left alone; Paste Last finds the text at
+            // the next launch.
             Log.pipeline.info("Not pasted or copied: kotoba is quitting; the text is in History")
-            return (.copied, nil)
+            return (.notPasted, nil)
         }
         // The owner went to another app after the stop (a late answer): the text never goes there, it waits on the
         // clipboard (lead, 2026-10-17). With no app known at the stop, or now, nothing says it changed.

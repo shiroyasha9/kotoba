@@ -310,8 +310,11 @@ struct HistoryStatus {
         case .pasted, .copied:
             guard record.polishedText != nil else { return nil }
             (title, systemImage, isProblem) = ("Polished", IndicatorPanel.polishSymbol, false)
-        case .recovered:
-            (title, systemImage, isProblem) = ("Recovered", "checkmark.circle", false)
+        // Text the owner did not get at its stop: a retry's, or one that came while kotoba quit.
+        case .recovered, .notPasted:
+            (title, systemImage, isProblem) =
+                record.status == .recovered
+                ? ("Recovered", "checkmark.circle", false) : ("Not pasted", "tray.and.arrow.down", false)
         case .cancelled:
             (title, systemImage, isProblem) = ("Canceled", "xmark.circle", false)
         case .pending where isSending:
