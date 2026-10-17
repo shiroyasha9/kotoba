@@ -78,4 +78,33 @@ struct PipelineRetryCapTests {
         #expect(record.status == .rejected)
         #expect(await pipeline.state == .rejected(record.id, .other))
     }
+
+    /// A live dictation that gets its text shows the route works again (a server outage ended with the network up):
+    /// the failed dictations are sent then, not only at the next launch (audit C5).
+    @Test func aLiveTranscriptSendsTheFailedDictationsAgain() async throws {
+        let world = FakeWorld(transcript: "back again")
+        let pipeline = world.makePipeline()
+        await world.provider.fail(with: ProviderError.server(status: 503))
+        await pipeline.dictate(world)
+
+        await world.provider.fail(with: nil)
+        await pipeline.dictate(world)
+
+        #expect(await world.provider.requests.count == 3)
+        #expect(await world.store.records.map(\.status).sorted { $0.rawValue < $1.rawValue } == [.pasted, .recovered])
+    }
+
+    @Test func aLiveTranscriptSendsNoDictationPastTheCap() async throws {
+        let world = FakeWorld(transcript: "back again")
+        let pipeline = world.makePipeline()
+        await world.provider.fail(with: ProviderError.server(status: 503))
+        await pipeline.dictate(world)
+        await pipeline.retryAtLaunch()
+        await pipeline.retryAtLaunch()
+
+        await world.provider.fail(with: nil)
+        await pipeline.dictate(world)
+
+        #expect(await world.provider.requests.count == 4)
+    }
 }

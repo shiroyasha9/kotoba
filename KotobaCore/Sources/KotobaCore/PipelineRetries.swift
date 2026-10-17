@@ -55,6 +55,13 @@ extension DictationPipeline {
         await retryPending(.onlyNeedsSetup)
     }
 
+    /// A live dictation got its text: the route works, credit included, so the dictations that waited for it are sent
+    /// (decision 6), and so are the failed ones, as a server outage can end with the network up (audit C5). Each
+    /// within its automatic attempts.
+    func routeAnswered() async {
+        await retryPending(nil, isAutomatic: true)
+    }
+
     /// The network monitor's report. When the network returns after an outage, the failed dictations are sent again
     /// (story 22), as tracked work: this returns at once, so the monitor never waits on a retry (review B7).
     public func networkChanged(isOnline: Bool) async {
