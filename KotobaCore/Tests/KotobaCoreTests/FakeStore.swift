@@ -40,6 +40,7 @@ actor FakeStore: Store {
     }
 
     func update(_ record: DictationRecord) async throws -> Bool {
+        if let updateError { throw updateError }
         addToLedger(record)
         guard let index = records.firstIndex(where: { $0.id == record.id }) else { return false }
         records[index] = record
@@ -100,6 +101,13 @@ actor FakeStore: Store {
         let kept = ids.intersection(undeletable)
         records.removeAll { ids.contains($0.id) && !kept.contains($0.id) }
         return kept
+    }
+
+    private var updateError: (any Error)?
+
+    /// Every `update` throws `error` (nil: writes again), as a full disk does.
+    func failUpdates(with error: (any Error)?) {
+        updateError = error
     }
 
     private var deleteError: (any Error)?

@@ -53,6 +53,19 @@ struct PipelineTranscribeAgainTests {
         #expect(await pipeline.state == .idle)
     }
 
+    /// The new text was not written (a full disk): History is told nothing changed, as it did not.
+    @Test func aNewTextTheStoreCannotWriteReportsNoChange() async throws {
+        let world = FakeWorld(transcript: "Fix the log in bug.")
+        let pipeline = world.makePipeline()
+        await pipeline.dictate(world)
+        let id = try #require(await world.store.records.first?.id)
+        await world.provider.hear("Fix the login bug.")
+        await world.store.failUpdates(with: CocoaError(.fileWriteOutOfSpace))
+
+        #expect(await pipeline.transcribeAgain(id) == false)
+        #expect(await world.store.records.first?.transcript == "Fix the log in bug.")
+    }
+
     @Test func anAnswerWithNoWordsKeepsTheTextAndIsBilled() async throws {
         let world = FakeWorld(transcript: "Fix the login bug.")
         let pipeline = world.makePipeline()

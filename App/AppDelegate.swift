@@ -252,15 +252,6 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         await refreshQueues()
     }
 
-    var statusContext: StatusContext {
-        StatusContext(
-            provider: routeSettings.route.account, microphone: readiness.microphone,
-            isPasteAllowed: readiness.isAccessibilityAllowed, isSecureInputOn: isSecureInputOn,
-            microphoneName: audio.inputInUse?.name,
-            longRecordingMinutes: Int(settings.longRecordingWarning / .seconds(60)), undoWindow: settings.undoWindow,
-            isYielding: releaseWatcher.isYielding)
-    }
-
     private func render(_ newState: DictationState) {
         let wasRecording = if case .recording = state { true } else { false }
         state = newState
@@ -281,6 +272,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         switch newState {
         // Their text and button depend on the mic and Accessibility grants now (I2).
         case .captureFailed, .copied: readiness.refresh()
+        // A recovered text the store could not write is listed from memory, with no write to announce it.
+        case .recovered: scheduleQueueRefresh()
         default: break
         }
         indicator.show(newState, context: statusContext)
@@ -309,6 +302,15 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 // MARK: - History writes
 
 extension AppDelegate {
+    var statusContext: StatusContext {
+        StatusContext(
+            provider: routeSettings.route.account, microphone: readiness.microphone,
+            isPasteAllowed: readiness.isAccessibilityAllowed, isSecureInputOn: isSecureInputOn,
+            microphoneName: audio.inputInUse?.name,
+            longRecordingMinutes: Int(settings.longRecordingWarning / .seconds(60)), undoWindow: settings.undoWindow,
+            isYielding: releaseWatcher.isYielding)
+    }
+
     /// Each history write can change the Retry count, the Recovered list, "Fix Last Dictation…" and the open main
     /// window's panes.
     private func historyChanged(_ change: HistoryChange) {

@@ -263,13 +263,22 @@ extension Store {
         }
     }
 
-    /// Updates and logs a failure. False only when the row is gone: the dictation was deleted, so it has no outcome.
-    func updateOrLog(_ record: DictationRecord) async -> Bool {
+    /// Updates and logs a failure.
+    func updateOrLog(_ record: DictationRecord) async -> StoreUpdate {
         do {
-            return try await update(record)
+            return try await update(record) ? .written : .rowGone
         } catch {
             Log.pipeline.error("Cannot save dictation \(record.id.rawValue): \(error)")
-            return true
+            return .failed
         }
     }
+}
+
+/// What `Store.updateOrLog` did.
+enum StoreUpdate {
+    case written
+    /// The owner deleted the dictation: it has no outcome.
+    case rowGone
+    /// The store failed (a full disk): nothing was written.
+    case failed
 }

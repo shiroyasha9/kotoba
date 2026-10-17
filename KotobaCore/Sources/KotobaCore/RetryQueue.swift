@@ -15,6 +15,9 @@ public actor RetryQueue {
     private var requested: RetrySelection?
     /// Whether the last network report was offline.
     private var isOffline = false
+    /// Recovered transcripts the store could not write (a full disk): the menu lists them until the owner copies
+    /// them, and no run in this process sends them again. The next launch does, as their rows are still queued.
+    private var unsaved: [DictationRecord] = []
 
     init(steps: TranscriptionSteps, store: any Store, clock: any PipelineClock, clipboard: ClipboardGuard) {
         self.steps = steps
@@ -75,8 +78,20 @@ public actor RetryQueue {
             await waitUntilQuiet()
             guard let fresh = await stillQueued(record.id, isInFlight: isInFlight) else { continue }
             let (retried, error) = await retry(fresh, settings: await settings())
-            // Deleted from the History pane during the request: it stays deleted and shows no outcome.
-            if await store.updateOrLog(retried) { results.append(retried) }
+            switch await store.updateOrLog(retried) {
+            case .written:
+                results.append(retried)
+            case .rowGone:
+                // Deleted from the History pane during the request: it stays deleted and shows no outcome.
+                break
+            case .failed:
+                if retried.status == .recovered {
+                    unsaved.append(retried)
+                    results.append(retried)
+                }
+                Log.pipeline.error("Retry: stopped, the store cannot write; the next answer would be lost the same way")
+                return results
+            }
             if error?.isSharedByEveryRequest == true {
                 Log.pipeline.info(
                     "Retry: stopped, the next sends would fail the same way: \(String(describing: error))")
@@ -93,7 +108,7 @@ public actor RetryQueue {
         _ id: DictationID,
         isInFlight: @Sendable (DictationID) async -> Bool
     ) async -> DictationRecord? {
-        guard await !isInFlight(id) else { return nil }
+        guard !unsaved.contains(where: { $0.id == id }), await !isInFlight(id) else { return nil }
         do {
             return try await store.queuedRecord(id)
         } catch {
@@ -125,14 +140,19 @@ public actor RetryQueue {
         return (record, failure)
     }
 
-    /// Recovered transcripts from the last 24 h, newest first.
+    /// Recovered transcripts from the last 24 h, newest first, the unsaved ones included.
     public func recovered() async -> [DictationRecord] {
+        let cutoff = clock.date - Self.recoveredWindow
+        let stored: [DictationRecord]
         do {
-            return try await store.recovered(since: clock.date - Self.recoveredWindow)
+            stored = try await store.recovered(since: cutoff)
         } catch {
             Log.pipeline.error("Cannot read recovered transcripts: \(error)")
-            return []
+            stored = []
         }
+        let kept = unsaved.filter { ($0.recoveredAt ?? .distantPast) >= cutoff }
+        guard !kept.isEmpty else { return stored }
+        return (kept + stored).sorted { ($0.recoveredAt ?? .distantPast) > ($1.recoveredAt ?? .distantPast) }
     }
 
     /// Puts a recovered transcript (the cleaned one, for a cleanup dictation) on the clipboard and
@@ -140,6 +160,7 @@ public actor RetryQueue {
     public func copy(_ record: DictationRecord) async {
         guard let text = record.deliveredText else { return }
         await clipboard.copy(text)
+        unsaved.removeAll { $0.id == record.id }
         do {
             try await store.markCopied(record.id)
         } catch {

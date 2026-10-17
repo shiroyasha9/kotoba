@@ -105,6 +105,41 @@ struct RetryQueueTests {
         #expect(await queue.recovered().isEmpty)
     }
 
+    /// The store cannot write a recovered transcript (a full disk): the run stops, as the next answer would be billed
+    /// and lost the same way. The menu still lists the text until the owner copies it, and no later run in this
+    /// process sends it again.
+    @Test func aRecoveredTranscriptTheStoreCannotWriteStaysInTheMenuAndStopsTheRun() async throws {
+        let first = try await queued(.failed)
+        _ = try await queued(.failed)
+        await world.store.failUpdates(with: CocoaError(.fileWriteOutOfSpace))
+        let queue = makeQueue()
+
+        let results = await run(queue, .all)
+
+        #expect(results.map(\.id) == [first.id])
+        #expect(await world.provider.requests.count == 1)
+        #expect(await queue.recovered().map(\.id) == [first.id])
+
+        await world.store.failUpdates(with: nil)
+        let second = await run(queue, .all)
+
+        #expect(!second.contains { $0.id == first.id })
+        #expect(await world.provider.requests.count == 2)
+    }
+
+    @Test func aRecoveredTranscriptTheStoreCannotWriteLeavesTheMenuOnceCopied() async throws {
+        _ = try await queued(.failed)
+        await world.store.failUpdates(with: CocoaError(.fileWriteOutOfSpace))
+        let queue = makeQueue()
+        _ = await run(queue, .all)
+
+        let item = try #require(await queue.recovered().first)
+        await queue.copy(item)
+
+        #expect(await queue.recovered().isEmpty)
+        #expect(await world.pasteboard.text == "recovered")
+    }
+
     @Test func aRetryAskedForDuringARunRunsAfterIt() async throws {
         _ = try await queued(.failed)
         var waiting = DictationRecord(
