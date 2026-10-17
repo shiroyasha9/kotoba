@@ -135,6 +135,8 @@ extension DictationPipeline {
         /// The front app and window and the owner's input count now; nil when unknown. Polish replaces by Backspace only
         /// when it did not change since kotoba's paste (`PolishPlacement`).
         public let inputMark: @Sendable () -> InputMark?
+        /// Microphone access is on now. Read only at the stop of a recording that heard no sound.
+        public let isMicrophoneAllowed: @Sendable () -> Bool
 
         public init(
             audio: any AudioSource,
@@ -149,7 +151,8 @@ extension DictationPipeline {
             frontApp: @escaping @Sendable () -> FrontApp? = { nil },
             polisher: (any TextPolisher)? = nil,
             selector: (any PastedTextSelector)? = nil,
-            inputMark: @escaping @Sendable () -> InputMark? = { nil }
+            inputMark: @escaping @Sendable () -> InputMark? = { nil },
+            isMicrophoneAllowed: @escaping @Sendable () -> Bool = { true }
         ) {
             self.audio = audio
             self.provider = provider
@@ -164,6 +167,7 @@ extension DictationPipeline {
             self.polisher = polisher
             self.selector = selector
             self.inputMark = inputMark
+            self.isMicrophoneAllowed = isMicrophoneAllowed
         }
     }
 

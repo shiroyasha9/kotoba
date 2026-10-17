@@ -164,6 +164,55 @@ struct PipelineNoSoundTests {
     }
 }
 
+/// Microphone access turned off while kotoba runs: the mic gives only zeros, so a recording that never heard a sound
+/// is not sent (no request, no bill), and the pill says why (lead, 2026-10-17).
+struct PipelineMicrophoneOffTests {
+    @Test func aSilentRecordingWithMicrophoneAccessOffIsNotSent() async throws {
+        let world = FakeWorld(transcript: "zeros")
+        let pipeline = world.makePipeline(noSoundWarning: .seconds(2))
+        await pipeline.tap(world)
+        await world.meter(pipeline, 0, for: .seconds(3))
+        world.microphone.isAllowed = false
+
+        await pipeline.tap(world)
+        await pipeline.settle()
+
+        #expect(await world.provider.requests.isEmpty)
+        #expect(await world.store.records.isEmpty)
+        #expect(await world.audio.discarded == (await world.audio.files))
+        #expect(await pipeline.state == .captureFailed)
+    }
+
+    /// The owner spoke before the access went off: that part is sent.
+    @Test func aRecordingThatHeardSoundIsSentAfterAccessWentOff() async {
+        let world = FakeWorld(transcript: "first words")
+        let pipeline = world.makePipeline(noSoundWarning: .seconds(2))
+        await pipeline.tap(world)
+        await world.meter(pipeline, 0.4, for: .seconds(1))
+        await world.meter(pipeline, 0, for: .seconds(3))
+        world.microphone.isAllowed = false
+
+        await pipeline.tap(world)
+        await pipeline.settle()
+
+        #expect(await world.provider.requests.count == 1)
+        #expect(await world.paster.pasted == ["first words"])
+    }
+
+    /// With access on, a silent recording is sent as before: the route says "No speech heard".
+    @Test func aSilentRecordingWithAccessOnIsSent() async {
+        let world = FakeWorld(transcript: "")
+        let pipeline = world.makePipeline(noSoundWarning: .seconds(2))
+        await pipeline.tap(world)
+        await world.meter(pipeline, 0, for: .seconds(3))
+
+        await pipeline.tap(world)
+        await pipeline.settle()
+
+        #expect(await world.provider.requests.count == 1)
+    }
+}
+
 extension FakeWorld {
     /// The meter sends `level` each 100 ms for `duration`, and the pipeline takes each one.
     func meter(_ pipeline: DictationPipeline, _ level: Float, for duration: Duration) async {

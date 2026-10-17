@@ -15,6 +15,8 @@ struct NoSoundPolicy: Sendable, Equatable {
     /// Since when every level was under `floor`.
     private var quietSince: Instant
     private(set) var isWarning = false
+    /// A level at or over `floor` came at least once in this recording.
+    private(set) var hasHeardSound = false
 
     init(delay: Duration, startingAt start: Instant) {
         self.delay = delay
@@ -26,6 +28,7 @@ struct NoSoundPolicy: Sendable, Equatable {
         if level >= Self.floor {
             quietSince = now
             isWarning = false
+            hasHeardSound = true
         } else if now - quietSince >= delay {
             isWarning = true
         }

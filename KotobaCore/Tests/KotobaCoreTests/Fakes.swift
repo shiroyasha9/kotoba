@@ -20,6 +20,7 @@ struct FakeWorld {
     }
 
     let setup = FakeSetup()
+    let microphone = FakeMicrophoneAccess()
 
     /// The fake mic sends no levels, so the no-sound deadline (`Settings.noSoundWarning`) stays out of other
     /// tests' way unless a test sets it.
@@ -33,7 +34,8 @@ struct FakeWorld {
                 clock: clock,
                 store: store,
                 missingSetup: { [setup] in setup.missing },
-                frontApp: { [frontApp] in frontApp.current }
+                frontApp: { [frontApp] in frontApp.current },
+                isMicrophoneAllowed: { [microphone] in microphone.isAllowed }
             ),
             settings: .init(audioDirectory: URL(filePath: "/tmp/kotoba-tests"), noSoundWarning: noSoundWarning)
         )
@@ -41,6 +43,16 @@ struct FakeWorld {
 }
 
 struct FakeError: Error {}
+
+/// Whether Microphone access is on; tests turn it off as the owner would in System Settings.
+final class FakeMicrophoneAccess: Sendable {
+    private let value = Mutex(true)
+
+    var isAllowed: Bool {
+        get { value.withLock { $0 } }
+        set { value.withLock { $0 = newValue } }
+    }
+}
 
 /// What the route still needs (a key or an endpoint); nil when it is ready.
 final class FakeSetup: Sendable {

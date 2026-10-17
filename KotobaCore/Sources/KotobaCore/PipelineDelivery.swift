@@ -13,6 +13,13 @@ extension DictationPipeline {
             finishDictation(current.id, showing: .nothingRecorded)
             return
         }
+        // Microphone access went off while kotoba runs: the mic gave only zeros, so nothing is sent or billed. Read
+        // only for a recording that never heard a sound.
+        guard current.sound.hasHeardSound || ports.isMicrophoneAllowed() else {
+            await remember(current.id, unless: await ports.audio.discard(audio))
+            finishDictation(current.id, showing: .captureFailed)
+            return
+        }
         guard audio.duration >= settings.minimumRecording else {
             await remember(current.id, unless: await ports.audio.discard(audio))
             finishDictation(current.id, showing: audio.loss.map(DictationState.audioNotSaved) ?? .idle)
