@@ -50,7 +50,8 @@ extension DictationPipeline {
         // After the paste: a dictation with text is the event that lets retention run (story 31). Tracked, so the
         // retries below do not wait for the files.
         if outcome.record.status.isTranscribed { work.track { await self.deleteExpiredAudio() } }
-        if outcome.record.transcript != nil { await routeAnswered() }
+        // Tracked, so this dictation's work ends here while the retries wait for a quiet moment.
+        if outcome.record.transcript != nil { work.track { await self.routeAnswered() } }
     }
 
     /// No app read a paste of `text` of dictation `id` (`ClipboardGuard.Unread`): it did not land, so Polish never

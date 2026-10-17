@@ -100,8 +100,7 @@ final class MainWindowController {
         if change.isUsageAdded {
             usage?.ledgerChanged()
         }
-        let isDeleted = if case .deleted = change { true } else { false }
-        if change.isUsageAdded || isDeleted {
+        if change.isInsightsChanged {
             insights?.storeChanged()
         }
         if change.isKeptAudioChanged {

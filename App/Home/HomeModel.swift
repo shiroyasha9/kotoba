@@ -20,7 +20,7 @@ final class HomeModel {
 
     /// What Home does. The snapshot run passes none and sets the figures itself.
     struct Source {
-        /// The Insights figures at `now`: a scan of the whole ledger (20 ms at 10,000 dictations, progress.md).
+        /// The Insights figures at `now`: a scan of the whole ledger (20 ms at 10,000 dictations).
         var readInsights: @MainActor (_ now: Date) async throws -> DictationInsights
         /// The newest dictations, at most `recentCount`, and whether one reached the owner.
         var readRows: @MainActor () async throws -> (recent: [DictationRecord], hasLastDictation: Bool)
@@ -97,11 +97,9 @@ final class HomeModel {
     }
 
     /// The history was written: a shown Home reads again, the rows alone when the write left the figures as they were
-    /// (the pending save at upload start, a status change). The figures follow the ledger, and a delete takes a
-    /// dictation's recorded length away, as in Insights.
+    /// (the pending save at upload start, a status change).
     func historyChanged(_ change: HistoryChange) {
-        let isDeleted = if case .deleted = change { true } else { false }
-        if change.isUsageAdded || isDeleted { reads?.isInsightsDue = true }
+        if change.isInsightsChanged { reads?.insightsChanged() }
         if change.isRowChanged || change.isUsageAdded { reader.changed() }
     }
 
@@ -120,20 +118,26 @@ final class HomeModel {
 }
 
 extension HomeModel {
-    /// Reads Home's figures, with the Insights scan only when a write could change them or the day changed (audit E3a):
-    /// the scan runs on the store actor that the next dictation's save needs.
+    /// Reads Home's figures, with the Insights scan only when a write could change them or the day changed: the scan
+    /// runs on the store actor that the next dictation's save needs.
     @MainActor
     private final class Reads {
-        let source: Source
-        var isInsightsDue = true
+        private let readInsights: @MainActor (_ now: Date) async throws -> DictationInsights
+        private let readRows: @MainActor () async throws -> (recent: [DictationRecord], hasLastDictation: Bool)
+        private var isInsightsDue = true
         private var insights: (value: DictationInsights, day: Date)?
 
         init(source: Source) {
-            self.source = source
+            readInsights = source.readInsights
+            readRows = source.readRows
+        }
+
+        func insightsChanged() {
+            isInsightsDue = true
         }
 
         func read(at now: Date) async throws -> Figures {
-            async let rows = source.readRows()
+            async let rows = readRows()
             let current: DictationInsights
             if !isInsightsDue, let insights, Calendar.current.isDate(insights.day, inSameDayAs: now) {
                 current = insights.value
@@ -141,7 +145,7 @@ extension HomeModel {
                 // A write during the scan sets it due again, so the next read scans again.
                 isInsightsDue = false
                 do {
-                    current = try await source.readInsights(now)
+                    current = try await readInsights(now)
                 } catch {
                     isInsightsDue = true
                     throw error

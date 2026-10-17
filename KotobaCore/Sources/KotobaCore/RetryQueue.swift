@@ -150,9 +150,9 @@ public actor RetryQueue {
             Log.pipeline.error("Cannot read recovered transcripts: \(error)")
             stored = []
         }
-        let kept = unsaved.filter { ($0.recoveredAt ?? .distantPast) >= cutoff }
-        guard !kept.isEmpty else { return stored }
-        return (kept + stored).sorted { ($0.recoveredAt ?? .distantPast) > ($1.recoveredAt ?? .distantPast) }
+        unsaved.removeAll { ($0.recoveredAt ?? .distantPast) < cutoff }
+        guard !unsaved.isEmpty else { return stored }
+        return (unsaved + stored).sorted { ($0.recoveredAt ?? .distantPast) > ($1.recoveredAt ?? .distantPast) }
     }
 
     /// Puts a recovered transcript (the cleaned one, for a cleanup dictation) on the clipboard and

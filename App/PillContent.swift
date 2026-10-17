@@ -66,20 +66,10 @@ extension IndicatorPanel {
         case .recording(let isLong, let isSilent, let isCleaned):
             // Only a plain "Listening" pill stands vertical at an edge; the others carry more words.
             let isPlain = !isLong && !isSilent && !context.isSecureInputOn
-            let toolTip: String? =
-                if isSilent {
-                    context.microphone == .denied
-                        ? StatusText.microphoneOffHelp : StatusText.noSoundHelp(context.microphoneName)
-                } else if context.isSecureInputOn {
-                    DictationState.secureInputHelp
-                } else if isCleaned {
-                    StatusText.cleanupHelp
-                } else {
-                    nil
-                }
+            let toolTip = recordingHelp(isSilent: isSilent, isCleaned: isCleaned, context: context)
             // No sound is a warning with its fix on the button; it clears when sound arrives, so no timer. With
             // Microphone access off there is nothing to meter, and the button's words need the room.
-            let isAccessOff = isSilent && context.microphone == .denied
+            let isAccessOff = isSilent && context.isMicrophoneOff
             return .init(
                 text: text, color: isSilent ? .systemOrange : .systemRed, symbol: isCleaned ? cleanupSymbol : nil,
                 toolTip: toolTip, showsMeter: !isAccessOff, isCompact: isPlain, click: click, action: action)
@@ -100,5 +90,13 @@ extension IndicatorPanel {
             return .init(
                 PillNotice(text: text, action: action), color: state.isGoodOutcome ? .systemGreen : .systemOrange)
         }
+    }
+
+    /// The recording pill's help tag: why it is silent, Secure Input, or the cleanup to come.
+    private static func recordingHelp(isSilent: Bool, isCleaned: Bool, context: StatusContext) -> String? {
+        if isSilent && context.isMicrophoneOff { return StatusText.microphoneOffHelp }
+        if isSilent { return StatusText.noSoundHelp(context.microphoneName) }
+        if context.isSecureInputOn { return DictationState.secureInputHelp }
+        return isCleaned ? StatusText.cleanupHelp : nil
     }
 }

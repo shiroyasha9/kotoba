@@ -4,7 +4,7 @@ import Testing
 @testable import KotobaCore
 
 /// Quit while a dictation is being sent waits a little for its answer (`DictationPipeline.quitWait`), so the billed
-/// text is saved and the next launch does not send it again (audit C6).
+/// text is saved and the next launch does not send it again.
 struct PipelineQuitTests {
     @Test func quitWaitsForTheAnswerOfADictationInFlight() async throws {
         let world = FakeWorld(transcript: "almost lost")
@@ -51,10 +51,10 @@ struct PipelineQuitTests {
 
         await pipeline.shutdown()
 
-        #expect(await pipeline.quitWaiters.isEmpty)
+        #expect(await world.store.records.map(\.status) == [.pasted])
     }
 
-    /// Quit before the first buffer: no row of 0 s for the next launch to send, and no file (audit B5b).
+    /// Quit before the first buffer: no row of 0 s for the next launch to send, and no file.
     @Test func quitBeforeAnyAudioKeepsNoRow() async throws {
         let world = FakeWorld(transcript: "unused")
         let pipeline = world.makePipeline()

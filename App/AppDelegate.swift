@@ -272,7 +272,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         updateIcon()
         switch newState {
         // Their text and button depend on the mic and Accessibility grants now (I2).
-        // The mic can go silent because its access was turned off while kotoba runs (audit B5a).
+        // The mic can go silent because its access was turned off while kotoba runs.
         case .captureFailed, .copied, .recording(_, isSilent: true, _): readiness.refresh()
         // A recovered text the store could not write is listed from memory, with no write to announce it.
         case .recovered: scheduleQueueRefresh()
@@ -301,9 +301,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     }
 }
 
-// MARK: - History writes
+// MARK: - Status
 
 extension AppDelegate {
+    /// What the pill and the menu status line read besides the state.
     var statusContext: StatusContext {
         StatusContext(
             provider: routeSettings.route.account, microphone: readiness.microphone,
@@ -312,7 +313,11 @@ extension AppDelegate {
             longRecordingMinutes: Int(settings.longRecordingWarning / .seconds(60)), undoWindow: settings.undoWindow,
             isYielding: releaseWatcher.isYielding)
     }
+}
 
+// MARK: - History writes
+
+extension AppDelegate {
     /// Each history write can change the Retry count, the Recovered list, "Fix Last Dictation…" and the open main
     /// window's panes.
     private func historyChanged(_ change: HistoryChange) {

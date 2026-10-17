@@ -21,6 +21,13 @@ public enum HistoryChange: Sendable, Equatable {
         }
     }
 
+    /// The Insights figures can differ: they follow the ledger, and a delete takes a dictation's recorded length away
+    /// (Insights falls back to the billed length).
+    public var isInsightsChanged: Bool {
+        if case .deleted = self { return true }
+        return isUsageAdded
+    }
+
     /// A row was written or deleted: a status, a count or a text that lists show can differ.
     public var isRowChanged: Bool {
         switch self {

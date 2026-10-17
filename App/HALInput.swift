@@ -201,14 +201,8 @@ final class SettlingInput {
                     (stream.id, PropertyAddress($0))
                 }
             }
-        let isReported = Mutex(false)
-        listener = { _, _ in
-            let isFirst = isReported.withLock { isReported in
-                defer { isReported = true }
-                return !isReported
-            }
-            if isFirst { onChange() }
-        }
+        let pending = Mutex<(@Sendable () -> Void)?>(onChange)
+        listener = { _, _ in pending.withLock { $0.take() }?() }
         for target in targets {
             var address = target.address
             let status = AudioObjectAddPropertyListenerBlock(target.object, &address, .main, listener)

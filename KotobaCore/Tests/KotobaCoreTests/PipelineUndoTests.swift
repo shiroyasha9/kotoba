@@ -195,8 +195,7 @@ struct PipelineUndoTests {
         #expect(try #require(await world.store.records.first).status == .recovered)
     }
 
-    /// Esc before the first buffer: nothing was recorded, so the final cancel keeps no row of 0 s and no file
-    /// (audit B5b).
+    /// Esc before the first buffer: nothing was recorded, so the final cancel keeps no row of 0 s and no file.
     @Test func aCancelWithNoAudioKeepsNoRow() async throws {
         let world = FakeWorld(transcript: "unused")
         let pipeline = world.makePipeline()

@@ -80,7 +80,7 @@ struct PipelineRetryCapTests {
     }
 
     /// A live dictation that gets its text shows the route works again (a server outage ended with the network up):
-    /// the failed dictations are sent then, not only at the next launch (audit C5).
+    /// the failed dictations are sent then, not only at the next launch.
     @Test func aLiveTranscriptSendsTheFailedDictationsAgain() async throws {
         let world = FakeWorld(transcript: "back again")
         let pipeline = world.makePipeline()

@@ -142,6 +142,9 @@ struct StatusContext {
     var undoWindow = Duration.seconds(5)
     /// A development build gives way to the release app (`InstallYield`): its idle pill starts nothing.
     var isYielding = false
+
+    /// Microphone access is off: the mic gives nothing, and the fix is in System Settings.
+    var isMicrophoneOff: Bool { microphone == .denied }
 }
 
 /// The words for each `DictationState`, shared by the menu and the indicator pill, so the two
@@ -154,7 +157,7 @@ extension DictationState {
         switch self {
         case .idle: nil
         case .recording(_, isSilent: true, _):
-            context.microphone == .denied ? StatusText.microphoneOff : StatusText.noSound
+            context.isMicrophoneOff ? StatusText.microphoneOff : StatusText.noSound
         case .recording(isLong: true, _, _): "Still listening · \(context.longRecordingMinutes) min"
         case .recording: context.isSecureInputOn ? "Listening · Secure Input on" : "Listening"
         case .transcribing: "Transcribing"
@@ -172,7 +175,7 @@ extension DictationState {
         case .needsSetup(_, .credit): "\(provider) is out of credit. Saved."
         case .needsSetup(_, let item): StatusText.add(item, for: context.provider)
         case .rejected(_, let reason): reason.text(provider: provider)
-        case .captureFailed: context.microphone == .denied ? StatusText.microphoneOff : "No microphone found"
+        case .captureFailed: context.isMicrophoneOff ? StatusText.microphoneOff : "No microphone found"
         case .nothingRecorded: "Nothing was recorded. Try again."
         case .audioNotSaved(.diskFull): "Couldn’t save audio. Disk full?"
         case .audioNotSaved(.other): "Couldn’t save audio. Try again."
@@ -211,12 +214,12 @@ extension DictationState {
         switch self {
         case .undoable: .undo
         case .recording(_, isSilent: true, _):
-            context.microphone == .denied ? .openMicrophoneSettings : .chooseMicrophone
+            context.isMicrophoneOff ? .openMicrophoneSettings : .chooseMicrophone
         case .failed, .timedOut: .retry
         case .needsSetup(_, let item): item.pillAction
         case .recovered: .copy
         case .copied: context.isPasteAllowed ? nil : .allowPasting
-        case .captureFailed: context.microphone == .denied ? .openMicrophoneSettings : nil
+        case .captureFailed: context.isMicrophoneOff ? .openMicrophoneSettings : nil
         case .polished, .polishFailed: polishAction
         case .idle, .recording, .transcribing, .cleaning, .rejected, .cleanupFailed, .cleanupTooSlow, .returnSkipped,
             .nothingRecorded, .audioNotSaved, .audioCut, .clipboardNotKept, .polishing:

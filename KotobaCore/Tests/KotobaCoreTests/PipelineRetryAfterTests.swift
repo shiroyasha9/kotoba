@@ -4,7 +4,7 @@ import Testing
 @testable import KotobaCore
 
 /// The route asked to wait (`ProviderError.rateLimited`, from a `Retry-After` header): the waiting dictations are sent
-/// once that time passed, on the pipeline clock, with no launch or network change needed (audit C3).
+/// once that time passed, on the pipeline clock, with no launch or network change needed.
 struct PipelineRetryAfterTests {
     @Test func aLiveDictationRefusedForNowIsSentWhenTheRouteSaid() async throws {
         let world = FakeWorld(transcript: "later")

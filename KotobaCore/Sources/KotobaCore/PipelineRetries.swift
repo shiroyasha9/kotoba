@@ -56,7 +56,7 @@ extension DictationPipeline {
     }
 
     /// A live dictation got its text: the route works, credit included, so the dictations that waited for it are sent
-    /// (decision 6), and so are the failed ones, as a server outage can end with the network up (audit C5). Each
+    /// (decision 6), and so are the failed ones, as a server outage can end with the network up. Each
     /// within its automatic attempts.
     func routeAnswered() async {
         await retryPending(nil, isAutomatic: true)
@@ -75,8 +75,12 @@ extension DictationPipeline {
         let bounds = Self.retryAfterBounds
         let delay = min(max(wait, bounds.lowerBound), bounds.upperBound)
         retryTimer?.cancel()
-        retryTimer = work.schedule(at: ports.clock.now + delay) {
-            await self.retryPending(.exceptNeedsSetup, isAutomatic: true)
-        }
+        retryTimer = work.schedule(at: ports.clock.now + delay) { await self.retryTimerFired() }
+    }
+
+    /// From here a newer wait must not cancel this run: its request would end as offline.
+    private func retryTimerFired() async {
+        retryTimer = nil
+        await retryPending(.exceptNeedsSetup, isAutomatic: true)
     }
 }
