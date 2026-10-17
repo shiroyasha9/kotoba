@@ -108,7 +108,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
                 // The polisher shares the cleanup connection: OpenRouter's chat keeps one URLSession.
                 frontApp: { FrontAppObserver.current }, polisher: cleaner.polisher(), selector: AXPastedTextSelector(),
                 inputMark: { [hotkeys] in hotkeys.inputMark() },
-                isMicrophoneAllowed: { AVAudioApplication.shared.recordPermission == .granted }
+                isMicrophoneAllowed: { Readiness.Microphone.current == .allowed }
             ),
             settings: settings
         )

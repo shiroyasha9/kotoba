@@ -15,6 +15,15 @@ final class Readiness {
         /// macOS has not asked yet; onboarding asks.
         case notAsked
         case denied
+
+        /// The grant now, from any thread: Readiness, the mic test and the pipeline's stop read it.
+        static var current: Self {
+            switch AVAudioApplication.shared.recordPermission {
+            case .granted: .allowed
+            case .undetermined: .notAsked
+            default: .denied
+            }
+        }
     }
 
     /// One missing thing, in the order onboarding asks for them.
@@ -32,13 +41,7 @@ final class Readiness {
 
         static func live(settings: TranscriptionSettings, vault: KeyVault) -> Self {
             Self(
-                microphone: {
-                    switch AVAudioApplication.shared.recordPermission {
-                    case .granted: .allowed
-                    case .undetermined: .notAsked
-                    default: .denied
-                    }
-                },
+                microphone: { .current },
                 isAccessibilityAllowed: { AXIsProcessTrusted() },
                 missingSetup: { settings.missingSetup(hasKey: vault.hasKey(for:)).map { ($0, settings.route.account) } }
             )

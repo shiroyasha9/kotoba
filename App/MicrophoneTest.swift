@@ -8,7 +8,7 @@ extension AudioCapture {
     /// until it ends. It does not start when the mic is not allowed (no prompt from Settings), a dictation records, or
     /// no mic opens; it says which, so the pane never shows a click that did nothing.
     func test(for duration: Duration) -> MicrophoneTest {
-        guard AVAudioApplication.shared.recordPermission == .granted else { return blocked(.notAllowed) }
+        guard Readiness.Microphone.current == .allowed else { return blocked(.notAllowed) }
         guard writer == nil else { return blocked(.dictating) }
         let (levels, continuation) = AsyncStream.makeStream(of: Float.self, bufferingPolicy: .bufferingNewest(1))
         let file = URL.temporaryDirectory.appending(path: "kotoba-microphone-test-\(UUID().uuidString).flac")

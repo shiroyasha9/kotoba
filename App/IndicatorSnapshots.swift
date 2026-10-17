@@ -221,7 +221,9 @@ extension IndicatorPanel {
         case .cleanupTooSlow: "cleanupTooSlow"
         case .returnSkipped: "returnSkipped"
         case .recovered: "recovered"
-        default: "\(state)"
+        case .idle, .recording, .transcribing, .cleaning, .undoable, .needsSetup, .rejected, .copied, .captureFailed,
+            .nothingRecorded, .audioNotSaved, .audioCut, .clipboardNotKept, .polishing, .polished, .polishFailed:
+            "\(state)"
         }
     }
 

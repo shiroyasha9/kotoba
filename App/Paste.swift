@@ -155,9 +155,11 @@ final class OwnClipboardWrites {
         ]
     }
 
+    /// A count kotoba's windows may have written: one that moved in this active spell, or the one an earlier spell
+    /// left (a ⌘C in kotoba, a switch away and back with no copy elsewhere).
     func mayInclude(_ changeCount: Int) -> Bool {
-        if NSApp.isActive { return changeCount != countAtActivation }
-        return changeCount == countAtResign
+        if changeCount == countAtResign { return true }
+        return NSApp.isActive && changeCount != countAtActivation
     }
 }
 
