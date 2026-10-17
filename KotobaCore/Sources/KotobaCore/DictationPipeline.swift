@@ -76,6 +76,8 @@ public actor DictationPipeline {
     private var quietWaiters = Waiters()
     /// The run the route asked for with its wait (`scheduleRetry(after:)`); a newer wait replaces it.
     var retryTimer: Task<Void, Never>?
+    /// Quit, waiting for the dictations in flight (`shutdown`).
+    var quitWaiters = Waiters()
     /// Test seam: sound events taken so far (levels, a lost mic, the no-sound deadline). The capture stream gives
     /// tests no other sign that the pipeline took an event, so they wait for this count before they check the state.
     var handledSoundEvents = 0
@@ -223,7 +225,9 @@ public actor DictationPipeline {
     }
 
     /// Quit: a live recording is saved `.pending` (transcribed at the next launch, into Recovered),
-    /// and a recording in its Undo window is saved `.cancelled`. Nothing is lost.
+    /// and a recording in its Undo window is saved `.cancelled`. Nothing is lost. A dictation being sent gets up to
+    /// `quitWait` for its answer, so its billed text is saved and the next launch does not send it again; one that
+    /// takes longer stays `.pending`.
     public func shutdown() async {
         if let current = paused {
             paused = nil
@@ -234,6 +238,17 @@ public actor DictationPipeline {
             endRecording(current)
             await keep(current, audio: await endCapture(of: current), as: .pending)
         }
+        guard !inFlight.isEmpty else { return }
+        let bound = work.schedule(at: ports.clock.now + Self.quitWait) { await self.endQuitWait() }
+        await withCheckedContinuation { quitWaiters.add($0) }
+        bound.cancel()
+    }
+
+    /// Most dictations get their answer in about a second; quit must not hang on a slow route.
+    static let quitWait = Duration.seconds(3)
+
+    private func endQuitWait() {
+        quitWaiters.resumeAll()
     }
 }
 
@@ -252,6 +267,7 @@ extension DictationPipeline {
         inFlight.remove(id)
         cleaning.remove(id)
         submitRequests.remove(id)
+        if inFlight.isEmpty { quitWaiters.resumeAll() }
         // With another dictation in flight the state may not change, but this one is no longer sent.
         announceActivity()
         defer { resumeQuietWaiters() }

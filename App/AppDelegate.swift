@@ -162,7 +162,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         return store
     }
 
-    /// Quit waits until a live recording or an open Undo window is saved, so no audio is lost.
+    /// Quit waits until a live recording or an open Undo window is saved, so no audio is lost, and up to 3 s for a
+    /// dictation being sent (`DictationPipeline.shutdown`).
     func applicationShouldTerminate(_ sender: NSApplication) -> NSApplication.TerminateReply {
         guard let pipeline else { return .terminateNow }
         Task {
