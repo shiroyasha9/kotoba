@@ -156,7 +156,8 @@ public enum ProviderError: Error, Sendable, Equatable {
     case needsSetup(provider: String, item: SetupItem)
     /// The key store failed for a reason other than "no key" (a locked keychain); a later try can read it.
     case keyUnavailable
-    /// 429. `retryAfter` comes from the `Retry-After` header when the route sends one.
+    /// The route asks to wait: 429, or 503 with a `Retry-After` header. `retryAfter` comes from that header when the
+    /// route sends one.
     case rateLimited(retryAfter: Duration?)
     /// 408 or 5xx.
     case server(status: Int)
@@ -210,6 +211,11 @@ public enum ProviderError: Error, Sendable, Equatable {
             .noAudio:
             false
         }
+    }
+
+    /// How long the route asked to wait before the next request, when it said.
+    public var retryAfter: Duration? {
+        if case .rateLimited(let wait) = self { wait } else { nil }
     }
 
     /// The request reached the route and may have been billed: it uses one of the dictation's automatic attempts

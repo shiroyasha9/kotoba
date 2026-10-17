@@ -68,6 +68,7 @@ struct AzureProviderTests {
         (.fixture("azure-error-401", status: 401), .auth(status: 401)),
         (.raw(status: 429, headers: ["Retry-After": "2"], body: ""), .rateLimited(retryAfter: .seconds(2))),
         (.raw(status: 503, body: ""), .server(status: 503)),
+        (.raw(status: 503, headers: ["Retry-After": "5"], body: ""), .rateLimited(retryAfter: .seconds(5))),
         (.failure(.timedOut), .timedOut),
     ])
     func failureMapsToProviderError(reply: StubReply, expected: ProviderError) async {

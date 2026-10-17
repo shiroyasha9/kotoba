@@ -74,6 +74,8 @@ public actor DictationPipeline {
     var audioDeletion = AudioDeletion()
     /// Retries waiting until no dictation is live.
     private var quietWaiters = Waiters()
+    /// The run the route asked for with its wait (`scheduleRetry(after:)`); a newer wait replaces it.
+    var retryTimer: Task<Void, Never>?
     /// Test seam: sound events taken so far (levels, a lost mic, the no-sound deadline). The capture stream gives
     /// tests no other sign that the pipeline took an event, so they wait for this count before they check the state.
     var handledSoundEvents = 0
@@ -145,46 +147,6 @@ public actor DictationPipeline {
         paused?.hold(isHeld, at: ports.clock.now) { work.schedule(at: $0) { await self.closeUndoWindow(of: id) } }
     }
 
-    /// Transcribes kept dictations into the Recovered list, each send after no dictation is live. With no `selection`
-    /// (the menu), dictations that wait for a setting are included only when the route has everything.
-    public func retryPending(_ chosen: RetrySelection? = nil) async {
-        await retryPending(chosen, isAutomatic: false)
-    }
-
-    /// Launch: the menu's Retry, except that a dictation that used its automatic attempts waits for the owner
-    /// (`RetrySelection.automaticAttempts`).
-    public func retryAtLaunch() async {
-        await retryPending(nil, isAutomatic: true)
-    }
-
-    private func retryPending(_ chosen: RetrySelection?, isAutomatic: Bool) async {
-        let isSetUp = await ports.missingSetup() == nil
-        var selection = chosen ?? (isSetUp ? .all : .exceptNeedsSetup)
-        selection.isAutomatic = isAutomatic
-        let results = await retries.run(
-            selection, settings: { await self.settings }, skipping: { await self.inFlight.contains($0) },
-            waitUntilQuiet: { await self.waitUntilQuiet() })
-        for record in results {
-            reportTerms(of: record)
-            emitIfQuiet(.outcome(of: record))
-        }
-        // A recovered dictation is delivered too: retention's event (story 31).
-        if results.contains(where: \.status.isTranscribed) { work.track { await self.deleteExpiredAudio() } }
-    }
-
-    /// The History pane's Retry: sends the chosen kept dictations again, each after no dictation is live. A cancelled
-    /// or rejected one joins the queue first (`DictationRecord.isRetryable`).
-    public func retry(_ ids: Set<DictationID>) async {
-        for id in ids {
-            do {
-                try await ports.store.queueForRetry(id)
-            } catch {
-                Log.pipeline.error("Cannot queue \(id.rawValue) for retry: \(error)")
-            }
-        }
-        await retryPending(.only(ids))
-    }
-
     /// The History pane's Delete. A dictation in flight is kept: its own save would bring the row back. False when a
     /// dictation stays because its audio file cannot be removed, or the store failed: the window says so.
     public func delete(_ ids: Set<DictationID>) async -> Bool {
@@ -198,19 +160,6 @@ public actor DictationPipeline {
             Log.pipeline.error("Cannot delete dictations: \(error)")
             return false
         }
-    }
-
-    /// A key, an endpoint or credit arrived: once the route has everything, the waiting dictations are sent once each.
-    public func setupChanged() async {
-        guard await ports.missingSetup() == nil else { return }
-        await retryPending(.onlyNeedsSetup)
-    }
-
-    /// The network monitor's report. When the network returns after an outage, the failed dictations are sent again
-    /// (story 22), as tracked work: this returns at once, so the monitor never waits on a retry (review B7).
-    public func networkChanged(isOnline: Bool) async {
-        guard await retries.recordNetwork(isOnline: isOnline) else { return }
-        work.track { await self.retryPending(.exceptNeedsSetup, isAutomatic: true) }
     }
 
     /// The owner edited the dictionary: the next request, paste and retry use it.
@@ -332,7 +281,7 @@ extension DictationPipeline {
         recording == nil && paused == nil && inFlight.isEmpty && !isPolishing
     }
 
-    private func waitUntilQuiet() async {
+    func waitUntilQuiet() async {
         guard !isQuiet else { return }
         await withCheckedContinuation { quietWaiters.add($0) }
     }

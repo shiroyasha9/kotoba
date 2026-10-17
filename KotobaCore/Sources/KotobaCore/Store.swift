@@ -112,6 +112,9 @@ public struct DictationRecord: Sendable, Equatable, Identifiable {
     /// The last failed send timed out (`ProviderError.timedOut`), since this record was read from the store; the store
     /// does not keep it. The pill says so.
     public var hasTimedOut = false
+    /// How long the route asked to wait before the next send (`ProviderError.rateLimited`), for the last failed send
+    /// since this record was read from the store; the store does not keep it. The pipeline sends again then.
+    public var retryAfter: Duration?
     /// The answers billed since this record was read from the store: the store adds each one to the usage ledger once
     /// (by `UsageEntry.id`), so saving the record again adds nothing. A record read back has none.
     public var usage: [UsageEntry] = []
@@ -222,6 +225,7 @@ extension DictationRecord {
         let providerError = error as? ProviderError
         if providerError?.usesAttempt ?? true { attempts += 1 }
         hasTimedOut = providerError == .timedOut
+        retryAfter = providerError?.retryAfter
         needsSetup = providerError?.setupItem
         switch providerError?.recovery ?? .transient {
         case .transient, .needsSetup:

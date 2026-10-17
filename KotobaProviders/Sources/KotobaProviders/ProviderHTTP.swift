@@ -195,17 +195,34 @@ enum ProviderHTTP {
         }
     }
 
-    /// The error for a non-2xx status, the same on every route: 401/403 auth, 402 no credit, 429 rate limit,
-    /// 408/5xx server, any other 4xx rejected with the body's message.
-    static func error(status: Int, retryAfter: String?, body: Data) -> ProviderError {
+    /// The error for a non-2xx status, the same on every route: 401/403 auth, 402 no credit, 429 rate limit (and 503
+    /// with a `Retry-After`: the route asks to wait), 408/5xx server, any other 4xx rejected with the body's message.
+    static func error(status: Int, retryAfter header: String?, body: Data) -> ProviderError {
+        let retryAfter = header.flatMap { retryAfter($0, now: Date()) }
         switch status {
-        case 401, 403: .auth(status: status)
-        case 402: .noCredit
-        case 429: .rateLimited(retryAfter: retryAfter.flatMap(Int.init).map { .seconds($0) })
-        case 408, 500...: .server(status: status)
-        default: .rejected(status: status, message: errorMessage(in: body))
+        case 401, 403: return .auth(status: status)
+        case 402: return .noCredit
+        case 429: return .rateLimited(retryAfter: retryAfter)
+        case 503 where retryAfter != nil: return .rateLimited(retryAfter: retryAfter)
+        case 408, 500...: return .server(status: status)
+        default: return .rejected(status: status, message: errorMessage(in: body))
         }
     }
+
+    /// A `Retry-After` value (RFC 9110 section 10.2.3): whole seconds, or an HTTP date, counted from `now`.
+    static func retryAfter(_ header: String, now: Date) -> Duration? {
+        if let seconds = Int(header) { return seconds >= 0 ? .seconds(seconds) : nil }
+        guard let date = try? httpDate.parse(header) else { return nil }  // Not a date: no wait was given.
+        return .seconds(max(date.timeIntervalSince(now), 0))
+    }
+
+    /// The IMF-fixdate form, the one senders must use.
+    private static let httpDate = Date.ParseStrategy(
+        format: """
+            \(weekday: .abbreviated), \(day: .twoDigits) \(month: .abbreviated) \(year: .defaultDigits) \
+            \(hour: .twoDigits(clock: .twentyFourHour, hourCycle: .zeroBased)):\(minute: .twoDigits):\
+            \(second: .twoDigits) GMT
+            """, locale: Locale(identifier: "en_US_POSIX"), timeZone: .gmt)
 
     /// The message from the error shapes the routes send (`{"error": {"message"}}` on OpenRouter and Azure,
     /// `{"error": "..."}` and `{"message": "..."}` elsewhere), else the start of the raw body.

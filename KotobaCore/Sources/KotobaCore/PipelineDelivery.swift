@@ -32,6 +32,7 @@ extension DictationPipeline {
             beforeCleanup: { await self.cleanupStarted(current.id) },
             isSubmitRequested: { await self.submitRequests.contains(current.id) })
         finishDictation(current.id, showing: outcome.showing ?? .outcome(of: outcome.record))
+        if let wait = outcome.record.retryAfter { scheduleRetry(after: wait) }
         // Return submitted the field: the text is no longer where it was pasted.
         let target = pasteTargets.removeValue(forKey: current.id)
         if outcome.isSubmitted {
