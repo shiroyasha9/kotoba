@@ -779,13 +779,13 @@ Polish sends the last dictation to OpenRouter (DeepSeek V4.1 Flash, about USD 0.
 
 ## Core audit fixes (kotoba Dev, 2026-10-17)
 
-Rows 770-779 need real apps, a slow target or a lock, which a unit test cannot make. Use kotoba Dev with the release kotoba quit. Read the log with `log show --last 5m --predicate 'subsystem == "tech.teensy.kotoba.dev"'`.
+Rows 770-781 need real apps, a slow target or a lock, which a unit test cannot make. Use kotoba Dev with the release kotoba quit. Read the log with `log show --last 5m --predicate 'subsystem == "tech.teensy.kotoba.dev"'`.
 
 | # | Do this | Expect | Result |
 |---|---|---|---|
 | 770 | Copy a word. Dictate into Terminal, Slack, Cursor, Safari and TextEdit, one each; after each, press ⌘V in a scratch note | Each app gets the transcript; each ⌘V afterwards pastes your copied word (restored right after the app read the text) | |
 | 771 | Copy a word. Start a build in Xcode (or any load that makes Slack or Cursor slow), dictate into that app, and stop while it is busy | The app pastes the transcript, never your copied word, however late; then ⌘V elsewhere pastes your word | |
-| 772 | With your clipboard manager running (Raycast, Maccy, Paste or Alfred, note which), copy a word, dictate into TextEdit | The transcript pastes; the manager's history has no transcript entry; ⌘V afterwards pastes your word. If the manager reads the transient text at once (an early read), note it: the restore then follows its read | |
+| 772 | With Raycast clipboard history on, copy a word, dictate into TextEdit, Slack and Terminal | The transcript pastes each time; Raycast's history has no transcript entry; ⌘V afterwards pastes your word. The log has no “An app read the transient text before the Cmd-V” | |
 | 773 | Click the Finder desktop (no text field), copy a word, dictate | Nothing pastes; after 10 s the pill says “Copied. Press ⌘V to paste.”; ⌘V in TextEdit pastes the transcript; History shows it as copied | |
 | 774 | Hold ⌥ (push to talk) for dictation A, release, then at once hold ⌥ again for dictation B and speak for 5 s, release | A pastes as soon as you release B's hold (not as ⌃⌥⌘V, no beep), then B pastes after it | |
 | 775 | Dictate into Slack, and switch to TextEdit before the text arrives (turn Wi-Fi off for the stop, then on after the switch) | Nothing pastes into TextEdit; the pill says “Copied. Press ⌘V to paste.” | |
@@ -793,4 +793,6 @@ Rows 770-779 need real apps, a slow target or a lock, which a unit test cannot m
 | 777 | Start a hands-free dictation, speak, close the lid (or Apple menu > Sleep); wake | The recording stopped at sleep; the text is copied, or (no network at wake) the dictation is in History as failed and is sent when the network returns | |
 | 778 | Use the network link conditioner (or a slow hotspot) at about 1 Mbps up; dictate 3 min | The text pastes (no fixed 75 s cut). With the uplink cut mid-upload, the pill says “OpenRouter took too long. Saved.” or “Couldn’t reach OpenRouter. Saved.”, not both | |
 | 779 | Make a dictation fail three times with a server error (owner trial only if one occurs naturally), then relaunch | The relaunch does not send it again; History **Retry** still sends it | |
+| 780 | With an iPhone or iPad on the same Apple Account and Handoff on, dictate into TextEdit, then paste on the phone | The phone pastes what you copied before, never the transcript (kotoba's paste stays on this Mac) | |
+| 781 | Click the Finder desktop and dictate (no app reads it), then within 10 s dictate into TextEdit | The second dictation pastes; History shows the first as copied, not pasted; ⌘V afterwards pastes your copied word | |
 

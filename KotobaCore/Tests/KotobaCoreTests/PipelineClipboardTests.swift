@@ -67,6 +67,43 @@ struct PipelineClipboardTests {
         #expect(await pipeline.state == .copied(record.id))
     }
 
+    /// A clipboard manager that ignores the transient marker reads the text before the Cmd-V: its read is not the
+    /// paste target's, so the clipboard does not come back early (the target would paste the old one).
+    @Test func anEarlyReaderIsNotThePasteTarget() async throws {
+        let world = FakeWorld(transcript: "dictated", clipboard: "user's clipboard")
+        await world.pasteboard.readEachWriteAsAManager()
+        let pipeline = world.makePipeline()
+
+        await pipeline.dictate(world)
+        let afterThePaste = await world.pasteboard.text
+        world.clock.advance(by: .seconds(10))
+        await pipeline.settle()
+
+        #expect(await world.paster.pasted == ["dictated"])
+        #expect(afterThePaste == "dictated")
+        #expect(await world.pasteboard.text == "dictated")
+    }
+
+    /// A pasted into a busy app that never read it, then B: A's row says copied, not pasted; B's read brings the
+    /// owner's clipboard back.
+    @Test func aPasteReplacedBeforeAnyReadIsMarkedCopied() async throws {
+        let world = FakeWorld(transcript: "first", clipboard: "user's clipboard")
+        let pipeline = world.makePipeline()
+        await world.paster.readLater()
+        await pipeline.dictate(world)
+
+        await world.provider.hear("second")
+        await pipeline.dictate(world)
+        await world.pasteboard.appReads()
+        await pipeline.settle()
+
+        let records = await world.store.records
+        #expect(records.map(\.transcript) == ["first", "second"])
+        #expect(records.map(\.status) == [.copied, .pasted])
+        #expect(await world.pasteboard.text == "user's clipboard")
+        #expect(await pipeline.state == .idle)
+    }
+
     @Test func aCopyAfterThePasteIsNotOverwritten() async {
         let world = FakeWorld(transcript: "dictated")
         let pipeline = world.makePipeline()

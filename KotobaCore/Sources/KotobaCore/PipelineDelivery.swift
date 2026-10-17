@@ -21,15 +21,13 @@ extension DictationPipeline {
         let job = TranscriptDelivery.Job(
             id: current.id, audio: audio, createdAt: ports.clock.date, keyDown: keyDown, latency: latency,
             clipboard: clipboard, settings: settings, output: current.output,
-            frontAppAtStop: current.frontAppAtStop)
+            frontAppAtStop: current.frontAppAtStop,
+            pasteWentUnread: { await self.pasteWentUnread(current.id, isLeftOnClipboard: $0) })
         let outcome = await delivery.deliver(
             job,
             beforePaste: { await self.isReadyToPaste(current) },
             beforeCleanup: { await self.cleanupStarted(current.id) },
             isSubmitRequested: { await self.submitRequests.contains(current.id) })
-        if let write = outcome.restore {
-            await leaveUnread(write) { await self.pasteWentUnread(current.id) }
-        }
         finishDictation(current.id, showing: outcome.showing ?? .outcome(of: outcome.record))
         // Return submitted the field: the text is no longer where it was pasted.
         let target = pasteTargets.removeValue(forKey: current.id)
@@ -52,23 +50,16 @@ extension DictationPipeline {
         if outcome.record.transcript != nil { await setupChanged() }
     }
 
-    /// The owner's clipboard comes back when the paste target reads the transcript (`ClipboardGuard`). When no app
-    /// read it within `Settings.readWait`, the paste went nowhere: the transcript stays on the clipboard and `unread`
-    /// runs.
-    func leaveUnread(_ write: ClipboardGuard.Write, unread: @escaping @Sendable () async -> Void) async {
-        await clipboard.leaveUnread(write, at: ports.clock.now + settings.readWait, unread: unread)
-    }
-
-    /// The dictation's text is on the clipboard, not in the app: its row says copied, and the pill says so when no
-    /// other dictation shows.
-    private func pasteWentUnread(_ id: DictationID) async {
-        Log.pipeline.notice("No app read the paste of \(id.rawValue); the text is left on the clipboard")
+    /// No app read the dictation's paste (`ClipboardGuard`): its row says copied, not pasted. When the text is still
+    /// on the clipboard, the pill says so if no other dictation shows.
+    private func pasteWentUnread(_ id: DictationID, isLeftOnClipboard: Bool) async {
+        Log.pipeline.notice("No app read the paste of \(id.rawValue); left on the clipboard: \(isLeftOnClipboard)")
         do {
             try await ports.store.markCopied(id)
         } catch {
             Log.pipeline.error("Cannot mark \(id.rawValue) copied: \(error)")
         }
-        emitIfQuiet(.copied(id))
+        if isLeftOnClipboard { emitIfQuiet(.copied(id)) }
     }
 
     func emitIfQuiet(_ newState: DictationState) {

@@ -271,8 +271,17 @@ actor FakePasteboard: Pasteboard {
         await write(text, isTransient: false, onRead: nil)
     }
 
+    /// A clipboard manager that ignores the transient marker reads each transient text as it is written.
+    private var isManagerReading = false
+
+    func readEachWriteAsAManager() {
+        isManagerReading = true
+    }
+
     func writeTransient(_ text: String, onRead: @escaping @Sendable () -> Void) async -> Int {
-        await write(text, isTransient: true, onRead: onRead)
+        let written = await write(text, isTransient: true, onRead: onRead)
+        if isManagerReading { appReads() }
+        return written
     }
 
     private func write(_ text: String, isTransient transient: Bool, onRead: (@Sendable () -> Void)?) async -> Int {

@@ -17,12 +17,14 @@ struct TranscriptDelivery: Sendable {
         let output: DictationOutput
         /// The front app at the stop; a submit Return goes only to it, and the record keeps it.
         var frontAppAtStop: FrontApp?
+        /// No app read the paste (`ClipboardGuard.Unread`).
+        let pasteWentUnread: ClipboardGuard.Unread
     }
 
     struct Outcome: Sendable {
         let record: DictationRecord
-        /// A transient write to restore once the app read it (`DictationPipeline.leaveUnread`); nil when nothing was
-        /// pasted.
+        /// The transient write that waits for the app's read (`ClipboardGuard`); nil when nothing was pasted or the
+        /// earlier clipboard was too large to keep.
         let restore: ClipboardGuard.Write?
         /// What the indicator shows instead of the record's usual outcome (for example `.cleanupFailed`).
         var showing: DictationState?
@@ -164,7 +166,8 @@ struct TranscriptDelivery: Sendable {
             await clipboard.copy(text)
             return (.copied, nil)
         }
-        let write = await clipboard.writeTransient(text, over: snapshot)
+        let write = await clipboard.writeTransient(text, over: snapshot, unread: job.pasteWentUnread)
+        if let write { await clipboard.willPaste(write, readBy: clock.now + job.settings.readWait) }
         do {
             try await paster.sendPaste()
             Self.mark(.pasteSent, at: clock.now, of: job, in: &latency)

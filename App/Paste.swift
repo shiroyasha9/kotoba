@@ -51,10 +51,13 @@ actor SystemPasteboard: KotobaCore.Pasteboard {
 
     /// The text is promised, not written: the pasteboard asks kotoba for it at the first read, on the main thread
     /// (spike, 2026-10-17: one call per write, at the first data read; a listing of the types asks nothing; a reader
-    /// waits while kotoba's main thread is busy). The promise adds about 0.5 ms to the target's read.
+    /// waits while kotoba's main thread is busy). The promise adds about 0.5 ms to the target's read. The markers
+    /// follow nspasteboard.org: transient (not recorded in a history), concealed, auto-generated (no Copy by the
+    /// owner), so Raycast, Maccy, Paste and similar managers skip the item and leave the first read to the paste
+    /// target. `.currentHostOnly` keeps it off Universal Clipboard ("available only on the current device").
     func writeTransient(_ text: String, onRead: @escaping @Sendable () -> Void) -> Int {
         let pasteboard = NSPasteboard.general
-        pasteboard.clearContents()
+        _ = pasteboard.prepareForNewContents(with: .currentHostOnly)
         let item = NSPasteboardItem()
         for type in Self.transientTypes {
             item.setData(Data(), forType: type)
@@ -86,9 +89,10 @@ actor SystemPasteboard: KotobaCore.Pasteboard {
 }
 
 /// A transient transcript the pasteboard asks for when an app reads it. The first ask is the paste target's read: the
-/// text goes over, then `onRead` runs, after the answer has left (the next turn of the main run loop), so the restore
-/// it sets off never races the hand-over. At quit AppKit asks for every promise, so an unread text stays on the
-/// clipboard (spike, 2026-10-17).
+/// text goes over, then `onRead` runs at once, on this thread, so the pipeline compares the read's moment with the
+/// Cmd-V's exactly. The pasteboard holds the text once `setString` returns (spike, 2026-10-17: it releases the
+/// provider inside that call), so the restore that follows never races the hand-over. At quit AppKit asks for every
+/// promise, so an unread text stays on the clipboard.
 private final class PromisedText: NSObject, NSPasteboardItemDataProvider, Sendable {
     private let text: String
     private let onRead: Mutex<(@Sendable () -> Void)?>
@@ -102,8 +106,7 @@ private final class PromisedText: NSObject, NSPasteboardItemDataProvider, Sendab
         _ pasteboard: NSPasteboard?, item: NSPasteboardItem, provideDataForType type: NSPasteboard.PasteboardType
     ) {
         item.setString(text, forType: type)
-        guard let onRead = onRead.withLock({ $0.take() }) else { return }
-        DispatchQueue.main.async { onRead() }
+        onRead.withLock { $0.take() }?()
     }
 
     /// Replaced before any read, or read already: nothing to do.
