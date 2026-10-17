@@ -133,6 +133,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         // never delays the hotkey tap.
         Task { indicator.show(state, context: statusContext) }
         watchNetwork(for: pipeline)
+        AwayWatcher.watch(feeding: pipeline)
     }
 
     /// Story 22: the pipeline sends failed dictations again when the network returns.

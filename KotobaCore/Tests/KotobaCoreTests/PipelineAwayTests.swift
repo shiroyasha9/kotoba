@@ -1,0 +1,71 @@
+import Foundation
+import Testing
+
+@testable import KotobaCore
+
+/// The screen locks, the Mac sleeps or another user takes the session: a hands-free recording stops and what it
+/// recorded is transcribed, never lost; no text pastes while the owner is away (it would go to the lock screen), so it
+/// waits on the clipboard.
+struct PipelineAwayTests {
+    @Test(arguments: [Absence.screenLocked, .asleep, .sessionInactive])
+    func aLiveRecordingStopsAndItsTextIsCopied(absence: Absence) async throws {
+        let world = FakeWorld(transcript: "Ship it.")
+        let pipeline = world.makePipeline()
+        await pipeline.tap(world)
+
+        await pipeline.absenceBegan(absence)
+        await pipeline.settle()
+
+        #expect(await world.audio.isCapturing == false)
+        #expect(await world.paster.keystrokes == [])
+        #expect(await world.pasteboard.text == "Ship it.")
+        let record = try #require(await world.store.records.first)
+        #expect(record.status == .copied)
+        #expect(await pipeline.state == .copied(record.id))
+    }
+
+    @Test func aDictationInFlightAtTheLockIsCopied() async throws {
+        let world = FakeWorld(transcript: "Ship it.")
+        let pipeline = world.makePipeline()
+        let gate = Gate()
+        await world.provider.hold(at: gate)
+        await pipeline.tap(world)
+        await pipeline.tap(world)
+        #expect(await eventually { await gate.hasWaiters })
+
+        await pipeline.absenceBegan(.screenLocked)
+        await gate.open()
+        await pipeline.settle()
+
+        #expect(await world.paster.keystrokes == [])
+        #expect(try #require(await world.store.records.first).status == .copied)
+    }
+
+    /// Locked and asleep at once: only the end of both brings pasting back.
+    @Test func pastingComesBackWhenEveryAbsenceEnded() async {
+        let world = FakeWorld(transcript: "Back.")
+        let pipeline = world.makePipeline()
+        await pipeline.absenceBegan(.screenLocked)
+        await pipeline.absenceBegan(.asleep)
+        await pipeline.absenceEnded(.asleep)
+        await pipeline.dictate(world)
+        let pastedWhileLocked = await world.paster.pasteCount
+
+        await pipeline.absenceEnded(.screenLocked)
+        await pipeline.dictate(world)
+
+        #expect(pastedWhileLocked == 0)
+        #expect(await world.paster.pasted == ["Back."])
+    }
+
+    @Test func nothingLiveMeansNothingChanges() async {
+        let world = FakeWorld(transcript: "unused")
+        let pipeline = world.makePipeline()
+
+        await pipeline.absenceBegan(.asleep)
+        await pipeline.settle()
+
+        #expect(await world.store.records.isEmpty)
+        #expect(await pipeline.state == .idle)
+    }
+}

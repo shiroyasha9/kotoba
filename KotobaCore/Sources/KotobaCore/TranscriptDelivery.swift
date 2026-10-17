@@ -37,11 +37,12 @@ struct TranscriptDelivery: Sendable {
     let clipboard: ClipboardGuard
     let frontApp: @Sendable () -> FrontApp?
 
-    /// `beforePaste` returns when it is safe to post Cmd-V (the chord is released). `beforeCleanup` runs as the
+    /// `beforePaste` returns when it is safe to post Cmd-V (the chord is released): false when the text must not paste
+    /// now (the owner is away), so it waits on the clipboard. `beforeCleanup` runs as the
     /// transcript goes to the cleaner, so the indicator can say so. `isSubmitRequested` tells, once pasted, whether the
     /// owner stopped with Return or pressed it just after.
     func deliver(
-        _ job: Job, beforePaste: @Sendable () async -> Void, beforeCleanup: @Sendable () async -> Void = {},
+        _ job: Job, beforePaste: @Sendable () async -> Bool, beforeCleanup: @Sendable () async -> Void = {},
         isSubmitRequested: @Sendable () async -> Bool = { false }
     ) async -> Outcome {
         var latency = job.latency
@@ -146,15 +147,19 @@ struct TranscriptDelivery: Sendable {
         _ text: String,
         job: Job,
         latency: inout LatencyLog,
-        beforePaste: @Sendable () async -> Void
+        beforePaste: @Sendable () async -> Bool
     ) async -> (DictationRecord.Status, ClipboardGuard.Write?) {
         let (snapshot, readyAt) = await job.clipboard.value
         Self.mark(.snapshotReady, at: readyAt, of: job, in: &latency)
-        await beforePaste()
+        let mayPaste = await beforePaste()
         // The owner went to another app after the stop (a late answer): the text never goes there, it waits on the
         // clipboard (lead, 2026-10-17). With no app known at the stop, or now, nothing says it changed.
-        if let atStop = job.frontAppAtStop, let now = frontApp(), now.processID != atStop.processID {
-            Log.pipeline.info("Not pasted: the front app changed after the stop; the text is on the clipboard")
+        let isFrontAppChanged =
+            job.frontAppAtStop.map { atStop in
+                frontApp().map { $0.processID != atStop.processID } ?? false
+            } ?? false
+        guard mayPaste, !isFrontAppChanged else {
+            Log.pipeline.info("Not pasted (owner away, or another app in front); the text is on the clipboard")
             await clipboard.copy(text)
             return (.copied, nil)
         }

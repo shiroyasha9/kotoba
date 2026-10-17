@@ -27,6 +27,7 @@ extension DictationPipeline {
             beforePaste: {
                 await self.waitForChordRelease(after: current.stoppingPress)
                 await self.takePasteTarget(for: current.id)
+                return await self.isPresent
             },
             beforeCleanup: { await self.cleanupStarted(current.id) },
             isSubmitRequested: { await self.submitRequests.contains(current.id) })
