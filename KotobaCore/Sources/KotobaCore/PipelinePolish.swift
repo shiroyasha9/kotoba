@@ -107,10 +107,15 @@ extension DictationPipeline {
     /// Pastes `new` in place of `old`, the text of `record` that kotoba pasted: over the selection when the selector
     /// finds `old`, else after Backspaces when nothing changed since that paste (`PolishPlacement`).
     private func put(_ new: String, replacing old: String, of record: DictationRecord) async -> Put {
-        let isSelected = await ports.selector?.select(old, in: record.app) ?? false
         guard await !isOvertaken(record.id) else { return .overtaken }
+        let selection = await ports.selector?.select(old, in: record.app) ?? .untouched
+        // The selection took its time: a dictation since then must not find the old text selected.
+        guard await !isOvertaken(record.id) else {
+            if selection == .selected { await ports.selector?.restoreSelection() }
+            return .overtaken
+        }
         switch PolishPlacement.choose(
-            replacing: old, isSelected: isSelected, lastPaste: lastPaste, now: ports.inputMark())
+            replacing: old, selection: selection, lastPaste: lastPaste, now: ports.inputMark())
         {
         case .overSelection:
             break
@@ -186,6 +191,7 @@ extension DictationPipeline {
     /// after `Settings.restoreDelay`.
     func pasteThroughClipboard(_ text: String) async -> PasteResult {
         let write = await clipboard.writeTransient(text, over: await clipboard.snapshot())
+        let target = pasteTarget()
         do {
             try await ports.paster.sendPaste()
         } catch {
@@ -193,14 +199,25 @@ extension DictationPipeline {
             await clipboard.copy(text)
             return .copied
         }
-        markPasted(text)
+        markPasted(text, at: target)
         guard let write else { return .clipboardNotKept }
         work.schedule(at: ports.clock.now + settings.restoreDelay) { await self.clipboard.restore(after: write) }
         return .pasted
     }
 
-    /// Remembers `text` as the last paste, with where the owner was right after it.
-    func markPasted(_ text: String) {
-        lastPaste = ports.inputMark().map { LastPaste(text: text, mark: $0) }
+    /// Where the owner is just before a ⌘V, so a Cmd-Tab or a click right after it cannot become the paste's place;
+    /// nil while Polish is off, as nothing reads it then. One window list read on the paste path: 0.2 ms p50, 0.5 ms
+    /// p90; the first in a process takes 20-40 ms, and the indicator's first key-down already pays it.
+    func pasteTarget() -> InputMark? {
+        ports.polisher == nil ? nil : ports.inputMark()
+    }
+
+    func takePasteTarget(for id: DictationID) {
+        pasteTargets[id] = pasteTarget()
+    }
+
+    /// Remembers `text` as the last paste, at the place read before its ⌘V.
+    func markPasted(_ text: String, at target: InputMark?) {
+        lastPaste = target.map { LastPaste(text: text, mark: $0) }
     }
 }

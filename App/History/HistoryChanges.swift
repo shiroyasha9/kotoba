@@ -94,7 +94,8 @@ struct ChangesView: View {
         }
     }
 
-    /// Removed words struck through in red, added words underlined in green; the spacing after them stays plain.
+    /// Removed words struck through in red, added words underlined in green; the spacing after them stays plain. The
+    /// two colors (asset catalog, light and dark) read at 4.5:1 or more on the text background in both modes.
     static func marked(_ runs: [WordDiff.Run]) -> AttributedString {
         runs.reduce(into: AttributedString()) { text, run in
             let end = run.text.lastIndex { !$0.isWhitespace }.map(run.text.index(after:)) ?? run.text.startIndex
@@ -103,10 +104,10 @@ struct ChangesView: View {
             case .kept:
                 break
             case .removed:
-                words.foregroundColor = .red
+                words.foregroundColor = Color(.diffRemoved)
                 words.strikethroughStyle = .single
             case .added:
-                words.foregroundColor = .green
+                words.foregroundColor = Color(.diffAdded)
                 words.underlineStyle = .single
             }
             text += words + AttributedString(run.text[end...])

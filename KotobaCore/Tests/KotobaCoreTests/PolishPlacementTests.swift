@@ -11,7 +11,7 @@ struct PolishPlacementTests {
     struct Row: Sendable, CustomTestStringConvertible {
         let name: String
         var old = "Fix the login bug."
-        var isSelected = false
+        var selection = SelectionResult.untouched
         var lastPaste: LastPaste? = PolishPlacementTests.paste
         var now: InputMark? = PolishPlacementTests.mark
         let placement: PolishPlacement
@@ -20,7 +20,8 @@ struct PolishPlacementTests {
     }
 
     static let rows: [Row] = [
-        Row(name: "a selection wins", isSelected: true, lastPaste: nil, placement: .overSelection),
+        Row(name: "a selection wins", selection: .selected, lastPaste: nil, placement: .overSelection),
+        Row(name: "a selection the selector changed and lost", selection: .changed, placement: .clipboard),
         Row(name: "nothing changed: one Backspace per character", placement: .backspaces(18)),
         Row(
             name: "a key or a click since the paste",
@@ -57,7 +58,7 @@ struct PolishPlacementTests {
     func placement(_ row: Row) {
         #expect(
             PolishPlacement.choose(
-                replacing: row.old, isSelected: row.isSelected, lastPaste: row.lastPaste, now: row.now)
+                replacing: row.old, selection: row.selection, lastPaste: row.lastPaste, now: row.now)
                 == row.placement)
     }
 }

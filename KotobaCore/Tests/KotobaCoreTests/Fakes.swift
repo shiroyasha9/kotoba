@@ -162,8 +162,17 @@ actor FakePaster: Paster {
         self.error = error
     }
 
+    /// Runs once, at the next Cmd-V: what the owner does just as it lands.
+    private var onNextPaste: (@Sendable () -> Void)?
+
+    func whenPasting(_ action: @escaping @Sendable () -> Void) {
+        onNextPaste = action
+    }
+
     func sendPaste() async throws {
         if let error { throw error }
+        onNextPaste?()
+        onNextPaste = nil
         pasteCount += 1
         keystrokes.append(.commandV)
         if let text = await pasteboard?.text {

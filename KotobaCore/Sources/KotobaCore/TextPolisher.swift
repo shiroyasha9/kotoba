@@ -10,10 +10,20 @@ public protocol TextPolisher: Sendable {
 
 /// Finds text kotoba pasted in the focused field and selects it, so the next ⌘V replaces it (Polish and its Undo).
 public protocol PastedTextSelector: Sendable {
-    /// Selects `text` when the focused field is an editable field of `app` (nil: any app) that holds it exactly once,
-    /// and returns true once the selection is exactly `text`. False leaves the field as it was: no readable field (a
-    /// terminal), another app, a secure field, or text the owner changed.
-    func select(_ text: String, in app: DictationApp?) async -> Bool
+    /// Selects `text` when the focused field is an editable field of `app` (nil: any app) that holds it exactly once.
+    func select(_ text: String, in app: DictationApp?) async -> SelectionResult
+    /// Puts back the selection the last `select` changed (a dictation came while it ran); nothing when it changed none.
+    func restoreSelection() async
+}
+
+/// What `PastedTextSelector.select` did to the field.
+public enum SelectionResult: Sendable, Equatable {
+    /// Nothing changed: no readable field (a terminal), another app, a secure field, or text the owner changed.
+    case untouched
+    /// The selection is exactly the text.
+    case selected
+    /// The selection moved, but it could not be read back as the text nor put back: the insertion point is unknown.
+    case changed
 }
 
 /// Why Polish pasted nothing.
@@ -71,9 +81,11 @@ enum PolishPlacement: Equatable {
     /// `old` is that paste, the same app and window are in front, and no key went to an app and no click happened
     /// since. Each character must be one UTF-16 unit, so an app that deletes a character, a scalar or a JavaScript
     /// string unit per Backspace agrees on the count.
-    static func choose(replacing old: String, isSelected: Bool, lastPaste: LastPaste?, now: InputMark?) -> Self {
-        if isSelected { return .overSelection }
-        guard let lastPaste, lastPaste.text == old, let now, now.inputSincePaste == 0,
+    static func choose(replacing old: String, selection: SelectionResult, lastPaste: LastPaste?, now: InputMark?)
+        -> Self
+    {
+        if selection == .selected { return .overSelection }
+        guard selection == .untouched, let lastPaste, lastPaste.text == old, let now, now.inputSincePaste == 0,
             now.processID == lastPaste.mark.processID, now.window == lastPaste.mark.window, !old.isEmpty,
             old.count <= maxCharacters, old.split(separator: "\n", omittingEmptySubsequences: false).count <= maxLines,
             old.utf16.count == old.count

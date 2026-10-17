@@ -32,7 +32,7 @@ extension NSScreen {
 
 /// An app's front window as the window server lists it (front to back): its number and bounds need no Screen
 /// Recording permission. One read: about 0.24 ms p50, 0.44 ms p90 with 14 windows on screen (`swiftc -O` probe,
-/// 2026-10-17); the first in a process takes about 20 ms.
+/// 2026-10-17); the first in a process takes 20-40 ms.
 enum FrontWindow {
     /// `pid`'s frontmost window at the normal level; nil when it has none on screen.
     static func info(of pid: pid_t) -> [String: Any]? {

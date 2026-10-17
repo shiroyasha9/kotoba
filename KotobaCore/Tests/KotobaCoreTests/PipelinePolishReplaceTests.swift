@@ -44,6 +44,34 @@ struct PipelinePolishReplaceTests {
         #expect(try #require(await world.store.records.first).polishedText == Self.polished)
     }
 
+    /// The selector changed the selection and could not read it back or put it back: Backspace could delete elsewhere.
+    @Test func aSelectionTheSelectorChangedLeavesThePolishOnTheClipboard() async {
+        let world = FakeWorld(transcript: Self.spoken)
+        let pipeline = world.makePipeline(
+            polisher: FakePolisher(answer: Self.polished), selector: FakeSelector(answer: .changed), input: FakeInput())
+        await pipeline.dictate(world)
+
+        await pipeline.polishLast()
+
+        #expect(await world.paster.keystrokes == [.commandV])
+        #expect(await world.pasteboard.text == Self.polished)
+    }
+
+    /// The place is read just before the ⌘V: a window that comes to the front as the paste lands is not taken for it.
+    @Test func aWindowThatComesAsThePasteLandsIsNotThePastesPlace() async {
+        let world = FakeWorld(transcript: Self.spoken)
+        let input = FakeInput()
+        let pipeline = world.makePipeline(
+            polisher: FakePolisher(answer: Self.polished), selector: FakeSelector(), input: input)
+        await world.paster.whenPasting { input.apply(.otherWindow) }
+        await pipeline.dictate(world)
+
+        await pipeline.polishLast()
+
+        #expect(await world.paster.keystrokes == [.commandV])
+        #expect(await world.pasteboard.text == Self.polished)
+    }
+
     @Test func aSubmittedDictationIsNeverDeletedByBackspace() async {
         let world = FakeWorld(transcript: "Fix the login bug, press enter")
         let pipeline = world.makePipeline(

@@ -13,7 +13,7 @@ enum FrontAppObserver {
     }
 
     private static let apps = Mutex(Apps())
-    private static let ownProcessID = ProcessInfo.processInfo.processIdentifier
+    static let ownProcessID = ProcessInfo.processInfo.processIdentifier
     @MainActor private static var observer: (any NSObjectProtocol)?
 
     static var current: FrontApp? {

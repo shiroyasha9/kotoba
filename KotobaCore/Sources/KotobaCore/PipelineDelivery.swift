@@ -23,7 +23,11 @@ extension DictationPipeline {
             clipboard: clipboard, settings: settings, output: current.output,
             frontAppAtStop: current.frontAppAtStop)
         let outcome = await delivery.deliver(
-            job, beforePaste: { await self.waitForChordRelease() },
+            job,
+            beforePaste: {
+                await self.waitForChordRelease()
+                await self.takePasteTarget(for: current.id)
+            },
             beforeCleanup: { await self.cleanupStarted(current.id) },
             isSubmitRequested: { await self.submitRequests.contains(current.id) })
         if let write = outcome.restore {
@@ -31,10 +35,11 @@ extension DictationPipeline {
         }
         finishDictation(current.id, showing: outcome.showing ?? .outcome(of: outcome.record))
         // Return submitted the field: the text is no longer where it was pasted.
+        let target = pasteTargets.removeValue(forKey: current.id)
         if outcome.isSubmitted {
             lastPaste = nil
         } else if outcome.record.status == .pasted, let text = outcome.record.deliveredText {
-            markPasted(text)
+            markPasted(text, at: target)
         }
         // Learning reads the field only between dictations, and not after a Return submitted it.
         if let readback = ports.readback, outcome.record.status == .pasted, !outcome.isSubmitted, recording == nil,

@@ -219,6 +219,8 @@ final class HotkeyTap: Sendable {
             let source = CFMachPortCreateRunLoopSource(nil, port, 0)
         else { return false }
         let new = InstalledTap(port: port, source: source, hasKeyUp: keyUp)
+        // The tap that comes in place of another (or of none) missed the keys in between.
+        noteInput()
         CFRunLoopAddSource(CFRunLoopGetCurrent(), source, .commonModes)
         let (old, isEnabled) = state.withLock { state in
             defer { state.tap = new }
@@ -278,35 +280,6 @@ final class HotkeyTap: Sendable {
         return decision.isSwallowed ? nil : Unmanaged.passUnretained(event)
     }
 
-    /// A key-down that reaches an app is the owner's input (`inputCount`); a chord the tap swallows is not.
-    private func countInput(_ input: KeyInput, _ decision: HotkeyDecision) {
-        guard case .keyDown = input, !decision.isSwallowed else { return }
-        noteInput()
-    }
-
-    private func noteInput() {
-        inputCount.add(1, ordering: .relaxed)
-    }
-
-    /// An event kotoba posted: its ⌘V (the only posted key with ⌘) marks the paste for `inputMark`.
-    private func posted(_ type: CGEventType, _ event: CGEvent) -> KeyInput {
-        if type == .keyDown, event.flags.contains(.maskCommand) {
-            inputAtPaste.store(inputCount.load(ordering: .relaxed), ordering: .relaxed)
-        }
-        return .posted
-    }
-
-    /// The front app and window and the owner's input since kotoba's last ⌘V (`DictationPipeline.Ports.inputMark`).
-    /// Nil whenever the tap cannot see every key: it is off, a recorder listens, or Secure Input hides the keys.
-    func inputMark() -> InputMark? {
-        let isObserving = state.withLock { $0.tap != nil && $0.isEnabled && !$0.classifier.isPaused }
-        guard isObserving, !IsSecureEventInputEnabled(), let front = FrontAppObserver.current,
-            let window = FrontWindow.info(of: front.processID)?[kCGWindowNumber as String] as? Int
-        else { return nil }
-        let since = inputCount.load(ordering: .relaxed) - inputAtPaste.load(ordering: .relaxed)
-        return InputMark(processID: front.processID, window: window, inputSincePaste: since)
-    }
-
     /// Every key event but the held key's own key-up, which ends the press by itself.
     private static func checksHeldKey(_ input: KeyInput, _ key: UInt16) -> Bool {
         switch input {
@@ -362,4 +335,46 @@ private func hotkeyTapCallback(
 ) -> Unmanaged<CGEvent>? {
     guard let userInfo else { return Unmanaged.passUnretained(event) }
     return Unmanaged<HotkeyTap>.fromOpaque(userInfo).takeUnretainedValue().handle(type, event)
+}
+
+// MARK: - The owner's input, for Polish's replace by Backspace
+
+extension HotkeyTap {
+    /// A key-down that reaches an app is the owner's input (`inputCount`); a chord the tap swallows is not. While
+    /// Secure Input is on the tap gets no key-downs but still modifier changes, so each of those counts, as unseen
+    /// keys may have come with it (0.85 µs a check, `swiftc -O` probe, 2026-10-17).
+    private func countInput(_ input: KeyInput, _ decision: HotkeyDecision) {
+        switch input {
+        case .keyDown where !decision.isSwallowed: noteInput()
+        case .modifiersChanged where IsSecureEventInputEnabled(): noteInput()
+        default: break
+        }
+    }
+
+    private func noteInput() {
+        inputCount.add(1, ordering: .relaxed)
+    }
+
+    /// An event a kotoba install posted. This process's ⌘V (the only posted key with ⌘) marks the paste for
+    /// `inputMark`; a key the other install (release or Dev) posted changes the field, so it is input here.
+    private func posted(_ type: CGEventType, _ event: CGEvent) -> KeyInput {
+        guard type == .keyDown else { return .posted }
+        if event.getIntegerValueField(.eventSourceUnixProcessID) != Int64(FrontAppObserver.ownProcessID) {
+            noteInput()
+        } else if event.flags.contains(.maskCommand) {
+            inputAtPaste.store(inputCount.load(ordering: .relaxed), ordering: .relaxed)
+        }
+        return .posted
+    }
+
+    /// The front app and window and the owner's input since kotoba's last ⌘V (`DictationPipeline.Ports.inputMark`).
+    /// Nil whenever the tap cannot see every key: it is off, a recorder listens, or Secure Input hides the keys.
+    func inputMark() -> InputMark? {
+        let isObserving = state.withLock { $0.tap != nil && $0.isEnabled && !$0.classifier.isPaused }
+        guard isObserving, !IsSecureEventInputEnabled(), let front = FrontAppObserver.current,
+            let window = FrontWindow.info(of: front.processID)?[kCGWindowNumber as String] as? Int
+        else { return nil }
+        let since = inputCount.load(ordering: .relaxed) - inputAtPaste.load(ordering: .relaxed)
+        return InputMark(processID: front.processID, window: window, inputSincePaste: since)
+    }
 }

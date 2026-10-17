@@ -50,6 +50,8 @@ public actor DictationPipeline {
     /// The last text kotoba pasted and where the owner was then; nil after a Return submitted it. Polish deletes it by
     /// Backspace only while nothing changed (`PolishPlacement`).
     var lastPaste: LastPaste?
+    /// Each dictation's place, read just before its ⌘V (`takePasteTarget`): several can be in flight.
+    var pasteTargets: [DictationID: InputMark] = [:]
     /// Dictations stopped with Return, or given a Return just after the stop: Return follows their paste.
     var submitRequests: Set<DictationID> = []
     /// The last dictation stopped, for a Return the tap swallowed just after the stop.

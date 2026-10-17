@@ -130,8 +130,8 @@ struct PipelinePolishTests {
     @Test func aDictationThatStartsDuringTheRequestWins() async throws {
         let world = FakeWorld(transcript: Self.spoken)
         let gate = Gate()
-        let pipeline = world.makePipeline(
-            polisher: FakePolisher(answer: Self.polished, gate: gate), selector: FakeSelector(finds: true))
+        let selector = FakeSelector(finds: true)
+        let pipeline = world.makePipeline(polisher: FakePolisher(answer: Self.polished, gate: gate), selector: selector)
         await pipeline.dictate(world)
 
         await pipeline.handle(.polishLast)
@@ -141,15 +141,36 @@ struct PipelinePolishTests {
         #expect(await eventually { await !pipeline.isPolishing })
 
         #expect(await world.paster.pasted == [Self.spoken])
+        #expect(await selector.requests.isEmpty)
         #expect(await pipeline.state == .recording(isLong: false))
         #expect(try #require(await world.store.records.first).polishedText == Self.polished)
+    }
+
+    /// The selection takes its time too: a dictation that starts meanwhile gets the old selection back, not a field
+    /// whose text a ⌘V or a key would replace.
+    @Test func aDictationDuringTheSelectionGetsTheOldSelectionBack() async throws {
+        let world = FakeWorld(transcript: Self.spoken)
+        let gate = Gate()
+        let selector = FakeSelector(answer: .selected, gate: gate)
+        let pipeline = world.makePipeline(polisher: FakePolisher(answer: Self.polished), selector: selector)
+        await pipeline.dictate(world)
+
+        await pipeline.handle(.polishLast)
+        #expect(await eventually { await gate.hasWaiters })
+        await pipeline.tap(world)
+        await gate.open()
+        #expect(await eventually { await !pipeline.isPolishing })
+
+        #expect(await selector.restores == 1)
+        #expect(await world.paster.pasted == [Self.spoken])
+        #expect(await pipeline.state == .recording(isLong: false))
     }
 
     @Test func aDictationPastedDuringTheRequestWins() async throws {
         let world = FakeWorld(transcript: Self.spoken)
         let gate = Gate()
-        let pipeline = world.makePipeline(
-            polisher: FakePolisher(answer: Self.polished, gate: gate), selector: FakeSelector(finds: true))
+        let selector = FakeSelector(finds: true)
+        let pipeline = world.makePipeline(polisher: FakePolisher(answer: Self.polished, gate: gate), selector: selector)
         await pipeline.dictate(world)
         let first = try #require(await world.store.records.first?.id)
 
@@ -165,6 +186,7 @@ struct PipelinePolishTests {
         await pipeline.settle()
 
         #expect(await world.paster.pasted == [Self.spoken, "Ship it."])
+        #expect(await selector.requests.isEmpty)
         #expect(await world.store.records.first { $0.id == first }?.polishedText == Self.polished)
         #expect(await pipeline.state == .idle)
     }
@@ -325,20 +347,34 @@ actor FakePolisher: TextPolisher {
 
 /// Finds every text asked for, or none.
 actor FakeSelector: PastedTextSelector {
-    private var finds: Bool
+    private var answer: SelectionResult
+    private let gate: Gate?
     private(set) var requests: [String] = []
+    /// How many times the pipeline asked for the old selection back.
+    private(set) var restores = 0
 
-    init(finds: Bool = false) {
-        self.finds = finds
+    init(answer: SelectionResult = .untouched, gate: Gate? = nil) {
+        self.answer = answer
+        self.gate = gate
+    }
+
+    /// Finds every text asked for (`.selected`), or none (`.untouched`).
+    init(finds: Bool) {
+        self.init(answer: finds ? .selected : .untouched)
     }
 
     func setFinds(_ finds: Bool) {
-        self.finds = finds
+        answer = finds ? .selected : .untouched
     }
 
-    func select(_ text: String, in app: DictationApp?) async -> Bool {
+    func select(_ text: String, in app: DictationApp?) async -> SelectionResult {
         requests.append(text)
-        return finds
+        await gate?.pass()
+        return answer
+    }
+
+    func restoreSelection() async {
+        restores += 1
     }
 }
 
