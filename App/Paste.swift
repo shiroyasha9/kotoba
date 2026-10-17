@@ -25,10 +25,18 @@ actor SystemPasteboard: KotobaCore.Pasteboard {
 
     /// The general pasteboard; a named one in the snapshot probe.
     private let pasteboard: NSPasteboard
+    private let name: NSPasteboard.Name
+    /// Whether kotoba's own windows may have written the clipboard at this change count (`OwnClipboardWrites`).
+    private let isOwnWrite: @MainActor @Sendable (Int) -> Bool
     /// The promise of the latest transient write, kept until the next write: the item does not keep its provider.
     private var promised: PromisedText?
 
-    init(name: NSPasteboard.Name = .general) {
+    init(
+        name: NSPasteboard.Name = .general,
+        isOwnWrite: @escaping @MainActor @Sendable (Int) -> Bool = { OwnClipboardWrites.shared.mayInclude($0) }
+    ) {
+        self.name = name
+        self.isOwnWrite = isOwnWrite
         pasteboard = NSPasteboard(name: name)
     }
 
@@ -36,15 +44,24 @@ actor SystemPasteboard: KotobaCore.Pasteboard {
         pasteboard.changeCount
     }
 
+    /// Read here, off the main thread, unless kotoba's own windows may have written the clipboard: AppKit fulfils their
+    /// promised types (a text view's UTF-16 translation) only on the main thread, so a read here would make it ask the
+    /// main thread synchronously ("synchronous promise fulfillment requested from a background thread").
+    func snapshot() async -> PasteboardSnapshot {
+        let changeCount = pasteboard.changeCount
+        guard await isOwnWrite(changeCount) else { return Self.snapshot(of: pasteboard) }
+        return await MainActor.run { [name] in Self.snapshot(of: NSPasteboard(name: name)) }
+    }
+
     /// Stops reading at `PasteboardSnapshot.byteLimit`: each type read makes the owning app render it (a big image
     /// as TIFF and PDF), and the snapshot stays in memory until the restore. The limit applies after each type is
     /// read: the pasteboard tells no size before the data. File promises are skipped (`filePromiseTypes`).
-    func snapshot() -> PasteboardSnapshot {
+    private static func snapshot(of pasteboard: NSPasteboard) -> PasteboardSnapshot {
         var byteCount = 0
         var items: [[PasteboardSnapshot.Representation]] = []
         for item in pasteboard.pasteboardItems ?? [] {
             var types: [PasteboardSnapshot.Representation] = []
-            for type in item.types where !Self.isFilePromise(type) {
+            for type in item.types where !isFilePromise(type) {
                 guard let data = item.data(forType: type) else { continue }
                 byteCount += data.count
                 guard byteCount <= PasteboardSnapshot.byteLimit else {
@@ -103,6 +120,41 @@ actor SystemPasteboard: KotobaCore.Pasteboard {
             pasteboard.writeObjects(items)
         }
         return true
+    }
+}
+
+/// Whether kotoba's own windows may have written the clipboard (a ⌘C in Settings or the Fix window). They write on the
+/// main thread, and only while kotoba is active, so a change count that moved during an active spell may be theirs;
+/// kotoba's own pastes and restores move it too, and only cost a read on the main thread then. Starts with the app.
+@MainActor
+final class OwnClipboardWrites {
+    static let shared = OwnClipboardWrites()
+
+    /// The change count when kotoba last became active.
+    private var countAtActivation: Int?
+    /// The change count when kotoba last resigned active, if it moved during that spell.
+    private var countAtResign: Int?
+    private var observers: [NSObjectProtocol] = []
+
+    private init() {
+        let center = NotificationCenter.default
+        countAtActivation = NSApp.isActive ? NSPasteboard.general.changeCount : nil
+        observers = [
+            center.addObserver(forName: NSApplication.didBecomeActiveNotification, object: nil, queue: .main) { _ in
+                MainActor.assumeIsolated { self.countAtActivation = NSPasteboard.general.changeCount }
+            },
+            center.addObserver(forName: NSApplication.didResignActiveNotification, object: nil, queue: .main) { _ in
+                MainActor.assumeIsolated {
+                    let count = NSPasteboard.general.changeCount
+                    if count != self.countAtActivation { self.countAtResign = count }
+                }
+            },
+        ]
+    }
+
+    func mayInclude(_ changeCount: Int) -> Bool {
+        if NSApp.isActive { return changeCount != countAtActivation }
+        return changeCount == countAtResign
     }
 }
 
