@@ -138,6 +138,11 @@ enum Snapshots {
         if arguments.contains("--snapshot-checks") {
             runChecks()
         }
+        if arguments.contains("--window-memory") {
+            isRunning = true
+            NSApplication.shared.setActivationPolicy(.prohibited)
+            Pane.measureWindowMemory()
+        }
         guard let flag = arguments.firstIndex(of: "--snapshots"), arguments.indices.contains(flag + 1) else { return }
         isRunning = true
         let folder = URL(filePath: arguments[flag + 1], directoryHint: .isDirectory)

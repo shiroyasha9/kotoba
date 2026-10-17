@@ -178,3 +178,55 @@ extension Pane {
         }
     }
 }
+
+// MARK: - Window memory
+
+@MainActor
+extension Pane {
+    /// `make window-memory` launches the app binary with `--window-memory`: the main window with the sample panes is
+    /// built, shown on every pane and closed, three times, then idles 5 s. Each step prints the footprint (the number
+    /// Activity Monitor shows), so a change to the window or to the allocator reports what stays after close.
+    /// Offscreen, as the snapshots: glass draws nothing, so the numbers are a floor for the window on screen.
+    static func measureWindowMemory() -> Never {
+        reportFootprint(at: "launch")
+        for cycle in 1...3 {
+            autoreleasepool {
+                let panes = samplePanes()
+                let selection = Selection(panes: panes, showing: .home)
+                let window = MainWindow.window(showing: MainView(panes: panes, selection: selection))
+                window.setContentSize(MainWindow.defaultSize)
+                for id in PaneID.allCases {
+                    selection.id = id
+                    Snapshots.settle()
+                    window.displayIfNeeded()
+                }
+                reportFootprint(at: "window open \(cycle)")
+                window.close()
+            }
+            Snapshots.settle()
+            reportFootprint(at: "window closed \(cycle)")
+        }
+        // Core Animation and the GPU driver free the window's surfaces a few seconds after it closes, with no event to
+        // wait on: the last step is defined as 5 s of idle run loop after the close.
+        RunLoop.current.run(until: Date(timeIntervalSinceNow: 5))
+        reportFootprint(at: "5 s after close")
+        exit(0)
+    }
+
+    private static func reportFootprint(at step: String) {
+        var info = task_vm_info_data_t()
+        var count = mach_msg_type_number_t(MemoryLayout<task_vm_info_data_t>.size / MemoryLayout<integer_t>.size)
+        let status = withUnsafeMutablePointer(to: &info) {
+            $0.withMemoryRebound(to: integer_t.self, capacity: Int(count)) {
+                task_info(mach_task_self_, task_flavor_t(TASK_VM_INFO), $0, &count)
+            }
+        }
+        let megabytes = { (bytes: Int64) in String(format: "%.1f MB", Double(bytes) / 1_048_576) }
+        let footprint = megabytes(Int64(info.phys_footprint))
+        let line =
+            status == KERN_SUCCESS
+            ? "\(step): footprint \(footprint), peak \(megabytes(info.ledger_phys_footprint_peak))"
+            : "\(step): no task info (\(status))"
+        FileHandle.standardOutput.write(Data((line + "\n").utf8))
+    }
+}
