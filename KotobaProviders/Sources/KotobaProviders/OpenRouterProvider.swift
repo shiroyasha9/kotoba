@@ -56,7 +56,7 @@ final class OpenRouterProvider: RouteClient {
                 try writer.write(contentsOf: request.audio, base64: true)
                 try writer.write(#""},"#)
                 try writer.write(rest.dropFirst())  // `rest` is a non-empty object: drop its "{".
-            })
+            }, idleTimeout: ProviderHTTP.idleTimeout(for: request))
         let answer = try ProviderHTTP.decode(OpenRouterAnswer.self, from: reply, label: label)
         let usage = TranscriptionUsage.priced(
             audio: answer.usage?.seconds.map { .seconds($0) }, cost: answer.usage?.charged, recorded: request.duration,

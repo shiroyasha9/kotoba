@@ -68,7 +68,7 @@ final class AzureProvider: RouteClient {
                 try writer.write(multipart.fileHeader("audio", filename: "audio.flac", contentType: "audio/flac"))
                 try writer.write(contentsOf: request.audio)
                 try writer.write(multipart.end)
-            })
+            }, idleTimeout: ProviderHTTP.idleTimeout(for: request))
         let body = try ProviderHTTP.decode(SuccessBody.self, from: reply, label: label)
         // One channel: the first combined phrase is the whole transcript. Azure reports no cost in the response.
         let text = body.combinedPhrases.first?.text ?? ""

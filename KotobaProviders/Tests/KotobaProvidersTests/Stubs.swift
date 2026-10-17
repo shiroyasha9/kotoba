@@ -49,6 +49,8 @@ struct SentRequest: Sendable {
     var method: String?
     var headers: [String: String]
     var body: Data
+    /// The request's idle limit.
+    var timeout: TimeInterval = 0
 
     func json() throws -> [String: Any] {
         try #require(JSONSerialization.jsonObject(with: body) as? [String: Any])
@@ -166,7 +168,8 @@ final class StubURLProtocol: URLProtocol, @unchecked Sendable {
             url: request.url,
             method: request.httpMethod,
             headers: request.allHTTPHeaderFields ?? [:],
-            body: request.httpBody ?? request.httpBodyStream.map(Self.drain) ?? Data()
+            body: request.httpBody ?? request.httpBodyStream.map(Self.drain) ?? Data(),
+            timeout: request.timeoutInterval
         )
         let requestHost = request.url?.host() ?? ""
         let (reply, onRequest) = Self.routes.withLock { routes in

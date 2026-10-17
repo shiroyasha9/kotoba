@@ -285,6 +285,18 @@ struct OpenRouterProviderTests {
         #expect(ProviderHTTP.sessionConfiguration().timeoutIntervalForResource == 75)
     }
 
+    /// The route sends nothing while it transcribes a long recording: the request's idle limit is the pipeline's
+    /// bound for its audio, not the session's 30 s.
+    @Test(arguments: [TranscriptionRoute.openRouterMAI, .xaiGrok])
+    func aTranscriptionMayStayIdleAsLongAsItsBound(route: TranscriptionRoute) async throws {
+        let stub = StubHost(reply: .fixture("success"))
+        stub.settings.route = route
+
+        _ = try await stub.provider().transcribe(stub.request(duration: .seconds(20 * 60)))
+
+        #expect(try #require(stub.requests.only).timeout == 675)
+    }
+
     @Test(arguments: [
         (StubReply.raw(status: 200, body: "<html>"), ProviderError.unreadableAnswer(status: 200)),
         (.fixture("error-401", status: 401), .auth(status: 401)),

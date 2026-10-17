@@ -59,11 +59,14 @@ final class ProviderConnection: Sendable {
     }
 
     /// POSTs `body` to `url` with the key, mapping a timeout to `ProviderError.timedOut` and other transport failures
-    /// to `.offline`.
-    func send(_ url: URL, contentType: String, label: String, body: Body) async throws -> Reply {
+    /// to `.offline`. `idleTimeout` replaces the session's idle limit for this request only.
+    func send(
+        _ url: URL, contentType: String, label: String, body: Body, idleTimeout: TimeInterval? = nil
+    ) async throws -> Reply {
         let key = try await key()
         var request = URLRequest(url: url)
         request.httpMethod = "POST"
+        if let idleTimeout { request.timeoutInterval = idleTimeout }
         authorize(&request, with: key)
         request.setValue(contentType, forHTTPHeaderField: "Content-Type")
         let metrics = UploadMetrics(label, interfaces: interfaces)
@@ -143,6 +146,14 @@ enum ProviderHTTP {
     /// A transcription's upload grows with the recording, so the pipeline bounds it by the audio's length
     /// (`DictationPipeline.Settings.transcriptionTimeout(for:)`); the connection allows a minute more than the longest
     /// bound, so the pipeline's decides and a long recording on a slow uplink is not cut at a fixed time.
+    /// A transcription's idle limit (`ProviderConnection.send`): the route sends nothing while it works on a long
+    /// recording, so the request may stay idle as long as the pipeline's bound for its audio, never cut first by the
+    /// session's 30 s. A request's own limit wins over the session's both ways (spike, 2026-10-17: with a 2 s session
+    /// limit, a 5 s request limit got a 3.5 s answer, and a 1 s one timed out at 1 s).
+    static func idleTimeout(for request: TranscriptionRequest) -> TimeInterval {
+        DictationPipeline.Settings.transcriptionTimeout(for: request.duration) / .seconds(1)
+    }
+
     static let transcriptionResourceTimeout: TimeInterval =
         (DictationPipeline.Settings.longestTranscription + .seconds(60)) / .seconds(1)
 

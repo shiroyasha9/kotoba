@@ -62,7 +62,8 @@ final class XAIProvider: RouteClient {
         let multipart = Multipart(boundary: makeBoundary())
         let reply = try await connection.send(
             endpoint, contentType: multipart.contentType, label: label,
-            body: .streamed { writer in try Self.write(request, options: options, multipart: multipart, to: writer) })
+            body: .streamed { writer in try Self.write(request, options: options, multipart: multipart, to: writer) },
+            idleTimeout: ProviderHTTP.idleTimeout(for: request))
         let body = try ProviderHTTP.decode(SuccessBody.self, from: reply, label: label)
         // xAI reports no cost in the response.
         let usage = TranscriptionUsage.priced(
