@@ -43,7 +43,7 @@ kotoba is a native, open-source alternative to Wispr Flow, built for developers 
 - Your words appear about one second after you stop.
 - Add names and terms to your dictionary, and kotoba spells them your way. On 62 real dictations it got 84.6% of technical terms exactly right, against 50.0% for Wispr Flow.
 - You need no account, kotoba has no server of its own, and it sends no telemetry. Your audio goes only to the speech service you choose, with your own key.
-- There is no subscription. You pay OpenRouter about $0.10 per hour of audio, and kotoba uses 15.9 MB of memory at idle.
+- There is no subscription. You pay OpenRouter about $0.10 per hour of audio, and kotoba uses 15.9 MB of memory at idle after launch, and about 40-50 MB once you have used its window.
 
 ## kotoba vs Wispr Flow
 
@@ -51,7 +51,7 @@ kotoba is a native, open-source alternative to Wispr Flow, built for developers 
 |---|---|---|
 | Technical terms transcribed exactly | **84.6%** (44 of 52) | 50.0% (26 of 52) |
 | Word error rate on real dictations | **3.3%** | 6.0% |
-| Memory at idle (no window open) | **15.9 MB** | 748 MB (third-party test) |
+| Memory at idle (after launch, no window opened) | **15.9 MB** | 748 MB (third-party test) |
 | Speech round trip, p50 / p90 | 902 ms / 1,083 ms | not compared |
 | Price | **about $0.10 per hour of audio** | $12-15 per month for Pro |
 | Download | 5.7 MB DMG | |

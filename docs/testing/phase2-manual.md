@@ -844,3 +844,16 @@ Rows 940-945 need real speech, a real speech model and real target apps. Turn on
 | 943 | In Terminal at a zsh prompt, dictate “echo one new line echo two” | Two lines sit in the prompt and nothing runs until you press Return. The second line starts with “echo”, not “Echo” (Terminal is in Code mode) | |
 | 944 | In Terminal, run `cat` (no bracketed paste), dictate “one new line two”, then press ⌃C | “one” runs as a line in `cat` (it echoes back): the known limit for programs without bracketed paste. kotoba sent no Return key: the break is a character in the paste | |
 | 945 | Turn the setting off and dictate “First new line second” | The words paste as said | |
+
+## Memory after use (kotoba Dev, 2026-10-17)
+
+Rows 946-951 need the app launched by Launch Services (Finder, the Dock or a login), not from Terminal: only then does it get the allocator's space-efficient mode (`LSEnvironment` in `project.yml`). Build with `make build`, quit the release kotoba, and open kotoba Dev from Finder. Each `make memory DEV=1` reads the running kotoba Dev. Before: release 0.4.1 after the same use read 68 MB (peak 181 MB).
+
+| # | Do this | Expect | Result |
+|---|---|---|---|
+| 946 | Open kotoba Dev from Finder, wait 1 min with no window open and no dictation, then run `make memory DEV=1` | “allocator: space efficient”; footprint at or under 15 MB (0.4.1 after launch: 15.9 MB) | |
+| 947 | With Settings > General > **Open kotoba when you log in** on, log out and in (or restart); wait 1 min, then run `make memory DEV=1` | “allocator: space efficient”: the login launch also gets the mode | |
+| 948 | Use kotoba Dev for 20 min: 10 dictations, open the window, show every pane (scroll History, open Insights, Usage and General), close the window, wait 1 min, then run `make memory DEV=1` | Footprint about 40-50 MB, peak about 160 MB (0.4.1: 68 MB, peak 181 MB) | |
+| 949 | After row 948, do 20 more dictations without opening the window, wait 1 min, run `make memory DEV=1` again | Footprint within 3 MB of row 948: dictations do not add memory | |
+| 950 | Open the window on General, wait 30 s, and read kotoba Dev's Memory in Activity Monitor; close the window and read it again after 30 s | Note both numbers in Result (the window's graphics peak on screen is not measured yet) | |
+| 951 | After rows 948-949, run `make latency-log DEV=1 LAST=1h` | p50 at or under 1.0 s and p90 at or under 1.5 s, as before the change | |
