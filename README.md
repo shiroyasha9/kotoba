@@ -62,8 +62,8 @@ kotoba is a native, open-source alternative to Wispr Flow, built for developers 
 
 ### Dictate anywhere
 
-- Tap ⌃⌥⌘ to start and again to stop, or hold it while you speak. Any shortcut works, even fn alone, and push to talk can have its own, even ⌥ alone.
-- Text goes into the focused app: terminals, editors, browsers, chat. Your clipboard comes back after the paste.
+- Tap ⌃⌥⌘ to start and again to stop, or hold it while you speak. Any shortcut works, even fn alone, and push to talk can have its own, even ⌥ alone. Double-tap push to talk to go hands-free.
+- Text goes into the focused app: terminals, editors, browsers, chat. Your clipboard comes back once that app has read the paste. If you switch apps before the text arrives, kotoba copies it instead of pasting it into the wrong place.
 - Esc cancels, with 5 seconds to Undo. Press Return while you speak, or end with "press enter", to paste and send in one step.
 - A small indicator shows the mic level and warns when the mic hears nothing.
 - When AirPods play your music, kotoba records from the built-in mic, so your music does not drop to call quality.
@@ -71,20 +71,22 @@ kotoba is a native, open-source alternative to Wispr Flow, built for developers 
 
 ### Get technical words right
 
-- A personal dictionary goes to the speech model as hints, plus replacement rules that run on every transcript.
+- A personal dictionary goes to the speech model as hints, plus replacement rules that run on every transcript. Add a word from the menu bar with "Add Word…".
 - kotoba learns from your edits: fix a word right after a paste, and kotoba adds it. For terminals, use "Fix Last Dictation…".
 - Import your Wispr Flow dictionary in one click, with the corrections Wispr learned.
 
 ### Clean up, per app
 
 - A second shortcut (⌃⌥⇧⌘) runs the transcript through an LLM that removes filler words and fixes punctuation: Gemini 3.5 Flash-Lite, Qwen 3.8 27B on Cerebras or Claude Haiku 5.5.
-- Code mode keeps commands, paths and flags as you said them. Writing mode writes clear sentences in your words. kotoba picks the mode from the app in front.
+- Code mode keeps commands, paths and flags as you said them. Writing mode writes clear sentences in your words. kotoba picks the mode from the app in front, and the Modes pane shows an example of each.
+- Polish rewrites your last dictation shorter and clearer, from the menu or its own shortcut, with DeepSeek V4.1 Flash through OpenRouter. Where kotoba can find the text, it replaces it in place, with Undo; otherwise the result goes to your clipboard. "View Changes…" in History shows what cleanup and Polish changed.
 
 ### Never lose a dictation
 
-- A failed dictation keeps its audio and retries when the network comes back. After a crash, kotoba transcribes the lost recording at the next launch.
-- History keeps every dictation, with search, Copy, Paste Again and Retry.
-- Paste your last dictation again from the menu or with its own shortcut.
+- A failed dictation keeps its audio and retries when the network comes back, up to 3 times, then waits for your Retry. After a crash, kotoba transcribes the lost recording at the next launch.
+- Locking the screen or putting the Mac to sleep stops the recording and transcribes what you said.
+- History keeps every dictation, with search, Copy, Paste Again and Retry. Play its saved audio, or transcribe it again with the current or another speech model.
+- Paste or copy your last dictation from the menu or with its own shortcut (Copy Last is ⌃⌘C).
 
 ### See what you dictate
 
@@ -94,6 +96,8 @@ kotoba is a native, open-source alternative to Wispr Flow, built for developers 
 ### Speech models
 
 MAI-Transcribe-2 (recommended) or Grok through OpenRouter, with one key. Under Advanced, you can use Grok through xAI or MAI-Transcribe-2 through Azure with your own key.
+
+With MAI-Transcribe-2 through OpenRouter, kotoba sends a short clip of silence when a dictation starts, so the route is warm when you stop. Each one costs one billed second (about $0.00003) and shows in Usage.
 
 ## Screenshots
 
@@ -125,7 +129,7 @@ MAI-Transcribe-2 (recommended) or Grok through OpenRouter, with one key. Under A
     <td width="50%">
       <picture>
         <source media="(prefers-color-scheme: dark)" srcset="docs/images/readme-modes-dark.png">
-        <img src="docs/images/readme-modes-light.png" alt="Modes: cleanup for code apps and writing apps, and the mode of each app">
+        <img src="docs/images/readme-modes-light.png" alt="Modes: cleanup for code apps and writing apps, an example of each, and the mode of each app">
       </picture>
       <p align="center">Modes</p>
     </td>
@@ -154,7 +158,7 @@ kotoba updates itself with [Sparkle](https://sparkle-project.org).
 ## Privacy
 
 - Audio goes only to the speech service you choose, with your own key. There is no kotoba server and no account.
-- On OpenRouter, kotoba asks for endpoints that keep no data (`provider.zdr`) for MAI-Transcribe-2 and for every cleanup model. Grok has no such endpoint, and kotoba tells you when you pick it.
+- On OpenRouter, kotoba asks for endpoints that keep no data (`provider.zdr`) for MAI-Transcribe-2 and for every cleanup and Polish model. Grok has no such endpoint, and kotoba tells you when you pick it.
 - API keys stay in the macOS Keychain. Transcripts, audio and your dictionary stay in `~/Library/Application Support/kotoba/`.
 - kotoba sends no analytics and no crash reports. Its only other request is Sparkle's daily update check, which you can turn off.
 - To learn from your edits, kotoba reads the field you pasted into for a short time after the paste. It never reads password fields, and it keeps only the words it learns.
