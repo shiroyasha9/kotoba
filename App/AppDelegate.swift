@@ -272,7 +272,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         updateIcon()
         switch newState {
         // Their text and button depend on the mic and Accessibility grants now (I2).
-        case .captureFailed, .copied: readiness.refresh()
+        // The mic can go silent because its access was turned off while kotoba runs (audit B5a).
+        case .captureFailed, .copied, .recording(_, isSilent: true, _): readiness.refresh()
         // A recovered text the store could not write is listed from memory, with no write to announce it.
         case .recovered: scheduleQueueRefresh()
         default: break

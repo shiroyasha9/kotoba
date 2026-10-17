@@ -50,6 +50,11 @@ enum StatusText {
         "kotoba hears nothing from \(microphone ?? "the mic"). Check that it is on and not muted."
     }
 
+    /// The pill when the mic gives nothing because Microphone access was turned off (at a press, or while recording).
+    static let microphoneOff = "Microphone access is off"
+    /// The silent recording pill's help tag when Microphone access is off.
+    static let microphoneOffHelp = "Turn on kotoba in System Settings > Privacy & Security > Microphone."
+
     /// The Microphone menu and pane warning while a Bluetooth mic is in use (`MicrophoneWarning`).
     static func title(_ warning: MicrophoneWarning) -> String {
         switch warning {
@@ -148,7 +153,8 @@ extension DictationState {
     func statusText(_ context: StatusContext) -> String? {
         switch self {
         case .idle: nil
-        case .recording(_, isSilent: true, _): StatusText.noSound
+        case .recording(_, isSilent: true, _):
+            context.microphone == .denied ? StatusText.microphoneOff : StatusText.noSound
         case .recording(isLong: true, _, _): "Still listening · \(context.longRecordingMinutes) min"
         case .recording: context.isSecureInputOn ? "Listening · Secure Input on" : "Listening"
         case .transcribing: "Transcribing"
@@ -166,7 +172,7 @@ extension DictationState {
         case .needsSetup(_, .credit): "\(provider) is out of credit. Saved."
         case .needsSetup(_, let item): StatusText.add(item, for: context.provider)
         case .rejected(_, let reason): reason.text(provider: provider)
-        case .captureFailed: context.microphone == .denied ? "Microphone access is off" : "No microphone found"
+        case .captureFailed: context.microphone == .denied ? StatusText.microphoneOff : "No microphone found"
         case .nothingRecorded: "Nothing was recorded. Try again."
         case .audioNotSaved(.diskFull): "Couldn’t save audio. Disk full?"
         case .audioNotSaved(.other): "Couldn’t save audio. Try again."
@@ -204,7 +210,8 @@ extension DictationState {
     func pillAction(_ context: StatusContext) -> PillAction? {
         switch self {
         case .undoable: .undo
-        case .recording(_, isSilent: true, _): .chooseMicrophone
+        case .recording(_, isSilent: true, _):
+            context.microphone == .denied ? .openMicrophoneSettings : .chooseMicrophone
         case .failed, .timedOut: .retry
         case .needsSetup(_, let item): item.pillAction
         case .recovered: .copy

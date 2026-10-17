@@ -68,7 +68,8 @@ extension IndicatorPanel {
             let isPlain = !isLong && !isSilent && !context.isSecureInputOn
             let toolTip: String? =
                 if isSilent {
-                    StatusText.noSoundHelp(context.microphoneName)
+                    context.microphone == .denied
+                        ? StatusText.microphoneOffHelp : StatusText.noSoundHelp(context.microphoneName)
                 } else if context.isSecureInputOn {
                     DictationState.secureInputHelp
                 } else if isCleaned {
@@ -76,10 +77,12 @@ extension IndicatorPanel {
                 } else {
                     nil
                 }
-            // No sound is a warning with its fix on the button; it clears when sound arrives, so no timer.
+            // No sound is a warning with its fix on the button; it clears when sound arrives, so no timer. With
+            // Microphone access off there is nothing to meter, and the button's words need the room.
+            let isAccessOff = isSilent && context.microphone == .denied
             return .init(
                 text: text, color: isSilent ? .systemOrange : .systemRed, symbol: isCleaned ? cleanupSymbol : nil,
-                toolTip: toolTip, showsMeter: true, isCompact: isPlain, click: click, action: action)
+                toolTip: toolTip, showsMeter: !isAccessOff, isCompact: isPlain, click: click, action: action)
         case .transcribing:
             return .init(text: text, color: .systemBlue, showsSpinner: true, isCompact: true)
         case .cleaning:

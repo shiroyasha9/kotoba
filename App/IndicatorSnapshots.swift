@@ -112,17 +112,7 @@ extension IndicatorPanel {
         case .idle:
             []
         case .recording:
-            [
-                SnapshotRow(name: "recording", state: .recording(isLong: false)),
-                SnapshotRow(name: "recording-long", state: .recording(isLong: true)),
-                SnapshotRow(
-                    name: "secure-input", state: .recording(isLong: false),
-                    context: StatusContext(provider: .azure, isSecureInputOn: true)),
-                SnapshotRow(
-                    name: "recording-silent", state: .recording(isLong: false, isSilent: true), context: silent,
-                    level: 0),
-                SnapshotRow(name: "recording-cleaned", state: .recording(isLong: false, isCleaned: true)),
-            ]
+            recordingRows
         case .needsSetup(let id, _):
             [
                 SnapshotRow(name: "needs-key", state: .needsSetup(id, .key)),
@@ -157,6 +147,24 @@ extension IndicatorPanel {
         case .polishing, .polished, .polishFailed:
             polishRows(for: state)
         }
+    }
+
+    /// The recording pill: plain, long, under Secure Input, silent (and silent with Microphone access off), cleaned up.
+    private static var recordingRows: [SnapshotRow] {
+        [
+            SnapshotRow(name: "recording", state: .recording(isLong: false)),
+            SnapshotRow(name: "recording-long", state: .recording(isLong: true)),
+            SnapshotRow(
+                name: "secure-input", state: .recording(isLong: false),
+                context: StatusContext(provider: .azure, isSecureInputOn: true)),
+            SnapshotRow(
+                name: "recording-silent", state: .recording(isLong: false, isSilent: true), context: silent,
+                level: 0),
+            SnapshotRow(
+                name: "recording-silent-denied", state: .recording(isLong: false, isSilent: true),
+                context: StatusContext(provider: .azure, microphone: .denied), level: 0),
+            SnapshotRow(name: "recording-cleaned", state: .recording(isLong: false, isCleaned: true)),
+        ]
     }
 
     /// Polish's states: the replaced and the new-text outcome, and each failure.
