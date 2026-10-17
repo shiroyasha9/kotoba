@@ -19,7 +19,8 @@ final class AzureProvider: RouteClient {
         makeBoundary: @escaping @Sendable () -> String = Multipart.randomBoundary
     ) {
         connection = ProviderConnection(
-            account: .azure, apiKey: apiKey, keyHeader: .subscriptionKey, configuration: configuration)
+            account: .azure, apiKey: apiKey, keyHeader: .subscriptionKey, isHostSetByOwner: true,
+            configuration: configuration)
         self.makeBoundary = makeBoundary
     }
 
@@ -69,7 +70,13 @@ final class AzureProvider: RouteClient {
                 try writer.write(contentsOf: request.audio)
                 try writer.write(multipart.end)
             }, idleTimeout: ProviderHTTP.idleTimeout(for: request))
-        let body = try ProviderHTTP.decode(SuccessBody.self, from: reply, label: label)
+        let body: SuccessBody
+        do {
+            body = try ProviderHTTP.decode(SuccessBody.self, from: reply, label: label)
+        } catch .auth(status: 403) {
+            // As in `checkKey`: a key sent and refused with 403 is a resource out of quota.
+            throw ProviderError.noCredit
+        }
         // One channel: the first combined phrase is the whole transcript. Azure reports no cost in the response.
         let text = body.combinedPhrases.first?.text ?? ""
         let usage = TranscriptionUsage.priced(

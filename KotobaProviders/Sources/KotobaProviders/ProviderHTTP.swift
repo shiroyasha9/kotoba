@@ -23,6 +23,9 @@ final class ProviderConnection: Sendable {
     let account: ProviderAccount
     private let apiKey: any APIKeySource
     private let keyHeader: KeyHeader
+    /// The owner typed the host (Azure's resource endpoint): a host that does not resolve is a wrong setting, not
+    /// offline.
+    private let isHostSetByOwner: Bool
     private let session: URLSession
     private let interfaces = InterfaceMemo()
 
@@ -30,11 +33,13 @@ final class ProviderConnection: Sendable {
         account: ProviderAccount,
         apiKey: any APIKeySource,
         keyHeader: KeyHeader = .bearer,
+        isHostSetByOwner: Bool = false,
         configuration: URLSessionConfiguration = ProviderHTTP.sessionConfiguration()
     ) {
         self.account = account
         self.apiKey = apiKey
         self.keyHeader = keyHeader
+        self.isHostSetByOwner = isHostSetByOwner
         // swiftlint:disable:next url_session_construction
         session = URLSession(configuration: configuration)
     }
@@ -58,8 +63,9 @@ final class ProviderConnection: Sendable {
         let network: NetworkTiming?
     }
 
-    /// POSTs `body` to `url` with the key, mapping a timeout to `ProviderError.timedOut` and other transport failures
-    /// to `.offline`. `idleTimeout` replaces the session's idle limit for this request only.
+    /// POSTs `body` to `url` with the key, mapping a timeout to `ProviderError.timedOut`, a host the owner typed that
+    /// does not resolve to `.needsSetup` (the endpoint), and other transport failures to `.offline`. `idleTimeout`
+    /// replaces the session's idle limit for this request only.
     func send(
         _ url: URL, contentType: String, label: String, body: Body, idleTimeout: TimeInterval? = nil
     ) async throws -> Reply {
@@ -91,6 +97,8 @@ final class ProviderConnection: Sendable {
         } catch let error as URLError where error.code == .timedOut {
             // The network works; the route was slow, and may have taken the audio.
             throw ProviderError.timedOut
+        } catch let error as URLError where error.code == .cannotFindHost && isHostSetByOwner {
+            throw ProviderError.needsSetup(provider: account.title, item: .endpoint)
         } catch is URLError {
             throw ProviderError.offline
         }

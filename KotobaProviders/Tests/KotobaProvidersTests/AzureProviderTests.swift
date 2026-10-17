@@ -66,6 +66,10 @@ struct AzureProviderTests {
             ProviderError.rejected(status: 400, message: "The format of input audio is not supported.")
         ),
         (.fixture("azure-error-401", status: 401), .auth(status: 401)),
+        // As the key check: 403 with a key sent is a resource out of quota.
+        (.raw(status: 403, body: ""), .noCredit),
+        // The resource name in the owner's endpoint does not exist: offline would wait for ever.
+        (.failure(.cannotFindHost), .needsSetup(provider: ProviderAccount.azure.title, item: .endpoint)),
         (.raw(status: 429, headers: ["Retry-After": "2"], body: ""), .rateLimited(retryAfter: .seconds(2))),
         (.raw(status: 503, body: ""), .server(status: 503)),
         (.raw(status: 503, headers: ["Retry-After": "5"], body: ""), .rateLimited(retryAfter: .seconds(5))),
