@@ -1,5 +1,5 @@
-## kotoba 0.4.1
+## kotoba 0.4.2
 
-### New
+### Improved
 
-- Say "new line" or "new paragraph" to start a new line or an empty line. Turn it on in Settings > General > Paste (off by default). In apps that use the Code mode, the word after a break keeps its case.
+- kotoba gives memory back after you close its window. On a test build, memory after closing the window went from about 69 MB to about 41 MB.

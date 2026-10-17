@@ -18,8 +18,8 @@ packages:
     exactVersion: 2.10.0
 settings:
   base:
-    MARKETING_VERSION: "0.4.1"
-    CURRENT_PROJECT_VERSION: "7"
+    MARKETING_VERSION: "0.4.2"
+    CURRENT_PROJECT_VERSION: "8"
     SWIFT_VERSION: "6.0"
     SWIFT_STRICT_CONCURRENCY: complete
     SWIFT_TREAT_WARNINGS_AS_ERRORS: YES
@@ -84,7 +84,7 @@ targets:
         # The allocator's space-efficient mode (libmalloc: "policies usually associated with memory-constrained
         # platforms (iOS) that trade some amount of time efficiency for space efficiency"). On macOS a third-party
         # process otherwise never gives freed segments back, so what a window's SwiftUI peak frees stays in the
-        # footprint until quit: `make window-memory` 68.7 -> 47-52 MB after close, 8.8 -> 6.3 MB at launch
+        # footprint until quit: `make window-memory` 68.8 -> 41.3 MB after close (median of 5), 8.5 -> 6.1 MB at launch
         # (docs/research/memory-spike.md, "Memory after use"). Launch Services sets it at each launch (Finder, Dock,
         # login, Sparkle relaunch); a binary started from the shell does not get it.
         LSEnvironment:
