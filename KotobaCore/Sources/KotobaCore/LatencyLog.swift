@@ -68,24 +68,3 @@ public struct LatencyLog: Sendable, Equatable {
         return endOffset - startOffset
     }
 }
-
-/// The latency logs of the dictations in progress.
-struct LatencyRecorder {
-    private var logs: [DictationID: (keyDown: ContinuousClock.Instant, log: LatencyLog)] = [:]
-
-    mutating func begin(_ id: DictationID, keyDown: ContinuousClock.Instant) {
-        logs[id] = (keyDown, LatencyLog())
-        mark(.keyDown, of: id, at: keyDown)
-    }
-
-    /// Records `mark` as an offset from key-down and emits its signpost. No-op once taken.
-    mutating func mark(_ mark: LatencyMark, of id: DictationID, at instant: ContinuousClock.Instant) {
-        guard let keyDown = logs[id]?.keyDown else { return }
-        logs[id]?.log.mark(mark, at: instant, keyDown: keyDown)
-    }
-
-    /// The key-down instant and the log, handed to the next stage; later marks here are dropped.
-    mutating func take(_ id: DictationID) -> (keyDown: ContinuousClock.Instant, log: LatencyLog) {
-        logs.removeValue(forKey: id) ?? (.now, LatencyLog())
-    }
-}

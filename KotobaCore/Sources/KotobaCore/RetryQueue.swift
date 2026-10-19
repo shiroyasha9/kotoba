@@ -15,12 +15,6 @@ public actor RetryQueue {
     private var requested: RetrySelection?
     /// Whether the last network report was offline.
     private var isOffline = false
-    /// Quit began: no send starts from here (`stop`).
-    private var isStopped = false
-    /// A send is on its way: marked in the same step as the `isStopped` check, so `stop` never misses it.
-    private var isSending = false
-    /// Quit, waiting for the send on its way to save its answer (`sendEnded`).
-    private(set) var sendEndWaiters = Waiters()
     /// Recovered transcripts the store could not write (a full disk): the menu lists them until the owner copies
     /// them, and no run in this process sends them again. The next launch does, as their rows are still queued.
     private var unsaved: [DictationRecord] = []
@@ -32,15 +26,27 @@ public actor RetryQueue {
         self.paste = paste
     }
 
+    /// The pipeline's answer when a send is about to begin (`DictationPipeline.beginRetrySend`).
+    enum SendStart: Sendable {
+        /// The send begins, with the settings of now; it is live until `endSend`, so quit waits for it.
+        case began(DictationPipeline.Settings)
+        /// A dictation is live: wait until none is, and read the row again.
+        case busy
+        /// The dictation is being sent live: skip it.
+        case inFlight
+        /// Quit began: the run sends no more.
+        case stopped
+    }
+
     /// Retries the queued dictations that `selection` picks, one at a time, and returns the updated
-    /// records in order. Before each send it waits until no dictation is live (`waitUntilQuiet`), and
-    /// it skips a dictation that is in flight or no longer queued. A call during a run returns at
-    /// once; its selection runs after the current one, in the same call.
+    /// records in order. Before each send it waits until no dictation is live (`waitUntilQuiet`), reads the row again,
+    /// and asks `beginSend`; `endSend` follows the saved answer. It skips a dictation that is in flight or no longer
+    /// queued. A call during a run returns at once; its selection runs after the current one, in the same call.
     func run(
         _ selection: RetrySelection,
-        settings: @Sendable () async -> DictationPipeline.Settings,
-        skipping isInFlight: @Sendable (DictationID) async -> Bool,
-        waitUntilQuiet: @Sendable () async -> Void = {}
+        waitUntilQuiet: @Sendable () async -> Void,
+        beginSend: @Sendable (DictationID) async -> SendStart,
+        endSend: @Sendable () async -> Void
     ) async -> [DictationRecord] {
         guard !isRunning else {
             requested = requested.map { $0.merged(with: selection) } ?? selection
@@ -51,28 +57,16 @@ public actor RetryQueue {
 
         var results: [DictationRecord] = []
         var next: RetrySelection? = selection
-        while let current = next, !isStopped {
+        while let current = next {
             let (records, isEnded) = await runOnce(
-                current, settings: settings, skipping: isInFlight, waitUntilQuiet: waitUntilQuiet)
+                current, waitUntilQuiet: waitUntilQuiet, beginSend: beginSend, endSend: endSend)
             results += records
-            // The store cannot write: the selection asked for meanwhile would lose its answers the same way.
+            // Quit began, or the store cannot write: the selection asked for meanwhile would lose its answers the same
+            // way.
             next = isEnded ? nil : requested
             requested = nil
         }
         return results
-    }
-
-    /// Quit: no run or send starts from here. Returns whether a send is on its way (`sendEnded` waits for it).
-    func stop() -> Bool {
-        isStopped = true
-        requested = nil
-        return isSending
-    }
-
-    /// Returns once the send on its way, if any, saved its answer, so the next launch does not send it again.
-    func sendEnded() async {
-        guard isSending else { return }
-        await withCheckedContinuation { sendEndWaiters.add($0) }
     }
 
     /// Records a network report. Returns true when the report ends an outage; the first report is not a return,
@@ -84,9 +78,9 @@ public actor RetryQueue {
 
     private func runOnce(
         _ selection: RetrySelection,
-        settings: @Sendable () async -> DictationPipeline.Settings,
-        skipping isInFlight: @Sendable (DictationID) async -> Bool,
-        waitUntilQuiet: @Sendable () async -> Void
+        waitUntilQuiet: @Sendable () async -> Void,
+        beginSend: @Sendable (DictationID) async -> SendStart,
+        endSend: @Sendable () async -> Void
     ) async -> (records: [DictationRecord], isEnded: Bool) {
         let queued: [DictationRecord]
         do {
@@ -97,16 +91,16 @@ public actor RetryQueue {
         }
         var results: [DictationRecord] = []
         for record in queued where selection.includes(record) {
-            await waitUntilQuiet()
-            guard let fresh = await stillQueued(record.id, isInFlight: isInFlight) else { continue }
-            let settings = await settings()
-            // Read last before the send: quit can begin during the awaits above.
-            guard !isStopped else { break }
-            isSending = true
+            let (fresh, settings): (DictationRecord, DictationPipeline.Settings)
+            switch await begin(record.id, waitUntilQuiet: waitUntilQuiet, beginSend: beginSend) {
+            case .ready(let record, let now): (fresh, settings) = (record, now)
+            case .skipped: continue
+            case .stopped: return (results, true)
+            }
             let (retried, error) = await retry(fresh, settings: settings)
             let update = await store.updateOrLog(retried)
-            isSending = false
-            sendEndWaiters.resumeAll()
+            // After the save: quit's wait ends with the answer kept.
+            await endSend()
             switch update {
             case .written:
                 results.append(retried)
@@ -130,14 +124,35 @@ public actor RetryQueue {
         return (results, false)
     }
 
-    /// The record as stored now, when it is still queued. A live dictation saves a `.pending` row while it uploads,
-    /// so the queue read can hold it; by its turn it may be in flight, already pasted, or failed with a new model and
-    /// new latency marks that the copy from the queue read lacks.
-    private func stillQueued(
+    private enum Begun {
+        case ready(DictationRecord, DictationPipeline.Settings)
+        case skipped
+        case stopped
+    }
+
+    /// Waits until no dictation is live, reads the row again, and asks the pipeline to begin the send. A live dictation
+    /// saves a `.pending` row while it uploads, so the queue read can hold it; by its turn it may be in flight, already
+    /// pasted, or failed with a new model and new latency marks that the copy from the queue read lacks. A dictation
+    /// that started during the read makes it wait and read again: a send never begins while one is live.
+    private func begin(
         _ id: DictationID,
-        isInFlight: @Sendable (DictationID) async -> Bool
-    ) async -> DictationRecord? {
-        guard !unsaved.contains(where: { $0.id == id }), await !isInFlight(id) else { return nil }
+        waitUntilQuiet: @Sendable () async -> Void,
+        beginSend: @Sendable (DictationID) async -> SendStart
+    ) async -> Begun {
+        while true {
+            await waitUntilQuiet()
+            guard !unsaved.contains(where: { $0.id == id }), let fresh = await stillQueued(id) else { return .skipped }
+            switch await beginSend(id) {
+            case .began(let settings): return .ready(fresh, settings)
+            case .busy: continue
+            case .inFlight: return .skipped
+            case .stopped: return .stopped
+            }
+        }
+    }
+
+    /// The record as stored now, when it is still queued.
+    private func stillQueued(_ id: DictationID) async -> DictationRecord? {
         do {
             return try await store.queuedRecord(id)
         } catch {

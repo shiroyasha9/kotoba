@@ -22,12 +22,11 @@ extension DictationPipeline {
             emit(.captureFailed)
             return
         }
-        latencies.begin(id, keyDown: now)
         let captureEvents = Task {
             for await event in events {
                 switch event {
                 case .firstBuffer(let instant):
-                    self.latencies.mark(.firstAudioBuffer, of: id, at: instant)
+                    self.live.mark(.firstAudioBuffer, of: id, at: instant)
                 case .level(let level):
                     self.soundChanged(of: id) { $0.level(level, at: self.ports.clock.now) }
                 case .inputLost:
@@ -35,7 +34,7 @@ extension DictationPipeline {
                 }
             }
         }
-        recording = Recording(
+        let recording = Recording(
             id: id,
             file: file,
             startedAt: now,
@@ -50,6 +49,7 @@ extension DictationPipeline {
             },
             sound: NoSoundPolicy(delay: settings.noSoundWarning, startingAt: now)
         )
+        live.start(recording, keyDown: now)
         armSoundDeadline(of: id)
     }
 
@@ -96,7 +96,7 @@ extension DictationPipeline {
         recording?.isAnnounced = true
         recording?.clipboard = paste.snapshot()
         current.announcement.cancel()
-        latencies.mark(.cue, of: id, at: instant)
+        live.announce(id, at: instant)
         // A route that answered nothing within the window is cold: the silent primer goes first (it warms most of the
         // route in about 2 s, so a short dictation gains), and the large one follows it, as only bytes warm the rest.
         largePrimerDue = warmth.isWarm(within: settings.primerInterval) ? nil : id
@@ -168,13 +168,11 @@ extension DictationPipeline {
         return true
     }
 
-    /// Clears the live recording and its timers.
-    func endRecording(_ current: Recording) {
-        recording = nil
-        current.warning.cancel()
-        current.announcement.cancel()
-        current.soundDeadline?.cancel()
-        current.primerTimer?.cancel()
+    /// The recording ends with no send (dropped, cancelled or kept at quit): its timers stop, and its dictation leaves
+    /// `live` with its latency marks.
+    @discardableResult func endRecording(_ current: Recording) -> LatencyLog {
+        current.cancelTimers()
+        return live.end(current.id) ?? LatencyLog()
     }
 
     func stop(_ current: Recording, at now: Instant) {
@@ -186,10 +184,8 @@ extension DictationPipeline {
         if current.output != .transcript, !current.isCleanerWarm {
             _ = warmCleaner()
         }
-        endRecording(current)
-        latencies.mark(.stop, of: current.id, at: now)
-        inFlight.insert(current.id)
-        lastStopped = current.id
+        current.cancelTimers()
+        live.stop(current.id, at: now)
         emit(.transcribing)
         let ended = Task { await self.endCapture(of: current) }
         captureEnd = ended
@@ -207,18 +203,18 @@ extension DictationPipeline {
     }
 
     func cancel(_ current: Recording) async {
-        endRecording(current)
+        let latency = endRecording(current)
         let audio = await ports.audio.cancelCapture()
         await current.captureEvents.value
-        await keep(current, audio: audio, as: .cancelled)
+        await keep(current, audio: audio, latency: latency, as: .cancelled)
         emit(inFlightState)
-        resumeQuietWaiters()
     }
 
     /// Saves a recording that is not transcribed now, with its audio and latency marks. One with no audio (Esc or quit
     /// before the first buffer) has nothing to send or play: its file is discarded and no row is kept.
-    func keep(_ current: Recording, audio: RecordedAudio?, as status: DictationRecord.Status) async {
-        let latency = latencies.take(current.id).log
+    func keep(_ current: Recording, audio: RecordedAudio?, latency: LatencyLog, as status: DictationRecord.Status)
+        async
+    {
         guard let audio else { return }
         guard audio.hasAudio else {
             await remember(current.id, unless: await ports.audio.discard(audio))
@@ -239,23 +235,22 @@ extension DictationPipeline {
         var current = current
         // A cancel that becomes final keeps the app and the mode of the Esc, not of the app in front 5 s later.
         current.frontAppAtStop = ports.frontApp()
-        recording = nil
         current.announcement.cancel()
         current.soundDeadline?.cancel()
         current.primerTimer?.cancel()
         current.primerTimer = nil
         largePrimerDue = nil
-        latencies.mark(.cancel, of: current.id, at: now)
-        paused = UndoWindow(item: current, duration: settings.undoWindow, at: now) { [id = current.id] in
+        let window = UndoWindow(item: current, duration: settings.undoWindow, at: now) { [id = current.id] in
             work.schedule(at: $0) { await self.closeUndoWindow(of: id) }
         }
+        live.pause(window, at: now)
         emit(.undoable)
         await ports.audio.pauseCapture()
     }
 
     func resume(at now: Instant) async {
-        guard let current = paused else { return }
-        paused = nil
+        // The dictation stays live while its capture resumes.
+        guard let current = live.unpause() else { return }
         current.timer.cancel()
         do {
             try await ports.audio.resumeCapture()
@@ -269,17 +264,15 @@ extension DictationPipeline {
         resumed.isAnnounced = true
         resumed.sound.restart(at: now)
         resumed.soundDeadline = nil
-        recording = resumed
+        live.resume(resumed, at: now)
         armSoundDeadline(of: resumed.id)
         armPrimer(for: resumed.id)
-        latencies.mark(.resume, of: resumed.id, at: now)
         emit(.recording(isLong: now - resumed.startedAt >= settings.longRecordingWarning, isCleaned: resumed.isCleaned))
     }
 
     /// No Undo in time: the cancel is final and the audio stays in history.
     func closeUndoWindow(of id: DictationID) async {
         guard let current = paused, current.item.id == id, !current.countdown.isHeld else { return }
-        paused = nil
         await cancel(current.item)
     }
 
@@ -289,9 +282,7 @@ extension DictationPipeline {
         endRecording(current)
         await remember(current.id, unless: await ports.audio.discardCapture())
         await current.captureEvents.value
-        _ = latencies.take(current.id)
         emit(inFlightState)
-        resumeQuietWaiters()
     }
 
     /// Remembers a discarded recording whose file stayed on disk (`isDeleted` false).

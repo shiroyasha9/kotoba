@@ -16,7 +16,7 @@ struct PipelineQuitTests {
         #expect(await eventually { await gate.hasWaiters })
 
         async let quit: Void = pipeline.shutdown()
-        #expect(await eventually { await pipeline.quitWaiters.count == 1 })
+        #expect(await eventually { await pipeline.waiterCount(.sendsEnded) == 1 })
         await gate.open()
         await quit
 
@@ -46,7 +46,7 @@ struct PipelineQuitTests {
         #expect(await eventually { await gate.hasWaiters })
 
         async let quit: Void = pipeline.shutdown()
-        #expect(await eventually { await pipeline.quitWaiters.count == 1 })
+        #expect(await eventually { await pipeline.waiterCount(.sendsEnded) == 1 })
         await gate.open()
         await quit
         await pipeline.settle()
@@ -82,7 +82,7 @@ struct PipelineQuitTests {
         async let run: Void = pipeline.retryPending()
         #expect(await eventually { await gate.hasWaiters })
         async let quit: Void = pipeline.shutdown()
-        #expect(await eventually { await pipeline.quitWaiters.count == 1 })
+        #expect(await eventually { await pipeline.waiterCount(.sendsEnded) == 1 })
         await gate.open()
         await quit
 
@@ -113,7 +113,7 @@ struct PipelineQuitTests {
         #expect(await eventually { await gate.hasWaiters })
 
         async let quit: Void = pipeline.shutdown()
-        #expect(await eventually { await pipeline.quitWaiters.count == 1 })
+        #expect(await eventually { await pipeline.waiterCount(.sendsEnded) == 1 })
         world.clock.advance(by: DictationPipeline.quitWait)
         await quit
 
@@ -209,7 +209,7 @@ struct PipelineQuitTests {
         #expect(await eventually { await gate.hasWaiters })
 
         async let quit: Void = pipeline.shutdown()
-        #expect(await eventually { await pipeline.quitWaiters.count == 1 })
+        #expect(await eventually { await pipeline.waiterCount(.sendsEnded) == 1 })
         world.clock.advance(by: DictationPipeline.quitWait)
         await quit
 
@@ -231,10 +231,10 @@ struct PipelineQuitTests {
         await pipeline.tap(world)
         #expect(await eventually { await gate.hasWaiters })
         async let run: Void = pipeline.retryPending()
-        #expect(await eventually { await pipeline.quietWaiters.count == 1 })
+        #expect(await eventually { await pipeline.waiterCount(.quiet) == 1 })
 
         async let quit: Void = pipeline.shutdown()
-        #expect(await eventually { await pipeline.quitWaiters.count == 1 })
+        #expect(await eventually { await pipeline.waiterCount(.sendsEnded) == 1 })
         await gate.open()
         await quit
         await run

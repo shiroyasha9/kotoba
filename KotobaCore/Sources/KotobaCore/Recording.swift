@@ -2,7 +2,7 @@ import Foundation
 
 extension DictationPipeline {
     /// One dictation from key-down until it is stopped, cancelled or dropped.
-    struct Recording {
+    struct Recording: Identifiable {
         let id: DictationID
         let file: URL
         let startedAt: Instant
@@ -41,5 +41,14 @@ extension DictationPipeline {
 
         /// The pill marks the dictation as one that will be cleaned up.
         var isCleaned: Bool { isCleanupSeen || cleansAtKeyDown }
+
+        /// The recording is over (stopped, dropped or kept): none of its timers fires. Esc keeps the long-recording
+        /// warning, which stays due once Undo resumes.
+        func cancelTimers() {
+            warning.cancel()
+            announcement.cancel()
+            soundDeadline?.cancel()
+            primerTimer?.cancel()
+        }
     }
 }

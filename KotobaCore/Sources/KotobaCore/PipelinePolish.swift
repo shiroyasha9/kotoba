@@ -8,13 +8,12 @@ extension DictationPipeline {
     /// rewrite with no paste. A failed, cut or late answer pastes nothing. Every answer is billed as a `polish` entry,
     /// with no words.
     public func polishLast() async {
-        guard isQuiet, !isQuitting, transcribingAgain.isEmpty, let polisher = ports.polisher else { return }
-        isPolishing = true
+        // Only between dictations and while History sends none again (`LiveDictations.begin`).
+        guard let polisher = ports.polisher, live.begin(.polish) else { return }
         emit(.polishing)
         // An LLM's rewrite is not the owner's edit: the learning session of the last paste ends here.
         await ports.readback?.dictationStarted()
         let outcome = await polish(with: polisher, front: ports.frontApp())
-        isPolishing = false
         finishPolish(showing: outcome)
     }
 
@@ -22,19 +21,15 @@ extension DictationPipeline {
     /// (an earlier polish, or the dictation's own text); when the polished text is no longer there as pasted, the old
     /// text goes to the clipboard. History goes back to the text from before either way.
     public func undoPolish(_ id: DictationID) async {
-        guard isQuiet, !isQuitting, transcribingAgain.isEmpty else { return }
-        isPolishing = true
-        announceActivity()
+        guard live.begin(.polish) else { return }
         let outcome = await revertPolish(of: id, front: ports.frontApp())
-        isPolishing = false
         finishPolish(showing: outcome)
     }
 
     private func finishPolish(showing outcome: DictationState?) {
-        announceActivity()
-        resumeQuietWaiters()
+        live.end(.polish)
         // A dictation that started meanwhile shows its own state.
-        guard let outcome, recording == nil, paused == nil, inFlight.isEmpty else { return }
+        guard let outcome, !live.isDictationLive else { return }
         emit(outcome)
     }
 
@@ -141,13 +136,8 @@ extension DictationPipeline {
     /// A dictation came since Polish began: one records, waits in its Undo window or is sent, or one newer than `id`
     /// reached the owner. Its text is now where Polish would paste.
     private func isOvertaken(_ id: DictationID) async -> Bool {
-        guard !isDictationLive else { return true }
+        guard !live.isDictationLive else { return true }
         return await lastDelivered()?.id != id
-    }
-
-    /// A dictation records, waits in its Undo window or is sent.
-    var isDictationLive: Bool {
-        recording != nil || paused != nil || !inFlight.isEmpty
     }
 
     private func lastDelivered() async -> DictationRecord? {

@@ -1,4 +1,5 @@
 import Foundation
+import Synchronization
 import Testing
 
 @testable import KotobaCore
@@ -19,16 +20,17 @@ struct RetryQueueTests {
         )
     }
 
-    /// `run` with the test settings and nothing in flight.
+    static let settings = DictationPipeline.Settings(audioDirectory: URL(filePath: "/tmp/kotoba-tests"))
+
+    /// `run` with the test settings and nothing live: each send begins, unless `start` says otherwise.
     func run(
         _ queue: RetryQueue, _ selection: RetrySelection,
-        skipping: @escaping @Sendable (DictationID) -> Bool = { _ in false }
+        start: @escaping @Sendable (DictationID) -> RetryQueue.SendStart = { _ in .began(Self.settings) },
+        endSend: @escaping @Sendable () async -> Void = {}
     )
         async -> [DictationRecord]
     {
-        await queue.run(
-            selection, settings: { .init(audioDirectory: URL(filePath: "/tmp/kotoba-tests")) },
-            skipping: { skipping($0) })
+        await queue.run(selection, waitUntilQuiet: {}, beginSend: { start($0) }, endSend: endSend)
     }
 
     func queued(_ status: DictationRecord.Status) async throws -> DictationRecord {
@@ -89,7 +91,8 @@ struct RetryQueueTests {
         let inFlight = try await queued(.pending)
         let queuedOne = try await queued(.failed)
 
-        let results = await run(makeQueue(), .all, skipping: { [id = inFlight.id] in $0 == id })
+        let results = await run(makeQueue(), .all) { [id = inFlight.id] in $0 == id ? .inFlight : .began(Self.settings)
+        }
 
         #expect(results.map(\.id) == [queuedOne.id])
     }
@@ -148,26 +151,31 @@ struct RetryQueueTests {
         #expect(await world.provider.requests.count == 1)
     }
 
-    /// Quit: `stop` reports the send on its way, and `sendEnded` returns only once it saved its answer, so quit never
-    /// takes a billed send for done; no send starts after `stop`.
-    @Test func stopWaitsForTheSendOnItsWay() async throws {
-        let first = try await queued(.failed)
+    /// Quit: no send begins once the pipeline says it stopped, and the run ends there.
+    @Test func aStoppedPipelineEndsTheRun() async throws {
         _ = try await queued(.failed)
-        let gate = Gate()
-        await world.provider.hold(at: gate)
-        let queue = makeQueue()
+        _ = try await queued(.failed)
 
-        async let run = run(queue, .all)
-        #expect(await eventually { await gate.hasWaiters })
-        #expect(await queue.stop())
-        async let ended: Void = queue.sendEnded()
-        #expect(await eventually { await queue.sendEndWaiters.count == 1 })
-        await gate.open()
-        await ended
+        let results = await run(makeQueue(), .all) { _ in .stopped }
 
-        #expect(await world.store.records.first { $0.id == first.id }?.status == .recovered)
-        _ = await run
-        #expect(await world.provider.requests.count == 1)
+        #expect(results.isEmpty)
+        #expect(await world.provider.requests.isEmpty)
+    }
+
+    /// The send ends only after its answer is saved, so quit, which waits for that end, never loses a billed answer.
+    @Test func theSendEndsAfterItsAnswerIsSaved() async throws {
+        let record = try await queued(.failed)
+        let statuses = Mutex<[DictationRecord.Status?]>([])
+
+        _ = await run(
+            makeQueue(), .all,
+            endSend: { [store = world.store] in
+                // A failed read shows as nil, which the expectation below refuses.
+                let status = try? await store.status(of: record.id)
+                statuses.withLock { $0.append(status) }
+            })
+
+        #expect(statuses.withLock { $0 } == [.recovered])
     }
 
     @Test func aRecoveredTranscriptTheStoreCannotWriteLeavesTheMenuOnceCopied() async throws {

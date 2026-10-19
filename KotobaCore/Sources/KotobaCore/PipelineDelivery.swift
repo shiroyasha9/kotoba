@@ -8,7 +8,7 @@ extension DictationPipeline {
     /// file stopped taking audio (`RecordedAudio.loss`): then the pill says the audio was not saved. A longer
     /// incomplete file is sent; its paste says the text has only the part saved (`TranscriptDelivery`).
     func finish(_ current: Recording, audio: RecordedAudio?, clipboard: ClipboardPaste.PendingSnapshot) async {
-        let (keyDown, latency) = latencies.take(current.id)
+        let (keyDown, latency) = live.latency(of: current.id) ?? (ports.clock.now, LatencyLog())
         guard let audio else {
             finishDictation(current.id, showing: .nothingRecorded)
             return
@@ -40,8 +40,8 @@ extension DictationPipeline {
             markPasted(text, at: pasted.place)
         }
         // Learning reads the field only between dictations, and not after a Return submitted it.
-        if let readback = ports.readback, outcome.record.status == .pasted, !outcome.isSubmitted, recording == nil,
-            paused == nil, let text = outcome.record.deliveredText
+        if let readback = ports.readback, outcome.record.status == .pasted, !outcome.isSubmitted, !live.hasRecording,
+            let text = outcome.record.deliveredText
         {
             await readback.pasted(text)
         }
@@ -77,19 +77,17 @@ extension DictationPipeline {
     /// The transcript of `id` went to the cleaner: the indicator says so, unless a new recording or an Undo window
     /// shows, or another dictation is still being transcribed.
     func cleanupStarted(_ id: DictationID) {
-        cleaning.insert(id)
-        guard recording == nil, paused == nil else { return }
+        live.cleanupStarted(id)
+        guard !live.hasRecording else { return }
         emit(inFlightState)
     }
 
     /// Return while recording stops it. Just after a stop the tap may still swallow a Return (the indicator has not
     /// left recording yet), so it goes to the dictation that stopped, while that one is not yet pasted.
     func requestSubmit(at now: Instant) {
+        live.askSubmit()
         if let recording {
-            submitRequests.insert(recording.id)
             stop(recording, at: now)
-        } else if let id = lastStopped, inFlight.contains(id) {
-            submitRequests.insert(id)
         }
     }
 
@@ -132,13 +130,13 @@ extension DictationPipeline: PasteGate {
         case .again:
             isOvertaken = !isQuiet
         case .polish:
-            isOvertaken = isDictationLive
+            isOvertaken = live.isDictationLive
         }
         return ClipboardPaste.Facts(isQuitting: isQuitting, isPresent: isPresent, isOvertaken: isOvertaken)
     }
 
     func isSubmitAsked(_ request: ClipboardPaste.Request) -> Bool {
-        submitRequests.contains(request.id)
+        live.isSubmitAsked(request.id)
     }
 
     /// The paste did not land, so Polish never deletes it by Backspace. A dictation's own paste leaves its row copied,

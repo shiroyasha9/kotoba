@@ -14,14 +14,9 @@ extension DictationPipeline {
     /// or sent again, Polish runs, the request failed, the answer heard no words, its cleanup missed, or the store could
     /// not write the new text. The dictation then keeps its text and its status.
     public func transcribeAgain(_ id: DictationID, model: String? = nil) async -> Bool {
-        // Polish writes the text it read before its request: the two never overlap.
-        guard !isQuitting, !inFlight.contains(id), !transcribingAgain.contains(id), !isPolishing else { return false }
-        transcribingAgain.insert(id)
-        announceActivity()
-        defer {
-            transcribingAgain.remove(id)
-            announceActivity()
-        }
+        // Polish writes the text it read before its request: the two never overlap (`LiveDictations.begin`).
+        guard live.begin(.transcribeAgain(id)) else { return false }
+        defer { live.end(.transcribeAgain(id)) }
         let stored: DictationRecord?
         do {
             stored = try await ports.store.transcribedRecord(id)

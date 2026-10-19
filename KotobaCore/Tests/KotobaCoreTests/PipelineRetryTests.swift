@@ -199,6 +199,31 @@ struct PipelineRetryTests {
         #expect(await world.provider.requests.filter { $0.audio == live }.count == 1)
     }
 
+    /// A recording that starts while the retry reads its row holds the send until no dictation is live: the send
+    /// begins in the same step as the check that nothing is live.
+    @Test func aRecordingThatStartsDuringTheRetrysReadHoldsTheSend() async throws {
+        let world = FakeWorld(transcript: "text")
+        let pipeline = world.makePipeline()
+        await world.provider.fail(with: ProviderError.offline)
+        await pipeline.dictate(world)
+        await world.provider.fail(with: nil)
+        let readGate = Gate()
+        await world.store.holdQueuedReads(at: readGate)
+
+        async let retried: Void = pipeline.retryPending()
+        #expect(await eventually { await readGate.hasWaiters })
+        await pipeline.tap(world)
+        await readGate.open()
+
+        #expect(await eventually { await pipeline.waiterCount(.quiet) == 1 })
+        #expect(await world.provider.requests.count == 1)
+        await pipeline.tap(world)
+        await pipeline.settle()
+        await retried
+        #expect(await world.provider.requests.count == 3)
+        #expect(await world.store.records.map(\.status).sorted { $0.rawValue < $1.rawValue } == [.pasted, .recovered])
+    }
+
     @Test func aRetryResultDoesNotHideALiveTranscription() async throws {
         let world = FakeWorld(transcript: "text")
         let pipeline = world.makePipeline()

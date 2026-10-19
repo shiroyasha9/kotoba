@@ -66,8 +66,16 @@ actor FakeStore: Store {
         records.first { $0.id == id }?.status
     }
 
+    /// When set, each `queuedRecord` read waits for this gate.
+    private var queuedReadGate: Gate?
+
+    func holdQueuedReads(at gate: Gate) {
+        queuedReadGate = gate
+    }
+
     /// As the real store, which reads entries into the ledger and never back into a record.
     func queuedRecord(_ id: DictationID) async throws -> DictationRecord? {
+        await queuedReadGate?.pass()
         guard var record = records.first(where: { $0.id == id }), [.pending, .failed].contains(record.status)
         else { return nil }
         record.usage = []

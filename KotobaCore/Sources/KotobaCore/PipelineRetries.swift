@@ -25,8 +25,8 @@ extension DictationPipeline {
         var selection = chosen ?? (isSetUp ? .all : .exceptNeedsSetup)
         selection.isAutomatic = isAutomatic
         let results = await retries.run(
-            selection, settings: { await self.settings }, skipping: { await self.inFlight.contains($0) },
-            waitUntilQuiet: { await self.waitUntilQuiet() })
+            selection, waitUntilQuiet: { await self.waitUntilQuiet() },
+            beginSend: { await self.beginRetrySend(of: $0) }, endSend: { await self.retrySendEnded() })
         // The run stops at the route's wait, so it is the last result's.
         if let wait = results.last?.lastError?.retryAfter { scheduleRetry(after: wait) }
         for record in results {
@@ -35,6 +35,18 @@ extension DictationPipeline {
         }
         // A recovered dictation is delivered too: retention's event (story 31).
         if results.contains(where: \.status.isTranscribed) { work.track { await self.deleteExpiredAudio() } }
+    }
+
+    /// The retry queue's send of `id` begins, in one step with the checks: only while nothing is live and before quit,
+    /// and not for a dictation being sent live. It is live until `retrySendEnded`, so quit waits for its answer.
+    private func beginRetrySend(of id: DictationID) -> RetryQueue.SendStart {
+        if live.isQuitting { return .stopped }
+        if live.isSending(id) { return .inFlight }
+        return live.begin(.retrySend) ? .began(settings) : .busy
+    }
+
+    private func retrySendEnded() {
+        live.end(.retrySend)
     }
 
     /// The History pane's Retry: sends the chosen kept dictations again, each after no dictation is live. A cancelled

@@ -161,6 +161,22 @@ struct PipelineHistoryChangeTests {
         #expect(await activity.next() == PipelineActivity(isQuiet: true, inFlight: []))
     }
 
+    /// A press that turns out to be a shortcut leaves the activity quiet, so History keeps playing; a dictation makes
+    /// it busy from its cue.
+    @Test func theActivityIsBusyFromTheCue() async {
+        let world = FakeWorld(transcript: "unused")
+        let pipeline = world.makePipeline()
+
+        await pipeline.handle(.chordDown(.tapOrHold))
+        #expect(await pipeline.lastActivity.isQuiet)
+        #expect(await !pipeline.isQuiet)
+        await pipeline.handle(.chordInterrupted)
+        #expect(await pipeline.lastActivity.isQuiet)
+
+        await pipeline.tap(world)
+        #expect(await !pipeline.lastActivity.isQuiet)
+    }
+
     @Test func aDictationThatEndsWhileAnotherIsSentLeavesTheActivity() async throws {
         let world = FakeWorld(transcript: "two at once")
         let pipeline = world.makePipeline()
