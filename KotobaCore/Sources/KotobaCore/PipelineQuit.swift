@@ -21,10 +21,12 @@ extension DictationPipeline {
         // After a capture start or an Undo's resume on its way, so quit keeps that recording; one that does not end
         // within the bound (a stuck mic) is left, as quit must not hang.
         let isKept = await inTurn(by: deadline) {
-            // A recording whose Undo window just ended keeps its row.
-            while cancelSaves > 0 {
+            // A recording whose Undo window just ended keeps its row, within the bound.
+            let bound = cancelSaves > 0 ? work.schedule(at: deadline) { await self.endCancelSaveWait() } : nil
+            while cancelSaves > 0, ports.clock.now < deadline {
                 await withCheckedContinuation { cancelSaveWaiters.add($0) }
             }
+            bound?.cancel()
             if let current = paused {
                 current.timer.cancel()
                 await cancel(current.item)
@@ -53,5 +55,9 @@ extension DictationPipeline {
 
     private func endQuitWait() {
         live.release(.sendsEnded)
+    }
+
+    private func endCancelSaveWait() {
+        cancelSaveWaiters.resumeAll()
     }
 }

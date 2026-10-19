@@ -161,4 +161,23 @@ struct PipelineCaptureTurnTests {
 
         #expect(await world.store.records.map(\.status) == [.cancelled])
     }
+
+    @Test func quitWaitsForTheSaveAfterTheUndoWindowNoLongerThanItsBound() async throws {
+        let world = FakeWorld(transcript: "unused")
+        let pipeline = world.makePipeline()
+        await pipeline.tap(world)
+        await pipeline.handle(.escape)
+        let disk = Gate()
+        await world.store.holdSaves(at: disk)
+        world.clock.advance(by: .seconds(5))
+        #expect(await eventually { await disk.hasWaiters })
+
+        async let quit: Void = pipeline.shutdown()
+        #expect(await eventually { await pipeline.cancelSaveWaiterCount == 1 })
+        world.clock.advance(by: DictationPipeline.quitWait)
+        await quit
+
+        await disk.open()
+        await pipeline.settle()
+    }
 }
