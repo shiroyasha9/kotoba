@@ -1,8 +1,9 @@
 import Foundation
 
-/// The stage after capture: upload, dictionary replacements, paste through the clipboard guard,
-/// latency marks and the stored record. The pipeline hands over one finished recording and gets
-/// the final record back; it keeps the hotkey, recording and Undo state machine.
+/// The stage after capture: upload, dictionary replacements, the paste (`ClipboardPaste`), latency marks and the
+/// stored record. The pipeline hands over one finished recording and gets the final record back; it keeps the hotkey,
+/// recording and Undo state machine. A Sendable struct, so this work runs off the pipeline actor and a key event never
+/// waits for it.
 struct TranscriptDelivery: Sendable {
     /// One finished recording, with what the stage needs from the pipeline.
     struct Job: Sendable {
@@ -12,44 +13,37 @@ struct TranscriptDelivery: Sendable {
         let keyDown: ContinuousClock.Instant
         let latency: LatencyLog
         /// The clipboard taken at chord-down, and when it was ready.
-        let clipboard: ClipboardGuard.Pending
+        let clipboard: ClipboardPaste.PendingSnapshot
         let settings: DictationPipeline.Settings
         let output: DictationOutput
-        /// The front app at the stop; a submit Return goes only to it, and the record keeps it.
+        /// The front app at the stop; the text pastes and a submit Return goes only to it, and the record keeps it.
         var frontAppAtStop: FrontApp?
-        /// Reads the paste's place, right before the ⌘V (`ClipboardGuard.paste`).
-        let takePastePlace: @Sendable () async -> Void
-        /// No app read the paste (`ClipboardGuard.Unread`).
-        let pasteWentUnread: @Sendable (_ text: String, _ isLeftOnClipboard: Bool) async -> Void
+        /// The press that stopped the dictation, while it was down at the stop: the paste waits for its release.
+        var stoppingPress: Int?
     }
 
     struct Outcome: Sendable {
         let record: DictationRecord
-        /// The transient write that waits for the app's read (`ClipboardGuard`); nil when nothing was pasted or the
-        /// earlier clipboard was too large to keep.
-        let restore: ClipboardGuard.Write?
+        /// Nil when nothing was pasted.
+        let pasted: ClipboardPaste.Pasted?
         /// What the indicator shows instead of the record's usual outcome (for example `.cleanupFailed`).
         var showing: DictationState?
+
         /// Return followed the paste, so the field was submitted and holds no pasted text to read back.
-        var isSubmitted = false
+        var isSubmitted: Bool {
+            if case .sent = pasted?.submit { true } else { false }
+        }
     }
 
     /// The transcribe and clean steps, shared with the retry queue.
     let steps: TranscriptionSteps
-    let paster: any Paster
     let store: any Store
     let clock: any PipelineClock
-    let clipboard: ClipboardGuard
-    let frontApp: @Sendable () -> FrontApp?
+    let paste: ClipboardPaste
 
-    /// `beforePaste` returns when it is safe to post Cmd-V (the chord is released), with what to do with the text
-    /// (`PasteChoice`). `beforeCleanup` runs as the
-    /// transcript goes to the cleaner, so the indicator can say so. `isSubmitRequested` tells, once pasted, whether the
-    /// owner stopped with Return or pressed it just after.
-    func deliver(
-        _ job: Job, beforePaste: @Sendable () async -> PasteChoice, beforeCleanup: @Sendable () async -> Void = {},
-        isSubmitRequested: @Sendable () async -> Bool = { false }
-    ) async -> Outcome {
+    /// `gate` says when and whether the text may paste (`ClipboardPaste.run(_:gate:)`). `beforeCleanup` runs as the
+    /// transcript goes to the cleaner, so the indicator can say so.
+    func deliver(_ job: Job, gate: some PasteGate, beforeCleanup: @Sendable () async -> Void = {}) async -> Outcome {
         var latency = job.latency
         func mark(_ mark: LatencyMark, at instant: ContinuousClock.Instant) {
             Self.mark(mark, at: instant, of: job, in: &latency)
@@ -70,9 +64,8 @@ struct TranscriptDelivery: Sendable {
         }
         await savedPending
 
-        var restore: ClipboardGuard.Write?
+        var pasted: ClipboardPaste.Pasted?
         var cleanupMiss: TranscriptionSteps.CleanupMiss?
-        var submitted: Submitted?
         switch result {
         case .failure(let error):
             Log.pipeline.error("Transcription \(job.id.rawValue) on \(record.model ?? "no answer") failed: \(error)")
@@ -86,30 +79,27 @@ struct TranscriptDelivery: Sendable {
                     deadline: job.settings.cleanupDeadline)
                 mark(.cleanResponse, at: clock.now)
             }
-            (record.status, restore) = await paste(
-                record.cleanedText ?? transcribed.text, job: job, latency: &latency, beforePaste: beforePaste)
-            if record.status == .pasted {
-                let isAsked = transcribed.submits ? true : await isSubmitRequested()
-                if isAsked { submitted = await submit(job: job, latency: &latency) }
-            }
+            (record.status, pasted) = await pasteTranscript(
+                record.cleanedText ?? transcribed.text, submits: transcribed.submits, job: job, gate: gate,
+                latency: &latency)
             Self.log(latency, of: job, model: record.model)
         }
         record.latency = latency
         // The answers' ledger entries go with this save. A crash between the answer and here (at most the cleanup and
         // the paste, 1-2 s) loses them; the pending row is sent again at the next launch.
         await store.saveOrLog(record)
-        let showing = Self.notice(for: record, of: job, restore, cleanupMiss: cleanupMiss, submitted: submitted)
-        return Outcome(record: record, restore: restore, showing: showing, isSubmitted: submitted == .sent)
+        let showing = Self.notice(for: record, of: job, pasted, cleanupMiss: cleanupMiss)
+        return Outcome(record: record, pasted: pasted, showing: showing)
     }
 
     /// A copied transcript needs the owner's Cmd-V, so "Copied" wins over the cleanup note. A Return the owner asked
     /// for and did not get wins over the cleanup note too, and the cleanup note over a cut recording's. Lost audio
-    /// matters more than a lost clipboard (`Write.isClipboardKept`).
+    /// matters more than a lost clipboard (`Pasted.isClipboardKept`).
     private static func notice(
-        for record: DictationRecord, of job: Job, _ restore: ClipboardGuard.Write?,
-        cleanupMiss: TranscriptionSteps.CleanupMiss?, submitted: Submitted?
+        for record: DictationRecord, of job: Job, _ pasted: ClipboardPaste.Pasted?,
+        cleanupMiss: TranscriptionSteps.CleanupMiss?
     ) -> DictationState? {
-        if submitted == .frontAppChanged { return .returnSkipped(record.id) }
+        if pasted?.submit == .frontAppChanged { return .returnSkipped(record.id) }
         guard record.status == .pasted else { return nil }
         switch cleanupMiss {
         case .failed: return .cleanupFailed(record.id)
@@ -117,66 +107,28 @@ struct TranscriptDelivery: Sendable {
         case nil: break
         }
         if let loss = job.audio.loss { return .audioCut(record.id, loss) }
-        return restore?.isClipboardKept == false ? .clipboardNotKept(record.id) : nil
+        return pasted?.isClipboardKept == false ? .clipboardNotKept(record.id) : nil
     }
 
-    /// Return right after the Cmd-V, into the same event stream; the chord is already released. True when sent.
-    private enum Submitted {
-        case sent
-        /// A Return in another app could run the pasted text as a command there.
-        case frontAppChanged
-        case failed
-    }
-
-    private func submit(job: Job, latency: inout LatencyLog) async -> Submitted {
-        guard frontApp()?.processID == job.frontAppAtStop?.processID else {
-            Log.pipeline.info("Return not sent: the front app changed after the stop")
-            return .frontAppChanged
-        }
-        do {
-            try await paster.sendReturn()
-            Self.mark(.returnSent, at: clock.now, of: job, in: &latency)
-            return .sent
-        } catch {
-            Log.pipeline.error("Return not sent after the paste: \(error)")
-            return .failed
-        }
-    }
-
-    /// Pastes `text` once the chord is released; when paste is not allowed, leaves it on the clipboard.
-    private func paste(
-        _ text: String,
-        job: Job,
-        latency: inout LatencyLog,
-        beforePaste: @Sendable () async -> PasteChoice
-    ) async -> (DictationRecord.Status, ClipboardGuard.Write?) {
-        let (snapshot, readyAt) = await job.clipboard.value
-        Self.mark(.snapshotReady, at: readyAt, of: job, in: &latency)
-        let choice = await beforePaste()
-        guard choice != .saveOnly else {
-            // Quit returns before a restore could run, so the clipboard is left alone; Paste Last finds the text at
-            // the next launch.
-            Log.pipeline.info("Not pasted or copied: kotoba is quitting; the text is in History")
+    /// Pastes `text` once the gate allows it, with its latency marks; when paste is not allowed, the text waits on the
+    /// clipboard, and while kotoba quits it is only saved.
+    private func pasteTranscript(
+        _ text: String, submits: Bool, job: Job, gate: some PasteGate, latency: inout LatencyLog
+    ) async -> (DictationRecord.Status, ClipboardPaste.Pasted?) {
+        Self.mark(.snapshotReady, at: await job.clipboard.value.readyAt, of: job, in: &latency)
+        let request = ClipboardPaste.Request(
+            id: job.id, text: text, kind: .dictation(stoppingPress: job.stoppingPress, submits: submits),
+            app: job.frontAppAtStop, snapshot: job.clipboard)
+        switch await paste.run(request, gate: gate) {
+        case .pasted(let pasted):
+            Self.mark(.pasteSent, at: pasted.sentAt, of: job, in: &latency)
+            if case .sent(let at) = pasted.submit { Self.mark(.returnSent, at: at, of: job, in: &latency) }
+            return (.pasted, pasted)
+        case .copied:
+            return (.copied, nil)
+        case .skipped:
             return (.notPasted, nil)
         }
-        // The owner went to another app after the stop (a late answer): the text never goes there, it waits on the
-        // clipboard (lead, 2026-10-17). With no app known at the stop, or now, nothing says it changed.
-        let isFrontAppChanged =
-            job.frontAppAtStop.map { atStop in
-                frontApp().map { $0.processID != atStop.processID } ?? false
-            } ?? false
-        guard choice == .paste, !isFrontAppChanged else {
-            Log.pipeline.info("Not pasted (owner away, or another app in front); the text is on the clipboard")
-            await clipboard.copy(text)
-            return (.copied, nil)
-        }
-        guard
-            let write = await clipboard.paste(
-                text, over: snapshot, readBy: clock.now + job.settings.readWait,
-                beforeSend: job.takePastePlace, unread: { await job.pasteWentUnread(text, $0) })
-        else { return (.copied, nil) }
-        Self.mark(.pasteSent, at: clock.now, of: job, in: &latency)
-        return (.pasted, write)
     }
 
     /// One notice line per transcribed dictation. Notice, not info: the system keeps notice lines on disk, so
@@ -217,13 +169,4 @@ extension Result where Failure == any Error {
             self = .failure(error)
         }
     }
-}
-
-/// What a dictation does with its text once it may paste.
-enum PasteChoice {
-    case paste
-    /// The owner is away: the text waits on the clipboard.
-    case copy
-    /// kotoba is quitting: the text is only saved.
-    case saveOnly
 }

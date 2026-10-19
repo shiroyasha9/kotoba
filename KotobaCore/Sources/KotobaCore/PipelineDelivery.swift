@@ -7,7 +7,7 @@ extension DictationPipeline {
     /// Audio shorter than `Settings.minimumRecording` (an accidental double tap) is discarded with no word, unless the
     /// file stopped taking audio (`RecordedAudio.loss`): then the pill says the audio was not saved. A longer
     /// incomplete file is sent; its paste says the text has only the part saved (`TranscriptDelivery`).
-    func finish(_ current: Recording, audio: RecordedAudio?, clipboard: ClipboardGuard.Pending) async {
+    func finish(_ current: Recording, audio: RecordedAudio?, clipboard: ClipboardPaste.PendingSnapshot) async {
         let (keyDown, latency) = latencies.take(current.id)
         guard let audio else {
             finishDictation(current.id, showing: .nothingRecorded)
@@ -28,24 +28,16 @@ extension DictationPipeline {
         let job = TranscriptDelivery.Job(
             id: current.id, audio: audio, createdAt: ports.clock.date, keyDown: keyDown, latency: latency,
             clipboard: clipboard, settings: settings, output: current.output,
-            frontAppAtStop: current.frontAppAtStop,
-            takePastePlace: { await self.takePasteTarget(for: current.id) },
-            pasteWentUnread: { text, isLeftOnClipboard in
-                await self.pasteWentUnread(text, of: current.id, marksRow: true, isLeftOnClipboard: isLeftOnClipboard)
-            })
+            frontAppAtStop: current.frontAppAtStop, stoppingPress: current.stoppingPress)
         let outcome = await delivery.deliver(
-            job,
-            beforePaste: { await self.pasteChoice(after: current) },
-            beforeCleanup: { await self.cleanupStarted(current.id) },
-            isSubmitRequested: { await self.submitRequests.contains(current.id) })
+            job, gate: self, beforeCleanup: { await self.cleanupStarted(current.id) })
         finishDictation(current.id, showing: outcome.showing ?? .outcome(of: outcome.record))
         if let wait = outcome.record.lastError?.retryAfter { scheduleRetry(after: wait) }
         // Return submitted the field: the text is no longer where it was pasted.
-        let target = pasteTargets.removeValue(forKey: current.id)
         if outcome.isSubmitted {
             lastPaste = nil
-        } else if outcome.record.status == .pasted, let text = outcome.record.deliveredText {
-            markPasted(text, at: target)
+        } else if let pasted = outcome.pasted, let text = outcome.record.deliveredText {
+            markPasted(text, at: pasted.place)
         }
         // Learning reads the field only between dictations, and not after a Return submitted it.
         if let readback = ports.readback, outcome.record.status == .pasted, !outcome.isSubmitted, recording == nil,
@@ -59,23 +51,6 @@ extension DictationPipeline {
         if outcome.record.status.isTranscribed { work.track { await self.deleteExpiredAudio() } }
         // Tracked, so this dictation's work ends here while the retries wait for a quiet moment.
         if outcome.record.transcript != nil { work.track { await self.routeAnswered() } }
-    }
-
-    /// No app read a paste of `text` of dictation `id` (`ClipboardGuard.Unread`): it did not land, so Polish never
-    /// deletes it by Backspace. A dictation's own paste (`marksRow`) leaves its row copied, not pasted; Paste Again
-    /// and Polish leave the row as it was. When the text is still on the clipboard, the pill says so if no other
-    /// dictation shows.
-    func pasteWentUnread(_ text: String, of id: DictationID, marksRow: Bool, isLeftOnClipboard: Bool) async {
-        Log.pipeline.notice("No app read the paste of \(id.rawValue); left on the clipboard: \(isLeftOnClipboard)")
-        if lastPaste?.text == text { lastPaste = nil }
-        if marksRow {
-            do {
-                try await ports.store.markCopied(id)
-            } catch {
-                Log.pipeline.error("Cannot mark \(id.rawValue) copied: \(error)")
-            }
-        }
-        if isLeftOnClipboard { emitIfQuiet(.copied(id)) }
     }
 
     func emitIfQuiet(_ newState: DictationState) {
@@ -118,14 +93,6 @@ extension DictationPipeline {
         }
     }
 
-    /// Once no chord is held, what the text does: it pastes, waits on the clipboard while the owner is away, or is only
-    /// saved while kotoba quits.
-    private func pasteChoice(after current: Recording) async -> PasteChoice {
-        await waitForChordRelease(after: current.stoppingPress)
-        if isQuitting { return .saveOnly }
-        return isPresent ? .paste : .copy
-    }
-
     /// A Cmd-V posted while a chord is held reaches the app as Ctrl+Opt+Cmd+V, so the paste waits for every press to
     /// end. Only the press that stopped this dictation (`stoppingPress`) can have lost its release: it holds the paste
     /// for `Settings.chordReleaseWait` at most. A later press (the next push-to-talk hold) holds it until its release,
@@ -146,5 +113,46 @@ extension DictationPipeline {
 
     private func endReleaseWait() {
         releaseWaiters.resumeAll()
+    }
+}
+
+// MARK: - The paste gate
+
+extension DictationPipeline: PasteGate {
+    /// A dictation's paste waits for the chord's release; Paste Again and Polish wait for nothing, and a dictation that
+    /// came since the owner asked overtakes them. Nothing pastes while the owner is away or kotoba quits.
+    func facts(for request: ClipboardPaste.Request) async -> ClipboardPaste.Facts {
+        let isFirst: Bool
+        switch request.kind {
+        case .dictation(let stoppingPress, _):
+            await waitForChordRelease(after: stoppingPress)
+            isFirst = true
+        case .again:
+            isFirst = isQuiet
+        case .polish:
+            isFirst = await !isOvertaken(request.id)
+        }
+        return ClipboardPaste.Facts(isQuitting: isQuitting, isPresent: isPresent, isOvertaken: !isFirst)
+    }
+
+    func isSubmitAsked(_ request: ClipboardPaste.Request) -> Bool {
+        submitRequests.contains(request.id)
+    }
+
+    /// The paste did not land, so Polish never deletes it by Backspace. A dictation's own paste leaves its row copied,
+    /// not pasted; Paste Again and Polish leave the row as it was. When the text is still on the clipboard, the pill
+    /// says so if no dictation shows.
+    func pasteWentUnread(_ request: ClipboardPaste.Request, isLeftOnClipboard: Bool) async {
+        let id = request.id
+        Log.pipeline.notice("No app read the paste of \(id.rawValue); left on the clipboard: \(isLeftOnClipboard)")
+        if lastPaste?.text == request.text { lastPaste = nil }
+        if case .dictation = request.kind {
+            do {
+                try await ports.store.markCopied(id)
+            } catch {
+                Log.pipeline.error("Cannot mark \(id.rawValue) copied: \(error)")
+            }
+        }
+        if isLeftOnClipboard { emitIfQuiet(.copied(id)) }
     }
 }

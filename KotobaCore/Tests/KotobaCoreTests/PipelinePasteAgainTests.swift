@@ -28,7 +28,7 @@ struct PipelinePasteAgainTests {
 
         await pipeline.pasteAgain("Fix the login bug.", of: DictationID())
         await pipeline.settle()
-        world.clock.advance(by: ClipboardGuard.readSettle)
+        world.clock.advance(by: ClipboardPaste.readSettle)
         await pipeline.settle()
 
         #expect(await world.paster.pasted == ["Fix the login bug."])
@@ -67,6 +67,59 @@ struct PipelinePasteAgainTests {
         #expect(await pipeline.state == .copied(id))
     }
 
+    /// A recording that starts while Paste Again pastes keeps its pill: the outcome of Paste Again shows only when no
+    /// dictation does.
+    @Test func aRecordingThatStartsDuringPasteAgainKeepsItsPill() async {
+        let world = FakeWorld(transcript: "unused")
+        await world.paster.deny(with: FakeError())
+        let pipeline = world.makePipeline()
+        let gate = Gate()
+        await world.pasteboard.holdNextWriteReturn(at: gate)
+
+        async let again: Void = pipeline.pasteAgain("Fix the login bug.", of: DictationID())
+        #expect(await eventually { await gate.hasWaiters })
+        await pipeline.tap(world)
+        await gate.open()
+        await again
+
+        #expect(await pipeline.state == .recording(isLong: false))
+    }
+
+    /// The screen locks just as the owner asks: a ⌘V would go to the lock screen, so the text waits on the clipboard.
+    @Test func pasteAgainWhileTheOwnerIsAwayLeavesTheTextCopied() async {
+        let world = FakeWorld(transcript: "unused")
+        let pipeline = world.makePipeline()
+        let id = DictationID()
+        await pipeline.absenceBegan(.screenLocked)
+
+        await pipeline.pasteAgain("Fix the login bug.", of: id)
+
+        #expect(await world.paster.keystrokes.isEmpty)
+        #expect(await world.pasteboard.text == "Fix the login bug.")
+        #expect(await world.pasteboard.isTransient == false)
+        #expect(await pipeline.state == .copied(id))
+    }
+
+    /// The owner goes to another app while kotoba reads the clipboard: the text never goes there, it waits on the
+    /// clipboard, as for a dictation.
+    @Test func anotherAppInFrontDuringPasteAgainGetsNoPaste() async {
+        let world = FakeWorld(transcript: "unused")
+        let pipeline = world.makePipeline()
+        let id = DictationID()
+        let gate = Gate()
+        await world.pasteboard.holdNextChangeCountRead(at: gate)
+
+        async let again: Void = pipeline.pasteAgain("Fix the login bug.", of: id)
+        #expect(await eventually { await gate.hasWaiters })
+        world.frontApp.activate(200)
+        await gate.open()
+        await again
+
+        #expect(await world.paster.keystrokes.isEmpty)
+        #expect(await world.pasteboard.text == "Fix the login bug.")
+        #expect(await pipeline.state == .copied(id))
+    }
+
     @Test func pasteAgainWaitsForNoRecording() async {
         let world = FakeWorld(transcript: "unused")
         let pipeline = world.makePipeline()
@@ -84,7 +137,7 @@ struct PipelinePasteAgainTests {
 
         await pipeline.handle(.pasteLast)
         await pipeline.settle()
-        world.clock.advance(by: ClipboardGuard.readSettle)
+        world.clock.advance(by: ClipboardPaste.readSettle)
         await pipeline.settle()
 
         #expect(await world.paster.pasted == ["Fix the login bug.", "Fix the login bug."])

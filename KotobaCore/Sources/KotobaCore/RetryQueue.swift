@@ -9,7 +9,7 @@ public actor RetryQueue {
     private let steps: TranscriptionSteps
     private let store: any Store
     private let clock: any PipelineClock
-    private let clipboard: ClipboardGuard
+    private let paste: ClipboardPaste
     private var isRunning = false
     /// Asked for while a run was going; it runs right after, so no request is lost.
     private var requested: RetrySelection?
@@ -25,11 +25,11 @@ public actor RetryQueue {
     /// them, and no run in this process sends them again. The next launch does, as their rows are still queued.
     private var unsaved: [DictationRecord] = []
 
-    init(steps: TranscriptionSteps, store: any Store, clock: any PipelineClock, clipboard: ClipboardGuard) {
+    init(steps: TranscriptionSteps, store: any Store, clock: any PipelineClock, paste: ClipboardPaste) {
         self.steps = steps
         self.store = store
         self.clock = clock
-        self.clipboard = clipboard
+        self.paste = paste
     }
 
     /// Retries the queued dictations that `selection` picks, one at a time, and returns the updated
@@ -188,7 +188,7 @@ public actor RetryQueue {
     /// takes it off the Recovered list.
     public func copy(_ record: DictationRecord) async {
         guard let text = record.deliveredText else { return }
-        await clipboard.copy(text)
+        await paste.copy(text)
         unsaved.removeAll { $0.id == record.id }
         do {
             try await store.markCopied(record.id)

@@ -15,7 +15,7 @@ public protocol Paster: Sendable {
 /// read the transcript, only if `changeCount` did not move (docs/spec.md, "Paste").
 public protocol Pasteboard: Sendable {
     var changeCount: Int { get async }
-    /// Can be slow: reading promised data makes the owning app produce it. `ClipboardGuard` takes
+    /// Can be slow: reading promised data makes the owning app produce it. `ClipboardPaste` takes
     /// the snapshot at the announcement, while capture runs, and again before the write only if the
     /// clipboard changed.
     func snapshot() async -> PasteboardSnapshot

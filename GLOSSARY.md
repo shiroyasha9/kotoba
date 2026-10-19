@@ -41,3 +41,16 @@ _Avoid_: pending device, unstable mic
 **Recorder**:
 What writes one capture's audio file at the input's sample rate.
 _Avoid_: encoder
+
+### Paste
+
+**Paste transaction**:
+One paste of kotoba's text into the owner's app: the check that it may paste, the text written over the owner's clipboard, the ⌘V (with Backspaces before it or a Return after it), and the owner's clipboard coming back after the app read the text. A dictation, Polish and its Undo, Paste Last and Paste Again each paste through one.
+_Avoid_: clipboard guard, paste path
+
+**Paste gate**:
+What decides, right before the write, whether a paste transaction may go out: it waits for the chord's release, and says whether kotoba quits, the owner is away, or a dictation came first.
+_Avoid_: before-paste check, paste choice
+
+**Overtaken**:
+Said of a Paste Again or Polish when a dictation started, waits or is sent since the owner asked (for Paste Again, also when a Polish runs): that one wins, and nothing is pasted or copied.

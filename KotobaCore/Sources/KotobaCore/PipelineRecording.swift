@@ -94,7 +94,7 @@ extension DictationPipeline {
     func announce(_ id: DictationID, at instant: Instant) async {
         guard let current = recording, current.id == id, !current.isAnnounced else { return }
         recording?.isAnnounced = true
-        recording?.clipboard = takeClipboard()
+        recording?.clipboard = paste.snapshot()
         current.announcement.cancel()
         latencies.mark(.cue, of: id, at: instant)
         // A route that answered nothing within the window is cold: the silent primer goes first (it warms most of the
@@ -161,10 +161,6 @@ extension DictationPipeline {
         primeRoute(for: id, size: .silent)
     }
 
-    private func takeClipboard() -> ClipboardGuard.Pending {
-        Task { [clipboard, clock = ports.clock] in (snapshot: await clipboard.snapshot(), readyAt: clock.now) }
-    }
-
     /// Opens the cleaner's connection as tracked work; false when there is no cleaner.
     func warmCleaner() -> Bool {
         guard let cleaner = ports.cleaner else { return false }
@@ -197,7 +193,7 @@ extension DictationPipeline {
         emit(.transcribing)
         let ended = Task { await self.endCapture(of: current) }
         captureEnd = ended
-        let clipboard = current.clipboard ?? takeClipboard()
+        let clipboard = current.clipboard ?? paste.snapshot()
         work.track { await self.finish(current, audio: await ended.value, clipboard: clipboard) }
     }
 

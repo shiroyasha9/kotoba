@@ -12,7 +12,7 @@ struct PipelineClipboardTests {
 
         await pipeline.dictate(world)
         let afterTheRead = await world.pasteboard.text
-        world.clock.advance(by: ClipboardGuard.readSettle)
+        world.clock.advance(by: ClipboardPaste.readSettle)
         await pipeline.settle()
 
         #expect(await world.paster.pasted == ["dictated"])
@@ -27,7 +27,7 @@ struct PipelineClipboardTests {
         let pipeline = world.makePipeline()
 
         await pipeline.dictate(world)
-        world.clock.advance(by: ClipboardGuard.readSettle)
+        world.clock.advance(by: ClipboardPaste.readSettle)
         await pipeline.settle()
 
         #expect(world.clock.deadlines.isEmpty)
@@ -45,7 +45,7 @@ struct PipelineClipboardTests {
         await pipeline.settle()
         let read = await world.pasteboard.appReads()
         await pipeline.settle()
-        world.clock.advance(by: ClipboardGuard.readSettle)
+        world.clock.advance(by: ClipboardPaste.readSettle)
         await pipeline.settle()
 
         #expect(read == "dictated")
@@ -109,7 +109,7 @@ struct PipelineClipboardTests {
         await pipeline.dictate(world)
         await world.pasteboard.appReads()
         await pipeline.settle()
-        world.clock.advance(by: ClipboardGuard.readSettle)
+        world.clock.advance(by: ClipboardPaste.readSettle)
         await pipeline.settle()
 
         let records = await world.store.records
@@ -141,7 +141,7 @@ struct PipelineClipboardTests {
         await pipeline.dictate(world)
         world.clock.advance(by: .milliseconds(300))
         await pipeline.dictate(world)
-        world.clock.advance(by: ClipboardGuard.readSettle)
+        world.clock.advance(by: ClipboardPaste.readSettle)
         await pipeline.settle()
         #expect(await world.paster.pasted == ["dictated", "dictated"])
         #expect(await world.pasteboard.text == "user's clipboard")

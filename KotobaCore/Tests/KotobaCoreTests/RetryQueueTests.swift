@@ -13,9 +13,9 @@ struct RetryQueueTests {
                 work: PendingWork(clock: world.clock)),
             store: world.store,
             clock: world.clock,
-            clipboard: ClipboardGuard(
-                pasteboard: world.pasteboard, paster: world.paster, work: PendingWork(clock: world.clock),
-                clock: world.clock)
+            paste: ClipboardPaste(
+                pasteboard: world.pasteboard, paster: world.paster, frontApp: { nil }, place: nil,
+                readWait: .seconds(10), work: PendingWork(clock: world.clock), clock: world.clock)
         )
     }
 

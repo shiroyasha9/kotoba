@@ -19,7 +19,8 @@ public actor DictationPipeline {
 
     let ports: Ports
     var settings: Settings
-    let clipboard: ClipboardGuard
+    /// Every paste goes through it (`ClipboardPaste.run(_:gate:)`, the pipeline as the gate).
+    let paste: ClipboardPaste
     /// The retry queue, and the Recovered list the menu shows.
     public nonisolated let retries: RetryQueue
     let delivery: TranscriptDelivery
@@ -54,8 +55,6 @@ public actor DictationPipeline {
     /// The last text kotoba pasted and where the owner was then; nil after a Return submitted it. Polish deletes it by
     /// Backspace only while nothing changed (`PolishPlacement`).
     var lastPaste: LastPaste?
-    /// Each dictation's place, read just before its ⌘V (`takePasteTarget`): several can be in flight.
-    var pasteTargets: [DictationID: InputMark] = [:]
     /// Dictations stopped with Return, or given a Return just after the stop: Return follows their paste.
     var submitRequests: Set<DictationID> = []
     /// The last dictation stopped, for a Return the tap swallowed just after the stop.
@@ -98,14 +97,15 @@ public actor DictationPipeline {
         self.ports = ports
         self.settings = settings
         work = PendingWork(clock: ports.clock)
-        clipboard = ClipboardGuard(
-            pasteboard: ports.pasteboard, paster: ports.paster, work: work, clock: ports.clock)
+        let paste = ClipboardPaste(
+            pasteboard: ports.pasteboard, paster: ports.paster, frontApp: ports.frontApp,
+            place: ports.polisher == nil ? nil : ports.inputMark, readWait: settings.readWait, work: work,
+            clock: ports.clock)
+        self.paste = paste
         let steps = TranscriptionSteps(
             provider: ports.provider, cleaner: ports.cleaner, clock: ports.clock, store: ports.store, work: work)
-        delivery = TranscriptDelivery(
-            steps: steps, paster: ports.paster, store: ports.store, clock: ports.clock, clipboard: clipboard,
-            frontApp: ports.frontApp)
-        retries = RetryQueue(steps: steps, store: ports.store, clock: ports.clock, clipboard: clipboard)
+        delivery = TranscriptDelivery(steps: steps, store: ports.store, clock: ports.clock, paste: paste)
+        retries = RetryQueue(steps: steps, store: ports.store, clock: ports.clock, paste: paste)
         (states, stateContinuation) = AsyncStream.makeStream(of: DictationState.self)
         (termReports, termReportContinuation) = AsyncStream.makeStream(of: TermReport.self)
         (activity, activityContinuation) = AsyncStream.makeStream(
@@ -194,46 +194,6 @@ public actor DictationPipeline {
         settings.isLineBreakPhraseOn = isOn
     }
 
-    /// "Paste Last Dictation", from the menu or its chord: pastes the newest delivered dictation again (`pasteAgain`).
-    public func pasteLast() async {
-        guard isQuiet, !isQuitting else { return }
-        do {
-            guard let last = try await ports.store.lastDelivered(), let text = last.latestText else { return }
-            await pasteAgain(text, of: last.id)
-        } catch {
-            Log.pipeline.error("Cannot read the last dictation: \(error)")
-        }
-    }
-
-    /// Pastes `text` of dictation `id` through the clipboard guard, as a dictation does, with no Return (Paste Last,
-    /// History's "Paste Again"). Only between dictations, with none in flight (its paste would replace this text on
-    /// the clipboard before the app reads it); when paste is not allowed, the text stays on the clipboard.
-    public func pasteAgain(_ text: String, of id: DictationID) async {
-        guard isQuiet, !isQuitting else { return }
-        switch await pasteThroughClipboard(text, of: id) {
-        case .pasted: break
-        case .clipboardNotKept: emit(.clipboardNotKept(id))
-        case .copied: emit(.copied(id))
-        }
-    }
-
-    /// "Copy Last Dictation", from the menu or its chord: leaves the newest delivered dictation on the clipboard, with
-    /// no restore, and the indicator says so. During a dictation it copies too, and the indicator keeps its state.
-    public func copyLast() async {
-        do {
-            guard let last = try await ports.store.lastDelivered(), let text = last.latestText else { return }
-            await clipboard.copy(text)
-            emitIfQuiet(.copied(last.id))
-        } catch {
-            Log.pipeline.error("Cannot read the last dictation: \(error)")
-        }
-    }
-
-    /// History's Copy: leaves `text` on the clipboard, with no restore.
-    public func copyAgain(_ text: String) async {
-        await clipboard.copy(text)
-    }
-
     /// Quit: a live recording is saved `.pending` (transcribed at the next launch, into Recovered),
     /// and a recording in its Undo window is saved `.cancelled`. Nothing is lost. A dictation being sent gets up to
     /// `quitWait` for its answer, so its billed text is saved and the next launch does not send it again; one that
@@ -270,7 +230,7 @@ public actor DictationPipeline {
             bound.cancel()
         }
         // A paste that went out before quit began gets its restore, so the owner's clipboard comes back.
-        await clipboard.waitUntilRestored(by: deadline)
+        await paste.waitUntilRestored(by: deadline)
     }
 
     /// No live dictation and no retry is being sent.

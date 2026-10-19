@@ -82,6 +82,27 @@ struct PipelineAwayTests {
         #expect(await world.paster.pasted == ["Back."])
     }
 
+    /// Polish answers while the screen is locked: its ⌘V would go to the lock screen, so the polished text waits on
+    /// the clipboard.
+    @Test func aPolishThatAnswersWhileTheOwnerIsAwayIsCopied() async throws {
+        let world = FakeWorld(transcript: PipelinePolishTests.spoken)
+        let gate = Gate()
+        let polisher = FakePolisher(answer: PipelinePolishTests.polished, gate: gate)
+        let pipeline = world.makePipeline(polisher: polisher, selector: FakeSelector(finds: true))
+        await pipeline.dictate(world)
+
+        await pipeline.handle(.polishLast)
+        #expect(await eventually { await gate.hasWaiters })
+        await pipeline.absenceBegan(.screenLocked)
+        await gate.open()
+        await pipeline.settle()
+
+        let id = try #require(await world.store.records.first?.id)
+        #expect(await world.paster.pasted == [PipelinePolishTests.spoken])
+        #expect(await world.pasteboard.text == PipelinePolishTests.polished)
+        #expect(await pipeline.state == .polished(id, isReplaced: false))
+    }
+
     @Test func nothingLiveMeansNothingChanges() async {
         let world = FakeWorld(transcript: "unused")
         let pipeline = world.makePipeline()

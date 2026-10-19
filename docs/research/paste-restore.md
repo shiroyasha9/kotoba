@@ -40,7 +40,7 @@ Only Handy also uses a promised item as the read signal. It restores 200 ms afte
 
 ## Decision
 
-Keep the promised item and restore `ClipboardGuard.readSettle` (200 ms, as in Handy; owner, 2026-10-19) after the paste target's read. The read still sets the time, so a busy app that reads late still gets the transcript (Handy #502). The 200 ms covers the hand-over (under 1 ms), a target's check after its read, and a second read in the same paste, with room under load. The cost: the owner's clipboard comes back 0.2 s later, and the change count guard keeps a copy made in that time. The hot path does not change (the restore is after the Cmd-V).
+Keep the promised item and restore `ClipboardPaste.readSettle` (200 ms, as in Handy; owner, 2026-10-19) after the paste target's read. The read still sets the time, so a busy app that reads late still gets the transcript (Handy #502). The 200 ms covers the hand-over (under 1 ms), a target's check after its read, and a second read in the same paste, with room under load. The cost: the owner's clipboard comes back 0.2 s later, and the change count guard keeps a copy made in that time. The hot path does not change (the restore is after the Cmd-V).
 
 ## To revisit
 

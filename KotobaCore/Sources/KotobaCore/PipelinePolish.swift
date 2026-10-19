@@ -25,7 +25,7 @@ extension DictationPipeline {
         guard isQuiet, !isQuitting, transcribingAgain.isEmpty else { return }
         isPolishing = true
         announceActivity()
-        let outcome = await revertPolish(of: id)
+        let outcome = await revertPolish(of: id, front: ports.frontApp())
         isPolishing = false
         finishPolish(showing: outcome)
     }
@@ -63,20 +63,17 @@ extension DictationPipeline {
         }
         guard await ports.store.setPolishedTextOrLog(polished, of: record.id, usage: usage) else { return nil }
         lastPolish = (record.id, earlier: record.polishedText)
-        // Another app in front: a paste there could land in the wrong field.
-        let isSameApp = front == nil || ports.frontApp()?.processID == front?.processID
-        switch isSameApp ? await put(polished, replacing: text, of: record) : .unsafe {
-        case .pasted(let result):
-            return result.state(of: record.id, pasted: .polished(record.id, isReplaced: true))
-        case .unsafe:
-            await clipboard.copy(polished)
+        switch await put(polished, replacing: text, of: record, for: front) {
+        case .pasted(let pasted):
+            return pasted.isClipboardKept ? .polished(record.id, isReplaced: true) : .clipboardNotKept(record.id)
+        case .copied:
             return .polished(record.id, isReplaced: false)
-        case .overtaken:
+        case .skipped:
             return nil
         }
     }
 
-    private func revertPolish(of id: DictationID) async -> DictationState? {
+    private func revertPolish(of id: DictationID, front: FrontApp?) async -> DictationState? {
         guard let record = await lastDelivered(), record.id == id, let polished = record.polishedText else {
             return nil
         }
@@ -85,57 +82,66 @@ extension DictationPipeline {
             await ports.store.setPolishedTextOrLog(earlier, of: id, usage: [])
         else { return nil }
         lastPolish = nil
-        switch await put(original, replacing: polished, of: record) {
-        case .pasted(let result):
-            return result.state(of: id, pasted: .idle)
-        case .unsafe:
-            await clipboard.copy(original)
+        switch await put(original, replacing: polished, of: record, for: front) {
+        case .pasted(let pasted):
+            return pasted.isClipboardKept ? .idle : .clipboardNotKept(id)
+        case .copied:
             return .copied(id)
-        case .overtaken:
+        case .skipped:
             return nil
         }
     }
 
-    private enum Put {
-        case pasted(PasteResult)
-        /// No safe way to replace the old text: the clipboard gets the new one.
-        case unsafe
-        /// A dictation came while the request and the selection took their time: it wins, nothing more happens.
-        case overtaken
-    }
-
-    /// Pastes `new` in place of `old`, the text of `record` that kotoba pasted: over the selection when the selector
-    /// finds `old`, else after Backspaces when nothing changed since that paste (`PolishPlacement`).
-    private func put(_ new: String, replacing old: String, of record: DictationRecord) async -> Put {
-        guard await !isOvertaken(record.id) else { return .overtaken }
+    /// Pastes `new` in place of `old`, the text of `record` that kotoba pasted, into `front`: over the selection when
+    /// the selector finds `old`, else after Backspaces when nothing changed since that paste (`PolishPlacement`); else
+    /// the clipboard gets it. Skipped when a dictation came while the request and the selection took their time: it
+    /// wins, nothing more happens.
+    private func put(_ new: String, replacing old: String, of record: DictationRecord, for front: FrontApp?) async
+        -> ClipboardPaste.Outcome
+    {
+        guard await !isOvertaken(record.id) else { return .skipped }
+        // Another app in front: a paste there could land in the wrong field, so no field is touched.
+        guard !paste.isFrontAppChanged(from: front) else {
+            await paste.copy(new)
+            return .copied
+        }
         let selection = await ports.selector?.select(old, in: record.app) ?? .untouched
         // The selection took its time: a dictation since then must not find the old text selected.
         guard await !isOvertaken(record.id) else {
             if selection == .selected { await ports.selector?.restoreSelection() }
-            return .overtaken
+            return .skipped
         }
+        guard let backspaces = backspaces(replacing: old, selection: selection) else {
+            Log.pipeline.info("Polish: no safe way to replace the text; it goes to the clipboard")
+            await paste.copy(new)
+            return .copied
+        }
+        let request = ClipboardPaste.Request(
+            id: record.id, text: new, kind: .polish(backspaces: backspaces), app: front)
+        let outcome = await paste.run(request, gate: self)
+        switch outcome {
+        case .pasted(let pasted): markPasted(new, at: pasted.place)
+        case .copied: break
+        // A dictation came between the selection and the paste.
+        case .skipped: if selection == .selected { await ports.selector?.restoreSelection() }
+        }
+        return outcome
+    }
+
+    /// How many Backspaces delete `old` before the paste (0 over the selection); nil when no way is safe.
+    private func backspaces(replacing old: String, selection: SelectionResult) -> Int? {
         switch PolishPlacement.choose(
             replacing: old, selection: selection, lastPaste: lastPaste, now: ports.inputMark())
         {
-        case .overSelection:
-            break
-        case .backspaces(let count):
-            do {
-                try await ports.paster.sendBackspaces(count)
-            } catch {
-                Log.pipeline.error("Polish: Backspace not allowed: \(error)")
-                return .unsafe
-            }
-        case .clipboard:
-            Log.pipeline.info("Polish: no safe way to replace the text; it goes to the clipboard")
-            return .unsafe
+        case .overSelection: 0
+        case .backspaces(let count): count
+        case .clipboard: nil
         }
-        return .pasted(await pasteThroughClipboard(new, of: record.id))
     }
 
     /// A dictation came since Polish began: one records, waits in its Undo window or is sent, or one newer than `id`
     /// reached the owner. Its text is now where Polish would paste.
-    private func isOvertaken(_ id: DictationID) async -> Bool {
+    func isOvertaken(_ id: DictationID) async -> Bool {
         guard recording == nil, paused == nil, inFlight.isEmpty else { return true }
         return await lastDelivered()?.id != id
     }
@@ -168,47 +174,6 @@ extension DictationPipeline {
         UsageEntry(
             time: time, dictation: id, kind: .polish, model: answer.model, deliveredWords: 0, cost: answer.cost,
             app: app)
-    }
-
-    enum PasteResult {
-        case pasted
-        /// Pasted, but the clipboard before it was too large to keep, so it is not restored.
-        case clipboardNotKept
-        /// Paste was not allowed: the text is on the clipboard.
-        case copied
-
-        /// What the pill shows for a paste of dictation `id`: `pasted` when it went as planned.
-        func state(of id: DictationID, pasted: DictationState) -> DictationState {
-            switch self {
-            case .pasted: pasted
-            case .clipboardNotKept: .clipboardNotKept(id)
-            case .copied: .copied(id)
-            }
-        }
-    }
-
-    /// Pastes `text` of dictation `id` through the clipboard guard, as a dictation does, with no Return: the clipboard
-    /// comes back once the app read it, and a paste no app read is left on the clipboard (`ClipboardGuard`).
-    func pasteThroughClipboard(_ text: String, of id: DictationID) async -> PasteResult {
-        let write = await clipboard.paste(
-            text, over: await clipboard.snapshot(), readBy: ports.clock.now + settings.readWait,
-            beforeSend: { await self.takePasteTarget(for: id) },
-            unread: { await self.pasteWentUnread(text, of: id, marksRow: false, isLeftOnClipboard: $0) })
-        let target = pasteTargets.removeValue(forKey: id)
-        guard let write else { return .copied }
-        markPasted(text, at: target)
-        return write.isClipboardKept ? .pasted : .clipboardNotKept
-    }
-
-    /// Where the owner is just before a ⌘V, so a Cmd-Tab or a click right after it cannot become the paste's place;
-    /// nil while Polish is off, as nothing reads it then. One window list read on the paste path: 0.2 ms p50, 0.5 ms
-    /// p90; the first in a process takes 20-40 ms, and the indicator's first key-down already pays it.
-    func pasteTarget() -> InputMark? {
-        ports.polisher == nil ? nil : ports.inputMark()
-    }
-
-    func takePasteTarget(for id: DictationID) {
-        pasteTargets[id] = pasteTarget()
     }
 
     /// Remembers `text` as the last paste, at the place read before its ⌘V.

@@ -23,7 +23,7 @@ extension DictationPipeline {
         var isAnnounced = false
         let captureEvents: Task<Void, Never>
         /// The clipboard, taken at the announcement (so a shortcut press reads nothing) while capture runs.
-        var clipboard: ClipboardGuard.Pending?
+        var clipboard: ClipboardPaste.PendingSnapshot?
         let warning: Task<Void, Never>
         let announcement: Task<Void, Never>
         /// Whether the mic gave sound lately, for the no-sound warning.

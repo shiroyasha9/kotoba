@@ -199,7 +199,7 @@ final class OwnClipboardWrites: Sendable {
 /// Cmd-V's exactly. The ask is the start of the read, not its end: the pasteboard hands the text to the reader after
 /// this returns, and a new clipboard before then gives the reader nothing (spike, 2026-10-19: 380 of 1000 reads lost
 /// to a restore at once; `pasteboardFinishedWithDataProvider` comes before the hand-over too). So the restore waits
-/// `ClipboardGuard.readSettle`. At quit AppKit asks for every promise, so an unread text stays on the clipboard.
+/// `ClipboardPaste.readSettle`. At quit AppKit asks for every promise, so an unread text stays on the clipboard.
 private final class PromisedText: NSObject, NSPasteboardItemDataProvider, Sendable {
     private let text: String
     private let onRead: Mutex<(@Sendable () -> Void)?>
