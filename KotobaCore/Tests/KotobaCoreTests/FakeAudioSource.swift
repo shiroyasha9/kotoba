@@ -24,11 +24,20 @@ actor FakeAudioSource: AudioSource {
     /// When set, `beginCapture` waits for this gate.
     var beginGate: Gate?
     var beginError: (any Error)?
+    /// When set, `resumeCapture` waits for this gate.
+    private var resumeGate: Gate?
+    /// A capture is open from its begin to its end, cancel or discard, paused or not: a second begin is refused, as
+    /// `AudioCapture` refuses it.
+    private var isOpen = false
 
     private var continuation: AsyncStream<CaptureEvent>.Continuation?
 
     func holdBegin(at gate: Gate) {
         beginGate = gate
+    }
+
+    func holdResume(at gate: Gate) {
+        resumeGate = gate
     }
 
     /// From now on `discardCapture` cannot delete the file, as when the audio folder refuses the removal.
@@ -64,6 +73,8 @@ actor FakeAudioSource: AudioSource {
     func beginCapture(into file: URL) async throws -> AsyncStream<CaptureEvent> {
         await beginGate?.pass()
         if let beginError { throw beginError }
+        guard !isOpen else { throw AudioCapture.CaptureError.alreadyCapturing }
+        isOpen = true
         files.append(file)
         isCapturing = true
         let (stream, continuation) = AsyncStream.makeStream(of: CaptureEvent.self)
@@ -100,6 +111,7 @@ actor FakeAudioSource: AudioSource {
 
     func endCapture() async -> RecordedAudio? {
         isCapturing = false
+        isOpen = false
         continuation?.finish()
         guard !isCaptureLost else { return nil }
         let file = files.last ?? URL(filePath: "/dev/null")
@@ -116,6 +128,7 @@ actor FakeAudioSource: AudioSource {
 
     func cancelCapture() async -> RecordedAudio? {
         isCapturing = false
+        isOpen = false
         continuation?.finish()
         return files.last.map { RecordedAudio(file: $0, duration: recordedLength) }
     }
@@ -126,6 +139,7 @@ actor FakeAudioSource: AudioSource {
     }
 
     func resumeCapture() async throws {
+        await resumeGate?.pass()
         isCapturing = true
         isPaused = false
         resumes += 1
@@ -133,6 +147,7 @@ actor FakeAudioSource: AudioSource {
 
     func discardCapture() async -> Bool {
         isCapturing = false
+        isOpen = false
         continuation?.finish()
         guard let file = files.popLast() else { return true }
         return remove(file)

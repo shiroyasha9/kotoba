@@ -4,6 +4,7 @@ import Foundation
 
 extension DictationPipeline {
     func start(_ gesture: ChordGesture, at now: Instant) async {
+        assert(isTurnTaken, "A capture changes only in its turn (`inTurn`)")
         let id = DictationID()
         let file = settings.audioDirectory.appending(path: id.audioFileName)
         // The connection warms while the engine starts.
@@ -181,6 +182,7 @@ extension DictationPipeline {
     }
 
     func stop(_ current: Recording, at now: Instant) {
+        assert(isTurnTaken, "A capture changes only in its turn (`inTurn`)")
         var current = current
         current.frontAppAtStop = ports.frontApp()
         current.stoppingPress = isChordDown ? press : nil
@@ -208,6 +210,7 @@ extension DictationPipeline {
     }
 
     func cancel(_ current: Recording) async {
+        assert(isTurnTaken, "A capture changes only in its turn (`inTurn`)")
         let latency = endRecording(current)
         let audio = await ports.audio.cancelCapture()
         await current.captureEvents.value
@@ -237,6 +240,7 @@ extension DictationPipeline {
 
     /// Esc: the mic goes off, the file stays open, and Undo can resume until the window closes.
     func pause(_ current: Recording, at now: Instant) async {
+        assert(isTurnTaken, "A capture changes only in its turn (`inTurn`)")
         var current = current
         // A cancel that becomes final keeps the app and the mode of the Esc, not of the app in front 5 s later.
         current.frontAppAtStop = ports.frontApp()
@@ -254,6 +258,7 @@ extension DictationPipeline {
     }
 
     func resume(at now: Instant) async {
+        assert(isTurnTaken, "A capture changes only in its turn (`inTurn`)")
         // The dictation stays live while its capture resumes.
         guard let current = live.unpause() else { return }
         current.timer.cancel()
@@ -277,13 +282,16 @@ extension DictationPipeline {
 
     /// No Undo in time: the cancel is final and the audio stays in history.
     func closeUndoWindow(of id: DictationID) async {
-        guard let current = paused, current.item.id == id, !current.countdown.isHeld else { return }
-        await cancel(current.item)
+        await inTurn {
+            guard let current = paused, current.item.id == id, !current.countdown.isHeld else { return }
+            await cancel(current.item)
+        }
     }
 
     /// Drops a recording that turned out to be part of another app's shortcut: no row, no file, no cue. A file that
     /// stays on disk is remembered as discarded, so no launch takes it for an orphan and sends it (`OrphanAudio`).
     func discard(_ current: Recording) async {
+        assert(isTurnTaken, "A capture changes only in its turn (`inTurn`)")
         endRecording(current)
         await remember(current.id, unless: await ports.audio.discardCapture())
         await current.captureEvents.value

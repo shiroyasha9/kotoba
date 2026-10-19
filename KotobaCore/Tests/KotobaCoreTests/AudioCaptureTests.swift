@@ -65,6 +65,29 @@ struct AudioCaptureTests {
         #expect(hardware.running != nil)
     }
 
+    /// One capture at a time: a begin during a capture or its Undo window is refused, and the first goes on.
+    @Test func aBeginDuringACaptureIsRefusedAndTheFirstGoesOn() async throws {
+        let hardware = FakeCaptureHardware()
+        let capture = AudioCapture(hardware: hardware)
+        _ = try await capture.beginCapture(into: Self.file)
+
+        await #expect(throws: AudioCapture.CaptureError.alreadyCapturing) {
+            _ = try await capture.beginCapture(into: Self.file)
+        }
+        await capture.pauseCapture()
+        await #expect(throws: AudioCapture.CaptureError.alreadyCapturing) {
+            _ = try await capture.beginCapture(into: Self.file)
+        }
+        #expect(hardware.running == nil)
+        try await capture.resumeCapture()
+
+        #expect(hardware.recorders.count == 1)
+        #expect(hardware.recorders.first?.stops.isEmpty == true)
+        #expect(hardware.running != nil)
+        _ = await capture.endCapture()
+        #expect(hardware.recorders.first?.stops == [.afterCycle])
+    }
+
     @Test func anAudioServiceRestartBuildsTheInputAgain() async {
         let hardware = FakeCaptureHardware()
         let capture = AudioCapture(hardware: hardware)

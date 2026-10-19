@@ -7,3 +7,4 @@
 ### Fixed
 
 - With AirPods as the Mac’s default mic, kotoba records from the built-in mic. When the built-in mic does not open, kotoba now says so instead of recording from the AirPods, which switched them to call quality.
+- A press right after you click Undo now stops the resumed dictation. Before, it could start a second recording over the first and mix their audio. Quitting while a dictation starts or resumes now keeps it for the next launch.

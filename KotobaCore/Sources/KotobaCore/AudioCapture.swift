@@ -11,6 +11,8 @@ public actor AudioCapture: AudioSource {
     public enum CaptureError: Error {
         case noInputDevice
         case notCapturing
+        /// A capture is open (recording or in its Undo window): one capture at a time.
+        case alreadyCapturing
     }
 
     /// One capture from its start to its end or cancel: a dictation, or the Settings mic test.
@@ -138,9 +140,12 @@ public actor AudioCapture: AudioSource {
         return try startCapture(into: file, levels: levelContinuation)
     }
 
+    /// One capture at a time: a capture that is open (recording or in its Undo window) is never replaced, as its
+    /// recorder would go on beside the new one and no end would close it.
     func startCapture(
         into file: URL, levels: AsyncStream<Float>.Continuation
     ) throws -> AsyncStream<CaptureEvent> {
+        guard capture == nil else { throw CaptureError.alreadyCapturing }
         // The input starts first; audio waits in the ring while the file and converter are made (about 0.2 ms, or
         // about 11 ms the first time in a process).
         let position = hardware.markCaptureStart()
@@ -199,31 +204,6 @@ public actor AudioCapture: AudioSource {
             await self.applyDeferredInputChange()
         }
         return audio
-    }
-
-    public func pauseCapture() async {
-        guard capture != nil else { return }
-        isPaused = true
-        stopInput()
-    }
-
-    public func resumeCapture() async throws {
-        // A rebuild during the Undo window leaves the new input stopped (paused) once the recorder switched its rate.
-        while isRebuilding {
-            await withCheckedContinuation { rebuildWaiters.add($0) }
-        }
-        guard let recorder = capture?.recorder, let input else { throw CaptureError.notCapturing }
-        do {
-            try input.start()
-            isPaused = false
-        } catch {
-            // As at a press (`startInput`): an input that does not start is built again once. Not paused, the rebuild
-            // starts the new input after the recorder has switched to its sample rate.
-            Log.audio.error("The mic did not resume; building a new input: \(error)")
-            isPaused = false
-            await requestRebuild(reason: "the mic did not resume")
-            guard capture?.recorder === recorder, self.input != nil else { throw error }
-        }
     }
 
     public func cancelCapture() async -> RecordedAudio? {
@@ -328,6 +308,35 @@ public actor AudioCapture: AudioSource {
         guard let events = capture?.events, capture?.isInputLossReported == false else { return }
         capture?.isInputLossReported = true
         events.yield(.inputLost)
+    }
+}
+
+// MARK: - The Undo window
+
+extension AudioCapture {
+    public func pauseCapture() async {
+        guard capture != nil else { return }
+        isPaused = true
+        stopInput()
+    }
+
+    public func resumeCapture() async throws {
+        // A rebuild during the Undo window leaves the new input stopped (paused) once the recorder switched its rate.
+        while isRebuilding {
+            await withCheckedContinuation { rebuildWaiters.add($0) }
+        }
+        guard let recorder = capture?.recorder, let input else { throw CaptureError.notCapturing }
+        do {
+            try input.start()
+            isPaused = false
+        } catch {
+            // As at a press (`startInput`): an input that does not start is built again once. Not paused, the rebuild
+            // starts the new input after the recorder has switched to its sample rate.
+            Log.audio.error("The mic did not resume; building a new input: \(error)")
+            isPaused = false
+            await requestRebuild(reason: "the mic did not resume")
+            guard capture?.recorder === recorder, self.input != nil else { throw error }
+        }
     }
 }
 

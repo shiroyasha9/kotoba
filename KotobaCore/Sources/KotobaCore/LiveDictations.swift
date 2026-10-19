@@ -125,10 +125,12 @@ struct LiveDictations<Recording: Identifiable> where Recording.ID == DictationID
         take(recording)
     }
 
-    /// Puts `recording` in the one place of the live recording. A press during a start or a resume (both wait for the
-    /// audio source) can bring a second one; the one it replaces can no longer stop, so its dictation ends here.
+    /// Puts `recording` in the one place of the live recording. A start and a resume both wait for the audio source,
+    /// and the events that change the recording take turns (`DictationPipeline.inTurn`), so the place is empty here.
+    /// Should one replace another all the same, the one it replaces can no longer stop, so its dictation ends here.
     private mutating func take(_ recording: Recording) {
         if let replaced = liveRecording, replaced.id != recording.id {
+            assertionFailure("A recording started while another was live")
             Log.pipeline.error("A recording started while another was live; the earlier one ends with no row")
             entries.removeValue(forKey: replaced.id)
         }

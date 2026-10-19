@@ -58,6 +58,9 @@ public actor DictationPipeline {
     var audioDeletion = AudioDeletion()
     /// The run the route asked for with its wait (`scheduleRetry(after:)`); a newer wait replaces it.
     var retryTimer: Task<Void, Never>?
+    /// An event that reads or changes the recording or its Undo window runs (`inTurn`); the next ones wait for it.
+    private(set) var isTurnTaken = false
+    private var turnWaiters = Waiters()
     /// Test seam: sound events taken so far (levels, a lost mic, the no-sound deadline). The capture stream gives
     /// tests no other sign that the pipeline took an event, so they wait for this count before they check the state.
     var handledSoundEvents = 0
@@ -96,6 +99,14 @@ public actor DictationPipeline {
     public func handle(_ event: HotkeyEvent, at instant: ContinuousClock.Instant? = nil) async {
         guard !isQuitting else { return }
         let now = instant ?? ports.clock.now
+        await inTurn {
+            // Quit can begin while the event waits for its turn.
+            guard !isQuitting else { return }
+            await take(event, at: now)
+        }
+    }
+
+    private func take(_ event: HotkeyEvent, at now: Instant) async {
         switch event {
         case .chordDown(let gesture): await chordDown(gesture, at: now)
         case .gestureChanged(let gesture): gestureChanged(gesture)
@@ -112,6 +123,20 @@ public actor DictationPipeline {
         }
     }
 
+    /// Runs `body` once no other event reads or changes the recording or its Undo window. A capture start and an
+    /// Undo's resume wait for the audio source with no recording live in the ledger; a press, an Undo, the Undo
+    /// window's end or quit in that time would begin a second capture over the first or miss the one resuming.
+    /// Key events come one at a time already, so a key event waits only for an Undo click, the window's end or quit.
+    func inTurn(_ body: () async -> Void) async {
+        while isTurnTaken {
+            await withCheckedContinuation { turnWaiters.add($0) }
+        }
+        isTurnTaken = true
+        await body()
+        isTurnTaken = false
+        turnWaiters.resumeAll()
+    }
+
     /// The Paste Last, Copy Last and Polish Last chords.
     private func lastDictation(_ event: HotkeyEvent) async {
         switch event {
@@ -124,7 +149,8 @@ public actor DictationPipeline {
 
     /// Resumes the recording that Esc cancelled, while the Undo window is open.
     public func undo() async {
-        await resume(at: ports.clock.now)
+        let now = ports.clock.now
+        await inTurn { await resume(at: now) }
     }
 
     /// The pointer on the Undo pill holds the window's time (true); leaving runs it on (false), as the pill's bar does.
@@ -185,13 +211,16 @@ public actor DictationPipeline {
         retryTimer = nil
         // A paste waiting for a chord release saves its text instead.
         releaseWaiters.resumeAll()
-        if let current = paused {
-            current.timer.cancel()
-            await cancel(current.item)
-        }
-        if let current = recording {
-            let latency = endRecording(current)
-            await keep(current, audio: await endCapture(of: current), latency: latency, as: .pending)
+        // After a capture start or an Undo's resume on its way, so quit keeps that recording.
+        await inTurn {
+            if let current = paused {
+                current.timer.cancel()
+                await cancel(current.item)
+            }
+            if let current = recording {
+                let latency = endRecording(current)
+                await keep(current, audio: await endCapture(of: current), latency: latency, as: .pending)
+            }
         }
         let deadline = ports.clock.now + Self.quitWait
         if !live.areSendsEnded {
@@ -282,6 +311,9 @@ extension DictationPipeline {
     func waiterCount(_ condition: LiveDictations<Recording>.Condition) -> Int {
         live.waiterCount(condition)
     }
+
+    /// Test seam: events that wait for their turn (`inTurn`).
+    var turnWaiterCount: Int { turnWaiters.count }
 
     /// Test seam: Polish or its Undo runs.
     var isPolishing: Bool { live.isRunning(.polish) }

@@ -121,30 +121,6 @@ struct LiveDictationsTests {
         #expect(live.activity == PipelineActivity(isQuiet: false, inFlight: [next.id]))
     }
 
-    /// The live recording has one place. A recording that takes it (a start or a resume that raced another) ends the
-    /// one it replaces, so no dictation stays live with nothing left to end it.
-    @Test(arguments: [true, false])
-    func aRecordingThatTakesThePlaceEndsTheOneItReplaces(isResumeFirst: Bool) {
-        var live = makeLive()
-        let take = Take()
-        live.start(take, keyDown: keyDown)
-        live.pause(window(take), at: keyDown)
-        _ = live.unpause()
-        let next = Take()
-
-        if isResumeFirst {
-            live.resume(take, at: keyDown)
-            live.start(next, keyDown: keyDown)
-        } else {
-            live.start(next, keyDown: keyDown)
-            live.resume(take, at: keyDown)
-        }
-        let winner = isResumeFirst ? next : take
-        #expect(live.recording?.id == winner.id)
-        live.end(winner.id)
-        #expect(live.isQuiet)
-    }
-
     @Test func anEndedUndoWindowLeavesNothingLive() {
         var live = makeLive()
         let take = Take()
