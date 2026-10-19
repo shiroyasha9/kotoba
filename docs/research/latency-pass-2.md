@@ -1,6 +1,6 @@
 # Latency pass 2: where the stop-to-paste time goes in 0.4.x, and a smaller upload
 
-Date: 2026-10-19 23:24 to 2026-10-20 00:40 IST. Agent `latency-2`, branch `latency-2`. Raw rows, the saved log lines, the scripts and the run log are in `<runbooks>/2026-10-19-kotoba-latency-2/` (not in git). No app database was read. Paid spend: section 5.
+Date: 2026-10-19 23:24 to 2026-10-20 01:05 IST (round 2 from 00:35). Agent `latency-2`, branch `latency-2`. Raw rows, the saved log lines, the scripts and the run log are in `<runbooks>/2026-10-19-kotoba-latency-2/` (not in git). No app database was read. Paid spend: section 5.
 
 ## Summary
 
@@ -9,7 +9,8 @@ Date: 2026-10-19 23:24 to 2026-10-20 00:40 IST. Agent `latency-2`, branch `laten
 - The largest measured win that keeps quality: upload Ogg Opus at 24 kbps instead of FLAC. One fifth of the bytes (57 KB against 303 KB for a 15 s clip), stop-to-answer p50 1,238 to 995 ms and p90 2,281 to 1,632 ms (20 clips, warm, same path). WER is the same: 5.68% FLAC against 5.71% (Apple's encoder) on 80 clips, paired 95% CI -0.25 to +0.35 pp.
 - Implemented in this branch (lead go, 2026-10-20 00:20 IST, after the `arch-capture` merge): the capture writes an Ogg Opus copy of each recording while it records (`App/OpusUploadWriter.swift`, framed by `OggOpusStream` in KotobaProviders), the first request sends it on MAI through OpenRouter and deletes it when it ends. Every other route, every retry and History's Transcribe Again send the FLAC, which stays the kept recording.
 - Dropped after measurement: a hedge (two requests at once) on a cold route (the second request of a pair is 1-4 s slower every time, section 2.5), streaming the upload during the recording (with Opus, about 30 ms is left to win), other ZDR speech models (none clearly faster at MAI's WER).
-- Measured, left for the lead and the owner: upload during the recording in segments split at pauses: for 51-82 s dictations, the stop waits only for the last segment, p50 1,875 to 1,059 ms and p90 3,868 to 1,383 ms; WER 4.3% to 5.0% on 7 clips (section 2.4).
+- Measured, designed, not built (section 7): upload during the recording in segments cut at pauses of 0.4 s after 15 s of audio. On 56 clips of 30 s or more the WER does not change (7.90% whole, 8.00% segmented, paired CI -0.26 to +0.39 pp; the same clip sent twice differs by 0.05 pp), and the stop then waits only for the last segment (p50 13.8 s of audio instead of 51 s). The first 7-clip result (+0.7 pp) was noise.
+- The large primer still helps with Opus at the tail, by a small and uncertain margin (section 8): keep it.
 
 ## 1. Baseline: the release app's log, 2026-10-19
 
@@ -121,7 +122,7 @@ OpenAI GPT Transcribe, Gemini 3.5 Transcribe and Meta Muse Voice have no ZDR end
 1. `OggOpusStream` (`KotobaProviders/Sources/KotobaProviders/OggOpusStream.swift`): the two Opus header pages and audio pages of whole packets (RFC 3533, RFC 7845), a page per 50 packets (one second) or before 255 lacing values. A full page waits for the next packet, so the last page always holds packets and its granule (the recording's own length) trims the encoder's padding (Codex review, 2026-10-20). Tests: `OggOpusStreamTests` (6): the header bytes ffmpeg checked, a decode by AVAudioFile at the exact length, lacing, the page limits, the trim on a full last page.
 2. `OpusUploadWriter` (`App/OpusUploadWriter.swift`): AVAudioConverter to Opus at 24 kbps, 20 ms packets, framed by `OggOpusStream`.
 3. `CaptureWriter` (`App/CaptureWriter.swift`, "Upload copy"): after each FLAC chunk it writes the same chunk to the copy, at the path the capture gives it. The writer is made at the first chunk on the writer thread, not at the key-down. At its first failure (or a failed FLAC write) the copy is dropped and deleted, and the stop returns no copy: the upload sends the FLAC, with nothing for the owner to see. Pause and resume (Esc, Undo) keep the same writer.
-4. `RecordedAudio.upload` and `AudioCapture` (KotobaCore): the copies go in one folder of their own (`<temporary folder>/<bundle id>.upload-copies`, so kotoba and kotoba Dev keep apart), which the first `prepare` after a launch empties (a copy that a quit or a crash left). `discard(_:)` deletes the copy with the FLAC, so a discard, an Esc that ends in a discard and the mic test leave no copy. Tests: `AudioCaptureUploadCopyTests` (5), through the `CaptureHardware` fake.
+4. `RecordedAudio.upload` and `AudioCapture` (KotobaCore): the copies go in one folder of their own (`<temporary folder>/<bundle id>.upload-copies`, so kotoba and kotoba Dev keep apart), which the first `prepare` after a launch empties (a copy that a quit or a crash left). A cancelled recording (an Esc whose Undo window ended, which History keeps unsent) returns no copy and its copy is deleted at the cancel (Codex review of 9c0216a, 2026-10-20), and `discard(_:)` deletes the copy with the FLAC, so an Esc, a discard and the mic test leave no copy. Tests: `AudioCaptureUploadCopyTests` (5), through the `CaptureHardware` fake.
 5. The first request only (`TranscriptionSteps.transcribe`, `KotobaCore/Sources/KotobaCore/TranscriptionSteps.swift:47-52`; `DictationPipeline.Settings.request(for:at:)`, `KotobaCore/Sources/KotobaCore/PipelineInterface.swift:254`): the request carries the copy, and the copy is deleted when that request ends, answered or not (Codex review, 2026-10-20: a copy kept for later outlived a History delete and a quit). So the copy is on disk only from the recording to its first answer; a retry, and History's Transcribe Again, send the FLAC. `TranscriptionRoute.takesOggOpus`: MAI through OpenRouter sends the copy as `input_audio.format: "ogg"`, opened before the body is written; every other route sends the FLAC. Tests: `PipelineUploadCopyTests` (3), `OpenRouterOpusUploadTests` (5).
 6. Bench: the probes of section 2 in `bench/latency/run.ts`.
 
@@ -147,8 +148,53 @@ $0.33 of `usage.cost` in the two raw files (`results/latency-raw.jsonl`, `qualit
 3. Listen to two History recordings: the kept file is still the FLAC.
 4. After a dictation, an Esc whose Undo window passed, and a Settings mic test: the folder `tech.teensy.kotoba.dev.upload-copies` in the temporary folder (`$TMPDIR`) is empty.
 
+## 7. Segment upload at pauses (round 2, 2026-10-20 00:38-01:01 IST)
+
+Harness: `bun run latency --exp segrules` (`--rules`, `--wholes`, `--parallel 8`; score with `--exp score [--cut-by RULE]`), raw rows in `<runbooks>/2026-10-19-kotoba-latency-2/segrules/`. All 56 bench clips of 30 s or more (59 min, 11,058 reference words), FLAC, the app's request shape. Each clip whole twice (the noise floor: MAI is not deterministic), then cut by each rule: `s<A>p<B>` cuts at the middle of the first pause of B s or more (under -40 dBFS, `ffmpeg silencedetect`) that starts A s or more after the last cut, never in the last 2 s; `o1` starts each later segment 1 s before its cut and drops the words heard twice at the join (the longest run of up to 12 words that ends one segment and starts the next). Segments are joined with a space. MAI has no prompt or context field (Azure's MAI-Transcribe options: `phraseList`, `transcribeStyle`, `timestamps`, `diarization`, `locales`), so "the previous segment's text as a prompt" cannot be tested; the phrase list goes with every segment.
+
+| Rule | Clips cut (of 56) | WER, all 56 | Against whole, paired 95% CI | Last segment of a cut clip p50 / p90 / max | Extra sentence ends per cut |
+| --- | --- | --- | --- | --- | --- |
+| Whole (second send) | - | 7.96% | +0.05 pp (-0.06, +0.17) | 51.3 s (whole clip, p50) | - |
+| s15p0.4 | 40 | 8.00% | +0.10 pp (-0.26, +0.39) | 13.8 / 22.5 / 31.9 s | 0.30 (28 over 92 cuts) |
+| s15p0.3 | 43 | 8.11% | +0.21 pp (-0.19, +0.55) | 12.8 / 17.5 / 28.1 s | 0.27 |
+| s10p0.4 | 40 | 7.99% | +0.09 pp (-0.30, +0.41) | 10.6 / 20.6 / 31.9 s | 0.18 |
+| s15p0.8 | 19 | 7.90% | +0.00 pp (-0.31, +0.23) | 19.3 / 61.4 / 132.4 s | 0.12 |
+| s25p0.8 | 15 | 7.99% | +0.08 pp (-0.21, +0.30) | 19.3 / 50.2 / 53.3 s | - |
+| s15p0.4o1 (1 s overlap) | 40 | 8.18% | +0.27 pp (-0.10, +0.60) | 14.8 / 23.5 / 32.9 s | - |
+
+- On the 40 clips that s15p0.4 cuts: 9.78% whole, 9.93% segmented, +0.15 pp (-0.40, +0.59); the second whole send +0.03 pp. No rule has a WER cost that the data can see; the overlap is the worst (its join adds words), so no overlap.
+- A pause rule of 0.8 s cuts too few clips (19 of 56): the owner rarely pauses that long. 0.4 s cuts 71% of them.
+- Visible cost: about 3 of 10 cuts end a sentence where the whole clip had none (a period and a capital at the seam). WER ignores it; the owner will see it in long dictations.
+- Request times in this pass are contended (8 at once): whole p50 2,307 ms, last segment p50 1,464 ms. The app's own numbers (section 1: server p50 1,057 ms for 10-20 s against 2,736 ms for 40 s and more) give the gain to expect: about 1.5 s at p50 for a dictation of 40 s or more.
+
+### 7.1 Design the numbers support (for the pipeline owner; not built)
+
+1. Rule: s15p0.4. A segment ends at the first pause of 0.4 s (every 10 ms frame under -40 dBFS) that starts 15 s or more after the last cut, and not in the last 2 s before the stop. The cut is 0.2 s into the pause, so each side keeps silence.
+2. Capture (`CaptureWriter`, writer thread): a pause detector over the 16 kHz chunks it already converts (RMS per 10 ms frame, no new buffers). At a cut it closes the current Opus copy and starts the next one (`OggOpusStream` per segment); the FLAC stays one file. It reports the closed segment as a capture event (file, start, length).
+3. Pipeline: on each segment event while recording, send it as its own request (the copy, the phrase list, the language), keep its answer by index, and do not wait. A segment request also keeps the route warm, so no re-prime is due while segments flow.
+4. At the stop: close the last segment, send it, wait for every segment's answer, join the texts in order with one space, then run the steps as today (submit phrase, line breaks, replacements, cleanup).
+5. Failure: if any segment fails or times out, send the whole recording as today (the FLAC, the retry queue), and use none of the segment answers. Esc and discard cancel the segment requests (the audio already sent is billed: about one second of MAI per 10 s spoken, $0.000028 a second).
+6. Undo after Esc resumes the segmenting. The usage ledger gets one speech entry with the sum of the segments' costs and the recording's length.
+7. A recording with no cut (no 0.4 s pause after 15 s, 16 of the 56 clips) goes as one request, as today.
+8. Tests through the seam: the fake audio source emits segment events; assertions on the requests sent while recording, the joined text, the fallback to the whole recording on a failed segment, and the cancel on Esc.
+
+## 8. Cold route with the Opus body: is the large primer still worth it? (2026-10-20 00:43-00:58 IST)
+
+`bun run latency --exp coldcodec --cold opus,opus-silent`, 12 sets by turns, each after 65 s of quiet: the silent primer, then either the large primer (the app today) or nothing more, then 12 s after the start one 10-20 s clip as the app's Opus copy. Raw rows in `<runbooks>/2026-10-19-kotoba-latency-2/cold2/`. The route was normal (silent primers 1.0-3.5 s).
+
+| Set | n | Clip times, ms | p50 |
+| --- | --- | --- | --- |
+| Opus, silent and large primer | 6 | 882, 944, 1,112, 1,611, 2,075, 2,116 | 1,112 ms |
+| Opus, silent primer only | 6 | 1,002, 1,134, 1,234, 1,361, 2,703, 4,232 | 1,234 ms |
+
+The two slowest clips came without the large primer; at n 6 that is a hint, not proof. Keep the large primer: its cost is upload bytes (0.5 MB per cold dictation), not money. Check again from the app's log after a week of Opus use (`make latency-log`, after-a-quiet-minute set).
+
+## 9. Cost, round 2
+
+$0.81 of `usage.cost` (`segrules/` $0.81, `cold2/` $0.006), of the $1.00 for this round. Paid wall time about 22 minutes of the 30.
+
 ## Unresolved questions
 
-1. Does a cold route still need the large primer when the dictation's own body is a fifth of the size? The `coldcodec` control ran during a slow period; rerun it, or read `make latency-log` after a day of use (the after-a-quiet-minute set).
-2. Does a single request on a cold route get the faster time of a hedge pair (section 2.5)? Needs the `coldcodec` FLAC sets on a normal day.
-3. Segments for long dictations (section 2.4): is +0.7 pp WER on 7 clips real, and is the gain worth an upload per pause? Lead and owner decision; it needs the capture to cut at pauses and the pipeline to join texts.
+1. The large primer with Opus (section 8): n 6 per set; the app's log after a week of use decides.
+2. Does a single request on a cold route get the faster time of a hedge pair (section 2.5)?
+3. Segments (section 7): are about 3 extra sentence breaks per 10 cuts acceptable to the owner in long dictations? Owner decision before the pipeline work.
