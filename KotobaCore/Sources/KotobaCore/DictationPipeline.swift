@@ -61,6 +61,9 @@ public actor DictationPipeline {
     /// An event that reads or changes the recording or its Undo window runs (`inTurn`); the next ones wait for it.
     private(set) var isTurnTaken = false
     private var turnWaiters = Waiters()
+    /// History saves of recordings whose Undo window ended, which run after the turn; quit waits for them.
+    var cancelSaves = 0
+    var cancelSaveWaiters = Waiters()
     /// Test seam: sound events taken so far (levels, a lost mic, the no-sound deadline). The capture stream gives
     /// tests no other sign that the pipeline took an event, so they wait for this count before they check the state.
     var handledSoundEvents = 0
@@ -127,13 +130,31 @@ public actor DictationPipeline {
     /// Undo's resume wait for the audio source with no recording live in the ledger; a press, an Undo, the Undo
     /// window's end or quit in that time would begin a second capture over the first or miss the one resuming.
     /// Key events come one at a time already, so a key event waits only for an Undo click, the window's end or quit.
-    func inTurn(_ body: () async -> Void) async {
+    /// With a `deadline` (quit) it waits no longer than that on the pipeline clock and returns false then, with `body`
+    /// not run.
+    @discardableResult
+    func inTurn(by deadline: Instant? = nil, _ body: () async -> Void) async -> Bool {
+        var bound: Task<Void, Never>?
         while isTurnTaken {
+            if let deadline {
+                guard ports.clock.now < deadline else {
+                    bound?.cancel()
+                    return false
+                }
+                bound = bound ?? work.schedule(at: deadline) { await self.wakeTurnWaiters() }
+            }
             await withCheckedContinuation { turnWaiters.add($0) }
         }
+        bound?.cancel()
         isTurnTaken = true
         await body()
         isTurnTaken = false
+        turnWaiters.resumeAll()
+        return true
+    }
+
+    /// A bound passed: each waiter checks its own deadline and waits on when its turn has not come.
+    private func wakeTurnWaiters() {
         turnWaiters.resumeAll()
     }
 
@@ -197,50 +218,6 @@ public actor DictationPipeline {
     /// The owner turned spoken line breaks on or off: the next transcript uses it.
     public func updateLineBreakPhrase(isOn: Bool) async {
         settings.isLineBreakPhraseOn = isOn
-    }
-
-    /// Quit: a live recording is saved `.pending` (transcribed at the next launch, into Recovered),
-    /// and a recording in its Undo window is saved `.cancelled`. Nothing is lost. A dictation being sent gets up to
-    /// `quitWait` for its answer, so its billed text is saved and the next launch does not send it again; one that
-    /// takes longer stays `.pending`; a retry send, Polish, Transcribe Again and every billed answer on its way (a
-    /// primer, unused segments, a late cleanup: `PendingWork.bill`) get the same wait, so their cost reaches the usage
-    /// ledger, and a paste that went out gets its restore. All share one bound.
-    /// From the start nothing new is sent (a send now could be billed now and again at the next launch), recorded or
-    /// pasted: the paste of an answer that comes during the wait would return before its restore.
-    public func shutdown() async {
-        live.beginQuit()
-        retryTimer?.cancel()
-        retryTimer = nil
-        // A paste waiting for a chord release saves its text instead.
-        releaseWaiters.resumeAll()
-        // After a capture start or an Undo's resume on its way, so quit keeps that recording.
-        await inTurn {
-            if let current = paused {
-                current.timer.cancel()
-                await cancel(current.item)
-            }
-            if let current = recording {
-                let latency = endRecording(current)
-                await keep(current, audio: await endCapture(of: current), latency: latency, as: .pending)
-            }
-        }
-        let deadline = ports.clock.now + Self.quitWait
-        if !live.areSendsEnded {
-            let bound = work.schedule(at: deadline) { await self.endQuitWait() }
-            await withCheckedContinuation { live.wait(until: .sendsEnded, $0) }
-            bound.cancel()
-        }
-        // Billed answers on their way beside the sends (primers, unused segments, late cleanups) reach the ledger.
-        await work.billsEnded(by: deadline)
-        // A paste that went out before quit began gets its restore, so the owner's clipboard comes back.
-        await paste.waitUntilRestored(by: deadline)
-    }
-
-    /// Most dictations get their answer in about a second; quit must not hang on a slow route.
-    static let quitWait = Duration.seconds(3)
-
-    private func endQuitWait() {
-        live.release(.sendsEnded)
     }
 }
 
@@ -318,6 +295,9 @@ extension DictationPipeline {
 
     /// Test seam: events that wait for their turn (`inTurn`).
     var turnWaiterCount: Int { turnWaiters.count }
+
+    /// Test seam: quits that wait for the save after an Undo window.
+    var cancelSaveWaiterCount: Int { cancelSaveWaiters.count }
 
     /// Test seam: quits that wait for billed work.
     var billWaiterCount: Int { work.billWaiterCount }

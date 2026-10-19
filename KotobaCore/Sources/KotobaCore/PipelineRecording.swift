@@ -210,12 +210,18 @@ extension DictationPipeline {
     }
 
     func cancel(_ current: Recording) async {
+        let (audio, latency) = await endCancelled(current)
+        await keep(current, audio: audio, latency: latency, as: .cancelled)
+        emit(inFlightPhase)
+    }
+
+    /// The capture part of a cancel: the recording ends and its audio closes, kept as it is.
+    private func endCancelled(_ current: Recording) async -> (RecordedAudio?, LatencyLog) {
         assert(isTurnTaken, "A capture changes only in its turn (`inTurn`)")
         let latency = endRecording(current)
         let audio = await ports.audio.cancelCapture()
         await current.captureEvents.value
-        await keep(current, audio: audio, latency: latency, as: .cancelled)
-        emit(inFlightPhase)
+        return (audio, latency)
     }
 
     /// Saves a recording that is not transcribed now, with its audio and latency marks. One with no audio (Esc or quit
@@ -282,10 +288,20 @@ extension DictationPipeline {
 
     /// No Undo in time: the cancel is final and the audio stays in history.
     func closeUndoWindow(of id: DictationID) async {
+        var cancelled: Recording?
+        var ended: (audio: RecordedAudio?, latency: LatencyLog)?
         await inTurn {
             guard let current = paused, current.item.id == id, !current.countdown.isHeld else { return }
-            await cancel(current.item)
+            cancelled = current.item
+            ended = await endCancelled(current.item)
+            emit(inFlightPhase)
+            cancelSaves += 1
         }
+        // The History save comes after the turn, so a press now records at once; quit waits for it.
+        guard let cancelled, let ended else { return }
+        await keep(cancelled, audio: ended.audio, latency: ended.latency, as: .cancelled)
+        cancelSaves -= 1
+        if cancelSaves == 0 { cancelSaveWaiters.resumeAll() }
     }
 
     /// Drops a recording that turned out to be part of another app's shortcut: no row, no file, no cue. A file that

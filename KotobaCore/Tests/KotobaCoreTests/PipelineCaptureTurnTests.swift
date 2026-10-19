@@ -98,4 +98,67 @@ struct PipelineCaptureTurnTests {
         #expect(await world.provider.requests.isEmpty)
         #expect(await world.store.records.map(\.status) == [.pending])
     }
+
+    /// A resume that never returns (a stuck rebuild) holds the turn: quit still returns within its bound.
+    @Test func quitWaitsForAStuckResumeNoLongerThanItsBound() async throws {
+        let world = FakeWorld(transcript: "unused")
+        let pipeline = world.makePipeline()
+        await pipeline.tap(world)
+        await pipeline.handle(.escape)
+        let gate = Gate()
+        await world.audio.holdResume(at: gate)
+
+        async let undone: Void = pipeline.undo()
+        #expect(await eventually { await gate.hasWaiters })
+        async let quit: Void = pipeline.shutdown()
+        #expect(await eventually { await pipeline.turnWaiterCount == 1 })
+        world.clock.advance(by: DictationPipeline.quitWait)
+        await quit
+
+        #expect(await world.provider.requests.isEmpty)
+        await gate.open()
+        await undone
+    }
+
+    /// The end of the Undo window closes the capture in its turn; the History save comes after it, so a press then
+    /// records at once.
+    @Test func aPressAfterTheUndoWindowEndsDoesNotWaitForTheHistorySave() async throws {
+        let world = FakeWorld(transcript: "second")
+        let pipeline = world.makePipeline()
+        await pipeline.tap(world)
+        await pipeline.handle(.escape)
+        let disk = Gate()
+        await world.store.holdSaves(at: disk)
+
+        world.clock.advance(by: .seconds(5))
+        #expect(await eventually { await disk.hasWaiters })
+        await pipeline.handle(.chordDown(.tapOrHold))
+
+        #expect(await world.audio.isCapturing)
+        #expect(await world.audio.files.count == 2)
+        await disk.open()
+        await pipeline.handle(.chordUp)
+        await pipeline.tap(world)
+        await pipeline.settle()
+        #expect(await world.store.records.map(\.status) == [.cancelled, .pasted])
+    }
+
+    /// Quit during that save waits for it, so the cancelled recording keeps its row.
+    @Test func quitDuringTheSaveAfterTheUndoWindowKeepsTheRow() async throws {
+        let world = FakeWorld(transcript: "unused")
+        let pipeline = world.makePipeline()
+        await pipeline.tap(world)
+        await pipeline.handle(.escape)
+        let disk = Gate()
+        await world.store.holdSaves(at: disk)
+        world.clock.advance(by: .seconds(5))
+        #expect(await eventually { await disk.hasWaiters })
+
+        async let quit: Void = pipeline.shutdown()
+        #expect(await eventually { await pipeline.cancelSaveWaiterCount == 1 })
+        await disk.open()
+        await quit
+
+        #expect(await world.store.records.map(\.status) == [.cancelled])
+    }
 }

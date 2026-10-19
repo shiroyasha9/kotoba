@@ -40,7 +40,15 @@ actor FakeStore: Store {
         discarded.insert(id)
     }
 
+    /// When set, `save` waits for this gate, as a busy database.
+    private var saveGate: Gate?
+
+    func holdSaves(at gate: Gate) {
+        saveGate = gate
+    }
+
     func save(_ record: DictationRecord) async throws {
+        await saveGate?.pass()
         addToLedger(record)
         records.removeAll { $0.id == record.id }
         records.append(record)
