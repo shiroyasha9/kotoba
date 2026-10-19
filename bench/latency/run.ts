@@ -20,11 +20,13 @@ import {
 	loadClips,
 	loadDictionary,
 	loadReferences,
+	mulberry32,
 	paths,
 	seededSample,
 } from "../data.ts";
 import { API, Budget, appendJsonl, authHeaders, readJsonl, spentUsd } from "../openrouter.ts";
 import { fmtMs, percentile, score } from "../report.ts";
+import { normalize, wer } from "../score.ts";
 import { LISTED_USD_PER_SEC, MAI, biasTerms } from "../stt.ts";
 
 /** Default cap on this probe's raw file, across runs. */
@@ -43,6 +45,7 @@ const EXPERIMENTS = [
 	"segments",
 	"hedgecold",
 	"coldcodec",
+	"segrules",
 	"report",
 	"score",
 ] as const;
@@ -82,6 +85,13 @@ const { values } = parseArgs({
 		min: { type: "string", default: "10" },
 		max: { type: "string", default: "20" },
 		codecs: { type: "string", default: "opus24,opus16" },
+		// The segrules experiment: pause-split rules, s<min segment s>p<min pause s>[o<overlap s>], and whole-clip runs.
+		rules: { type: "string", default: "s15p0.4,s15p0.8,s25p0.8,s15p0.4o1" },
+		wholes: { type: "string", default: "2" },
+		// The coldcodec experiment: the sets to alternate, flac and opus (with the large primer), opus-silent (without).
+		cold: { type: "string", default: "flac,opus" },
+		// segrules scoring: only the clips this rule cut at least once.
+		"cut-by": { type: "string" },
 		// The models experiment: every model only on zero-data-retention endpoints (as the app sends MAI).
 		zdr: { type: "boolean", default: false },
 		// The primer experiment: which primers to compare (default all of PRIMERS).
@@ -158,7 +168,7 @@ type Row = {
 	/** The transcript, for the WER of a request shape (`--exp score`). Rows before 2026-10-19 have none. */
 	text?: string | null;
 	/** A segment of a longer clip (`--exp segments`): its index from 0, the count, and where it starts. */
-	segment?: { index: number; count: number; startSec: number };
+	segment?: { index: number; count: number; startSec: number; rule?: string };
 	error?: string;
 };
 
@@ -311,8 +321,10 @@ async function encoded(clipId: string, codec: string): Promise<string> {
 
 /** Where a recording split at pauses would cut: the middle of the first pause of 0.4 s or more (under -40 dB) that starts
  * `SEGMENT_SEC` or more after the last cut. An app that uploads during the recording cuts at such a pause. */
-async function cuts(file: string, durationSec: number): Promise<number[]> {
-	const log = await $`ffmpeg -hide_banner -nostats -i ${file} -af silencedetect=noise=-40dB:d=0.4 -f null -`.quiet().nothrow();
+async function cuts(file: string, durationSec: number, minSegmentSec = SEGMENT_SEC, minPauseSec = 0.4): Promise<number[]> {
+	const log = await $`ffmpeg -hide_banner -nostats -i ${file} -af silencedetect=noise=-40dB:d=${minPauseSec} -f null -`
+		.quiet()
+		.nothrow();
 	const text = log.stderr.toString();
 	const starts = [...text.matchAll(/silence_start: ([\d.]+)/g)].map((m) => Number(m[1]));
 	const ends = [...text.matchAll(/silence_end: ([\d.]+)/g)].map((m) => Number(m[1]));
@@ -321,7 +333,7 @@ async function cuts(file: string, durationSec: number): Promise<number[]> {
 	starts.forEach((start, i) => {
 		const end = ends[i] ?? durationSec;
 		// A cut in the last 2 s would leave a segment too short to test the tail.
-		if (start - last >= SEGMENT_SEC && end < durationSec - 2) {
+		if (start - last >= minSegmentSec && end < durationSec - 2) {
 			// On a 10 ms grid: ffmpeg's FLAC encoder fails on a cut that leaves a first frame of a few samples.
 			const cut = Math.round((start + end) * 50) / 100;
 			out.push(cut);
@@ -590,6 +602,43 @@ async function plan(): Promise<Job[][]> {
 			}
 			return rounds;
 		}
+		case "segrules": {
+			// Which pause rule keeps the WER of the whole clip? Each long clip whole (`--wholes` times, the noise floor),
+			// then cut by each rule (`--rules`); a rule with an overlap starts each later segment that much before its cut.
+			// Rounds go `--parallel` at once: this is a quality pass. WER: `--exp score`.
+			const rules = values.rules.split(",").map((rule) => {
+				const m = rule.match(/^s([\d.]+)p([\d.]+)(?:o([\d.]+))?$/);
+				if (!m) fail(`--rules takes s<sec>p<sec>[o<sec>], not ${rule}`);
+				return { rule, segment: Number(m[1]), pause: Number(m[2]), overlap: Number(m[3] ?? 0) };
+			});
+			const clips = await pick(Number(values.min), Number(values.max), clipCount);
+			const wholes = Number(values.wholes);
+			const rounds: Job[][] = [];
+			for (const c of clips) {
+				const flac = audioPath(p, c.clipId, "flac");
+				for (let w = 0; w < wholes; w++) {
+					rounds.push([{ exp, variant: { ...APP, key: w ? `whole-${w + 1}` : "whole" }, clipId: c.clipId, file: flac, durationSec: c.durationSec }]);
+				}
+				for (const r of rules) {
+					const bounds = [0, ...(await cuts(flac, c.durationSec, r.segment, r.pause))];
+					for (const [i, cut] of bounds.entries()) {
+						const from = i ? Math.max(0, Math.round((cut - r.overlap) * 100) / 100) : 0;
+						const to = bounds[i + 1] ?? null;
+						rounds.push([
+							{
+								exp,
+								variant: { ...APP, key: `${r.rule}:${i === bounds.length - 1 ? "last" : "segment"}` },
+								clipId: c.clipId,
+								file: await piece(c.clipId, from, to),
+								durationSec: (to ?? c.durationSec) - from,
+								segment: { index: i, count: bounds.length, startSec: from, rule: r.rule },
+							},
+						]);
+					}
+				}
+			}
+			return rounds;
+		}
 		case "hedgecold": {
 			// The app's cold path, then the same request twice at once: after `HEDGE_QUIET_SEC` quiet the silent primer, the
 			// large one when it answered, and `HEDGE_RECORDING_SEC` after the silent one the clip as two requests (A, B), then
@@ -623,14 +672,21 @@ async function plan(): Promise<Job[][]> {
 			await Bun.write(silence, Buffer.from(PRIMER_AUDIO, "base64"));
 			const large = join(out, "audio", "noise-1s-app.wav");
 			if (!(await Bun.file(large).exists())) fail(`copy the app's large primer to ${large}`);
+			const kinds = values.cold.split(",");
+			const unknown = kinds.filter((k) => !["flac", "opus", "opus-silent"].includes(k));
+			if (unknown.length) fail(`--cold takes flac, opus, opus-silent; not ${unknown.join(", ")}`);
 			return Promise.all(
 				clips.map(async (c, i) => {
-					const opus = i % 2 === 1;
+					const kind = kinds[i % kinds.length]!;
+					const opus = kind !== "flac";
 					const file = opus ? await encoded(c.clipId, "apple24") : audioPath(p, c.clipId, "flac");
 					return [
 						{ exp, variant: { ...APP, key: "primer-silent", phrases: false }, clipId: "primer", file: silence, durationSec: 0.5, idleBefore: HEDGE_QUIET_SEC },
-						{ exp, variant: { ...APP, key: "primer-large", phrases: false }, clipId: "primer", file: large, durationSec: 1, after: "previous" },
-						{ exp, variant: { ...APP, key: opus ? "apple24" : "app" }, clipId: c.clipId, file, durationSec: c.durationSec, delayMs: HEDGE_RECORDING_SEC * 1000 },
+						// Without the large primer, the silent one alone, as on a warm route.
+						...(kind === "opus-silent"
+							? []
+							: [{ exp, variant: { ...APP, key: "primer-large", phrases: false }, clipId: "primer", file: large, durationSec: 1, after: "previous" } satisfies Job]),
+						{ exp, variant: { ...APP, key: kind === "flac" ? "app" : kind === "opus" ? "apple24" : "apple24-silent-only" }, clipId: c.clipId, file, durationSec: c.durationSec, delayMs: HEDGE_RECORDING_SEC * 1000 },
 					] satisfies Job[];
 				}),
 			);
@@ -702,7 +758,71 @@ async function scoreRows(): Promise<void> {
 	}
 }
 
+/** `next` joined to `prev`, with the words an overlap heard twice dropped: the longest run (up to 12 words) that ends
+ * `prev` and starts `next`, compared normalized. */
+function joinOverlap(prev: string, next: string): string {
+	const a = prev.trim().split(/\s+/);
+	const b = next.trim().split(/\s+/);
+	const key = (words: string[]) => normalize(words.join(" ")).join(" ");
+	for (let k = Math.min(12, a.length, b.length); k > 0; k--) {
+		if (key(a.slice(-k)) && key(a.slice(-k)) === key(b.slice(0, k))) return [...a, ...b.slice(k)].join(" ");
+	}
+	return [...a, ...b].join(" ");
+}
+
+/** segrules: WER per variant on the clips every variant answered, and each against `whole` as a paired bootstrap. */
+async function scoreRules(): Promise<void> {
+	const rows = (await readJsonl<Row>(raw)).filter((r) => r.exp === "segrules" && r.ok && typeof r.text === "string");
+	if (!rows.length) return;
+	const { clips } = await loadClips(p);
+	const owner = await loadReferences(p);
+	const refOf = new Map(clips.map((c) => [c.id, owner.get(c.id)?.text ?? c.reference]));
+	const texts = new Map<string, Map<string, string>>();
+	const put = (v: string, id: string, t: string) => texts.set(v, (texts.get(v) ?? new Map()).set(id, t));
+	for (const r of rows) if (!r.segment && !texts.get(r.variant)?.has(r.clipId)) put(r.variant, r.clipId, r.text!);
+	const parts = new Map<string, Map<number, Row>>();
+	for (const r of rows) {
+		if (!r.segment?.rule) continue;
+		const key = `${r.segment.rule}|${r.clipId}`;
+		const m = parts.get(key) ?? new Map<number, Row>();
+		if (!m.has(r.segment.index)) m.set(r.segment.index, r);
+		parts.set(key, m);
+	}
+	for (const [key, m] of parts) {
+		const [rule, id] = key.split("|") as [string, string];
+		const count = m.values().next().value!.segment!.count;
+		if (m.size !== count) continue;
+		const ordered = [...Array(count).keys()].map((i) => m.get(i)!.text!.trim());
+		const overlap = /o[\d.]+$/.test(rule);
+		put(rule, id, ordered.reduce((acc, t) => (acc ? (overlap ? joinOverlap(acc, t) : `${acc} ${t}`) : t), ""));
+	}
+	const cutBy = values["cut-by"];
+	const cut = new Set(
+		rows.filter((r) => r.segment?.rule === cutBy && (r.segment?.count ?? 0) > 1).map((r) => r.clipId),
+	);
+	const ids = [...refOf.keys()].filter(
+		(id) => [...texts.values()].every((m) => m.has(id)) && (!cutBy || cut.has(id)),
+	);
+	console.log(`segrules: ${ids.length} clips answered by every variant${cutBy ? `, cut by ${cutBy}` : ""}`);
+	const perClip = (v: string) => ids.map((id) => wer(refOf.get(id)!, texts.get(v)!.get(id)!));
+	const base = perClip("whole");
+	for (const v of texts.keys()) {
+		const mine = perClip(v);
+		const rate = (idx: number[], list: typeof mine) => idx.reduce((t, i) => t + list[i]!.errors, 0) / idx.reduce((t, i) => t + list[i]!.refWords, 0);
+		const all = ids.map((_, i) => i);
+		const rand = mulberry32(20261020);
+		const diffs = Array.from({ length: 4000 }, () => {
+			const idx = all.map(() => Math.floor(rand() * all.length));
+			return rate(idx, mine) - rate(idx, base);
+		}).sort((x, y) => x - y);
+		const errors = mine.reduce((t, w) => t + w.errors, 0);
+		const words = mine.reduce((t, w) => t + w.refWords, 0);
+		console.log(`  ${v}: WER ${((100 * errors) / words).toFixed(2)}% (${errors}/${words}); against whole ${(100 * (rate(all, mine) - rate(all, base))).toFixed(2)} pp, 95% CI [${(100 * diffs[100]!).toFixed(2)}, ${(100 * diffs[3899]!).toFixed(2)}]`);
+	}
+}
+
 if (exp === "score") {
+	await scoreRules();
 	await scoreRows();
 	process.exit(0);
 }
