@@ -871,3 +871,14 @@ The mic input's lifecycle moved from App/ into KotobaCore's `AudioCapture` behin
 | 984 | AirPods first in your order. Start a dictation on AirPods, speak, and start a FaceTime call while you speak (the headset changes to the call format), then stop | As row 930: the stop takes under half a second, the text has what you said before the call, no “No sound from the mic” | |
 | 985 | Start a dictation, press Esc, unplug the mic in use (or take out AirPods) within the 5 s, then click **Undo** | The recording goes on with the next mic; the text after Undo is at normal pitch | |
 | 986 | Run `sudo killall coreaudiod`, wait 5 s, then dictate | The dictation records and pastes with no “No microphone found”; the log shows “Rebuilding the mic input: audio service restarted” | |
+
+### One capture at a time, and quit waits for billed answers (2026-10-20)
+
+A press, an Undo, an absence and quit take turns (`DictationPipeline.inTurn`), and quit waits for billed work (`PendingWork.bill`). Only a real run proves the timing.
+
+| # | Do this | Expect | Result |
+|---|---|---|---|
+| 987 | Start a dictation, speak, press Esc, then click **Undo** on the pill and press the chord at once (the same moment) | One dictation pastes with the words from before and after Esc; History shows one row; no second recording starts | |
+| 988 | Start a dictation, speak, press Esc, click **Undo** and press ⌘Q at once | kotoba quits; at the next launch the dictation is in Recovered (sent once) | |
+| 989 | In History, choose **Transcribe Again** on a dictation and press ⌘Q at once | kotoba quits within about 3 s; at the next launch the row has the new text and Insights counts the second answer | |
+| 990 | AirPods as the system default, none in your order. Dictate (built-in mic). Then, if you can make the built-in mic fail to open (for example, another app holds it exclusively), dictate again | The first dictation records on the built-in mic. With the built-in mic not opening, the pill says no mic opened; the AirPods never switch to call quality | |
