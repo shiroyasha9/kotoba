@@ -249,7 +249,7 @@ extension DictationNotice {
         switch self {
         case .failed, .timedOut, .connectionBlocked, .hostNotFound: .retry
         case .needsSetup(_, let item): item.pillAction
-        case .recovered: .copy
+        case .recovered(let id): .copy(id)
         case .copied: context.isPasteAllowed ? nil : .allowPasting
         case .captureFailed: context.isMicrophoneOff ? .openMicrophoneSettings : nil
         case .polished(let id, isReplaced: true): .undoPolish(id)

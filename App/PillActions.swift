@@ -11,7 +11,8 @@ enum PillAction: Sendable, Equatable {
     case addKey
     case openSpeechSettings
     case addCredit
-    case copy
+    /// Puts recovered dictation `id` on the clipboard.
+    case copy(DictationID)
     case allowPasting
     case openMicrophoneSettings
     /// Opens Settings > Microphone, from the no-sound warning.
@@ -50,8 +51,7 @@ extension AppDelegate {
             mainWindow.show(selecting: action.settingsPane)
         case .addCredit:
             NSWorkspace.shared.open(routeSettings.route.account.creditsPage)
-        case .copy:
-            guard case .recovered(let id) = shell.dictation.notice else { return }
+        case .copy(let id):
             copyRecovered(id)
         case .allowPasting:
             setup.allowPasting()

@@ -213,6 +213,13 @@ custom_rules:
     excluded_match_kinds: [comment, doccomment, string]
     message: "Decide what the menu bar icon, the menus, the Dock badge and the cues show in `ShellStatus` (KotobaCore), with a test; AppDelegate and AppMenu only collect its facts and draw its output (CODING_STANDARDS.md, Layout)."
     severity: error
+  pill_action_carries_its_facts:
+    name: "A pill action carries its facts"
+    included: ["App/.*\\.swift"]
+    regex: "\\bshell\\.dictation\\.(?:notice|phase)\\b"
+    excluded_match_kinds: [comment, doccomment, string]
+    message: "A pill button acts on what its `PillAction` carries (such as `.copy(id)`), not on the shell's last state: the next state can come between the draw and the click."
+    severity: error
   status_text_key_names:
     name: "Status text: keys as symbols"
     included: ["App/StatusText\\.swift", "KotobaCore/Sources/KotobaCore/ShellStatus\\.swift"]
