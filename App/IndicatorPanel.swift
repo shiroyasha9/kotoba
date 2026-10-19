@@ -48,14 +48,15 @@ final class IndicatorPanel {
     /// Built on first show and kept. Building it at launch costs about 4.8 MB and 158 ms, and a
     /// release after hide frees almost nothing (docs/research/memory-spike.md).
     private var built: (panel: NSPanel, pill: IndicatorPillView)?
-    private var panel: NSPanel { build().panel }
-    private var pill: IndicatorPillView { build().pill }
+    var panel: NSPanel { build().panel }
+    var pill: IndicatorPillView { build().pill }
     /// The screen the pill shows on; chosen each time it appears.
-    private var screen: NSScreen?
-    private var dropTargets: DropTargets?
+    var screen: NSScreen?
+    var dropTargets: DropTargets?
     /// The pill's horizontal content width when the drag began, for the bottom target.
-    private var dropTargetWidth: CGFloat = 0
+    var dropTargetWidth: CGFloat = 0
     private var screenObserver: (any NSObjectProtocol)?
+    private var spaceObserver: (any NSObjectProtocol)?
     /// The pill's timer, the same one its bar shows. `task` waits for the deadline of a timer that hides the pill.
     private struct Timer {
         var countdown: Countdown
@@ -145,6 +146,7 @@ final class IndicatorPanel {
         place(animated: wasVisible)
         if !wasVisible {
             panel.orderFrontRegardless()
+            Self.rejoinAllSpaces(panel)
         }
         // A pill that appears under a still pointer gets no mouse-entered event, but its exit must still come.
         isHovering = panel.frame.insetBy(dx: Self.shadowMargin, dy: Self.shadowMargin).contains(NSEvent.mouseLocation)
@@ -208,6 +210,11 @@ final class IndicatorPanel {
             forName: NSApplication.didChangeScreenParametersNotification, object: nil, queue: .main
         ) { [weak self] _ in
             MainActor.assumeIsolated { self?.screenParametersChanged() }
+        }
+        spaceObserver = NSWorkspace.shared.notificationCenter.addObserver(
+            forName: NSWorkspace.activeSpaceDidChangeNotification, object: nil, queue: .main
+        ) { [weak self] _ in
+            MainActor.assumeIsolated { self?.built.map { Self.rejoinAllSpaces($0.panel) } }
         }
         built = (panel, pill)
         return (panel, pill)
@@ -308,42 +315,5 @@ extension IndicatorPanel {
             self.screen = NSScreen.focused
         }
         place(animated: false)
-    }
-}
-
-// MARK: Drag
-
-extension IndicatorPanel {
-    private func beginDrag() {
-        guard let screen else { return }
-        dropTargetWidth = pill.fittingWidth
-        pill.layout = .round
-        dropTargets = DropTargets(in: screen.visibleFrame, contentWidth: dropTargetWidth, below: panel)
-    }
-
-    private func moveDrag(to point: NSPoint) {
-        guard let dropTargets else { return }
-        panel.setFrame(
-            Self.windowFrame(around: NSRect(IndicatorPlacement.dragFrame(centeredAt: ScreenPoint(point)))),
-            display: true)
-        if let pointerScreen = NSScreen.screens.first(where: { $0.frame.contains(point) }), pointerScreen != screen {
-            screen = pointerScreen
-            dropTargets.close()
-            self.dropTargets = DropTargets(
-                in: pointerScreen.visibleFrame, contentWidth: dropTargetWidth, below: panel)
-        }
-        guard let screen else { return }
-        self.dropTargets?.highlight(
-            IndicatorPlacement.nearestAnchor(to: ScreenPoint(point), in: ScreenRect(screen.visibleFrame)))
-    }
-
-    /// Snaps to the anchor nearest `point` and saves it. Without a point (the pill hid during the
-    /// drag) only the drop targets go.
-    private func endDrag(at point: NSPoint? = nil) {
-        guard let dropTargets else { return }
-        dropTargets.close()
-        self.dropTargets = nil
-        guard let point, let screen else { return }
-        anchor = IndicatorPlacement.nearestAnchor(to: ScreenPoint(point), in: ScreenRect(screen.visibleFrame))
     }
 }

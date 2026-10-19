@@ -98,4 +98,55 @@ extension IndicatorPanel {
         panel.isExcludedFromWindowsMenu = true
         return panel
     }
+
+    /// Puts a shown panel back on every Space when it is not on the one the owner is on. A panel made here joins all
+    /// Spaces, but the window server can drop a Space from a long-lived one: on 2026-10-19 the pill (and Dia's floating
+    /// panel) was on every Space but Desktop 1, while a new panel joined all of them. Setting the behavior again does
+    /// nothing, and a clear and a set in one Core Animation transaction send no change; the flush sends the clear
+    /// first, so the set joins every Space again (10 of 10 broken panels in a spike, 0 of 4 without the flush).
+    static func rejoinAllSpaces(_ panel: NSPanel) {
+        guard panel.isVisible, !panel.isOnActiveSpace else { return }
+        Log.app.info("Indicator rejoins all Spaces")
+        let behavior = panel.collectionBehavior
+        panel.collectionBehavior = []
+        CATransaction.flush()
+        panel.collectionBehavior = behavior
+    }
+}
+
+// MARK: Drag
+
+extension IndicatorPanel {
+    func beginDrag() {
+        guard let screen else { return }
+        dropTargetWidth = pill.fittingWidth
+        pill.layout = .round
+        dropTargets = DropTargets(in: screen.visibleFrame, contentWidth: dropTargetWidth, below: panel)
+    }
+
+    func moveDrag(to point: NSPoint) {
+        guard let dropTargets else { return }
+        panel.setFrame(
+            Self.windowFrame(around: NSRect(IndicatorPlacement.dragFrame(centeredAt: ScreenPoint(point)))),
+            display: true)
+        if let pointerScreen = NSScreen.screens.first(where: { $0.frame.contains(point) }), pointerScreen != screen {
+            screen = pointerScreen
+            dropTargets.close()
+            self.dropTargets = DropTargets(
+                in: pointerScreen.visibleFrame, contentWidth: dropTargetWidth, below: panel)
+        }
+        guard let screen else { return }
+        self.dropTargets?.highlight(
+            IndicatorPlacement.nearestAnchor(to: ScreenPoint(point), in: ScreenRect(screen.visibleFrame)))
+    }
+
+    /// Snaps to the anchor nearest `point` and saves it. Without a point (the pill hid during the
+    /// drag) only the drop targets go.
+    func endDrag(at point: NSPoint? = nil) {
+        guard let dropTargets else { return }
+        dropTargets.close()
+        self.dropTargets = nil
+        guard let point, let screen else { return }
+        anchor = IndicatorPlacement.nearestAnchor(to: ScreenPoint(point), in: ScreenRect(screen.visibleFrame))
+    }
 }
