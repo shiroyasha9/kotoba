@@ -6,6 +6,9 @@
 # The providers' upload lines ("upload <model>: reused ..., upload N ms, wait N ms") are summed apart: `wait` is the
 # last body byte handed to the network stack to the first byte of the answer. Primer lines ("upload primer <model>:")
 # are summed on their own; cleanup lines ("upload cleanup ...") are left out.
+# Dictations of 20 s and more are also split by segment upload (`SegmentUpload`): "cut at pauses" (the line has
+# segments=N tailMs=N: the stop waited for the copy after the last cut), "whole after a failed segment" (whole=1), or
+# "not cut"; the stop to Cmd-V sent of the first against the last is the gain in real use.
 # Each set is split by the quiet time before it: for a dictation from the last paste to its key-down, for an upload line
 # since the previous upload. The upstream path of OpenRouter answers slower after a quiet minute
 # (docs/research/latency-pass.md).
@@ -69,6 +72,17 @@ lines |
       emit(set " ~ 5 response to Cmd-V sent (replacements, save, chord release, paste)", m["pasteSent"] - m["response"])
       if ("connected" in m) emit(set " ~ 6 new connection after the stop (count)", 1)
     }
+    if (m["audioMs"] >= 20000) {
+      cut = !("segments" in m) ? "not cut" : ("whole" in m) ? "whole after a failed segment" : "cut at pauses"
+      set = "20 s and more " m["model"] ", " cut
+      emit(set " ~ 0 stop to Cmd-V sent", m["pasteSent"] - m["stop"])
+      emit(set " ~ 0 stop to Cmd-V sent, " gap, m["pasteSent"] - m["stop"])
+      emit(set " ~ 2 uploadStart to response (the last answer)", m["response"] - m["uploadStart"])
+      if ("uploadSent" in m && "firstByte" in m) emit(set " ~ 3 uploadSent to firstByte (server)", m["firstByte"] - m["uploadSent"])
+      if ("tailMs" in m) emit(set " ~ 7 audio after the last cut", m["tailMs"])
+      # whole=1: the segment requests, then one for the whole recording.
+      if ("segments" in m) emit(set " ~ 8 requests per dictation (number)", m["segments"] + ("whole" in m ? 1 : 0))
+    }
     next
   }
   # The primer sent at the announcement (TranscriptionProvider.prime): its own wait, apart from the dictations.
@@ -96,6 +110,7 @@ lines |
     sub(/^[0-9] /, "", step)
     p50 = pct(0.5); p90 = pct(0.9)
     if (step ~ /\(count\)/) { printf "  %s: %d\n", step, n; return }
+    if (step ~ /\(number\)/) { printf "  %s: n %d, p50 %d, p90 %d, max %d\n", step, n, p50, p90, ms[n]; return }
     verdict = ""
     if (head ~ /^10-20 s/ && step == "stop to Cmd-V sent") {
       verdict = sprintf(" (gate %s)", (p50 <= p50gate && p90 <= p90gate) ? "PASS" : "FAIL")

@@ -86,7 +86,7 @@ struct TranscriptDelivery: Sendable {
             (record.status, pasted) = await pasteTranscript(
                 record.cleanedText ?? transcribed.text, submits: transcribed.submits, job: job, gate: gate,
                 latency: &latency)
-            Self.log(latency, of: job, model: record.model)
+            Self.log(latency, of: job, model: record.model, segments: transcribed.segments)
         }
         record.latency = latency
         // The answers' ledger entries go with this save. A crash between the answer and here (at most the cleanup and
@@ -136,12 +136,20 @@ struct TranscriptDelivery: Sendable {
     }
 
     /// One notice line per transcribed dictation. Notice, not info: the system keeps notice lines on disk, so
-    /// `make latency-log` reads them from `log show`.
-    private static func log(_ latency: LatencyLog, of job: Job, model: String?) {
+    /// `make latency-log` reads them from `log show`. A cut recording adds its requests and how its text came:
+    /// `segments=3 tailMs=4100` (joined; the copy after the last cut, the one the stop waited for) or `segments=3
+    /// whole=1` (a segment failed: the whole recording went).
+    private static func log(_ latency: LatencyLog, of job: Job, model: String?, segments: SegmentUpload.Use) {
+        let cut =
+            switch segments {
+            case .one: ""
+            case .joined(let count, let tail): " segments=\(count) tailMs=\(Int(tail / .milliseconds(1)))"
+            case .whole(let count): " segments=\(count) whole=1"
+            }
         Log.latency.notice(
             """
             \(job.id.rawValue) model=\(model ?? UsageEntry.unknownModel, privacy: .public) \
-            audioMs=\(Int(job.audio.duration / .milliseconds(1)), privacy: .public) \
+            audioMs=\(Int(job.audio.duration / .milliseconds(1)), privacy: .public)\(cut, privacy: .public) \
             \(latency.summary, privacy: .public)
             """)
     }
