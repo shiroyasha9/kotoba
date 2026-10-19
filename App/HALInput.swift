@@ -6,25 +6,27 @@ import KotobaCore
 import Synchronization
 
 /// Mic input from one device through the HAL output unit (AUHAL) with output disabled, as Apple's
-/// TN2091 describes. AVAudioEngine's input node records through an aggregate of the system default
-/// input and output on macOS 26+: a mic other than the default does not stay selected, and a
-/// Bluetooth default is opened (dropped to the call profile) even when kotoba records from another
-/// mic (crash of 2026-10-16). The unit is initialized while idle and runs only between `start` and
-/// `stop`, so the mic is on only while recording.
-final class HALInput {
+/// TN2091 describes (`HALCaptureHardware.openInput`). AVAudioEngine's input node records through an
+/// aggregate of the system default input and output on macOS 26+: a mic other than the default does
+/// not stay selected, and a Bluetooth default is opened (dropped to the call profile) even when kotoba
+/// records from another mic (crash of 2026-10-16). The unit is initialized while idle and runs only
+/// between `start` and `stop`, so the mic is on only while recording.
+final class HALInput: CaptureInput {
+    /// A format that is not safe to record throws `InputFormatPolicy.Rejection` instead.
     enum Failure: Error {
         /// The HAL output unit is not installed (it ships with macOS, so this should not happen).
         case noComponent
         /// The unit was created without an error but no instance came back.
         case noInstance
         case audioUnit(step: String, status: OSStatus)
-        case format(InputFormatPolicy.Rejection)
     }
 
     /// The device's sample rate; the ring receives mono Float32 samples at this rate.
     let sampleRate: Double
     private let unit: AudioUnit
     private let renderer: Renderer
+    /// Kept so the ring outlives the unit's callbacks, which reach it unowned through the renderer.
+    private let ring: SampleRing
     private let device: AudioObjectID
     private let listener: AudioObjectPropertyListenerBlock
     private static let watchedProperties = [kAudioDevicePropertyNominalSampleRate, kAudioDevicePropertyDeviceIsAlive]
@@ -32,6 +34,7 @@ final class HALInput {
     /// `onChange` runs on the main queue when the device's sample rate changes or the device dies.
     init(device: AudioObjectID, ring: SampleRing, onChange: @escaping @Sendable () -> Void) throws {
         unit = try Self.makeUnit()
+        self.ring = ring
         self.device = device
         do {
             (sampleRate, renderer) = try Self.configure(unit, device: device, ring: ring)
@@ -105,7 +108,7 @@ final class HALInput {
             channelCount: hardware.mChannelsPerFrame,
             deviceSampleRate: AudioDevices.nominalSampleRate(of: device)
         ) {
-            throw Failure.format(rejection)
+            throw rejection
         }
         // The unit converts sample format and channel count, not sample rate, so the client takes the
         // device rate. Without a channel map the unit passes device channels 1:1 from the first
@@ -225,8 +228,8 @@ final class SettlingInput {
 /// Only the real-time IO thread touches the buffers.
 private final class Renderer {
     let unit: AudioUnit
-    /// Unowned, so the IO thread does no retain or release: `AudioCapture` owns the ring for its whole
-    /// life and owns every `HALInput`, whose deinit disposes the unit (ending the callbacks) first.
+    /// Unowned, so the IO thread does no retain or release: the `HALInput` that owns this renderer holds
+    /// the ring too, and its deinit disposes the unit (ending the callbacks) first.
     unowned(unsafe) let ring: SampleRing
     let capacity: UInt32
     let buffers: UnsafeMutableAudioBufferListPointer

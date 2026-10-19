@@ -13,16 +13,16 @@ final class AudioDeviceObservation: Sendable {
         let block: AudioObjectPropertyListenerBlock
     }
 
-    private static let watchedProperties: [(AudioObjectPropertySelector, AudioDevices.Change)] = [
+    private static let watchedProperties: [(AudioObjectPropertySelector, AudioDeviceChange)] = [
         (kAudioHardwarePropertyDefaultInputDevice, .devices), (kAudioHardwarePropertyDefaultOutputDevice, .devices),
         (kAudioHardwarePropertyDevices, .devices), (kAudioHardwarePropertyServiceRestarted, .serviceRestarted),
     ]
 
-    private let onChange: @Sendable (AudioDevices.Change) -> Void
+    private let onChange: @Sendable (AudioDeviceChange) -> Void
     /// Changed on the main queue at a restart, and by `init` and `deinit` on the owner's thread.
     private let listeners = Mutex<[Listener]>([])
 
-    init(_ onChange: @escaping @Sendable (AudioDevices.Change) -> Void) {
+    init(_ onChange: @escaping @Sendable (AudioDeviceChange) -> Void) {
         self.onChange = onChange
         addListeners()
     }
@@ -59,7 +59,7 @@ final class AudioDeviceObservation: Sendable {
         }
     }
 
-    private func changed(_ change: AudioDevices.Change) {
+    private func changed(_ change: AudioDeviceChange) {
         if change == .serviceRestarted {
             removeListeners()
             addListeners()
@@ -110,18 +110,9 @@ enum AudioDevices {
         all().filter(\.hasInput)
     }
 
-    enum Change: Sendable {
-        /// The default input or output changed (the output feeds the Bluetooth mic warning), or a device connected or
-        /// disconnected.
-        case devices
-        /// The audio service (coreaudiod) restarted, after a crash or `killall coreaudiod`: every device id, unit
-        /// and listener from before is stale (AudioHardware.h).
-        case serviceRestarted
-    }
-
     /// Calls `onChange` on the main queue on each change, until the returned value is released: the app keeps one for
     /// its whole life, a window only while it is open.
-    static func observe(_ onChange: @escaping @Sendable (Change) -> Void) -> AudioDeviceObservation {
+    static func observe(_ onChange: @escaping @Sendable (AudioDeviceChange) -> Void) -> AudioDeviceObservation {
         AudioDeviceObservation(onChange)
     }
 

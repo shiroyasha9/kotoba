@@ -8,12 +8,11 @@ import os
 /// Drains the ring on its own thread, converts to 16 kHz mono Int16 and writes FLAC.
 /// The file, converter and read position are used only on that thread; `control` is the only
 /// state shared with the actor.
-final class CaptureWriter: @unchecked Sendable {
+final class CaptureWriter: CaptureRecorder, @unchecked Sendable {
     private struct Control {
         var stopHostTime: UInt64?
         var stopsNow = false
         var pendingSampleRate: Double?
-        var hasReportedInputLoss = false
         var rateSwitched: CheckedContinuation<Void, Never>?
         var finished: CheckedContinuation<RecordedAudio, Never>?
         /// Ends a stop that waits for audio from a vanished device; cancelled when the file closes.
@@ -82,10 +81,12 @@ final class CaptureWriter: @unchecked Sendable {
         thread.start()
     }
 
-    /// Returns once the audio up to `hostTime` is written and the file is closed. A device that
-    /// stops delivering ends the wait after 300 ms.
-    func stop(after hostTime: UInt64) async -> RecordedAudio {
-        await withCheckedContinuation { continuation in
+    /// Returns once the audio up to now is written and the file is closed. A device that stops
+    /// delivering ends the wait after 300 ms. The moment is read on the caller's executor
+    /// (`CaptureRecorder.stop`).
+    nonisolated(nonsending) func stop() async -> RecordedAudio {
+        let hostTime = mach_absolute_time()
+        return await withCheckedContinuation { continuation in
             control.withLock { control in
                 control.stopHostTime = hostTime
                 control.finished = continuation
@@ -116,17 +117,6 @@ final class CaptureWriter: @unchecked Sendable {
         }
     }
 
-    /// No mic is open during the capture; the events report it once (`CaptureEvent.inputLost`).
-    func inputLost() {
-        let isFirst = control.withLock { control in
-            defer { control.hasReportedInputLoss = true }
-            return !control.hasReportedInputLoss
-        }
-        if isFirst {
-            events.yield(.inputLost)
-        }
-    }
-
     /// The mic input was rebuilt at a new sample rate. Returns once audio at the old rate is written, or at once when
     /// the capture has ended: a cancel can close the file while the rebuild waits here (`AudioCapture.rebuildInput`).
     func switchSampleRate(to sampleRate: Double) async {
@@ -135,8 +125,6 @@ final class CaptureWriter: @unchecked Sendable {
                 guard !control.isClosed else { return true }
                 control.pendingSampleRate = sampleRate
                 control.rateSwitched = continuation
-                // A new mic is open: its loss is reported again.
-                control.hasReportedInputLoss = false
                 return false
             }
             if isClosed {

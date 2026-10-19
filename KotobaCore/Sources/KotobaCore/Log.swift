@@ -6,6 +6,8 @@ public enum Log {
     /// log apart (App/Install.swift). Package tests log under their runner's id.
     public static let subsystem = Bundle.main.bundleIdentifier ?? "kotoba"
     static let pipeline = Logger(subsystem: subsystem, category: "pipeline")
+    /// The mic input's lifecycle (`AudioCapture`), in the same category as the app's capture adapters.
+    static let audio = Logger(subsystem: subsystem, category: "audio")
     /// One line per dictation with the latency offsets; the providers add one line per upload.
     public static let latency = Logger(subsystem: subsystem, category: "latency")
     /// Points of interest: the latency marks, and the providers' `bodyReady`.

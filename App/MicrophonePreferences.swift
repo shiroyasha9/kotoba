@@ -27,12 +27,4 @@ final class MicrophonePreferences: Sendable {
             Entry(uid: listed, name: listed == uid ? name : names[listed] ?? listed)
         }
     }
-
-    /// The mic to record from among `devices`: the first listed one, else the system default (a
-    /// Bluetooth default replaced by the built-in mic, `InputDevicePolicy`).
-    func preferredInput(among devices: [AudioDevice]) -> AudioDevice? {
-        let defaultInput = AudioDevices.defaultInput()
-        let choice = InputDevicePolicy.preferredInput(defaultInput: defaultInput, devices: devices, order: order)
-        return choice ?? defaultInput
-    }
 }
