@@ -5,7 +5,8 @@ import Foundation
 /// (kotoba quits, a dictation came first, the owner is away, another app is in front), writes it as a transient item
 /// over the owner's clipboard, reads where the owner is, sends the Backspaces, the ⌘V and the Return, and the owner's
 /// clipboard comes back `readSettle` after the paste target read the text (`ClipboardGuard`). A paste that no app read
-/// is reported to the gate. Callers never post a key or write the pasteboard themselves (lint `one_paste_path`).
+/// is reported to the gate. Callers never post a paste key or write a transient item themselves (lint
+/// `one_paste_path`).
 ///
 /// A Sendable struct, not on the pipeline actor: the work between the gate and the ⌘V runs on the clipboard's own
 /// actor and the ports, so a key event never waits for it.
@@ -40,7 +41,8 @@ struct ClipboardPaste: Sendable {
     struct Facts: Sendable {
         var isQuitting = false
         var isPresent = true
-        /// A dictation came since the owner asked: its text is where this one would paste.
+        /// A dictation (or, for Paste Again, a Polish) came since the owner asked: its text is where this one would
+        /// paste.
         var isOvertaken = false
     }
 
@@ -118,8 +120,8 @@ struct ClipboardPaste: Sendable {
         let facts = await gate.facts(for: request)
         guard !facts.isQuitting, !facts.isOvertaken else {
             // Quit returns before a restore could run, so the clipboard is left alone; Paste Last finds the text at
-            // the next launch. A dictation that came first owns the clipboard now.
-            Log.pipeline.info("Not pasted or copied: kotoba is quitting, or a dictation came first")
+            // the next launch. A dictation or Polish that came first owns the clipboard now.
+            Log.pipeline.info("Not pasted or copied: kotoba is quitting, or a dictation or Polish came first")
             return .skipped
         }
         // The owner went to another app after the stop (a late answer) or since asking: the text never goes there, it
@@ -129,8 +131,10 @@ struct ClipboardPaste: Sendable {
             await clipboard.copy(request.text)
             return .copied
         }
+        // The report waits up to `readWait`: it holds no snapshot, which can be up to `PasteboardSnapshot.byteLimit`.
+        let reported = Request(id: request.id, text: request.text, kind: request.kind, app: request.app)
         let write = await clipboard.writeForPaste(request.text, over: snapshot, readBy: clock.now + readWait) {
-            await gate.pasteWentUnread(request, isLeftOnClipboard: $0)
+            await gate.pasteWentUnread(reported, isLeftOnClipboard: $0)
         }
         // Read after the write, right before the ⌘V, so a window switch during the write cannot leave a wrong place.
         let place = place?()
@@ -159,7 +163,8 @@ struct ClipboardPaste: Sendable {
         return now.processID != app.processID
     }
 
-    /// Return right after the Cmd-V, into the same event stream; the chord is already released.
+    /// Return right after the Cmd-V, into the same event stream; the chord is already released. Stricter than the
+    /// paste's rule: an app not known at the stop or now gets no Return, as a Return can run the text as a command.
     private func sendReturn(to app: FrontApp?) async -> Submit {
         guard frontApp()?.processID == app?.processID else {
             Log.pipeline.info("Return not sent: the front app changed after the stop")

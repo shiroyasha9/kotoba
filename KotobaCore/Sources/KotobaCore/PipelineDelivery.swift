@@ -119,20 +119,22 @@ extension DictationPipeline {
 // MARK: - The paste gate
 
 extension DictationPipeline: PasteGate {
-    /// A dictation's paste waits for the chord's release; Paste Again and Polish wait for nothing, and a dictation that
-    /// came since the owner asked overtakes them. Nothing pastes while the owner is away or kotoba quits.
+    /// A dictation's paste waits for the chord's release; Paste Again and Polish wait for nothing. A dictation that
+    /// started since overtakes them, and a Polish overtakes Paste Again. Polish checked the store for a newer
+    /// dictation after its selection; one delivered since then was live at that check. Nothing pastes while the owner
+    /// is away or kotoba quits.
     func facts(for request: ClipboardPaste.Request) async -> ClipboardPaste.Facts {
-        let isFirst: Bool
+        let isOvertaken: Bool
         switch request.kind {
         case .dictation(let stoppingPress, _):
             await waitForChordRelease(after: stoppingPress)
-            isFirst = true
+            isOvertaken = false
         case .again:
-            isFirst = isQuiet
+            isOvertaken = !isQuiet
         case .polish:
-            isFirst = await !isOvertaken(request.id)
+            isOvertaken = isDictationLive
         }
-        return ClipboardPaste.Facts(isQuitting: isQuitting, isPresent: isPresent, isOvertaken: !isFirst)
+        return ClipboardPaste.Facts(isQuitting: isQuitting, isPresent: isPresent, isOvertaken: isOvertaken)
     }
 
     func isSubmitAsked(_ request: ClipboardPaste.Request) -> Bool {

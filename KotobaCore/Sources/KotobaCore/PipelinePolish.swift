@@ -122,7 +122,7 @@ extension DictationPipeline {
         switch outcome {
         case .pasted(let pasted): markPasted(new, at: pasted.place)
         case .copied: break
-        // A dictation came between the selection and the paste.
+        // kotoba quits, or a dictation came after the selection: the field gets its selection back.
         case .skipped: if selection == .selected { await ports.selector?.restoreSelection() }
         }
         return outcome
@@ -141,9 +141,14 @@ extension DictationPipeline {
 
     /// A dictation came since Polish began: one records, waits in its Undo window or is sent, or one newer than `id`
     /// reached the owner. Its text is now where Polish would paste.
-    func isOvertaken(_ id: DictationID) async -> Bool {
-        guard recording == nil, paused == nil, inFlight.isEmpty else { return true }
+    private func isOvertaken(_ id: DictationID) async -> Bool {
+        guard !isDictationLive else { return true }
         return await lastDelivered()?.id != id
+    }
+
+    /// A dictation records, waits in its Undo window or is sent.
+    var isDictationLive: Bool {
+        recording != nil || paused != nil || !inFlight.isEmpty
     }
 
     private func lastDelivered() async -> DictationRecord? {

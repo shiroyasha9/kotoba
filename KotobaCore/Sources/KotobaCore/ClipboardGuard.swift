@@ -78,9 +78,6 @@ actor ClipboardGuard {
     private var earlyReadNumber: Int?
     private let clock: any PipelineClock
 
-    private static let earlyReadRestoreDelay = ClipboardPaste.earlyReadRestoreDelay
-    private static let readSettle = ClipboardPaste.readSettle
-
     init(pasteboard: any Pasteboard, work: PendingWork, clock: any PipelineClock) {
         self.pasteboard = pasteboard
         self.work = work
@@ -144,7 +141,7 @@ actor ClipboardGuard {
         guard let waiting = pending, waiting.write == write else { return }
         waiting.posted.post()
         if waiting.read == .early {
-            restore(after: Self.earlyReadRestoreDelay)
+            restore(after: ClipboardPaste.earlyReadRestoreDelay)
         } else {
             pending?.timer = work.schedule(at: deadline) { await self.readWaitEnded(write) }
         }
@@ -180,14 +177,14 @@ actor ClipboardGuard {
             return
         }
         guard isAfterPaste else {
-            let delay = Self.earlyReadRestoreDelay
+            let delay = ClipboardPaste.earlyReadRestoreDelay
             Log.pipeline.notice("An app read the transient text before the Cmd-V; the restore follows it by \(delay)")
             pending?.read = .early
             if waiting.posted.isPosted { restore(after: delay) }
             return
         }
         pending?.read = .byTarget
-        restore(after: Self.readSettle)
+        restore(after: ClipboardPaste.readSettle)
     }
 
     /// The pending write's clipboard comes back `delay` from now, in place of the wait for its read.
