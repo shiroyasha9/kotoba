@@ -76,7 +76,12 @@ final class IndicatorPanel {
 
     /// Shows the text and the button `StatusText` gives `state`, or the idle pill, or hides the pill.
     func show(_ state: DictationState, context: StatusContext) {
+        let wasNotice = shown?.state.notice
         shown = (state, context)
+        // Only the phase under the notice changed (Polish ended under it): the pill and its timer stay as they are.
+        if let wasNotice, wasNotice == state.notice {
+            return
+        }
         if state == .idle, notice != nil {
             return
         }

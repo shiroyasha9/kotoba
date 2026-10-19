@@ -220,9 +220,9 @@ extension DictationPipeline {
     }
 
     /// Shows `notice` over the phase. A notice shows only while no recording or Undo window does, so the phase under
-    /// it is Polish or the step of the dictations in flight.
+    /// it is `inFlightPhase`.
     func show(_ notice: DictationNotice) {
-        publish(DictationState(live.isRunning(.polish) ? .polishing : inFlightPhase, notice: notice))
+        publish(DictationState(inFlightPhase, notice: notice))
     }
 
     private func publish(_ newState: DictationState) {
@@ -240,10 +240,11 @@ extension DictationPipeline {
         if let notice { show(notice) } else { emit(inFlightPhase) }
     }
 
-    /// The phase when no recording or Undo window shows: idle, or the step the dictations in flight wait on.
+    /// The phase when no recording or Undo window shows: the step the dictations in flight wait on, else Polish, else
+    /// idle.
     var inFlightPhase: DictationPhase {
         switch live.sendStep {
-        case nil: .idle
+        case nil: live.isRunning(.polish) ? .polishing : .idle
         case .transcribing: .transcribing
         case .cleaning: .cleaning
         }

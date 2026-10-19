@@ -29,17 +29,21 @@ extension DictationPipeline {
     private func finishPolish(showing end: PolishEnd) {
         live.end(.polish)
         // A dictation that started meanwhile shows its own state.
-        guard !live.isDictationLive else { return }
-        switch end {
-        case .unchanged: break
-        case .done(let notice?): show(notice)
-        case .done(nil): emit(.idle)
+        if case .done(let notice) = end, !live.isDictationLive {
+            if let notice { show(notice) } else { emit(.idle) }
+            return
+        }
+        // Polish is no longer live: the phase says so, and the pill keeps what it shows.
+        if let notice = state.notice {
+            show(notice)
+        } else if state.phase == .polishing {
+            emit(inFlightPhase)
         }
     }
 
     /// What the pill shows once a Polish or its Undo ends.
     private enum PolishEnd {
-        /// Nothing changed that the pill should show: a dictation came during the request, or there was nothing to do.
+        /// Nothing new to show: a dictation came during the request, or there was nothing to do.
         case unchanged
         /// `notice` shows; nil shows idle.
         case done(DictationNotice?)
