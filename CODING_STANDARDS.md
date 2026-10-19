@@ -33,6 +33,7 @@
 - Plain file names after the main type (`DictationPipeline.swift`), no dotted suffixes.
 - Files stay under 400 lines (lint). When your edit takes a shared file past 350 lines, move a whole concern into its own extension file first (`PipelineRecording.swift`, `AppMenu.swift`), so the next agent has room. Never trim comments or join lines to pass the limit.
 - Platform code lives in `App/`; decisions live in `KotobaCore/`, which imports only Foundation, os and Synchronization. If an adapter starts to decide something, move the decision into the core behind a port.
+- The shell (the menu bar icon, the menus' status line and counts, the Dock badge, the start and stop cues) is decided in `ShellStatus` in KotobaCore and tested there. `AppDelegate` and `AppMenu` pass it facts and draw its output; lint refuses a `switch` or `if case` in them.
 
 ## Native components (owner, 2026-10-16)
 

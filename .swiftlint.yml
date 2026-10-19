@@ -194,37 +194,47 @@ custom_rules:
     match_kinds: [string]
     message: "Write keys as symbols in UI text: ⌃ ⌥ ⌘ ⇧ fn, ⌘V, never \"Control-Option-Command\" or \"Cmd+V\" (CODING_STANDARDS.md, User-facing text 4)."
     severity: error
+  # What the shell shows is decided in KotobaCore's `ShellStatus` and tested there; these two files only collect its
+  # facts and draw its output. b235fa0 and 3a9743b changed such rules here with no test: a pattern match on a state in
+  # them is a decision no test covers.
+  shell_adapters_decide_nothing:
+    name: "Shell adapters decide nothing"
+    included: ["App/AppDelegate\\.swift", "App/AppMenu\\.swift"]
+    regex: "\\b(?:switch\\s|(?:if|guard|for)\\s+case\\b)"
+    excluded_match_kinds: [comment, doccomment, string]
+    message: "Decide what the menu bar icon, the menus, the Dock badge and the cues show in `ShellStatus` (KotobaCore), with a test; AppDelegate and AppMenu only collect its facts and draw its output (CODING_STANDARDS.md, Layout)."
+    severity: error
   status_text_key_names:
     name: "Status text: keys as symbols"
-    included: ["App/StatusText\\.swift"]
+    included: ["App/StatusText\\.swift", "KotobaCore/Sources/KotobaCore/ShellStatus\\.swift"]
     regex: "(?i:\\b(?:Ctrl|Control|Opt|Option|Alt|Cmd|Command|Shift|Fn)[-+ ](?:Ctrl|Control|Opt|Option|Alt|Cmd|Command|Shift|Fn|Enter|Return|Escape|Esc|Tab|Space|Delete|Backspace|F\\d+|[A-Z0-9])\\b)"
     match_kinds: [string]
     message: "Write keys as symbols in pill and menu text: ⌃ ⌥ ⌘ ⇧ fn, ⌘V (CODING_STANDARDS.md, User-facing text 4)."
     severity: error
   status_text_straight_quotes:
     name: "Status text: curly apostrophe and quotes"
-    included: ["App/StatusText\\.swift"]
+    included: ["App/StatusText\\.swift", "KotobaCore/Sources/KotobaCore/ShellStatus\\.swift"]
     regex: "(?:'|\\\\\")"
     match_kinds: [string]
     message: "Use the curly apostrophe and quotes (’ “ ”) in pill and menu text, not ' or \\\" (CODING_STANDARDS.md, User-facing text 13)."
     severity: error
   status_text_ellipsis:
     name: "Status text: one-character ellipsis"
-    included: ["App/StatusText\\.swift"]
+    included: ["App/StatusText\\.swift", "KotobaCore/Sources/KotobaCore/ShellStatus\\.swift"]
     regex: "\\.\\.\\."
     match_kinds: [string]
     message: "Use the one-character ellipsis \"…\" (CODING_STANDARDS.md, User-facing text 3)."
     severity: error
   status_text_internal_terms:
     name: "Status text: no internal terms"
-    included: ["App/StatusText\\.swift"]
+    included: ["App/StatusText\\.swift", "KotobaCore/Sources/KotobaCore/ShellStatus\\.swift"]
     regex: "(?i:\\b(?:routes?|keyterms?|ZDR|zero-data-retention|needsSetup|untested|(?:microsoft|x-ai|openai|google)/[\\w.-]+)\\b)"
     match_kinds: [string]
     message: "No internal terms in pill or menu text (CODING_STANDARDS.md, User-facing text 5)."
     severity: error
   status_text_dash:
     name: "Status text: no \" - \" between phrases"
-    included: ["App/StatusText\\.swift"]
+    included: ["App/StatusText\\.swift", "KotobaCore/Sources/KotobaCore/ShellStatus\\.swift"]
     regex: " - "
     match_kinds: [string]
     message: "No \" - \" between phrases in pill or menu text (CODING_STANDARDS.md, User-facing text 8)."
