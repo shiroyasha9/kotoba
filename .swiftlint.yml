@@ -154,11 +154,12 @@ custom_rules:
     excluded_match_kinds: [comment, doccomment, string]
     message: "Only `DockAndMenuBar` sets the activation policy (story 35), so the Dock icon follows the settings and the open windows; the snapshot run sets `.prohibited`."
     severity: error
-  # The clipboard has one writer too: a Pasteboard port write or restore, an AppKit pasteboard write, or a second
-  # `SystemPasteboard` (the pipeline's is the `pasteboard:` port in AppDelegate) outside the clipboard's own files.
+  # The clipboard has one writer too: a Pasteboard port write or restore (only a restore call has the
+  # `ifChangeCount:` label), an AppKit pasteboard write, or a second `SystemPasteboard` (the pipeline's is the
+  # `pasteboard:` port in AppDelegate) outside the clipboard's own files.
   one_paste_path:
     name: "One paste path"
-    regex: "\\bClipboardGuard\\b|\\.(?:sendPaste|sendReturn|sendBackspaces|writeTransient|clearContents|prepareForNewContents|writeObjects|declareTypes|setPropertyList)\\s*\\(|\\.restore\\s*\\([^\\n]*\\bifChangeCount\\s*:|\\bpasteboard\\??\\.write\\s*\\(|(?<!pasteboard: )\\bSystemPasteboard\\s*\\("
+    regex: "\\bClipboardGuard\\b|\\.(?:sendPaste|sendReturn|sendBackspaces|writeTransient|clearContents|prepareForNewContents|writeObjects|declareTypes|setString|setData|setPropertyList)\\s*\\(|\\bifChangeCount\\s*:|\\bpasteboard\\??\\.write\\s*\\(|(?<!pasteboard: )\\bSystemPasteboard\\s*\\("
     excluded: ["KotobaCore/Sources/KotobaCore/ClipboardPaste\\.swift", "KotobaCore/Sources/KotobaCore/ClipboardGuard\\.swift", "App/Paste\\.swift"]
     excluded_match_kinds: [comment, doccomment, string]
     message: "Every paste is one transaction: run it through `ClipboardPaste.run(_:gate:)`, which owns the gate, the clipboard and the keys; a copy goes through `DictationPipeline.copyAgain`, so a waiting restore cannot overwrite it (docs/spec.md, \"Paste\")."
