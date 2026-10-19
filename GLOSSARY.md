@@ -58,3 +58,17 @@ _Avoid_: before-paste check, paste choice
 
 **Overtaken**:
 Said of a Paste Again or Polish when a dictation started, waits or is sent since the owner asked (for Paste Again, also when a Polish runs): that one wins, and nothing is pasted or copied.
+
+### Live dictations
+
+**Live dictation**:
+A dictation from its key-down until it ends: while it records, waits in its Undo window, or is in flight. It ends when it is finished, cancelled or dropped, or when quit keeps it for the next launch.
+_Avoid_: active dictation, current dictation
+
+**In flight**:
+Said of a live dictation after its stop, while its audio is sent and its text is cleaned, pasted or saved. Quit waits a little for each one, so its billed text is kept.
+_Avoid_: pending (a status in History), transcribing (one step of it)
+
+**Quiet**:
+No live dictation and no Polish: only then does Paste Again paste and a retry send begin. Transcribe Again and a retry send paste nothing, so they keep kotoba quiet.
+_Avoid_: idle (what the pill shows), free

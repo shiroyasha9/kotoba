@@ -248,6 +248,19 @@ custom_rules:
     severity: error
   # The mic input's lifecycle (which mic, when to rebuild, what waits for the end of a capture) lives in
   # KotobaCore's `AudioCapture`, tested through a fake. App/ only runs the hardware through `HALCaptureHardware`.
+  live_state_in_ledger:
+    name: "Live dictation state in LiveDictations"
+    included: ["KotobaCore/Sources/KotobaCore/DictationPipeline\\.swift"]
+    regex: "^    (?:private(?:\\(set\\))?\\s+)?var\\s+\\w+\\s*[:=]\\s*(?:Set<DictationID>|\\[DictationID\\s*:|LatencyLog\\b)"
+    message: "What is live per dictation (its step, Return request, latency marks) and every wait on it lives in `LiveDictations`, so a dictation leaves every list at once and quit sees it (CODING_STANDARDS.md, Layout)."
+    severity: error
+  live_questions_to_ledger:
+    name: "Ask LiveDictations what is live"
+    included: ["KotobaCore/Sources/KotobaCore/(?:DictationPipeline|Pipeline\\w+)\\.swift"]
+    regex: "\\b(?:recording|paused)\\s*[!=]=\\s*nil\\s*(?:,|&&|\\|\\|)\\s*(?:recording|paused)\\b"
+    excluded_match_kinds: [comment, doccomment, string]
+    message: "Ask `live` (`isQuiet`, `isDictationLive`, `hasRecording`) instead of combining the recording and the Undo window by hand."
+    severity: error
   capture_lifecycle_in_core:
     name: "Capture lifecycle in KotobaCore"
     included: ["App/.*\\.swift"]
