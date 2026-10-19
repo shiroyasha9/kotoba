@@ -25,8 +25,8 @@ extension DictationPipeline {
         switch await paste.run(request, gate: self) {
         case .pasted(let pasted):
             markPasted(text, at: pasted.place)
-            if !pasted.isClipboardKept { emitIfQuiet(.clipboardNotKept(id)) }
-        case .copied: emitIfQuiet(.copied(id))
+            if !pasted.isClipboardKept { showIfQuiet(.clipboardNotKept(id)) }
+        case .copied: showIfQuiet(.copied(id))
         case .skipped: break
         }
     }
@@ -37,7 +37,7 @@ extension DictationPipeline {
         do {
             guard let last = try await ports.store.lastDelivered(), let text = last.latestText else { return }
             await paste.copy(text)
-            emitIfQuiet(.copied(last.id))
+            showIfQuiet(.copied(last.id))
         } catch {
             Log.pipeline.error("Cannot read the last dictation: \(error)")
         }

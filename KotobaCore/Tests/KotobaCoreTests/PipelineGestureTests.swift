@@ -15,12 +15,12 @@ struct PipelineGestureTests {
         await pipeline.handle(.chordDown(.toggle))
         world.clock.advance(by: .seconds(1))
         await pipeline.settle()
-        #expect(await pipeline.state == .recording(isLong: false))
+        #expect(await pipeline.state.phase == .recording(isLong: false))
         await pipeline.handle(.chordUp)
         world.clock.advance(by: .seconds(5))
         await pipeline.settle()
 
-        #expect(await pipeline.state == .recording(isLong: false))
+        #expect(await pipeline.state.phase == .recording(isLong: false))
         #expect(await world.audio.isCapturing)
         #expect(await world.paster.pasteCount == 0)
 
@@ -34,7 +34,7 @@ struct PipelineGestureTests {
         let pipeline = world.makePipeline()
 
         await pipeline.press(.toggle)
-        #expect(await pipeline.state == .recording(isLong: false))
+        #expect(await pipeline.state.phase == .recording(isLong: false))
         await pipeline.press(.toggle)
         await pipeline.settle()
 
@@ -70,7 +70,7 @@ struct PipelineGestureTests {
         #expect(await pipeline.state == .idle)
         world.clock.advance(by: .milliseconds(1))
         await pipeline.settle()
-        #expect(await pipeline.state == .recording(isLong: false))
+        #expect(await pipeline.state.phase == .recording(isLong: false))
 
         world.clock.advance(by: .seconds(2))
         await pipeline.handle(.chordUp)
@@ -97,8 +97,8 @@ struct PipelineGestureTests {
         #expect(await world.provider.requests.isEmpty)
         // The dropped press emitted nothing; the first states belong to the dictation after it.
         await pipeline.dictate(world)
-        #expect(await states.next() == .recording(isLong: false))
-        #expect(await states.next() == .transcribing)
+        #expect(await states.next()?.phase == .recording(isLong: false))
+        #expect(await states.next()?.phase == .transcribing)
     }
 
     @Test func aKeyTypedDuringAPushToTalkPressIsAShortcut() async {
@@ -145,7 +145,7 @@ struct PipelineGestureTests {
         world.clock.advance(by: .seconds(3))
         await pipeline.settle()
 
-        #expect(await pipeline.state == .recording(isLong: false))
+        #expect(await pipeline.state.phase == .recording(isLong: false))
         #expect(await world.paster.pasteCount == 0)
     }
 
@@ -220,7 +220,7 @@ struct PipelineGestureTests {
 
         await pipeline.press(.hold)
 
-        #expect(await pipeline.state == .undoable)
+        #expect(await pipeline.state.phase == .undoable)
         #expect(await world.audio.resumes == 0)
     }
 
@@ -234,7 +234,7 @@ struct PipelineGestureTests {
         await pipeline.handle(.gestureChanged(.toggle))
         await pipeline.handle(.chordUp)
 
-        #expect(await pipeline.state == .recording(isLong: false))
+        #expect(await pipeline.state.phase == .recording(isLong: false))
         #expect(await world.audio.resumes == 1)
     }
 
@@ -264,7 +264,7 @@ struct PipelineGestureTests {
         await pipeline.handle(.chordUp)
         await pipeline.settle()
 
-        #expect(await pipeline.state == .recording(isLong: false))
+        #expect(await pipeline.state.phase == .recording(isLong: false))
         #expect(await world.paster.pasteCount == 0)
     }
 }

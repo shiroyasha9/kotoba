@@ -13,6 +13,21 @@ extension IndicatorPanel {
         var context = StatusContext(provider: .azure)
         /// The mic level the meter shows.
         var level = 0.6
+
+        init(
+            name: String, _ phase: DictationPhase, context: StatusContext = .init(provider: .azure), level: Double = 0.6
+        ) {
+            self.name = name
+            state = DictationState(phase)
+            self.context = context
+            self.level = level
+        }
+
+        init(name: String, _ notice: DictationNotice, context: StatusContext = .init(provider: .azure)) {
+            self.name = name
+            state = DictationState(.idle, notice: notice)
+            self.context = context
+        }
     }
 
     /// Every state the owner reads, plus the dragged pill. A compact pill renders at the bottom and at an edge
@@ -20,13 +35,14 @@ extension IndicatorPanel {
     /// when a pill's text is cut off.
     static func snapshots() -> [Snapshot] {
         let id = DictationID()
-        let samples: [DictationState] = [
-            .idle, .recording(isLong: false), .transcribing, .cleaning, .undoable, .failed(id), .timedOut(id),
-            .connectionBlocked(id), .hostNotFound(id, host: "x"),
-            .rejected(id, .other),
+        let phases: [DictationPhase] = [
+            .idle, .recording(isLong: false), .transcribing, .cleaning, .undoable, .polishing,
+        ]
+        let notices: [DictationNotice] = [
+            .failed(id), .timedOut(id), .connectionBlocked(id), .hostNotFound(id, host: "x"), .rejected(id, .other),
             .needsSetup(id, .key), .cleanupFailed(id), .cleanupTooSlow(id), .returnSkipped(id), .copied(id),
             .recovered(id), .captureFailed, .nothingRecorded, .audioNotSaved(.diskFull), .audioCut(id, .diskFull),
-            .clipboardNotKept(id), .polishing, .polished(id, isReplaced: true), .polishFailed(.failed),
+            .clipboardNotKept(id), .polished(id, isReplaced: true), .polishFailed(.failed),
         ]
         var snapshots = [
             Snapshot(name: "indicator-drag") { PillStandIn(content: .init(), anchor: nil) },
@@ -36,7 +52,7 @@ extension IndicatorPanel {
                 (view as? PillStandIn).flatMap { accessibilityProblem(of: $0.pill, content: $0.pill.content) }
             },
         ]
-        var contents = samples.flatMap(snapshotRows).compactMap { row in
+        var contents = (phases.flatMap(rows(for:)) + notices.flatMap(rows(for:))).compactMap { row in
             content(for: row.state, context: row.context, visibility: .whileDictating).map { (row.name, $0, row.level) }
         }
         // Auto-learn's notice; the longest word that fits.
@@ -106,62 +122,80 @@ extension IndicatorPanel {
         return context
     }
 
-    /// The rows for one state. The switch has no default, so a new `DictationState` case does not compile
-    /// until it has rows here; give it a sample in `snapshots()` too.
-    private static func snapshotRows(for state: DictationState) -> [SnapshotRow] {
-        switch state {
-        case .idle:
-            []
-        case .recording:
-            recordingRows
+    /// The rows for one phase. The switch has no default, so a new phase does not compile until it has rows here;
+    /// give it a sample in `snapshots()` too.
+    private static func rows(for phase: DictationPhase) -> [SnapshotRow] {
+        switch phase {
+        case .idle: []
+        case .recording: recordingRows
+        case .transcribing: [SnapshotRow(name: "transcribing", phase)]
+        case .cleaning: [SnapshotRow(name: "cleaning", phase)]
+        case .undoable: [SnapshotRow(name: "undoable", phase)]
+        case .polishing: [SnapshotRow(name: "polishing", phase)]
+        }
+    }
+
+    /// The rows for one notice, as `rows(for:)` for a phase.
+    private static func rows(for notice: DictationNotice) -> [SnapshotRow] {
+        switch notice {
         case .needsSetup(let id, _), .hostNotFound(let id, _):
             setupRows(of: id)
         case .rejected(let id, _):
             [RejectReason.emptyTranscript, .audioMissing, .other].map {
-                SnapshotRow(name: "rejected-\($0.rawValue)", state: .rejected(id, $0))
+                SnapshotRow(name: "rejected-\($0.rawValue)", .rejected(id, $0))
             }
         case .copied:
             [
-                SnapshotRow(name: "copied", state: state),
+                SnapshotRow(name: "copied", notice),
                 SnapshotRow(
-                    name: "copied-no-accessibility", state: state,
+                    name: "copied-no-accessibility", notice,
                     context: StatusContext(provider: .azure, isPasteAllowed: false)),
             ]
         case .captureFailed:
             [
-                SnapshotRow(name: "captureFailed", state: state),
+                SnapshotRow(name: "captureFailed", notice),
                 SnapshotRow(
-                    name: "captureFailed-denied", state: state,
+                    name: "captureFailed-denied", notice,
                     context: StatusContext(provider: .azure, microphone: .denied)),
             ]
-        case .transcribing, .cleaning, .undoable, .failed, .timedOut, .connectionBlocked, .cleanupFailed,
-            .cleanupTooSlow, .returnSkipped,
-            .recovered, .nothingRecorded:
-            [SnapshotRow(name: snapshotName(of: state), state: state)]
-        case .audioNotSaved, .audioCut:
-            lossRows(of: state)
-        case .clipboardNotKept:
-            [SnapshotRow(name: "clipboardNotKept", state: state)]
-        case .polishing, .polished, .polishFailed:
-            polishRows(for: state)
+        // Named after the case, as its file always was.
+        case .failed, .timedOut, .connectionBlocked, .cleanupFailed, .cleanupTooSlow, .returnSkipped, .recovered,
+            .nothingRecorded, .clipboardNotKept:
+            [SnapshotRow(name: String("\(notice)".prefix { $0 != "(" }), notice)]
+        case .audioNotSaved, .audioCut: lossRows(of: notice)
+        case .polished, .polishFailed:
+            polishRows(for: notice)
+        }
+    }
+
+    /// Polish's notices: the replaced and the new-text outcome, and each failure.
+    private static func polishRows(for notice: DictationNotice) -> [SnapshotRow] {
+        switch notice {
+        case .polished(let id, _):
+            [
+                SnapshotRow(name: "polished", .polished(id, isReplaced: true)),
+                SnapshotRow(name: "polished-copied", .polished(id, isReplaced: false)),
+            ]
+        default:
+            [PolishFailure.nothingToPolish, .cutOff, .tooSlow, .needsSetup(.key), .needsSetup(.credit), .failed].map {
+                SnapshotRow(name: "polishFailed-\(Self.snapshotName(of: $0))", .polishFailed($0))
+            }
         }
     }
 
     /// The recording pill: plain, long, under Secure Input, silent (and silent with Microphone access off), cleaned up.
     private static var recordingRows: [SnapshotRow] {
         [
-            SnapshotRow(name: "recording", state: .recording(isLong: false)),
-            SnapshotRow(name: "recording-long", state: .recording(isLong: true)),
+            SnapshotRow(name: "recording", .recording(isLong: false)),
+            SnapshotRow(name: "recording-long", .recording(isLong: true)),
             SnapshotRow(
-                name: "secure-input", state: .recording(isLong: false),
+                name: "secure-input", .recording(isLong: false),
                 context: StatusContext(provider: .azure, isSecureInputOn: true)),
+            SnapshotRow(name: "recording-silent", .recording(isLong: false, isSilent: true), context: silent, level: 0),
             SnapshotRow(
-                name: "recording-silent", state: .recording(isLong: false, isSilent: true), context: silent,
-                level: 0),
-            SnapshotRow(
-                name: "recording-silent-denied", state: .recording(isLong: false, isSilent: true),
+                name: "recording-silent-denied", .recording(isLong: false, isSilent: true),
                 context: StatusContext(provider: .azure, microphone: .denied), level: 0),
-            SnapshotRow(name: "recording-cleaned", state: .recording(isLong: false, isCleaned: true)),
+            SnapshotRow(name: "recording-cleaned", .recording(isLong: false, isCleaned: true)),
         ]
     }
 
@@ -169,74 +203,24 @@ extension IndicatorPanel {
     /// that fits, else not named.
     private static func setupRows(of id: DictationID) -> [SnapshotRow] {
         [
-            SnapshotRow(name: "needs-key", state: .needsSetup(id, .key)),
-            SnapshotRow(name: "needs-endpoint", state: .needsSetup(id, .endpoint)),
-            SnapshotRow(name: "needs-credit", state: .needsSetup(id, .credit)),
-            SnapshotRow(
-                name: "hostNotFound-label", state: .hostNotFound(id, host: "kotoba-asr.cognitiveservices.azure.com")),
+            SnapshotRow(name: "needs-key", .needsSetup(id, .key)),
+            SnapshotRow(name: "needs-endpoint", .needsSetup(id, .endpoint)),
+            SnapshotRow(name: "needs-credit", .needsSetup(id, .credit)),
+            SnapshotRow(name: "hostNotFound-label", .hostNotFound(id, host: "kotoba-asr.cognitiveservices.azure.com")),
             SnapshotRow(
                 name: "hostNotFound-unnamed",
-                state: .hostNotFound(id, host: "my-speech-resource.cognitiveservices.azure.com")),
+                .hostNotFound(id, host: "my-speech-resource.cognitiveservices.azure.com")),
         ]
     }
 
-    /// Polish's states: the replaced and the new-text outcome, and each failure.
-    private static func polishRows(for state: DictationState) -> [SnapshotRow] {
-        switch state {
-        case .polished(let id, _):
-            [
-                SnapshotRow(name: "polished", state: .polished(id, isReplaced: true)),
-                SnapshotRow(name: "polished-copied", state: .polished(id, isReplaced: false)),
-            ]
-        case .polishFailed:
-            [
-                PolishFailure.nothingToPolish, .cutOff, .tooSlow, .needsSetup(.key), .needsSetup(.credit), .failed,
-            ].map { SnapshotRow(name: "polishFailed-\(Self.snapshotName(of: $0))", state: .polishFailed($0)) }
-        default:
-            [SnapshotRow(name: "polishing", state: state)]
-        }
-    }
-
-    /// A lost-audio state once for each cause: only a full disk says "Disk full?".
-    private static func lossRows(of state: DictationState) -> [SnapshotRow] {
+    /// A lost-audio notice once for each cause: only a full disk says "Disk full?".
+    private static func lossRows(of notice: DictationNotice) -> [SnapshotRow] {
         [AudioLoss.diskFull, .other].compactMap { loss in
-            switch state {
-            case .audioNotSaved: SnapshotRow(name: "audioNotSaved-\(loss)", state: .audioNotSaved(loss))
-            case .audioCut(let id, _): SnapshotRow(name: "audioCut-\(loss)", state: .audioCut(id, loss))
+            switch notice {
+            case .audioNotSaved: SnapshotRow(name: "audioNotSaved-\(loss)", .audioNotSaved(loss))
+            case .audioCut(let id, _): SnapshotRow(name: "audioCut-\(loss)", .audioCut(id, loss))
             default: nil
             }
-        }
-    }
-
-    /// The file name of a state with one row; a case rename does not change it.
-    private static func snapshotName(of state: DictationState) -> String {
-        switch state {
-        case .transcribing: "transcribing"
-        case .cleaning: "cleaning"
-        case .undoable: "undoable"
-        case .failed, .timedOut, .connectionBlocked, .cleanupFailed, .cleanupTooSlow, .returnSkipped, .recovered:
-            outcomeName(of: state)
-        case .idle, .recording, .needsSetup, .hostNotFound, .rejected, .copied, .captureFailed, .nothingRecorded,
-            .audioNotSaved,
-            .audioCut, .clipboardNotKept, .polishing, .polished, .polishFailed:
-            "\(state)"
-        }
-    }
-
-    /// `snapshotName(of:)` for an outcome that names its dictation.
-    private static func outcomeName(of state: DictationState) -> String {
-        switch state {
-        case .failed: "failed"
-        case .timedOut: "timedOut"
-        case .connectionBlocked: "connectionBlocked"
-        case .cleanupFailed: "cleanupFailed"
-        case .cleanupTooSlow: "cleanupTooSlow"
-        case .returnSkipped: "returnSkipped"
-        case .recovered: "recovered"
-        case .idle, .recording, .transcribing, .cleaning, .undoable, .needsSetup, .hostNotFound, .rejected, .copied,
-            .captureFailed,
-            .nothingRecorded, .audioNotSaved, .audioCut, .clipboardNotKept, .polishing, .polished, .polishFailed:
-            "\(state)"
         }
     }
 

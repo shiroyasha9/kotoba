@@ -26,17 +26,29 @@ extension DictationPipeline {
         finishPolish(showing: outcome)
     }
 
-    private func finishPolish(showing outcome: DictationState?) {
+    private func finishPolish(showing end: PolishEnd) {
         live.end(.polish)
         // A dictation that started meanwhile shows its own state.
-        guard let outcome, !live.isDictationLive else { return }
-        emit(outcome)
+        guard !live.isDictationLive else { return }
+        switch end {
+        case .unchanged: break
+        case .done(let notice?): show(notice)
+        case .done(nil): emit(.idle)
+        }
     }
 
-    /// The outcome the pill shows; nil when a dictation came during the request.
-    private func polish(with polisher: any TextPolisher, front: FrontApp?) async -> DictationState? {
+    /// What the pill shows once a Polish or its Undo ends.
+    private enum PolishEnd {
+        /// Nothing changed that the pill should show: a dictation came during the request, or there was nothing to do.
+        case unchanged
+        /// `notice` shows; nil shows idle.
+        case done(DictationNotice?)
+    }
+
+    /// The outcome the pill shows.
+    private func polish(with polisher: any TextPolisher, front: FrontApp?) async -> PolishEnd {
         guard let record = await lastDelivered(), let text = record.latestText, !text.isEmpty else {
-            return .polishFailed(.nothingToPolish)
+            return .done(.polishFailed(.nothingToPolish))
         }
         let answer: RewrittenText
         switch await polisherAnswer(from: polisher, to: text, for: record) {
@@ -44,46 +56,46 @@ extension DictationPipeline {
             answer = polished
         case .answered(.failure(let error)):
             Log.pipeline.error("Polish \(record.id.rawValue) failed: \(error)")
-            return .polishFailed((error as? ProviderError)?.setupItem.map(PolishFailure.needsSetup) ?? .failed)
+            return .done(.polishFailed((error as? ProviderError)?.setupItem.map(PolishFailure.needsSetup) ?? .failed))
         case .tooSlow:
             Log.pipeline.error("Polish \(record.id.rawValue) passed its deadline")
-            return .polishFailed(.tooSlow)
+            return .done(.polishFailed(.tooSlow))
         }
         let usage = [Self.usage(of: answer, for: record.id, app: record.app, at: ports.clock.date)]
         let polished = answer.text.trimmingCharacters(in: .whitespacesAndNewlines)
         guard answer.isComplete, !polished.isEmpty else {
             Log.pipeline.error("Polish \(record.id.rawValue) answered \(answer.isComplete ? "no words" : "in part")")
             await ports.store.addUsageOrLog(usage, of: record.id)
-            return .polishFailed(answer.isComplete ? .failed : .cutOff)
+            return .done(.polishFailed(answer.isComplete ? .failed : .cutOff))
         }
-        guard await ports.store.setPolishedTextOrLog(polished, of: record.id, usage: usage) else { return nil }
+        guard await ports.store.setPolishedTextOrLog(polished, of: record.id, usage: usage) else { return .unchanged }
         lastPolish = (record.id, earlier: record.polishedText)
         switch await put(polished, replacing: text, of: record, for: front) {
         case .pasted(let pasted):
-            return pasted.isClipboardKept ? .polished(record.id, isReplaced: true) : .clipboardNotKept(record.id)
+            return .done(pasted.isClipboardKept ? .polished(record.id, isReplaced: true) : .clipboardNotKept(record.id))
         case .copied:
-            return .polished(record.id, isReplaced: false)
+            return .done(.polished(record.id, isReplaced: false))
         case .skipped:
-            return nil
+            return .unchanged
         }
     }
 
-    private func revertPolish(of id: DictationID, front: FrontApp?) async -> DictationState? {
+    private func revertPolish(of id: DictationID, front: FrontApp?) async -> PolishEnd {
         guard let record = await lastDelivered(), record.id == id, let polished = record.polishedText else {
-            return nil
+            return .unchanged
         }
         let earlier = lastPolish?.id == id ? lastPolish?.earlier : nil
         guard let original = earlier ?? record.deliveredText,
             await ports.store.setPolishedTextOrLog(earlier, of: id, usage: [])
-        else { return nil }
+        else { return .unchanged }
         lastPolish = nil
         switch await put(original, replacing: polished, of: record, for: front) {
         case .pasted(let pasted):
-            return pasted.isClipboardKept ? .idle : .clipboardNotKept(id)
+            return .done(pasted.isClipboardKept ? nil : .clipboardNotKept(id))
         case .copied:
-            return .copied(id)
+            return .done(.copied(id))
         case .skipped:
-            return nil
+            return .unchanged
         }
     }
 

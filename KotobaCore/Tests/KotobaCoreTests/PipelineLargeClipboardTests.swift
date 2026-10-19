@@ -19,7 +19,7 @@ struct PipelineLargeClipboardTests {
         #expect(await world.paster.pasted == ["dictated"])
         #expect(record.status == .pasted)
         #expect(await world.pasteboard.text == "dictated")
-        #expect(await pipeline.state == .clipboardNotKept(record.id))
+        #expect(await pipeline.state.notice == .clipboardNotKept(record.id))
     }
 
     @Test func pasteAgainSaysTheClipboardWasNotKept() async {
@@ -34,7 +34,7 @@ struct PipelineLargeClipboardTests {
 
         #expect(await world.paster.pasted == ["Fix the login bug."])
         #expect(await world.pasteboard.text == "Fix the login bug.")
-        #expect(await pipeline.state == .clipboardNotKept(id))
+        #expect(await pipeline.state.notice == .clipboardNotKept(id))
     }
 
     /// A clipboard under the limit comes back as before.

@@ -18,7 +18,7 @@ struct PipelineRetryTests {
         #expect(record.audio.file == (await world.audio.files.first))
         #expect(await world.paster.pasteCount == 0)
         #expect(await world.pasteboard.text == "user's clipboard")
-        #expect(await pipeline.state == .failed(record.id))
+        #expect(await pipeline.state.notice == .failed(record.id))
     }
 
     @Test func theAudioIsSavedBeforeTheTranscriptArrives() async throws {
@@ -55,7 +55,7 @@ struct PipelineRetryTests {
         let record = try #require(await world.store.records.first)
         #expect(record.status == .recovered)
         #expect(record.transcript == "second try")
-        #expect(await pipeline.state == .recovered(record.id))
+        #expect(await pipeline.state.notice == .recovered(record.id))
     }
 
     @Test func recoveredTranscriptsAreListedNewestFirst() async {
@@ -138,7 +138,7 @@ struct PipelineRetryTests {
         let record = try #require(await world.store.records.first)
         #expect(record.status == .failed)
         #expect(record.needsSetup == .key)
-        #expect(await pipeline.state == .needsSetup(record.id, .key))
+        #expect(await pipeline.state.notice == .needsSetup(record.id, .key))
 
         await world.provider.fail(with: nil)
         await pipeline.retryPending(.exceptNeedsSetup)
@@ -240,7 +240,7 @@ struct PipelineRetryTests {
         async let retried: Void = pipeline.retryPending()
 
         #expect(await eventually { await world.provider.requests.count >= 3 } == false)
-        #expect(await pipeline.state == .transcribing)
+        #expect(await pipeline.state.phase == .transcribing)
         await liveGate.open()
         await pipeline.settle()
         await retried
@@ -253,7 +253,7 @@ struct PipelineRetryTests {
         world.setup.missing = .endpoint
         await world.provider.fail(with: ProviderError.needsSetup(provider: "Azure", item: .endpoint))
         await pipeline.dictate(world)
-        #expect(await pipeline.state == .needsSetup(try #require(await world.store.records.first).id, .endpoint))
+        #expect(await pipeline.state.notice == .needsSetup(try #require(await world.store.records.first).id, .endpoint))
 
         await world.provider.fail(with: nil)
         await pipeline.retryPending()

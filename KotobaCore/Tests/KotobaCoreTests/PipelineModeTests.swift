@@ -192,7 +192,7 @@ struct PipelineModeTests {
 
         #expect(await world.paster.pasted == ["raw words"])
         let record = try #require(await world.store.records.first)
-        #expect(await pipeline.state == .cleanupFailed(record.id))
+        #expect(await pipeline.state.notice == .cleanupFailed(record.id))
     }
 
     @Test func newModesApplyToTheNextDictation() async {
@@ -217,7 +217,7 @@ struct PipelineModeTests {
 
         await pipeline.tap(world)
 
-        #expect(await pipeline.state == .recording(isLong: false, isCleaned: true))
+        #expect(await pipeline.state.phase == .recording(isLong: false, isCleaned: true))
     }
 
     @Test func theRecordingPillSaysWhenTheCleanupChordStartedIt() async {
@@ -225,7 +225,7 @@ struct PipelineModeTests {
 
         await pipeline.cleanupTap()
 
-        #expect(await pipeline.state == .recording(isLong: false, isCleaned: true))
+        #expect(await pipeline.state.phase == .recording(isLong: false, isCleaned: true))
     }
 
     @Test func aPlainRecordingPillSaysNothingAboutCleanup() async {
@@ -234,7 +234,7 @@ struct PipelineModeTests {
 
         await pipeline.tap(world)
 
-        #expect(await pipeline.state == .recording(isLong: false))
+        #expect(await pipeline.state.phase == .recording(isLong: false))
     }
 
     @Test func theLongRecordingWarningKeepsTheCleanupMark() async {
@@ -244,7 +244,7 @@ struct PipelineModeTests {
         world.clock.advance(by: .seconds(600))
         await pipeline.settle()
 
-        #expect(await pipeline.state == .recording(isLong: true, isCleaned: true))
+        #expect(await pipeline.state.phase == .recording(isLong: true, isCleaned: true))
     }
 
     @Test func thePillSaysCleaningWhileTheCleanerWorks() async throws {
@@ -256,7 +256,7 @@ struct PipelineModeTests {
         await pipeline.tap(world)
         #expect(await eventually { await gate.hasWaiters })
 
-        #expect(await pipeline.state == .cleaning)
+        #expect(await pipeline.state.phase == .cleaning)
         await gate.open()
         await pipeline.settle()
         #expect(await pipeline.state == .idle)
@@ -275,7 +275,7 @@ struct PipelineModeTests {
         await pipeline.handle(.chordInterrupted)
         await pipeline.handle(.chordUp)
 
-        #expect(await pipeline.state == .cleaning)
+        #expect(await pipeline.state.phase == .cleaning)
         await gate.open()
         await pipeline.settle()
     }
@@ -295,7 +295,7 @@ struct PipelineModeTests {
         // Not `settle()`: it would wait for the held cleanup too.
         #expect(await eventually { await world.store.records.contains { $0.status == .cancelled } })
 
-        #expect(await pipeline.state == .cleaning)
+        #expect(await pipeline.state.phase == .cleaning)
         await gate.open()
         await pipeline.settle()
     }
@@ -311,9 +311,9 @@ struct PipelineModeTests {
         await pipeline.tap(world)
         await pipeline.tap(world)
         #expect(await eventually { await world.paster.pasted == ["raw words"] })
-        #expect(await eventually { await pipeline.state != .transcribing })
+        #expect(await eventually { await pipeline.state.phase != .transcribing })
 
-        #expect(await pipeline.state == .cleaning)
+        #expect(await pipeline.state.phase == .cleaning)
         await gate.open()
         await pipeline.settle()
         #expect(await world.paster.pasted == ["raw words", "clean words"])

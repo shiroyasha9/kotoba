@@ -214,24 +214,34 @@ public actor DictationPipeline {
 // MARK: - Helpers
 
 extension DictationPipeline {
-    func emit(_ newState: DictationState) {
+    /// The pipeline is in `phase` now: a notice shown goes.
+    func emit(_ phase: DictationPhase) {
+        publish(DictationState(phase))
+    }
+
+    /// Shows `notice` over the phase. A notice shows only while no recording or Undo window does, so the phase under
+    /// it is Polish or the step of the dictations in flight.
+    func show(_ notice: DictationNotice) {
+        publish(DictationState(live.isRunning(.polish) ? .polishing : inFlightPhase, notice: notice))
+    }
+
+    private func publish(_ newState: DictationState) {
         guard newState != state else { return }
         state = newState
         stateContinuation.yield(newState)
     }
 
     /// The dictation ended: a recording in progress keeps the indicator on recording; other dictations in flight keep
-    /// it on their step.
-    func finishDictation(_ id: DictationID, showing outcome: DictationState) {
+    /// it on their step, under `notice` when there is one.
+    func finishDictation(_ id: DictationID, showing notice: DictationNotice?) {
         live.end(id)
-        // A live recording or an open Undo window keeps the indicator; the outcome would hide it.
+        // A live recording or an open Undo window keeps the indicator; the notice would hide it.
         guard !live.hasRecording else { return }
-        emit(outcome == .idle ? inFlightState : outcome)
+        if let notice { show(notice) } else { emit(inFlightPhase) }
     }
 
-    /// What the indicator shows when no recording or Undo window does: idle, or the step the dictations in flight
-    /// wait on.
-    var inFlightState: DictationState {
+    /// The phase when no recording or Undo window shows: idle, or the step the dictations in flight wait on.
+    var inFlightPhase: DictationPhase {
         switch live.sendStep {
         case nil: .idle
         case .transcribing: .transcribing

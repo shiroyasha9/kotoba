@@ -22,7 +22,7 @@ extension DictationPipeline {
         }
         guard audio.duration >= settings.minimumRecording else {
             await remember(current.id, unless: await ports.audio.discard(audio))
-            finishDictation(current.id, showing: audio.loss.map(DictationState.audioNotSaved) ?? .idle)
+            finishDictation(current.id, showing: audio.loss.map(DictationNotice.audioNotSaved))
             return
         }
         let job = TranscriptDelivery.Job(
@@ -53,8 +53,10 @@ extension DictationPipeline {
         if outcome.record.transcript != nil { work.track { await self.routeAnswered() } }
     }
 
-    func emitIfQuiet(_ newState: DictationState) {
-        if isQuiet { emit(newState) }
+    /// Shows `notice` only while nothing is live, so it never hides a dictation; nil shows idle.
+    func showIfQuiet(_ notice: DictationNotice?) {
+        guard isQuiet else { return }
+        if let notice { show(notice) } else { emit(.idle) }
     }
 
     /// After the paste: which keyterms the request sent, and which the delivered text has. Over every keyterm, sent or
@@ -79,7 +81,7 @@ extension DictationPipeline {
     func cleanupStarted(_ id: DictationID) {
         live.cleanupStarted(id)
         guard !live.hasRecording else { return }
-        emit(inFlightState)
+        emit(inFlightPhase)
     }
 
     /// Return while recording stops it. Just after a stop the tap may still swallow a Return (the indicator has not
@@ -153,6 +155,6 @@ extension DictationPipeline: PasteGate {
                 Log.pipeline.error("Cannot mark \(id.rawValue) copied: \(error)")
             }
         }
-        if isLeftOnClipboard { emitIfQuiet(.copied(id)) }
+        if isLeftOnClipboard { showIfQuiet(.copied(id)) }
     }
 }

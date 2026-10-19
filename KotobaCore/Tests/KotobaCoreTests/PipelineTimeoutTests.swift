@@ -22,7 +22,7 @@ struct PipelineTimeoutTests {
         await pipeline.tap(world)
         #expect(await eventually { await gate.hasWaiters })
         world.clock.advance(by: wait - .milliseconds(1))
-        let endedBefore = await eventually { await pipeline.state != .transcribing }
+        let endedBefore = await eventually { await pipeline.state.phase != .transcribing }
         world.clock.advance(by: .milliseconds(1))
         await pipeline.settle()
         await gate.open()
@@ -32,7 +32,7 @@ struct PipelineTimeoutTests {
         #expect(record.status == .failed)
         #expect(record.attempts == 1)
         #expect(await world.paster.pasteCount == 0)
-        #expect(await pipeline.state == .timedOut(record.id))
+        #expect(await pipeline.state.notice == .timedOut(record.id))
     }
 
     /// A retry that times out says so too, not "Couldn’t reach".
@@ -53,7 +53,7 @@ struct PipelineTimeoutTests {
 
         let record = try #require(await world.store.records.first)
         #expect(record.status == .failed)
-        #expect(await pipeline.state == .timedOut(record.id))
+        #expect(await pipeline.state.notice == .timedOut(record.id))
     }
 
     @Test func anAnswerInTimeCancelsTheBound() async throws {

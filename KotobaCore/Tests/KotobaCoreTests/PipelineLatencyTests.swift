@@ -84,7 +84,7 @@ struct PipelineLatencyTests {
         await pipeline.tap(world)
         world.clock.advance(by: .seconds(3))
         await pipeline.handle(.chordDown(.tapOrHold))
-        #expect(await pipeline.state == .transcribing)
+        #expect(await pipeline.state.phase == .transcribing)
         world.clock.advance(by: .milliseconds(150))
         await pipeline.handle(.chordUp)
         await pipeline.settle()

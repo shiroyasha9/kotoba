@@ -27,7 +27,7 @@ struct TranscriptDelivery: Sendable {
         /// Nil when nothing was pasted.
         let pasted: ClipboardPaste.Pasted?
         /// What the indicator shows instead of the record's usual outcome (for example `.cleanupFailed`).
-        var showing: DictationState?
+        var showing: DictationNotice?
 
         /// Return followed the paste, so the field was submitted and holds no pasted text to read back.
         var isSubmitted: Bool {
@@ -98,7 +98,7 @@ struct TranscriptDelivery: Sendable {
     private static func notice(
         for record: DictationRecord, of job: Job, _ pasted: ClipboardPaste.Pasted?,
         cleanupMiss: TranscriptionSteps.CleanupMiss?
-    ) -> DictationState? {
+    ) -> DictationNotice? {
         if pasted?.submit == .frontAppChanged { return .returnSkipped(record.id) }
         guard record.status == .pasted else { return nil }
         switch cleanupMiss {

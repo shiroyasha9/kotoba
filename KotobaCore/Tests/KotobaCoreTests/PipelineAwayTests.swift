@@ -21,7 +21,7 @@ struct PipelineAwayTests {
         #expect(await world.pasteboard.text == "Ship it.")
         let record = try #require(await world.store.records.first)
         #expect(record.status == .copied)
-        #expect(await pipeline.state == .copied(record.id))
+        #expect(await pipeline.state.notice == .copied(record.id))
     }
 
     @Test func aDictationInFlightAtTheLockIsCopied() async throws {
@@ -100,7 +100,7 @@ struct PipelineAwayTests {
         let id = try #require(await world.store.records.first?.id)
         #expect(await world.paster.pasted == [PipelinePolishTests.spoken])
         #expect(await world.pasteboard.text == PipelinePolishTests.polished)
-        #expect(await pipeline.state == .polished(id, isReplaced: false))
+        #expect(await pipeline.state.notice == .polished(id, isReplaced: false))
     }
 
     @Test func nothingLiveMeansNothingChanges() async {

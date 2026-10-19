@@ -15,16 +15,16 @@ struct IndicatorClickTests {
     static let id = DictationID()
 
     static let rows: [Row] = [
-        Row(state: .recording(isLong: false), showsIdlePill: false, click: .stopsDictation),
-        Row(state: .recording(isLong: false), showsIdlePill: true, click: .stopsDictation),
-        Row(state: .recording(isLong: true), showsIdlePill: false, click: .stopsDictation),
-        Row(state: .recording(isLong: false, isSilent: true), showsIdlePill: false, click: .stopsDictation),
+        Row(state: .init(.recording(isLong: false)), showsIdlePill: false, click: .stopsDictation),
+        Row(state: .init(.recording(isLong: false)), showsIdlePill: true, click: .stopsDictation),
+        Row(state: .init(.recording(isLong: true)), showsIdlePill: false, click: .stopsDictation),
+        Row(state: .init(.recording(isLong: false, isSilent: true)), showsIdlePill: false, click: .stopsDictation),
         Row(state: .idle, showsIdlePill: true, click: .startsDictation),
         Row(state: .idle, showsIdlePill: false, click: nil),
-        Row(state: .transcribing, showsIdlePill: true, click: nil),
-        Row(state: .undoable, showsIdlePill: true, click: nil),
-        Row(state: .failed(id), showsIdlePill: true, click: nil),
-        Row(state: .copied(id), showsIdlePill: false, click: nil),
+        Row(state: .init(.transcribing), showsIdlePill: true, click: nil),
+        Row(state: .init(.undoable), showsIdlePill: true, click: nil),
+        Row(state: .init(.idle, notice: .failed(id)), showsIdlePill: true, click: nil),
+        Row(state: .init(.idle, notice: .copied(id)), showsIdlePill: false, click: nil),
     ]
 
     /// The recording pill's click stops the dictation and the idle pill's starts one; VoiceOver's press says which.
@@ -39,7 +39,7 @@ struct IndicatorClickTests {
     @Test func whileYieldingOnlyARecordingPillIsATap() {
         #expect(IndicatorPlacement.click(in: .idle, showsIdlePill: true, isYielding: true) == nil)
         #expect(
-            IndicatorPlacement.click(in: .recording(isLong: false), showsIdlePill: true, isYielding: true)
+            IndicatorPlacement.click(in: .init(.recording(isLong: false)), showsIdlePill: true, isYielding: true)
                 == .stopsDictation)
     }
 
@@ -51,7 +51,7 @@ struct IndicatorClickTests {
 
         await pipeline.handle(.chordDown(.tapOrHold))
         await pipeline.handle(.chordUp)
-        #expect(await pipeline.state == .recording(isLong: false))
+        #expect(await pipeline.state.phase == .recording(isLong: false))
         await pipeline.handle(.chordDown(.tapOrHold))
         await pipeline.handle(.chordUp)
         await pipeline.settle()

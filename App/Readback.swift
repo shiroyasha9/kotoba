@@ -291,7 +291,7 @@ final class SessionThread: @unchecked Sendable {
 /// Turns the edits `EditReadback` reports into dictionary entries (docs/spec.md, Owner round 2026-10-16): a strong
 /// correction is added at once and the pill shows it with Undo; a weak one waits in Suggestions. The detector and the
 /// spell checker it loads (about 1.3 MB, 10-50 ms on first use) run only between dictations: an edit that comes while
-/// a dictation records or is sent waits until it is done.
+/// a dictation records or is sent, or Polish runs, waits until it is done.
 @MainActor
 final class EditLearner {
     /// The pipeline's port: it follows the field after each paste, and observes nothing between sessions.
@@ -331,13 +331,10 @@ final class EditLearner {
             })
     }
 
-    /// Every dictation state from the pipeline: learning waits while a dictation records, is sent or can be undone.
-    func dictationStateChanged(_ state: DictationState) {
-        isDictating =
-            switch state {
-            case .recording, .transcribing, .cleaning, .undoable: true
-            default: false
-            }
+    /// Every phase from the pipeline: learning waits while a dictation or a Polish is live (`DictationPhase.isLive`), so
+    /// it never runs during Polish's own replace.
+    func phaseChanged(_ phase: DictationPhase) {
+        isDictating = phase.isLive
         guard !isDictating, !waiting.isEmpty else { return }
         let edits = waiting
         waiting = []

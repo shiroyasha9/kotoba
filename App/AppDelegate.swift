@@ -242,7 +242,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
     private func render(_ newState: DictationState) {
         let reactions = shell.dictationChanged(newState)
-        learner.dictationStateChanged(newState)
+        learner.phaseChanged(newState.phase)
         // Before the cue: a stopped recording lets Esc and Return through to the front app at once.
         hotkeys.setRecordingShown(reactions.isRecordingShown)
         if reactions.readsSecureInput {

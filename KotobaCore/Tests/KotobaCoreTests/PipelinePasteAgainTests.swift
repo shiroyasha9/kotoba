@@ -48,7 +48,7 @@ struct PipelinePasteAgainTests {
 
         #expect(await world.pasteboard.text == "Fix the login bug.")
         #expect(await world.pasteboard.isTransient == false)
-        #expect(await pipeline.state == .copied(id))
+        #expect(await pipeline.state.notice == .copied(id))
     }
 
     /// History's Paste Again into an app that never reads it: the text stays on the clipboard and the pill says so.
@@ -64,7 +64,7 @@ struct PipelinePasteAgainTests {
 
         #expect(await world.pasteboard.text == "Fix the login bug.")
         #expect(await world.pasteboard.isTransient == false)
-        #expect(await pipeline.state == .copied(id))
+        #expect(await pipeline.state.notice == .copied(id))
     }
 
     /// A recording that starts while Paste Again pastes keeps its pill: the outcome of Paste Again shows only when no
@@ -82,7 +82,7 @@ struct PipelinePasteAgainTests {
         await gate.open()
         await again
 
-        #expect(await pipeline.state == .recording(isLong: false))
+        #expect(await pipeline.state.phase == .recording(isLong: false))
     }
 
     /// The screen locks just as the owner asks: a ⌘V would go to the lock screen, so the text waits on the clipboard.
@@ -97,7 +97,7 @@ struct PipelinePasteAgainTests {
         #expect(await world.paster.keystrokes.isEmpty)
         #expect(await world.pasteboard.text == "Fix the login bug.")
         #expect(await world.pasteboard.isTransient == false)
-        #expect(await pipeline.state == .copied(id))
+        #expect(await pipeline.state.notice == .copied(id))
     }
 
     /// The owner goes to another app while kotoba reads the clipboard: the text never goes there, it waits on the
@@ -117,7 +117,7 @@ struct PipelinePasteAgainTests {
 
         #expect(await world.paster.keystrokes.isEmpty)
         #expect(await world.pasteboard.text == "Fix the login bug.")
-        #expect(await pipeline.state == .copied(id))
+        #expect(await pipeline.state.notice == .copied(id))
     }
 
     @Test func pasteAgainWaitsForNoRecording() async {
@@ -179,7 +179,7 @@ struct PipelinePasteAgainTests {
         await pipeline.settle()
 
         #expect(await world.paster.pasted.isEmpty)
-        #expect(await pipeline.state == .recording(isLong: false))
+        #expect(await pipeline.state.phase == .recording(isLong: false))
     }
 
     static func record(_ text: String, at time: TimeInterval, _ status: DictationRecord.Status) -> DictationRecord {
@@ -204,7 +204,7 @@ struct PipelinePasteAgainTests {
         #expect(await world.pasteboard.text == "Copied text.")
         #expect(await world.pasteboard.isTransient == false)
         #expect(await world.paster.keystrokes.isEmpty)
-        #expect(await pipeline.state == .copied(last.id))
+        #expect(await pipeline.state.notice == .copied(last.id))
     }
 
     @Test func copyLastChordWithNoDictationCopiesNothing() async {
@@ -228,7 +228,7 @@ struct PipelinePasteAgainTests {
         await pipeline.settle()
 
         #expect(await world.pasteboard.text == "Older text.")
-        #expect(await pipeline.state == .recording(isLong: false))
+        #expect(await pipeline.state.phase == .recording(isLong: false))
     }
 
     @Test func copyAgainLeavesTheTextWithNoRestore() async {

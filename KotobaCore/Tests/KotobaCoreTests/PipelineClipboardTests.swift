@@ -72,7 +72,7 @@ struct PipelineClipboardTests {
         #expect(await world.pasteboard.appReads() == "dictated")
         let record = try #require(await world.store.records.first)
         #expect(record.status == .copied)
-        #expect(await pipeline.state == .copied(record.id))
+        #expect(await pipeline.state.notice == .copied(record.id))
     }
 
     /// A clipboard manager that ignores the transient marker reads the text before the Cmd-V: its read is not the
@@ -160,7 +160,7 @@ struct PipelineClipboardTests {
         #expect(await world.pasteboard.isTransient == false)
         let record = await world.store.records.first
         #expect(record?.status == .copied)
-        #expect(await pipeline.state == .copied(try #require(record).id))
+        #expect(await pipeline.state.notice == .copied(try #require(record).id))
     }
 
     @Test func aCopyDuringRecordingIsWhatComesBack() async {

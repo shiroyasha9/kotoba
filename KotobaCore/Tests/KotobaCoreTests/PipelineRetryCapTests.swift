@@ -76,7 +76,7 @@ struct PipelineRetryCapTests {
         #expect(await world.provider.requests.count == 1)
         let record = try #require(await world.store.records.first)
         #expect(record.status == .rejected)
-        #expect(await pipeline.state == .rejected(record.id, .other))
+        #expect(await pipeline.state.notice == .rejected(record.id, .other))
     }
 
     /// A live dictation that gets its text shows the route works again (a server outage ended with the network up):

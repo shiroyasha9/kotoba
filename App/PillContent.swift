@@ -60,7 +60,10 @@ extension IndicatorPanel {
         let isAlways = visibility == .always
         let click = IndicatorPlacement.click(
             in: state, showsIdlePill: isAlways, isYielding: context.isYielding)
-        switch state {
+        if let notice = state.notice {
+            return .init(PillNotice(text: text, action: action), color: notice.isGood ? .systemGreen : .systemOrange)
+        }
+        switch state.phase {
         case .idle:
             return isAlways ? .idle(click: click) : nil
         case .recording(let isLong, let isSilent, let isCleaned):
@@ -84,13 +87,6 @@ extension IndicatorPanel {
             return .init(
                 text: text, color: .secondaryLabelColor, action: action,
                 timer: .init(duration: context.undoWindow, kind: .followsUndoWindow))
-        case .failed, .timedOut, .connectionBlocked, .hostNotFound, .needsSetup, .rejected, .cleanupFailed,
-            .cleanupTooSlow,
-            .returnSkipped, .recovered,
-            .copied, .captureFailed, .nothingRecorded, .audioNotSaved, .audioCut, .clipboardNotKept, .polished,
-            .polishFailed:
-            return .init(
-                PillNotice(text: text, action: action), color: state.isGoodOutcome ? .systemGreen : .systemOrange)
         }
     }
 

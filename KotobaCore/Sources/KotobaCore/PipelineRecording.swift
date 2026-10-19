@@ -19,7 +19,7 @@ extension DictationPipeline {
             events = try await ports.audio.beginCapture(into: file)
         } catch {
             Log.pipeline.error("Capture did not start: \(error)")
-            emit(.captureFailed)
+            show(.captureFailed)
             return
         }
         let captureEvents = Task {
@@ -75,7 +75,9 @@ extension DictationPipeline {
         let isSilent = update(&sound)
         recording?.sound = sound
         armSoundDeadline(of: id)
-        guard recording?.isAnnounced == true, case .recording(let isLong, _, let isCleaned) = state else { return }
+        guard recording?.isAnnounced == true, case .recording(let isLong, _, let isCleaned) = state.phase else {
+            return
+        }
         emit(.recording(isLong: isLong, isSilent: isSilent, isCleaned: isCleaned))
     }
 
@@ -207,7 +209,7 @@ extension DictationPipeline {
         let audio = await ports.audio.cancelCapture()
         await current.captureEvents.value
         await keep(current, audio: audio, latency: latency, as: .cancelled)
-        emit(inFlightState)
+        emit(inFlightPhase)
     }
 
     /// Saves a recording that is not transcribed now, with its audio and latency marks. One with no audio (Esc or quit
@@ -282,7 +284,7 @@ extension DictationPipeline {
         endRecording(current)
         await remember(current.id, unless: await ports.audio.discardCapture())
         await current.captureEvents.value
-        emit(inFlightState)
+        emit(inFlightPhase)
     }
 
     /// Remembers a discarded recording whose file stayed on disk (`isDeleted` false).

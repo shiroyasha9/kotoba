@@ -82,7 +82,7 @@ final class IndicatorPanel {
         }
         notice = nil
         let wasRecording = isRecording
-        isRecording = if case .recording = state { true } else { false }
+        isRecording = state.phase.isRecording
         // A new dictation follows the focused window, unless a click on the pill started it.
         let followsFocus = isRecording && !wasRecording && !isTapPending
         if state != .idle {

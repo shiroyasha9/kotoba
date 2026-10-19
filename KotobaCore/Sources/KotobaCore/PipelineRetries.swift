@@ -31,7 +31,7 @@ extension DictationPipeline {
         if let wait = results.last?.lastError?.retryAfter { scheduleRetry(after: wait) }
         for record in results {
             reportTerms(of: record)
-            emitIfQuiet(.outcome(of: record))
+            showIfQuiet(.outcome(of: record))
         }
         // A recovered dictation is delivered too: retention's event (story 31).
         if results.contains(where: \.status.isTranscribed) { work.track { await self.deleteExpiredAudio() } }

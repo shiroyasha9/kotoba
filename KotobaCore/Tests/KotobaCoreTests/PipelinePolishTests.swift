@@ -25,7 +25,7 @@ struct PipelinePolishTests {
         #expect(await polisher.texts == [Self.spoken])
         #expect(await selector.requests == [Self.spoken])
         #expect(await world.paster.pasted == [Self.spoken, Self.polished])
-        #expect(await pipeline.state == .polished(record.id, isReplaced: true))
+        #expect(await pipeline.state.notice == .polished(record.id, isReplaced: true))
         #expect(record.transcript == Self.spoken)
         #expect(record.polishedText == Self.polished)
         #expect(record.latestText == Self.polished)
@@ -49,7 +49,7 @@ struct PipelinePolishTests {
         await pipeline.polishLast()
 
         #expect(await world.paster.pasted == [Self.spoken])
-        #expect(await pipeline.state == .polishFailed(.cutOff))
+        #expect(await pipeline.state.notice == .polishFailed(.cutOff))
         #expect(try #require(await world.store.records.first).polishedText == nil)
         #expect(await world.store.ledger.contains { $0.kind == .polish && $0.cost == .reported(1) })
     }
@@ -63,9 +63,9 @@ struct PipelinePolishTests {
 
         await pipeline.handle(.polishLast)
         #expect(await eventually { await gate.hasWaiters })
-        #expect(await pipeline.state == .polishing)
+        #expect(await pipeline.state.phase == .polishing)
         world.clock.advance(by: .seconds(10))
-        #expect(await eventually { await pipeline.state == .polishFailed(.tooSlow) })
+        #expect(await eventually { await pipeline.state.notice == .polishFailed(.tooSlow) })
         await gate.open()
         await pipeline.settle()
 
@@ -87,7 +87,7 @@ struct PipelinePolishTests {
 
         await pipeline.polishLast()
 
-        #expect(await pipeline.state == .polishFailed(failure))
+        #expect(await pipeline.state.notice == .polishFailed(failure))
         #expect(await world.paster.pasted == [Self.spoken])
         #expect(try #require(await world.store.records.first).polishedText == nil)
     }
@@ -99,7 +99,7 @@ struct PipelinePolishTests {
 
         await pipeline.polishLast()
 
-        #expect(await pipeline.state == .polishFailed(.failed))
+        #expect(await pipeline.state.notice == .polishFailed(.failed))
         #expect(await world.paster.pasted == [Self.spoken])
     }
 
@@ -110,7 +110,7 @@ struct PipelinePolishTests {
 
         await pipeline.polishLast()
 
-        #expect(await pipeline.state == .polishFailed(.nothingToPolish))
+        #expect(await pipeline.state.notice == .polishFailed(.nothingToPolish))
         #expect(await polisher.texts.isEmpty)
     }
 
@@ -124,7 +124,7 @@ struct PipelinePolishTests {
         await pipeline.polishLast()
 
         #expect(await polisher.texts.isEmpty)
-        #expect(await pipeline.state == .recording(isLong: false))
+        #expect(await pipeline.state.phase == .recording(isLong: false))
     }
 
     @Test func aDictationThatStartsDuringTheRequestWins() async throws {
@@ -142,7 +142,7 @@ struct PipelinePolishTests {
 
         #expect(await world.paster.pasted == [Self.spoken])
         #expect(await selector.requests.isEmpty)
-        #expect(await pipeline.state == .recording(isLong: false))
+        #expect(await pipeline.state.phase == .recording(isLong: false))
         #expect(try #require(await world.store.records.first).polishedText == Self.polished)
     }
 
@@ -163,7 +163,7 @@ struct PipelinePolishTests {
 
         #expect(await selector.restores == 1)
         #expect(await world.paster.pasted == [Self.spoken])
-        #expect(await pipeline.state == .recording(isLong: false))
+        #expect(await pipeline.state.phase == .recording(isLong: false))
     }
 
     @Test func aDictationPastedDuringTheRequestWins() async throws {
@@ -241,7 +241,7 @@ struct PipelinePolishTests {
         let id = try #require(await world.store.records.first?.id)
         #expect(await world.paster.pasted == [Self.spoken])
         #expect(await world.pasteboard.text == Self.polished)
-        #expect(await pipeline.state == .polished(id, isReplaced: false))
+        #expect(await pipeline.state.notice == .polished(id, isReplaced: false))
     }
 
     @Test func lastDictationActionsAndTheNextPolishUseThePolishedText() async {
@@ -290,7 +290,7 @@ struct PipelinePolishTests {
 
         #expect(await world.paster.pasted == [Self.spoken, Self.polished])
         #expect(await world.pasteboard.text == Self.spoken)
-        #expect(await pipeline.state == .copied(id))
+        #expect(await pipeline.state.notice == .copied(id))
         #expect(try #require(await world.store.records.first).polishedText == nil)
     }
 

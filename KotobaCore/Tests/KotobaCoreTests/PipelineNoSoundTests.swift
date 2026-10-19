@@ -12,11 +12,11 @@ struct PipelineNoSoundTests {
 
         await pipeline.tap(world)
         await world.meter(pipeline, 0, for: .milliseconds(1_900))
-        #expect(await pipeline.state == .recording(isLong: false))
+        #expect(await pipeline.state.phase == .recording(isLong: false))
 
         await world.meter(pipeline, 0, for: .milliseconds(100))
 
-        #expect(await pipeline.state == .recording(isLong: false, isSilent: true))
+        #expect(await pipeline.state.phase == .recording(isLong: false, isSilent: true))
         #expect(await world.audio.isCapturing)
     }
 
@@ -27,12 +27,12 @@ struct PipelineNoSoundTests {
         await pipeline.tap(world)
         world.clock.advance(by: .milliseconds(1_999))
         await pipeline.settle()
-        #expect(await pipeline.state == .recording(isLong: false))
+        #expect(await pipeline.state.phase == .recording(isLong: false))
 
         world.clock.advance(by: .milliseconds(1))
         await pipeline.settle()
 
-        #expect(await pipeline.state == .recording(isLong: false, isSilent: true))
+        #expect(await pipeline.state.phase == .recording(isLong: false, isSilent: true))
     }
 
     @Test func aMicThatStopsSendingWarns2sAfterItsLastSound() async {
@@ -44,12 +44,12 @@ struct PipelineNoSoundTests {
         await world.meter(pipeline, 0.4, for: .seconds(1))
         world.clock.advance(by: .milliseconds(1_999))
         await pipeline.settle()
-        #expect(await pipeline.state == .recording(isLong: false))
+        #expect(await pipeline.state.phase == .recording(isLong: false))
 
         world.clock.advance(by: .milliseconds(1))
         await pipeline.settle()
 
-        #expect(await pipeline.state == .recording(isLong: false, isSilent: true))
+        #expect(await pipeline.state.phase == .recording(isLong: false, isSilent: true))
     }
 
     @Test func aMicThatStopsAgainAfterTheWarningClearedWarnsAgain() async {
@@ -60,12 +60,12 @@ struct PipelineNoSoundTests {
         await pipeline.tap(world)
         await world.loseInput(pipeline)
         await world.meter(pipeline, 0.4, for: .milliseconds(500))
-        #expect(await pipeline.state == .recording(isLong: false))
+        #expect(await pipeline.state.phase == .recording(isLong: false))
 
         world.clock.advance(by: .seconds(2))
         await pipeline.settle()
 
-        #expect(await pipeline.state == .recording(isLong: false, isSilent: true))
+        #expect(await pipeline.state.phase == .recording(isLong: false, isSilent: true))
     }
 
     @Test func aStopCancelsTheDeadline() async {
@@ -80,8 +80,8 @@ struct PipelineNoSoundTests {
         world.clock.advance(by: .seconds(2))
         await pipeline.settle()
 
-        #expect(await states.next() == .recording(isLong: false))
-        #expect(await states.next() == .transcribing)
+        #expect(await states.next()?.phase == .recording(isLong: false))
+        #expect(await states.next()?.phase == .transcribing)
         #expect(await states.next() == .idle)
         #expect(await pipeline.state == .idle)
     }
@@ -94,7 +94,7 @@ struct PipelineNoSoundTests {
         await world.meter(pipeline, 0, for: .seconds(3))
         await world.meter(pipeline, 0.4, for: .milliseconds(100))
 
-        #expect(await pipeline.state == .recording(isLong: false))
+        #expect(await pipeline.state.phase == .recording(isLong: false))
     }
 
     @Test func aQuietRoomNeverWarns() async {
@@ -104,7 +104,7 @@ struct PipelineNoSoundTests {
         await pipeline.tap(world)
         await world.meter(pipeline, 0.0053, for: .seconds(30))
 
-        #expect(await pipeline.state == .recording(isLong: false))
+        #expect(await pipeline.state.phase == .recording(isLong: false))
     }
 
     @Test func aHoldShorterThanTheDelayNeverWarns() async {
@@ -118,8 +118,8 @@ struct PipelineNoSoundTests {
         await pipeline.settle()
 
         #expect(await world.paster.pasted == ["push to talk"])
-        #expect(await states.next() == .recording(isLong: false))
-        #expect(await states.next() == .transcribing)
+        #expect(await states.next()?.phase == .recording(isLong: false))
+        #expect(await states.next()?.phase == .transcribing)
         #expect(await states.next() == .idle)
     }
 
@@ -131,7 +131,7 @@ struct PipelineNoSoundTests {
         await world.meter(pipeline, 0.4, for: .seconds(1))
         await world.loseInput(pipeline)
 
-        #expect(await pipeline.state == .recording(isLong: false, isSilent: true))
+        #expect(await pipeline.state.phase == .recording(isLong: false, isSilent: true))
     }
 
     @Test func theTimeTheMicWasOffForUndoIsNotSilence() async {
@@ -144,11 +144,11 @@ struct PipelineNoSoundTests {
         world.clock.advance(by: .seconds(4))
         await pipeline.undo()
         await world.meter(pipeline, 0, for: .milliseconds(1_900))
-        #expect(await pipeline.state == .recording(isLong: false))
+        #expect(await pipeline.state.phase == .recording(isLong: false))
 
         await world.meter(pipeline, 0, for: .milliseconds(100))
 
-        #expect(await pipeline.state == .recording(isLong: false, isSilent: true))
+        #expect(await pipeline.state.phase == .recording(isLong: false, isSilent: true))
     }
 
     @Test func theLongRecordingWarningKeepsTheNoSoundWarning() async {
@@ -160,7 +160,7 @@ struct PipelineNoSoundTests {
         await world.meter(pipeline, 0, for: .seconds(3))
         await pipeline.settle()
 
-        #expect(await pipeline.state == .recording(isLong: true, isSilent: true))
+        #expect(await pipeline.state.phase == .recording(isLong: true, isSilent: true))
     }
 }
 
@@ -180,7 +180,7 @@ struct PipelineMicrophoneOffTests {
         #expect(await world.provider.requests.isEmpty)
         #expect(await world.store.records.isEmpty)
         #expect(await world.audio.discarded == (await world.audio.files))
-        #expect(await pipeline.state == .captureFailed)
+        #expect(await pipeline.state.notice == .captureFailed)
     }
 
     /// The owner spoke before the access went off: that part is sent.

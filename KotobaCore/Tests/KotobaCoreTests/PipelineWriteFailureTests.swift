@@ -18,7 +18,7 @@ struct PipelineWriteFailureTests {
         #expect(await world.store.records.isEmpty)
         #expect(await world.audio.discarded == (await world.audio.files))
         #expect(await world.paster.pasteCount == 0)
-        #expect(await pipeline.state == .audioNotSaved(loss))
+        #expect(await pipeline.state.notice == .audioNotSaved(loss))
     }
 
     @Test(arguments: [AudioLoss.diskFull, .other])
@@ -33,7 +33,7 @@ struct PipelineWriteFailureTests {
         #expect(await world.provider.requests.map(\.duration) == [.seconds(3)])
         #expect(await world.paster.pasted == ["the first half"])
         #expect(record.status == .pasted)
-        #expect(await pipeline.state == .audioCut(record.id, loss))
+        #expect(await pipeline.state.notice == .audioCut(record.id, loss))
     }
 
     /// A failure to reach the provider says more than the cut: the audio is saved and waits for a retry.
@@ -46,7 +46,7 @@ struct PipelineWriteFailureTests {
         await pipeline.dictate(world)
 
         let record = try #require(await world.store.records.first)
-        #expect(await pipeline.state == .failed(record.id))
+        #expect(await pipeline.state.notice == .failed(record.id))
     }
 
     /// Lost audio matters more than a lost clipboard: the text itself is short.
@@ -59,6 +59,6 @@ struct PipelineWriteFailureTests {
         await pipeline.dictate(world)
 
         let record = try #require(await world.store.records.first)
-        #expect(await pipeline.state == .audioCut(record.id, .diskFull))
+        #expect(await pipeline.state.notice == .audioCut(record.id, .diskFull))
     }
 }

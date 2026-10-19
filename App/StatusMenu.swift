@@ -213,27 +213,33 @@ struct MenuModel {
     /// listening (with Sparkle busy), failed with a retry and an update waiting, and a Bluetooth mic.
     static func samples() -> [(name: String, model: Self)] {
         let mics = [MenuChoice(title: "MacBook Pro Microphone", value: "builtin")]
-        let context = StatusContext(provider: .openRouter)
+        // Each status line comes from the shell, as the running app's does, so a sample shows its priorities.
+        func status(_ state: DictationState = .idle, _ facts: ShellStatus.Facts<Readiness.Missing> = .init()) -> Status
+        {
+            var shell = ShellStatus()
+            _ = shell.dictationChanged(state)
+            return shell.view(facts).status.line(StatusContext(provider: .openRouter))
+        }
         func route(_ route: TranscriptionRoute) -> MenuChoice {
             MenuChoice(title: route.menuTitle, value: route.rawValue)
         }
         var ready = Self(
-            status: .text(StatusText.ready), microphones: mics, microphoneInUse: ("builtin", "MacBook Pro Microphone"),
+            status: status(), microphones: mics, microphoneInUse: ("builtin", "MacBook Pro Microphone"),
             routes: routes(current: .openRouterMAI), route: route(.openRouterMAI), updates: Updates())
         var setup = ready
         setup.updates = nil
-        setup.status = .finishSetup(Readiness.Missing.setup(.key, .openRouter).setupText)
+        setup.status = status(.idle, .init(firstMissing: .setup(.key, .openRouter)))
         var listening = ready
-        listening.status = .text(DictationState.recording(isLong: false).statusText(context) ?? "")
+        listening.status = status(.init(.recording(isLong: false)))
         listening.updates?.canCheck = false
         ready.recovered = [MenuChoice(title: "Send the draft to the team by Friday", value: "1")]
         ready.hasLastDictation = true
         ready.hasRawLastDictation = true
         ready.suggestionCount = 2
         var yielding = ready
-        yielding.status = .text(StatusText.yieldsToRelease)
+        yielding.status = status(.idle, .init(isYielding: true))
         var failed = ready
-        failed.status = .text(DictationState.failed(DictationID()).statusText(context) ?? "")
+        failed.status = status(.init(.idle, notice: .failed(DictationID())))
         failed.pendingCount = 2
         failed.routes = routes(current: .xaiGrok)
         failed.route = route(.xaiGrok)

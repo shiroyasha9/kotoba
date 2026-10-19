@@ -70,7 +70,7 @@ struct PipelineCleanupTests {
         let record = try #require(await world.store.records.first)
         #expect(await world.paster.pasted == ["um open the auth dot ts file and then run the tests"])
         #expect(record.cleanedText == nil)
-        #expect(await pipeline.state == .cleanupFailed(record.id))
+        #expect(await pipeline.state.notice == .cleanupFailed(record.id))
         let cleanup = try #require(await world.store.ledger.first { $0.kind == .cleanup })
         #expect(cleanup.deliveredWords == 0 && cleanup.cost == .reported(1))
     }
@@ -124,7 +124,7 @@ struct PipelineCleanupTests {
         let record = try #require(await world.store.records.first)
         #expect(record.status == .pasted)
         #expect(record.cleanedText == nil)
-        #expect(await pipeline.state == .cleanupFailed(record.id))
+        #expect(await pipeline.state.notice == .cleanupFailed(record.id))
     }
 
     @Test func cleanupChordWithoutACleanerPastesTheRawTranscriptAndSaysSo() async throws {
@@ -137,7 +137,7 @@ struct PipelineCleanupTests {
 
         #expect(await world.paster.pasted == ["raw words"])
         let record = try #require(await world.store.records.first)
-        #expect(await pipeline.state == .cleanupFailed(record.id))
+        #expect(await pipeline.state.notice == .cleanupFailed(record.id))
     }
 
     @Test func deniedPasteShowsCopiedEvenWhenCleanupFailed() async throws {
@@ -152,7 +152,7 @@ struct PipelineCleanupTests {
         let record = try #require(await world.store.records.first)
         #expect(record.status == .copied)
         #expect(await world.pasteboard.text == "raw words")
-        #expect(await pipeline.state == .copied(record.id))
+        #expect(await pipeline.state.notice == .copied(record.id))
     }
 
     @Test func cleanedTextIsWhatACopyLeavesOnTheClipboard() async {

@@ -124,7 +124,7 @@ struct PipelineHistoryChangeTests {
         await retry.value
 
         #expect(await world.store.records.isEmpty)
-        #expect(await pipeline.state != .recovered(id))
+        #expect(await pipeline.state.notice != .recovered(id))
     }
 
     @Test func aDictationInFlightIsNotDeleted() async throws {
@@ -203,7 +203,7 @@ struct PipelineHistoryChangeTests {
             latest = await activity.next()
         }
         #expect(latest == PipelineActivity(isQuiet: false, inFlight: [ids[1]]))
-        #expect(await pipeline.state == .transcribing)
+        #expect(await pipeline.state.phase == .transcribing)
         await second.open()
         await pipeline.settle()
     }

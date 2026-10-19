@@ -14,7 +14,7 @@ struct PipelineDoubleTapTests {
         world.clock.advance(by: .seconds(5))
         await pipeline.settle()
 
-        #expect(await pipeline.state == .recording(isLong: false))
+        #expect(await pipeline.state.phase == .recording(isLong: false))
         #expect(await world.audio.isCapturing)
         #expect(await world.audio.discarded.count == 1)
         #expect(await world.paster.pasteCount == 0)
@@ -39,7 +39,7 @@ struct PipelineDoubleTapTests {
         #expect(await pipeline.state == .idle)
         await pipeline.handle(.chordUp)
 
-        #expect(await pipeline.state == .recording(isLong: false))
+        #expect(await pipeline.state.phase == .recording(isLong: false))
     }
 
     @Test func aHandsFreeTapStopsADoubleTapDictation() async {
@@ -61,7 +61,7 @@ struct PipelineDoubleTapTests {
 
         await pipeline.handle(.escape)
 
-        #expect(await pipeline.state == .undoable)
+        #expect(await pipeline.state.phase == .undoable)
         #expect(await world.paster.pasteCount == 0)
     }
 
@@ -80,7 +80,7 @@ struct PipelineDoubleTapTests {
         world.clock.advance(by: .seconds(2))
         await pipeline.settle()
 
-        #expect(await pipeline.state == .recording(isLong: false))
+        #expect(await pipeline.state.phase == .recording(isLong: false))
         #expect(await world.paster.pasteCount == 0)
     }
 
@@ -90,7 +90,7 @@ struct PipelineDoubleTapTests {
 
         await pipeline.doubleTap(world, gap: .milliseconds(300))
 
-        #expect(await pipeline.state == .recording(isLong: false))
+        #expect(await pipeline.state.phase == .recording(isLong: false))
     }
 
     @Test func aHandsFreeShortcutPressBetweenTheTapsClearsTheFirstTap() async {
@@ -207,7 +207,7 @@ struct PipelineDoubleTapTests {
 
         await pipeline.doubleTap(world)
 
-        #expect(await pipeline.state == .undoable)
+        #expect(await pipeline.state.phase == .undoable)
         #expect(await world.audio.resumes == 0)
     }
 

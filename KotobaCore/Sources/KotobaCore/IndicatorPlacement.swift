@@ -132,10 +132,11 @@ public enum IndicatorPlacement {
     /// Always" it starts one from the idle pill, unless a development build gives way to the release app
     /// (`InstallYield`). Nil elsewhere: the click does nothing. VoiceOver names the pill's press after it.
     public static func click(in state: DictationState, showsIdlePill: Bool, isYielding: Bool) -> PillClick? {
-        switch state {
+        guard state.notice == nil else { return nil }
+        return switch state.phase {
         case .recording: .stopsDictation
         case .idle: showsIdlePill && !isYielding ? .startsDictation : nil
-        default: nil
+        case .transcribing, .cleaning, .undoable, .polishing: nil
         }
     }
 

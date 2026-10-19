@@ -31,7 +31,7 @@ struct PipelineHotkeyTests {
         world.clock.advance(by: .seconds(5))
         await pipeline.settle()
 
-        #expect(await pipeline.state == .recording(isLong: false))
+        #expect(await pipeline.state.phase == .recording(isLong: false))
         #expect(await world.audio.isCapturing)
         #expect(await world.paster.pasteCount == 0)
     }
@@ -92,7 +92,7 @@ struct PipelineHotkeyTests {
         await pipeline.handle(.chordUp)
 
         #expect(await world.audio.isCapturing)
-        #expect(await pipeline.state == .recording(isLong: false))
+        #expect(await pipeline.state.phase == .recording(isLong: false))
     }
 
     @Test func aTapCapturesAtOnceButShowsAndSoundsOnlyAtRelease() async throws {
@@ -104,7 +104,7 @@ struct PipelineHotkeyTests {
         #expect(await pipeline.state == .idle)
         world.clock.advance(by: .milliseconds(150))
         await pipeline.handle(.chordUp)
-        #expect(await pipeline.state == .recording(isLong: false))
+        #expect(await pipeline.state.phase == .recording(isLong: false))
 
         await pipeline.tap(world)
         await pipeline.settle()
@@ -123,7 +123,7 @@ struct PipelineHotkeyTests {
 
         world.clock.advance(by: .milliseconds(1))
         await pipeline.settle()
-        #expect(await pipeline.state == .recording(isLong: false))
+        #expect(await pipeline.state.phase == .recording(isLong: false))
         #expect(await world.audio.isCapturing)
     }
 
@@ -141,8 +141,8 @@ struct PipelineHotkeyTests {
         await pipeline.dictate(world)
 
         // The shortcut emitted nothing; the first states belong to the dictation after it.
-        #expect(await states.next() == .recording(isLong: false))
-        #expect(await states.next() == .transcribing)
+        #expect(await states.next()?.phase == .recording(isLong: false))
+        #expect(await states.next()?.phase == .transcribing)
         #expect(await states.next() == .idle)
     }
 
@@ -161,7 +161,7 @@ struct PipelineHotkeyTests {
         await pipeline.handle(.chordUp, at: pressedAt + .milliseconds(380))
 
         #expect(await world.audio.isCapturing)
-        #expect(await pipeline.state == .recording(isLong: false))
+        #expect(await pipeline.state.phase == .recording(isLong: false))
     }
 
     @Test func aCaptureThatCannotStartShowsCaptureFailed() async {
@@ -171,7 +171,7 @@ struct PipelineHotkeyTests {
 
         await pipeline.tap(world)
 
-        #expect(await pipeline.state == .captureFailed)
+        #expect(await pipeline.state.notice == .captureFailed)
         #expect(await world.store.records.isEmpty)
     }
 
@@ -187,7 +187,7 @@ struct PipelineHotkeyTests {
         await pipeline.settle()
 
         // Not `.captureFailed`, which names a missing mic or mic access.
-        #expect(await pipeline.state == .nothingRecorded)
+        #expect(await pipeline.state.notice == .nothingRecorded)
         #expect(await world.store.records.isEmpty)
         #expect(await world.provider.requests.isEmpty)
     }
@@ -244,12 +244,12 @@ struct PipelineHotkeyTests {
         await pipeline.handle(.chordDown(.tapOrHold))
         world.clock.advance(by: .milliseconds(500))
         await pipeline.settle()
-        #expect(await pipeline.state == .recording(isLong: false))
+        #expect(await pipeline.state.phase == .recording(isLong: false))
         await pipeline.handle(.chordInterrupted)
 
         #expect(await world.audio.isCapturing)
         #expect(await world.audio.discarded.isEmpty)
-        #expect(await pipeline.state == .recording(isLong: false))
+        #expect(await pipeline.state.phase == .recording(isLong: false))
     }
 
     @Test func aKeyPressedAfterTheStartTapIsOrdinaryTyping() async {
@@ -261,7 +261,7 @@ struct PipelineHotkeyTests {
 
         #expect(await world.audio.isCapturing)
         #expect(await world.audio.discarded.isEmpty)
-        #expect(await pipeline.state == .recording(isLong: false))
+        #expect(await pipeline.state.phase == .recording(isLong: false))
     }
 
     @Test func tenMinutesOfRecordingWarnsButKeepsRecording() async {
@@ -271,12 +271,12 @@ struct PipelineHotkeyTests {
         await pipeline.tap(world)
         world.clock.advance(by: .seconds(599))
         await pipeline.settle()
-        #expect(await pipeline.state == .recording(isLong: false))
+        #expect(await pipeline.state.phase == .recording(isLong: false))
 
         world.clock.advance(by: .seconds(1))
         await pipeline.settle()
 
-        #expect(await pipeline.state == .recording(isLong: true))
+        #expect(await pipeline.state.phase == .recording(isLong: true))
         #expect(await world.audio.isCapturing)
     }
 
@@ -302,8 +302,8 @@ struct PipelineHotkeyTests {
         await pipeline.tap(world)
         await pipeline.settle()
 
-        #expect(await states.next() == .recording(isLong: false))
-        #expect(await states.next() == .transcribing)
+        #expect(await states.next()?.phase == .recording(isLong: false))
+        #expect(await states.next()?.phase == .transcribing)
         #expect(await states.next() == .idle)
     }
 

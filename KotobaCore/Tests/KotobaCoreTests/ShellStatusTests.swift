@@ -4,7 +4,12 @@ import Testing
 @testable import KotobaCore
 
 struct ShellStatusTests {
-    private static let listening = DictationState.recording(isLong: false)
+    private static let listening = DictationState(.recording(isLong: false))
+
+    /// A notice over no live dictation.
+    private static func notice(_ notice: DictationNotice) -> DictationState {
+        DictationState(.idle, notice: notice)
+    }
 
     /// Each state in turn from a fresh shell, and the cue each one plays.
     private static func cues(_ states: [DictationState]) -> [CueVoice.Cue?] {
@@ -14,22 +19,23 @@ struct ShellStatusTests {
 
     @Test func aDictationPlaysOneStartAndOneStopCue() {
         let states: [DictationState] = [
-            Self.listening, .recording(isLong: true), .recording(isLong: true, isSilent: true), .transcribing,
-            .cleaning,
-            .idle,
+            Self.listening, .init(.recording(isLong: true)), .init(.recording(isLong: true, isSilent: true)),
+            .init(.transcribing), .init(.cleaning), .idle,
         ]
         #expect(Self.cues(states) == [.start, nil, nil, .stop, nil, nil])
     }
 
     /// Esc cancels with no stop cue, and Undo resumes the same recording: the start cue sounds again for it.
     @Test func aCanceledRecordingPlaysNoStopCue() {
-        #expect(Self.cues([Self.listening, .undoable, Self.listening, .transcribing]) == [.start, nil, .start, .stop])
-        #expect(Self.cues([Self.listening, .nothingRecorded]) == [.start, nil])
+        #expect(
+            Self.cues([Self.listening, .init(.undoable), Self.listening, .init(.transcribing)])
+                == [.start, nil, .start, .stop])
+        #expect(Self.cues([Self.listening, Self.notice(.nothingRecorded)]) == [.start, nil])
     }
 
     /// A transcribing state that does not follow a recording (Transcribe Again, a retry) is no stop.
     @Test func aStopCueOnlyEndsARecording() {
-        #expect(Self.cues([.transcribing, .idle, .transcribing]) == [nil, nil, nil])
+        #expect(Self.cues([.init(.transcribing), .idle, .init(.transcribing)]) == [nil, nil, nil])
     }
 
     @Test func aRecordingStartReadsSecureInputOnceAndShowsTheRecording() {
@@ -37,8 +43,8 @@ struct ShellStatusTests {
         #expect(
             shell.dictationChanged(Self.listening)
                 == .init(cue: .start, readsSecureInput: true, isRecordingShown: true))
-        #expect(shell.dictationChanged(.recording(isLong: true)) == .init(isRecordingShown: true))
-        #expect(shell.dictationChanged(.transcribing) == .init(cue: .stop))
+        #expect(shell.dictationChanged(.init(.recording(isLong: true))) == .init(isRecordingShown: true))
+        #expect(shell.dictationChanged(.init(.transcribing)) == .init(cue: .stop))
     }
 
     /// b235fa0: Microphone access turned off while kotoba runs makes the mic silent; the silent pill reads the grants
@@ -46,7 +52,7 @@ struct ShellStatusTests {
     @Test func aSilentRecordingReadsTheGrantsAgain() {
         var shell = ShellStatus()
         _ = shell.dictationChanged(Self.listening)
-        let silent = shell.dictationChanged(.recording(isLong: false, isSilent: true))
+        let silent = shell.dictationChanged(.init(.recording(isLong: false, isSilent: true)))
         #expect(silent.readsGrants)
         #expect(silent.cue == nil)
         #expect(!shell.dictationChanged(Self.listening).readsGrants)
@@ -55,9 +61,9 @@ struct ShellStatusTests {
     /// I2: a capture that did not start and a copy instead of a paste say what the grants allow now.
     @Test func aFailedCaptureAndACopyReadTheGrantsAgain() {
         var shell = ShellStatus()
-        #expect(shell.dictationChanged(.captureFailed).readsGrants)
-        #expect(shell.dictationChanged(.copied(DictationID())).readsGrants)
-        #expect(!shell.dictationChanged(.failed(DictationID())).readsGrants)
+        #expect(shell.dictationChanged(Self.notice(.captureFailed)).readsGrants)
+        #expect(shell.dictationChanged(Self.notice(.copied(DictationID()))).readsGrants)
+        #expect(!shell.dictationChanged(Self.notice(.failed(DictationID()))).readsGrants)
         #expect(!shell.dictationChanged(.idle).readsGrants)
     }
 
@@ -65,8 +71,8 @@ struct ShellStatusTests {
     /// state itself reads the queues.
     @Test func aRecoveredTextReadsTheQueues() {
         var shell = ShellStatus()
-        #expect(shell.dictationChanged(.recovered(DictationID())) == .init(readsQueues: true))
-        #expect(!shell.dictationChanged(.copied(DictationID())).readsQueues)
+        #expect(shell.dictationChanged(Self.notice(.recovered(DictationID()))) == .init(readsQueues: true))
+        #expect(!shell.dictationChanged(Self.notice(.copied(DictationID()))).readsQueues)
     }
 
     // MARK: Icon
@@ -86,7 +92,7 @@ struct ShellStatusTests {
 
     @Test func theIconListensWhileRecordingWhateverNeedsAttention() {
         #expect(Self.view(.idle).icon == .ready)
-        #expect(Self.view(.transcribing).icon == .ready)
+        #expect(Self.view(.init(.transcribing)).icon == .ready)
         #expect(
             Self.view(Self.listening, .init(firstMissing: "key", hasWaitingUpdate: true), waiting: 2).icon == .listening
         )
@@ -108,9 +114,9 @@ struct ShellStatusTests {
 
     /// A dictation's own words come first, also while setup is not complete.
     @Test func aDictationSaysItsOwnWords() {
-        let failed = DictationState.failed(DictationID())
+        let failed = Self.notice(.failed(DictationID()))
         #expect(Self.view(failed, .init(firstMissing: "key")).status == .dictation(failed))
-        #expect(Self.view(.transcribing).status == .dictation(.transcribing))
+        #expect(Self.view(.init(.transcribing)).status == .dictation(.init(.transcribing)))
     }
 
     /// 2c02ed2, 80bfa83: a development build says it gives way while the release app runs. A live dictation's own
@@ -118,11 +124,17 @@ struct ShellStatusTests {
     @Test func theMenuSaysItGivesWayExceptDuringALiveDictation() {
         let yielding = Facts(firstMissing: "key", isYielding: true)
         #expect(Self.view(.idle, yielding).status == .yieldsToRelease)
-        #expect(Self.view(.failed(DictationID()), yielding).status == .yieldsToRelease)
-        #expect(Self.view(.copied(DictationID()), yielding).status == .yieldsToRelease)
-        for live: DictationState in [Self.listening, .transcribing, .cleaning, .undoable, .polishing] {
-            #expect(Self.view(live, yielding).status == .dictation(live))
+        #expect(Self.view(Self.notice(.failed(DictationID())), yielding).status == .yieldsToRelease)
+        #expect(Self.view(Self.notice(.copied(DictationID())), yielding).status == .yieldsToRelease)
+        for phase: DictationPhase in [.recording(isLong: false), .transcribing, .cleaning, .undoable, .polishing] {
+            #expect(Self.view(.init(phase), yielding).status == .dictation(.init(phase)))
         }
+    }
+
+    /// A notice can show while the next dictation is in flight: that one is live, so the menu keeps the notice.
+    @Test func aNoticeOverADictationInFlightIsNoYield() {
+        let state = DictationState(.transcribing, notice: .failed(DictationID()))
+        #expect(Self.view(state, Facts(isYielding: true)).status == .dictation(state))
     }
 
     /// The history database did not open: the menu says so over the yield and any dictation.

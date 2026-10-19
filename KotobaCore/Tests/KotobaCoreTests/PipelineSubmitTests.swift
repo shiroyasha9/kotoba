@@ -279,7 +279,7 @@ struct PipelineSubmitTests {
         #expect(await world.pasteboard.isTransient == false)
         let record = try #require(await world.store.records.first)
         #expect(record.status == .copied)
-        #expect(await pipeline.state == .copied(record.id))
+        #expect(await pipeline.state.notice == .copied(record.id))
     }
 
     /// With no front app known at the stop there is nothing to compare: the text pastes.

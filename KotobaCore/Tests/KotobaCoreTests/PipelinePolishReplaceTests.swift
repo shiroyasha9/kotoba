@@ -23,7 +23,7 @@ struct PipelinePolishReplaceTests {
         let id = try #require(await world.store.records.first?.id)
         #expect(await world.paster.keystrokes == [.commandV, .backspaces(Self.spoken.count), .commandV])
         #expect(await world.paster.pasted == [Self.spoken, Self.polished])
-        #expect(await pipeline.state == .polished(id, isReplaced: true))
+        #expect(await pipeline.state.notice == .polished(id, isReplaced: true))
     }
 
     /// No app read the last paste: it did not land, so Backspace would delete the owner's own text. The polished text
@@ -42,7 +42,7 @@ struct PipelinePolishReplaceTests {
         let id = try #require(await world.store.records.first?.id)
         #expect(await world.paster.keystrokes == [.commandV])
         #expect(await world.pasteboard.text == Self.polished)
-        #expect(await pipeline.state == .polished(id, isReplaced: false))
+        #expect(await pipeline.state.notice == .polished(id, isReplaced: false))
     }
 
     /// The owner switches windows between kotoba's clipboard write and its ⌘V, so the paste lands in the new window,
@@ -78,7 +78,7 @@ struct PipelinePolishReplaceTests {
         let id = try #require(await world.store.records.first?.id)
         #expect(await world.paster.keystrokes == [.commandV])
         #expect(await world.pasteboard.text == Self.polished)
-        #expect(await pipeline.state == .polished(id, isReplaced: false))
+        #expect(await pipeline.state.notice == .polished(id, isReplaced: false))
         #expect(try #require(await world.store.records.first).polishedText == Self.polished)
     }
 
@@ -111,7 +111,7 @@ struct PipelinePolishReplaceTests {
         #expect(await world.paster.keystrokes == [.commandV])
         #expect(await world.pasteboard.text == Self.polished)
         #expect(await world.pasteboard.isTransient == false)
-        #expect(await pipeline.state == .polished(id, isReplaced: false))
+        #expect(await pipeline.state.notice == .polished(id, isReplaced: false))
     }
 
     /// The place is read just before the ⌘V: a window that comes to the front as the paste lands is not taken for it.

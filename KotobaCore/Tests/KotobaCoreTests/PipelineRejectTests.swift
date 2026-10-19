@@ -14,7 +14,7 @@ struct PipelineRejectTests {
         let record = try #require(await world.store.records.first)
         #expect(record.status == .rejected)
         #expect(record.rejectReason == .other)
-        #expect(await pipeline.state == .rejected(record.id, .other))
+        #expect(await pipeline.state.notice == .rejected(record.id, .other))
 
         await world.provider.fail(with: nil)
         await pipeline.retryPending()
@@ -33,7 +33,7 @@ struct PipelineRejectTests {
         #expect(record.status == .failed)
         #expect(record.needsSetup == .credit)
         #expect(record.rejectReason == nil)
-        #expect(await pipeline.state == .needsSetup(record.id, .credit))
+        #expect(await pipeline.state.notice == .needsSetup(record.id, .credit))
 
         await world.provider.fail(with: nil)
         await pipeline.networkChanged(isOnline: false)
@@ -95,7 +95,7 @@ struct PipelineRejectTests {
         await pipeline.dictate(world)
 
         let record = try #require(await world.store.records.first)
-        #expect(await pipeline.state == .rejected(record.id, .other))
+        #expect(await pipeline.state.notice == .rejected(record.id, .other))
     }
 
     /// Routes send text with spaces or a newline around it; the pipeline trims it, and the cleaned text too.
@@ -126,7 +126,7 @@ struct PipelineRejectTests {
         #expect(rejected.rejectReason == .emptyTranscript)
         #expect(rejected.transcript == nil)
         #expect(rejected.isRetryable)
-        #expect(await pipeline.state == .rejected(rejected.id, .emptyTranscript))
+        #expect(await pipeline.state.notice == .rejected(rejected.id, .emptyTranscript))
         #expect(await world.paster.pasteCount == 0)
         await pipeline.retryPending()
 
@@ -189,6 +189,6 @@ struct PipelineRejectTests {
         #expect(cleanup.kind == .cleanup)
         #expect(cleanup.deliveredWords == 0)
         #expect(cleanup.cost == .reported(Decimal(2) / 10_000))
-        #expect(await pipeline.state == .cleanupFailed(record.id))
+        #expect(await pipeline.state.notice == .cleanupFailed(record.id))
     }
 }

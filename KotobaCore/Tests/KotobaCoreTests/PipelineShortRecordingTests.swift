@@ -87,6 +87,6 @@ struct PipelineShortRecordingTests {
 
         let record = try #require(await world.store.records.first)
         #expect(await world.provider.requests.count == 1)
-        #expect(await pipeline.state == .rejected(record.id, .emptyTranscript))
+        #expect(await pipeline.state.notice == .rejected(record.id, .emptyTranscript))
     }
 }

@@ -18,7 +18,7 @@ struct PipelineNetworkTests {
 
         let record = try #require(await world.store.records.first)
         #expect(record.status == .recovered)
-        #expect(await pipeline.state == .recovered(record.id))
+        #expect(await pipeline.state.notice == .recovered(record.id))
         #expect(await world.pasteboard.text == "owner's")
     }
 

@@ -123,14 +123,16 @@ public struct ShellStatus: Sendable, Equatable {
 
     /// The pipeline's new state.
     public mutating func dictationChanged(_ state: DictationState) -> Reactions {
-        let was = Phase(dictation)
-        let phase = Phase(state)
+        let wasRecording = dictation.phase.isRecording
         dictation = state
-        let isRecordingStart = phase.isRecording && !was.isRecording
+        let isRecordingStart = state.phase.isRecording && !wasRecording
+        // The mic can also go silent because its access was turned off while kotoba runs.
+        let isSilent = if case .recording(_, isSilent: true, _) = state.phase { true } else { false }
+        let isRecovered = if case .recovered = state.notice { true } else { false }
         return Reactions(
-            cue: isRecordingStart ? .start : was.isRecording && phase == .transcribing ? .stop : nil,
-            readsSecureInput: isRecordingStart, isRecordingShown: phase.isRecording, readsGrants: phase.readsGrants,
-            readsQueues: phase == .recovered)
+            cue: isRecordingStart ? .start : wasRecording && state.phase == .transcribing ? .stop : nil,
+            readsSecureInput: isRecordingStart, isRecordingShown: state.phase.isRecording,
+            readsGrants: state.notice?.dependsOnGrants ?? isSilent, readsQueues: isRecovered)
     }
 
     /// A history write or a reaction asks for a queue read. True: start one now. False: one runs, and it reads once
@@ -156,9 +158,8 @@ public struct ShellStatus: Sendable, Equatable {
 
     /// The icon and the menu's first line for `facts` now.
     public func view<Missing>(_ facts: Facts<Missing>) -> View<Missing> {
-        let phase = Phase(dictation)
         let icon: Icon =
-            if phase.isRecording {
+            if dictation.phase.isRecording {
                 .listening
             } else if facts.firstMissing != nil || queues.waitingCount > 0 || facts.hasWaitingUpdate {
                 .needsAttention
@@ -168,9 +169,9 @@ public struct ShellStatus: Sendable, Equatable {
         let status: MenuStatus<Missing> =
             if isHistoryUnavailable {
                 .historyUnavailable
-            } else if facts.isYielding && !phase.isLive {
+            } else if facts.isYielding && !dictation.phase.isLive {
                 .yieldsToRelease
-            } else if phase != .idle {
+            } else if dictation != .idle {
                 .dictation(dictation)
             } else {
                 facts.firstMissing.map { .finishSetup($0) } ?? .ready
@@ -185,52 +186,5 @@ extension ShellStatus {
         case running
         /// A request came while the read ran: one more read follows it.
         case due
-    }
-
-    /// What the shell needs to know of a `DictationState`. The only place this module reads one.
-    private enum Phase: Equatable {
-        case idle
-        case recording(isSilent: Bool)
-        case transcribing
-        /// A live dictation past its recording, or an Undo window: its own text comes first.
-        case working
-        /// A recovered text: a retry transcribed a queued dictation.
-        case recovered
-        /// An error or a delivery note: the dictation is past. `readsGrants`: its text and button depend on the mic
-        /// and Accessibility grants now (I2).
-        case outcome(readsGrants: Bool)
-
-        init(_ state: DictationState) {
-            self =
-                switch state {
-                case .idle: .idle
-                case .recording(_, let isSilent, _): .recording(isSilent: isSilent)
-                case .transcribing: .transcribing
-                case .cleaning, .undoable, .polishing: .working
-                case .recovered: .recovered
-                case .captureFailed, .copied: .outcome(readsGrants: true)
-                case .failed, .timedOut, .connectionBlocked, .hostNotFound, .needsSetup, .rejected, .cleanupFailed,
-                    .cleanupTooSlow, .returnSkipped, .nothingRecorded, .audioNotSaved, .audioCut, .clipboardNotKept,
-                    .polished, .polishFailed:
-                    .outcome(readsGrants: false)
-                }
-        }
-
-        var isRecording: Bool {
-            if case .recording = self { true } else { false }
-        }
-
-        /// A dictation the owner is still in: a recording, its transcript and cleanup, an Undo window, a Polish.
-        var isLive: Bool {
-            switch self {
-            case .recording, .transcribing, .working: true
-            case .idle, .recovered, .outcome: false
-            }
-        }
-
-        /// The mic can also go silent because its access was turned off while kotoba runs.
-        var readsGrants: Bool {
-            self == .outcome(readsGrants: true) || self == .recording(isSilent: true)
-        }
     }
 }

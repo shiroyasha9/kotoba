@@ -17,7 +17,7 @@ struct PipelineNetworkErrorTests {
         let record = try #require(await world.store.records.first)
         #expect(record.status == .failed)
         #expect(record.attempts == 0)
-        #expect(await pipeline.state == .connectionBlocked(record.id))
+        #expect(await pipeline.state.notice == .connectionBlocked(record.id))
     }
 
     /// The owner's endpoint does not resolve: a typo in it, or DNS down. The pill names the host, and the dictation
@@ -30,7 +30,7 @@ struct PipelineNetworkErrorTests {
         let record = try #require(await world.store.records.first)
         #expect(record.status == .failed)
         #expect(record.attempts == 0)
-        #expect(await pipeline.state == .hostNotFound(record.id, host: "myspeech.cognitiveservices.azure.com"))
+        #expect(await pipeline.state.notice == .hostNotFound(record.id, host: "myspeech.cognitiveservices.azure.com"))
 
         await world.provider.fail(with: nil)
         await pipeline.retryAtLaunch()
@@ -50,6 +50,6 @@ struct PipelineNetworkErrorTests {
         let record = try #require(await world.store.records.first)
         #expect(record.status == .rejected)
         #expect(await world.provider.requests.count == 1)
-        #expect(await pipeline.state == .rejected(record.id, .audioMissing))
+        #expect(await pipeline.state.notice == .rejected(record.id, .audioMissing))
     }
 }

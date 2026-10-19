@@ -224,7 +224,7 @@ struct PipelineMouseButtonTests {
         await click(.milliseconds(100))
         world.clock.advance(by: .seconds(3))
         await pipeline.settle()
-        #expect(await pipeline.state == .recording(isLong: false))
+        #expect(await pipeline.state.phase == .recording(isLong: false))
 
         await click(.milliseconds(100))
         await pipeline.settle()

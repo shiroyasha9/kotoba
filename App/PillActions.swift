@@ -51,7 +51,7 @@ extension AppDelegate {
         case .addCredit:
             NSWorkspace.shared.open(routeSettings.route.account.creditsPage)
         case .copy:
-            guard case .recovered(let id) = shell.dictation else { return }
+            guard case .recovered(let id) = shell.dictation.notice else { return }
             copyRecovered(id)
         case .allowPasting:
             setup.allowPasting()

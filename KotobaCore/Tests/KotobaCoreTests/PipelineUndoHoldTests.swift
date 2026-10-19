@@ -17,7 +17,7 @@ struct PipelineUndoHoldTests {
         world.clock.advance(by: .seconds(60))
         await pipeline.settle()
 
-        #expect(await pipeline.state == .undoable)
+        #expect(await pipeline.state.phase == .undoable)
         #expect(await world.store.records.isEmpty)
     }
 
@@ -33,7 +33,7 @@ struct PipelineUndoHoldTests {
         await pipeline.holdUndoWindow(false)
         world.clock.advance(by: .milliseconds(2_999))
         await pipeline.settle()
-        #expect(await pipeline.state == .undoable)
+        #expect(await pipeline.state.phase == .undoable)
 
         world.clock.advance(by: .milliseconds(1))
         await pipeline.settle()
@@ -52,7 +52,7 @@ struct PipelineUndoHoldTests {
         world.clock.advance(by: .seconds(30))
         await pipeline.undo()
 
-        #expect(await pipeline.state == .recording(isLong: false))
+        #expect(await pipeline.state.phase == .recording(isLong: false))
         #expect(await world.audio.resumes == 1)
     }
 

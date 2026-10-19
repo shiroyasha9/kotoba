@@ -24,7 +24,7 @@ struct PipelineCleanupDeadlineTests {
 
         #expect(await eventually { await world.paster.pasted == ["raw words"] })
         let record = try #require(await world.store.records.first)
-        #expect(await eventually { await pipeline.state == .cleanupTooSlow(record.id) })
+        #expect(await eventually { await pipeline.state.notice == .cleanupTooSlow(record.id) })
         #expect(record.cleanedText == nil)
         await gate.open()
         await pipeline.settle()

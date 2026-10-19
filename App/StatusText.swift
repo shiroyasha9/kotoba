@@ -159,11 +159,22 @@ struct StatusContext {
 }
 
 /// The words for each `DictationState`, shared by the menu and the indicator pill, so the two
-/// always say the same thing (copy deck: docs/research/ux-polish.md, 4.2).
+/// always say the same thing (copy deck: docs/research/ux-polish.md, 4.2). A notice shows in place of the phase.
 extension DictationState {
     static let secureInputHelp = "Another app turned on Secure Input. kotoba still records."
 
     /// The pill message and the menu status line; nil when idle, where the menu shows readiness instead.
+    func statusText(_ context: StatusContext) -> String? {
+        notice.map { $0.statusText(context) } ?? phase.statusText(context)
+    }
+
+    /// The one button the pill shows for this state, or nil.
+    func pillAction(_ context: StatusContext) -> PillAction? {
+        notice.map { $0.pillAction(context) } ?? phase.pillAction(context)
+    }
+}
+
+extension DictationPhase {
     func statusText(_ context: StatusContext) -> String? {
         switch self {
         case .idle: nil
@@ -175,23 +186,35 @@ extension DictationState {
         case .cleaning: "Cleaning up"
         case .polishing: "Polishing"
         case .undoable: "Canceled"
-        default: outcomeText(context)
         }
     }
 
-    private func outcomeText(_ context: StatusContext) -> String? {
+    func pillAction(_ context: StatusContext) -> PillAction? {
+        switch self {
+        case .undoable: .undo
+        case .recording(_, isSilent: true, _):
+            context.isMicrophoneOff ? .openMicrophoneSettings : .chooseMicrophone
+        case .idle, .recording, .transcribing, .cleaning, .polishing: nil
+        }
+    }
+}
+
+extension DictationNotice {
+    func statusText(_ context: StatusContext) -> String {
         let provider = context.provider.title
         return switch self {
         case .failed, .timedOut, .connectionBlocked, .hostNotFound: queuedText(provider)
-        case .needsSetup(_, .credit): "\(provider) is out of credit. Saved."
-        case .needsSetup(_, let item): StatusText.add(item, for: context.provider)
+        case .needsSetup(_, let item):
+            item == .credit ? "\(provider) is out of credit. Saved." : StatusText.add(item, for: context.provider)
         case .rejected(_, let reason): reason.text(provider: provider)
         case .captureFailed: context.isMicrophoneOff ? StatusText.microphoneOff : "No microphone found"
         case .nothingRecorded: "Nothing was recorded. Try again."
-        case .audioNotSaved(.diskFull): "Couldn’t save audio. Disk full?"
-        case .audioNotSaved(.other): "Couldn’t save audio. Try again."
+        case .audioNotSaved(let loss):
+            loss == .diskFull ? "Couldn’t save audio. Disk full?" : "Couldn’t save audio. Try again."
         case .polishFailed(let failure): failure.text
-        default: deliveredText
+        case .cleanupFailed, .cleanupTooSlow, .returnSkipped, .recovered, .copied, .audioCut, .clipboardNotKept,
+            .polished:
+            deliveredText
         }
     }
 
@@ -204,59 +227,39 @@ extension DictationState {
     }
 
     /// The text reached the owner, with a note on how.
-    private var deliveredText: String? {
+    private var deliveredText: String {
         switch self {
         case .cleanupFailed: "Pasted without cleanup"
         case .cleanupTooSlow: "Pasted without cleanup: too slow"
         case .returnSkipped: "Return not pressed: app changed"
         case .recovered: "Saved dictation recovered"
         case .copied: "Copied. Press ⌘V to paste."
-        case .audioCut(_, .diskFull): "Pasted what was saved. Disk full?"
-        case .audioCut(_, .other): "Pasted what was saved. Some audio was lost."
+        case .audioCut(_, let loss):
+            loss == .diskFull ? "Pasted what was saved. Disk full?" : "Pasted what was saved. Some audio was lost."
         case .clipboardNotKept: "Pasted. Old clipboard too large to keep."
-        case .polished(_, isReplaced: true): "Polished"
-        case .polished(_, isReplaced: false): "Polished. Copied, press ⌘V"
-        case .idle, .recording, .transcribing, .cleaning, .undoable, .failed, .timedOut, .connectionBlocked,
-            .hostNotFound, .needsSetup, .rejected,
-            .captureFailed, .nothingRecorded, .audioNotSaved, .polishing, .polishFailed:
-            nil
+        case .polished(_, let isReplaced): isReplaced ? "Polished" : "Polished. Copied, press ⌘V"
+        // `statusText` says these.
+        case .failed, .timedOut, .connectionBlocked, .hostNotFound, .needsSetup, .rejected, .captureFailed,
+            .nothingRecorded, .audioNotSaved, .polishFailed:
+            ""
         }
     }
 
-    /// The one button the pill shows for this state, or nil.
     func pillAction(_ context: StatusContext) -> PillAction? {
         switch self {
-        case .undoable: .undo
-        case .recording(_, isSilent: true, _):
-            context.isMicrophoneOff ? .openMicrophoneSettings : .chooseMicrophone
         case .failed, .timedOut, .connectionBlocked, .hostNotFound: .retry
         case .needsSetup(_, let item): item.pillAction
         case .recovered: .copy
         case .copied: context.isPasteAllowed ? nil : .allowPasting
         case .captureFailed: context.isMicrophoneOff ? .openMicrophoneSettings : nil
-        case .polished, .polishFailed: polishAction
-        case .idle, .recording, .transcribing, .cleaning, .rejected, .cleanupFailed, .cleanupTooSlow, .returnSkipped,
-            .nothingRecorded, .audioNotSaved, .audioCut, .clipboardNotKept, .polishing:
-            nil
-        }
-    }
-
-    /// Undo after Polish replaced the text; the fix after it failed.
-    private var polishAction: PillAction? {
-        switch self {
         case .polished(let id, isReplaced: true): .undoPolish(id)
         case .polishFailed(.needsSetup(.credit)): .addOpenRouterCredit
         case .polishFailed(.needsSetup): .addKey
         case .polishFailed(.failed), .polishFailed(.tooSlow): .retryPolish
-        default: nil
-        }
-    }
-
-    /// Recovered, copied and polished are good news; the other outcomes ask the owner to act.
-    var isGoodOutcome: Bool {
-        switch self {
-        case .recovered, .copied, .polished: true
-        default: false
+        case .polished(_, isReplaced: false), .polishFailed(.nothingToPolish), .polishFailed(.cutOff), .rejected,
+            .cleanupFailed, .cleanupTooSlow, .returnSkipped, .nothingRecorded, .audioNotSaved, .audioCut,
+            .clipboardNotKept:
+            nil
         }
     }
 }

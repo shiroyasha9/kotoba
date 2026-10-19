@@ -14,7 +14,7 @@ struct PipelineUndoTests {
 
         #expect(await world.audio.isCapturing == false)
         #expect(await world.audio.isPaused)
-        #expect(await pipeline.state == .undoable)
+        #expect(await pipeline.state.phase == .undoable)
         #expect(await world.store.records.isEmpty)
     }
 
@@ -27,7 +27,7 @@ struct PipelineUndoTests {
         await pipeline.handle(.escape)
         world.clock.advance(by: .seconds(2))
         await pipeline.undo()
-        #expect(await pipeline.state == .recording(isLong: false))
+        #expect(await pipeline.state.phase == .recording(isLong: false))
         world.clock.advance(by: .seconds(4))
         await pipeline.tap(world)
         await pipeline.settle()
@@ -54,7 +54,7 @@ struct PipelineUndoTests {
         #expect(await world.audio.isCapturing)
         #expect(await world.audio.resumes == 1)
         #expect(await world.audio.files.count == 1)
-        #expect(await pipeline.state == .recording(isLong: false))
+        #expect(await pipeline.state.phase == .recording(isLong: false))
 
         await pipeline.tap(world)
         await pipeline.settle()
@@ -69,7 +69,7 @@ struct PipelineUndoTests {
         await pipeline.handle(.escape)
         world.clock.advance(by: .milliseconds(4_999))
         await pipeline.settle()
-        #expect(await pipeline.state == .undoable)
+        #expect(await pipeline.state.phase == .undoable)
 
         world.clock.advance(by: .milliseconds(1))
         await pipeline.settle()
@@ -95,7 +95,7 @@ struct PipelineUndoTests {
         await pipeline.undo()
         world.clock.advance(by: .seconds(3))
         await pipeline.handle(.escape)
-        #expect(await pipeline.state == .undoable)
+        #expect(await pipeline.state.phase == .undoable)
 
         world.clock.advance(by: .seconds(5))
         await pipeline.settle()
@@ -117,7 +117,7 @@ struct PipelineUndoTests {
 
         #expect(await world.audio.resumes == 0)
         #expect(await world.audio.isCapturing == false)
-        #expect(await pipeline.state == .undoable)
+        #expect(await pipeline.state.phase == .undoable)
     }
 
     @Test func aHoldDuringTheWindowDoesNotResume() async {
@@ -131,7 +131,7 @@ struct PipelineUndoTests {
         await pipeline.handle(.chordUp)
 
         #expect(await world.audio.resumes == 0)
-        #expect(await pipeline.state == .undoable)
+        #expect(await pipeline.state.phase == .undoable)
     }
 
     @Test func aFinishedTranscriptionDoesNotHideTheUndoWindow() async {
@@ -147,7 +147,7 @@ struct PipelineUndoTests {
         await gate.open()
         await pipeline.settle()
 
-        #expect(await pipeline.state == .undoable)
+        #expect(await pipeline.state.phase == .undoable)
         world.clock.advance(by: .seconds(5))
         await pipeline.settle()
         #expect(await pipeline.state == .idle)
@@ -163,7 +163,7 @@ struct PipelineUndoTests {
         await pipeline.handle(.escape)
         await pipeline.undo()
 
-        #expect(await pipeline.state == .recording(isLong: true))
+        #expect(await pipeline.state.phase == .recording(isLong: true))
     }
 
     @Test func quitDuringTheUndoWindowKeepsTheAudioAsCancelled() async throws {
