@@ -19,6 +19,8 @@ struct LiveDictations<Recording: Identifiable> where Recording.ID == DictationID
     private struct Entry {
         let keyDown: Instant
         var latency = LatencyLog()
+        /// The recording's segments sent so far; the stop or the end takes them.
+        var segments = SegmentUpload()
         /// Nil until the stop.
         var send: SendStep?
         var isSubmitAsked = false
@@ -134,6 +136,22 @@ struct LiveDictations<Recording: Identifiable> where Recording.ID == DictationID
         changed()
     }
 
+    // MARK: - Segments
+
+    /// Runs `change` on the segments of the live dictation `id`; nil when it is not live.
+    mutating func withSegments<Result>(of id: DictationID, _ change: (inout SegmentUpload) -> Result) -> Result? {
+        guard var entry = entries[id] else { return nil }
+        let result = change(&entry.segments)
+        entries[id] = entry
+        return result
+    }
+
+    /// The segments of `id`, which leave it: the stop sends them on, an end with no send cancels them.
+    mutating func takeSegments(of id: DictationID) -> SegmentUpload {
+        defer { entries[id]?.segments = SegmentUpload() }
+        return entries[id]?.segments ?? SegmentUpload()
+    }
+
     // MARK: - Dictations being sent
 
     /// The transcript of `id` went to the cleaner.
@@ -165,6 +183,7 @@ struct LiveDictations<Recording: Identifiable> where Recording.ID == DictationID
         if undoWindow?.item.id == id { undoWindow = nil }
         if lastStopped == id { lastStopped = nil }
         guard let ended = entries.removeValue(forKey: id) else { return nil }
+        assert(ended.segments.isEmpty, "A dictation's segments are sent or cancelled before it ends (`dropSegments`)")
         changed()
         return ended.latency
     }

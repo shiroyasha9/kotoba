@@ -16,6 +16,8 @@ struct TranscriptionSteps: Sendable {
         var submits = false
         /// The upload's moments, when the route measured them.
         var network: NetworkTiming?
+        /// How the text came (`SegmentUpload`), for the latency line.
+        var segments = SegmentUpload.Use.one
     }
 
     /// Why a cleanup gave no text; the raw transcript is used then.
@@ -39,9 +41,11 @@ struct TranscriptionSteps: Sendable {
     /// is billed too), then the transcript. Throws `ProviderError.emptyTranscript` when the provider heard no words;
     /// the pipeline owns that decision and the trim, whatever the route sends. A record with no audio is never sent:
     /// `ProviderError.noAudio`, so it is rejected at once, live or on a retry. `model` replaces the owner's choice of
-    /// model for this request (`TranscriptionRequest.model`).
+    /// model for this request (`TranscriptionRequest.model`). `segments` are the live recording's, sent while it
+    /// recorded; a retry has none.
     func transcribe(
-        _ record: inout DictationRecord, settings: DictationPipeline.Settings, model: String? = nil
+        _ record: inout DictationRecord, settings: DictationPipeline.Settings, model: String? = nil,
+        segments: SegmentUpload = SegmentUpload()
     ) async throws -> Transcribed {
         guard record.audio.hasAudio else { throw ProviderError.noAudio }
         var request = settings.request(for: record.audio, at: clock.date)
@@ -52,8 +56,8 @@ struct TranscriptionSteps: Sendable {
         }
         request.model = model
         record.sentTerms = request.dictionaryTerms
-        let transcript = try await answer(
-            to: request, within: DictationPipeline.Settings.transcriptionTimeout(for: request.duration))
+        let (transcript, use) = try await segments.answer(
+            to: request, of: record.audio, through: self, billingTo: record.id, app: record.app)
         record.model = transcript.model
         let heard = transcript.text.trimmingCharacters(in: .whitespacesAndNewlines)
         // Matched on what the owner said, before the replacements, so a rule can neither make nor break a command.
@@ -64,7 +68,7 @@ struct TranscriptionSteps: Sendable {
             ? LineBreakPhrase.apply(to: said, capitalizes: settings.modes.mode(for: record.app) != .code) : said
         let transcribed = Transcribed(
             raw: raw, text: settings.dictionary.applyReplacements(to: raw), answeredAt: clock.date, submits: submits,
-            network: transcript.network)
+            network: transcript.network, segments: use)
         let words = DictationRecord.wordCount(of: transcribed.text)
         record.usage.append(
             UsageEntry(
@@ -74,6 +78,11 @@ struct TranscriptionSteps: Sendable {
         guard !heard.isEmpty else { throw ProviderError.emptyTranscript }
         record.transcript = transcribed.text
         return transcribed
+    }
+
+    /// The provider's answer within the bound for its audio (`Settings.transcriptionTimeout(for:)`).
+    func answer(to request: TranscriptionRequest) async throws -> Transcript {
+        try await answer(to: request, within: DictationPipeline.Settings.transcriptionTimeout(for: request.duration))
     }
 
     /// The provider's answer, or `ProviderError.timedOut` when `limit` passes first on the pipeline clock. A task group,

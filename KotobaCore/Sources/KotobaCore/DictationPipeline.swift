@@ -234,6 +234,7 @@ extension DictationPipeline {
     /// The dictation ended: a recording in progress keeps the indicator on recording; other dictations in flight keep
     /// it on their step, under `notice` when there is one.
     func finishDictation(_ id: DictationID, showing notice: DictationNotice?) {
+        dropSegments(of: id)
         live.end(id)
         // A live recording or an open Undo window keeps the indicator; the notice would hide it.
         guard !live.hasRecording else { return }

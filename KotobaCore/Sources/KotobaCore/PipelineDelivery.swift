@@ -28,7 +28,8 @@ extension DictationPipeline {
         let job = TranscriptDelivery.Job(
             id: current.id, audio: audio, createdAt: ports.clock.date, keyDown: keyDown, latency: latency,
             clipboard: clipboard, settings: settings, output: current.output,
-            frontAppAtStop: current.frontAppAtStop, stoppingPress: current.stoppingPress)
+            frontAppAtStop: current.frontAppAtStop, stoppingPress: current.stoppingPress,
+            segments: live.takeSegments(of: current.id))
         let outcome = await delivery.deliver(
             job, gate: self, beforeCleanup: { await self.cleanupStarted(current.id) })
         finishDictation(current.id, showing: outcome.showing ?? .outcome(of: outcome.record))

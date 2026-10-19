@@ -122,6 +122,31 @@ actor FakeTranscriptionProvider: TranscriptionProvider {
     nonisolated func switchRoute(hasPrimer: Bool) {
         primerOn.withLock { $0 = hasPrimer }
     }
+
+    /// Whether the route sends the upload copy, so recordings send their segments while they record; true, as MAI
+    /// through OpenRouter, by default.
+    private let uploadCopyOn = Mutex(true)
+    nonisolated var sendsUploadCopy: Bool { uploadCopyOn.withLock { $0 } }
+
+    nonisolated func switchRoute(sendsUploadCopy: Bool) {
+        uploadCopyOn.withLock { $0 = sendsUploadCopy }
+    }
+
+    /// Answers by request audio file (a segment's), over `transcript`.
+    private var heardFor: [URL: String] = [:]
+    private var errorFor: [URL: any Error] = [:]
+    /// Requests whose task was cancelled while they waited.
+    private(set) var cancelled: [URL] = []
+
+    /// The request for `audio` hears `text`.
+    func hear(_ text: String, for audio: URL) {
+        heardFor[audio] = text
+    }
+
+    /// The request for `audio` fails with `error`.
+    func fail(_ audio: URL, with error: any Error) {
+        errorFor[audio] = error
+    }
     /// How many primers the pipeline sent, and what each answers: nil (an answer with no cost) by default.
     var primes: Int { primeSizes.count }
     /// Each primer's size, in order.
@@ -152,10 +177,14 @@ actor FakeTranscriptionProvider: TranscriptionProvider {
         requests.append(request)
         await gate?.pass()
         await gates[request.audio]?.pass()
-        if let error { throw error }
+        if Task.isCancelled {
+            cancelled.append(request.audio)
+            throw CancellationError()
+        }
+        if let error = errorFor[request.audio] ?? error { throw error }
         return Transcript(
-            text: transcript, usage: TranscriptionUsage(audio: usageAudio, cost: cost), model: "fake/model-1",
-            network: network)
+            text: heardFor[request.audio] ?? transcript, usage: TranscriptionUsage(audio: usageAudio, cost: cost),
+            model: "fake/model-1", network: network)
     }
 }
 

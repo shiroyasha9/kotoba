@@ -71,6 +71,18 @@ actor FakeAudioSource: AudioSource {
         return stream
     }
 
+    /// The recorder closed `segment` at a pause.
+    func cut(_ segment: UploadSegment) {
+        continuation?.yield(.segment(segment))
+    }
+
+    /// From now on `endCapture` reports `upload` as the copy after the last cut, starting at `start`.
+    func endSegments(withCopy upload: URL, startingAt start: Duration) {
+        lastUpload = (upload, start)
+    }
+
+    private var lastUpload: (file: URL, start: Duration)?
+
     /// The first buffer arrived, its first sample captured at `instant`.
     func deliverFirstBuffer(at instant: ContinuousClock.Instant) {
         continuation?.yield(.firstBuffer(at: instant))
@@ -97,7 +109,9 @@ actor FakeAudioSource: AudioSource {
                 at: upload.deletingLastPathComponent(), withIntermediateDirectories: true)
             FileManager.default.createFile(atPath: upload.path, contents: Data("OggS".utf8))
         }
-        return RecordedAudio(file: file, duration: recordedLength, loss: writeLoss, upload: upload)
+        return RecordedAudio(
+            file: file, duration: recordedLength, loss: writeLoss, upload: lastUpload?.file ?? upload,
+            uploadStart: lastUpload?.start ?? .zero)
     }
 
     func cancelCapture() async -> RecordedAudio? {

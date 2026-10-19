@@ -20,6 +20,8 @@ struct TranscriptDelivery: Sendable {
         var frontAppAtStop: FrontApp?
         /// The press that stopped the dictation, while it was down at the stop: the paste waits for its release.
         var stoppingPress: Int?
+        /// The segments sent while it recorded (`CaptureEvent.segment`); empty when it was not cut.
+        var segments = SegmentUpload()
     }
 
     struct Outcome: Sendable {
@@ -57,7 +59,9 @@ struct TranscriptDelivery: Sendable {
         let pendingRecord = record
         async let savedPending: Void = store.saveOrLog(pendingRecord)
         mark(.uploadStart, at: clock.now)
-        let result = await Result { try await steps.transcribe(&record, settings: job.settings) }
+        let result = await Result {
+            try await steps.transcribe(&record, settings: job.settings, segments: job.segments)
+        }
         mark(.response, at: clock.now)
         if case .success(let transcribed) = result, let network = transcribed.network {
             Self.recordNetwork(network, of: job, in: &latency)

@@ -34,6 +34,8 @@ public final class TranscriptionRouter: TranscriptionProvider {
         await client(for: options.route.account).warmUp(options)
     }
 
+    public var sendsUploadCopy: Bool { settings.route.takesOggOpus }
+
     public var hasPrimer: Bool {
         let route = settings.route
         return client(for: route.account).hasPrimer(route)

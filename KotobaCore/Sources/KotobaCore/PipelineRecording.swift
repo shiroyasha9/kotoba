@@ -31,6 +31,8 @@ extension DictationPipeline {
                     self.soundChanged(of: id) { $0.level(level, at: self.ports.clock.now) }
                 case .inputLost:
                     self.soundChanged(of: id) { $0.inputLost() }
+                case .segment(let segment):
+                    self.segmentClosed(segment, of: id)
                 }
             }
         }
@@ -174,6 +176,7 @@ extension DictationPipeline {
     /// `live` with its latency marks.
     @discardableResult func endRecording(_ current: Recording) -> LatencyLog {
         current.cancelTimers()
+        dropSegments(of: current.id)
         return live.end(current.id) ?? LatencyLog()
     }
 

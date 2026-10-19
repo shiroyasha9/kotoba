@@ -9,6 +9,9 @@ public protocol TranscriptionProvider: Sendable {
     func warmUp() async
     /// Whether the current route has a primer (`prime`); a route switched in the menu applies from the next dictation.
     var hasPrimer: Bool { get }
+    /// Whether the current route sends the upload copy (`TranscriptionRequest.upload`), so a recording's segments go
+    /// while it records (`CaptureEvent.segment`).
+    var sendsUploadCopy: Bool { get }
     /// Sends the route's smallest billed request through its whole path, so the answer at the stop does not pay the
     /// route's cold start. The pipeline calls it when a dictation is announced, never for a dropped shortcut press, and
     /// never waits for it. Returns the primer's answer for its cost, or nil when the route has no primer or it failed.
@@ -31,6 +34,8 @@ final class RouteWarmth: TranscriptionProvider {
     }
 
     var hasPrimer: Bool { base.hasPrimer }
+
+    var sendsUploadCopy: Bool { base.sendsUploadCopy }
 
     func warmUp() async {
         await base.warmUp()
