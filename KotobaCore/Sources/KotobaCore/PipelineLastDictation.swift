@@ -5,13 +5,8 @@ import Foundation
 extension DictationPipeline {
     /// "Paste Last Dictation", from the menu or its chord: pastes the newest delivered dictation again (`pasteAgain`).
     public func pasteLast() async {
-        guard isQuiet, !isQuitting else { return }
-        do {
-            guard let last = try await ports.store.lastDelivered(), let text = last.latestText else { return }
-            await pasteAgain(text, of: last.id)
-        } catch {
-            Log.pipeline.error("Cannot read the last dictation: \(error)")
-        }
+        guard isQuiet, !isQuitting, let last = await lastDelivered(), let text = last.latestText else { return }
+        await pasteAgain(text, of: last.id)
     }
 
     /// Pastes `text` of dictation `id` as a dictation does, with no Return (Paste Last, History's "Paste Again"), into
@@ -34,18 +29,25 @@ extension DictationPipeline {
     /// "Copy Last Dictation", from the menu or its chord: leaves the newest delivered dictation on the clipboard, with
     /// no restore, and the indicator says so. During a dictation it copies too, and the indicator keeps its state.
     public func copyLast() async {
-        do {
-            guard let last = try await ports.store.lastDelivered(), let text = last.latestText else { return }
-            await paste.copy(text)
-            showIfQuiet(.copied(last.id))
-        } catch {
-            Log.pipeline.error("Cannot read the last dictation: \(error)")
-        }
+        guard let last = await lastDelivered(), let text = last.latestText else { return }
+        await paste.copy(text)
+        showIfQuiet(.copied(last.id))
     }
 
     /// History's and Home's Copy, and the Fix window's: leaves `text` on the clipboard, with no restore, and a paste that
     /// waits for its restore leaves it there.
     public func copyAgain(_ text: String) async {
         await paste.copy(text)
+    }
+
+    /// The newest delivered dictation, which Paste Last, Copy Last and Polish act on; nil when there is none or the
+    /// history cannot be read.
+    func lastDelivered() async -> DictationRecord? {
+        do {
+            return try await ports.store.lastDelivered()
+        } catch {
+            Log.pipeline.error("Cannot read the last dictation: \(error)")
+            return nil
+        }
     }
 }

@@ -156,15 +156,6 @@ extension DictationPipeline {
         return await lastDelivered()?.id != id
     }
 
-    private func lastDelivered() async -> DictationRecord? {
-        do {
-            return try await ports.store.lastDelivered()
-        } catch {
-            Log.pipeline.error("Polish: cannot read the last dictation: \(error)")
-            return nil
-        }
-    }
-
     /// The polisher's answer, or `.tooSlow` when `Settings.polishDeadline` passes first on the pipeline clock. A late
     /// answer was billed, so its cost goes to the ledger when it comes.
     private func polisherAnswer(from polisher: any TextPolisher, to text: String, for record: DictationRecord) async
