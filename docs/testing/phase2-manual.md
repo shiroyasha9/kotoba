@@ -857,3 +857,17 @@ Rows 946-951 need the app launched by Launch Services (Finder, the Dock or a log
 | 949 | After row 948, do 20 more dictations without opening the window, wait 1 min, run `make memory DEV=1` again | Footprint within 3 MB of row 948: dictations do not add memory | |
 | 950 | Open the window on General, wait 30 s, and read kotoba Dev's Memory in Activity Monitor; close the window and read it again after 30 s | Note both numbers in Result (the window's graphics peak on screen is not measured yet) | |
 | 951 | After rows 948-949, run `make latency-log DEV=1 LAST=1h` | p50 at or under 1.0 s and p90 at or under 1.5 s, as before the change | |
+
+## Capture lifecycle in KotobaCore (kotoba Dev, 2026-10-19)
+
+The mic input's lifecycle moved from App/ into KotobaCore's `AudioCapture` behind the `CaptureHardware` port; its tests run on a fake. These rows prove the CoreAudio adapter still does what the tests assume. After each row, `log show --last 5m --predicate 'process == "kotoba Dev" AND category == "audio"'` shows each “Recording from …” and “Rebuilding the mic input: …”.
+
+| # | Do this | Expect | Result |
+|---|---|---|---|
+| 980 | Built-in mic in use, AirPods connected and in your order below it. Dictate. Then move AirPods to the top of **Microphone Order**, dictate, move the built-in mic back to the top, dictate | Each dictation pastes; the menu's **Microphone** check and the pane's “In use” follow the order; the second dictation records from AirPods, the third from the built-in mic | |
+| 981 | AirPods first in your order. Start a hands-free dictation, speak, take both AirPods out (they disconnect) while you speak, keep speaking, then stop | The recording goes on with the built-in mic; the text has the words from before and after; no crash; the log shows “Rebuilding the mic input: audio route changed” | |
+| 982 | USB mic first in your order. Start a dictation, speak, unplug the USB mic, keep speaking, plug it back in, keep speaking, then stop | The recording moves to the next mic at the unplug and stays on it (the USB mic is used again from the next dictation); the text has all the words | |
+| 983 | Only the built-in mic in your order. Start a dictation and, while it records, connect AirPods (they become the system default) | The recording keeps the built-in mic; the next dictation also uses the built-in mic (your order wins) | |
+| 984 | AirPods first in your order. Start a dictation on AirPods, speak, and start a FaceTime call while you speak (the headset changes to the call format), then stop | As row 930: the stop takes under half a second, the text has what you said before the call, no “No sound from the mic” | |
+| 985 | Start a dictation, press Esc, unplug the mic in use (or take out AirPods) within the 5 s, then click **Undo** | The recording goes on with the next mic; the text after Undo is at normal pitch | |
+| 986 | Run `sudo killall coreaudiod`, wait 5 s, then dictate | The dictation records and pastes with no “No microphone found”; the log shows “Rebuilding the mic input: audio service restarted” | |

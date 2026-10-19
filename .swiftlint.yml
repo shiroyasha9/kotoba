@@ -239,3 +239,13 @@ custom_rules:
     match_kinds: [string]
     message: "No \" - \" between phrases in pill or menu text (CODING_STANDARDS.md, User-facing text 8)."
     severity: error
+  # The mic input's lifecycle (which mic, when to rebuild, what waits for the end of a capture) lives in
+  # KotobaCore's `AudioCapture`, tested through a fake. App/ only runs the hardware through `HALCaptureHardware`.
+  capture_lifecycle_in_core:
+    name: "Capture lifecycle in KotobaCore"
+    included: ["App/.*\\.swift"]
+    excluded: ["App/HALCaptureHardware\\.swift"]
+    regex: "\\b(?:HALInput|CaptureWriter|SettlingInput)\\s*\\(|\\bInputFormatPolicy\\s*\\.\\s*recovery\\b|\\bInputDevicePolicy\\s*\\.\\s*preferredInput\\b"
+    excluded_match_kinds: [comment, doccomment, string]
+    message: "Mic input decisions live in KotobaCore's AudioCapture; App/ opens inputs and writers only in HALCaptureHardware, when the capture asks."
+    severity: error
