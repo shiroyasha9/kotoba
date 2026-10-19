@@ -48,8 +48,8 @@ final class OpenRouterProvider: RouteClient {
         let label = options.route.rawValue
         let fields = Self.fields(terms: request.dictionaryTerms, language: request.language, options: options)
         let rest = try ProviderHTTP.encode(fields)
-        // The Opus copy when the route takes it and it is still there (the capture deletes it when the next recording
-        // starts); opened now, so a delete during the upload cannot cut it. Else the FLAC.
+        // The Opus copy when the route takes it and it is still there (a launch empties the copies' folder); opened now,
+        // so a delete during the upload cannot cut it. Else the FLAC.
         let opus = options.route.takesOggOpus ? request.upload.flatMap { try? FileHandle(forReadingFrom: $0) } : nil
         defer { try? opus?.close() }  // Read-only: closing cannot lose data.
         let reply = try await connection.send(

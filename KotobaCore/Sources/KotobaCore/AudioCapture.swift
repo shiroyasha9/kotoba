@@ -35,8 +35,9 @@ public actor AudioCapture: AudioSource {
     private let inputDidChange: @Sendable () -> Void
     private var input: (any CaptureInput)?
     private(set) var capture: Capture?
-    /// The last ended recording's upload copy; the next one replaces it on disk (`RecordedAudio.upload`).
-    private var lastUpload: URL?
+    /// Where the recorders write the upload copies (`RecordedAudio.upload`); emptied at the first `prepare`, so a copy
+    /// left by a quit or a crash goes at the next launch.
+    let uploads: URL
     var micTest: MicTest?
     /// In the Undo window after Esc: the input is stopped, the recorder and its file stay open.
     private var isPaused = false
@@ -70,9 +71,11 @@ public actor AudioCapture: AudioSource {
     /// the mic test.
     public init(
         hardware: any CaptureHardware, clock: any PipelineClock = SystemClock(),
+        uploads: URL = URL.temporaryDirectory.appending(path: "\(Log.subsystem).upload-copies"),
         inputDidChange: @escaping @Sendable () -> Void = {}
     ) {
         self.hardware = hardware
+        self.uploads = uploads
         self.clock = clock
         self.inputDidChange = inputDidChange
         (levels, levelContinuation) = AsyncStream.makeStream(of: Float.self, bufferingPolicy: .bufferingNewest(1))
@@ -90,6 +93,7 @@ public actor AudioCapture: AudioSource {
             input = makeInput()
         }
         guard deviceObservation == nil else { return }
+        Self.removeUploadCopies(in: uploads)
         deviceObservation = hardware.observeDevices { [weak self] change in
             Task { await self?.devicesChanged(change) }
         }
@@ -128,15 +132,6 @@ public actor AudioCapture: AudioSource {
         await inputMayHaveChanged()
     }
 
-    /// The mic to record from among `devices`: the first one in the owner's order, else the system default (a
-    /// Bluetooth default replaced by the built-in mic, `InputDevicePolicy`).
-    private func preferredInput(among devices: [AudioDevice]) -> AudioDevice? {
-        let defaultInput = hardware.defaultInput()
-        let order = hardware.microphoneOrder()
-        return InputDevicePolicy.preferredInput(defaultInput: defaultInput, devices: devices, order: order)
-            ?? defaultInput
-    }
-
     public func beginCapture(into file: URL) async throws -> AsyncStream<CaptureEvent> {
         // A dictation ends a mic test; this costs one input restart, only when a test runs.
         await endTest()
@@ -154,7 +149,8 @@ public actor AudioCapture: AudioSource {
         let recorder: any CaptureRecorder
         do {
             recorder = try hardware.makeRecorder(
-                file: file, sampleRate: input.sampleRate, readingFrom: position, events: continuation, levels: levels)
+                files: files(for: file), sampleRate: input.sampleRate, readingFrom: position, events: continuation,
+                levels: levels)
         } catch {
             stopInput()
             throw error
@@ -197,7 +193,6 @@ public actor AudioCapture: AudioSource {
         // recorder's guard.
         let isInputRunning = input != nil && !isRebuilding
         let audio = await isInputRunning ? capture.recorder.stop() : capture.recorder.stopNow()
-        keepUpload(of: audio)
         // Stopping the input runs after the audio goes to upload.
         Task {
             self.stopInputIfIdle()
@@ -237,7 +232,6 @@ public actor AudioCapture: AudioSource {
         isPaused = false
         stopInput()
         let audio = await capture.recorder.stopNow()
-        keepUpload(of: audio)
         await applyDeferredInputChange()
         return audio
     }
@@ -332,26 +326,41 @@ public actor AudioCapture: AudioSource {
     }
 }
 
+// MARK: - Mic choice
+
+extension AudioCapture {
+    /// The mic to record from among `devices`: the first one in the owner's order, else the system default (a
+    /// Bluetooth default replaced by the built-in mic, `InputDevicePolicy`).
+    private func preferredInput(among devices: [AudioDevice]) -> AudioDevice? {
+        let defaultInput = hardware.defaultInput()
+        let order = hardware.microphoneOrder()
+        return InputDevicePolicy.preferredInput(defaultInput: defaultInput, devices: devices, order: order)
+            ?? defaultInput
+    }
+}
+
 // MARK: - Discarded recordings and upload copies
 
 extension AudioCapture {
-    /// Keeps `audio`'s upload copy as the last one and deletes the one it replaces, off the stop path.
-    func keepUpload(of audio: RecordedAudio) {
-        guard lastUpload != audio.upload else { return }
-        let replaced = lastUpload
-        lastUpload = audio.upload
-        Task.detached { Self.remove(replaced) }
+    /// A capture's files: `file`, and its upload copy of the same name in the copies' folder.
+    func files(for file: URL) -> CaptureFiles {
+        CaptureFiles(
+            recording: file, upload: uploads.appending(path: file.deletingPathExtension().lastPathComponent + ".ogg"))
     }
 
-    /// Deletes an upload copy nothing sends any more. A copy that stays costs only temporary space: a later request
-    /// sends the FLAC either way.
-    nonisolated static func remove(_ upload: URL?) {
+    /// Deletes an upload copy nothing sends any more; one that stays goes at the next launch.
+    nonisolated static func removeUploadCopy(_ upload: URL?) {
         guard let upload else { return }
         do {
             try FileManager.default.removeItem(at: upload)
         } catch {
             Log.audio.error("Cannot delete an upload copy: \(error)")
         }
+    }
+
+    private nonisolated static func removeUploadCopies(in folder: URL) {
+        let copies = (try? FileManager.default.contentsOfDirectory(at: folder, includingPropertiesForKeys: nil)) ?? []
+        for copy in copies { removeUploadCopy(copy) }
     }
 
     @discardableResult
@@ -363,8 +372,7 @@ extension AudioCapture {
     @discardableResult
     public func discard(_ audio: RecordedAudio) async -> Bool {
         // The copy goes too; the result is the recording's own, as only the FLAC can be sent again.
-        if audio.upload != nil, audio.upload == lastUpload { lastUpload = nil }
-        Self.remove(audio.upload)
+        Self.removeUploadCopy(audio.upload)
         do {
             try FileManager.default.removeItem(at: audio.file)
             return true

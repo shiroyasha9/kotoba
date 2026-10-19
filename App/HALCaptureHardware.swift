@@ -46,14 +46,15 @@ final class HALCaptureHardware: CaptureHardware {
     }
 
     func makeRecorder(
-        file: URL,
+        files: CaptureFiles,
         sampleRate: Double,
         readingFrom position: Int,
         events: AsyncStream<CaptureEvent>.Continuation,
         levels: AsyncStream<Float>.Continuation
     ) throws -> any CaptureRecorder {
         try CaptureWriter(
-            file: file, sampleRate: sampleRate, ring: ring, readingFrom: position, events: events, levels: levels)
+            file: files.recording, upload: files.upload, sampleRate: sampleRate, ring: ring, readingFrom: position,
+            events: events, levels: levels)
     }
 }
 

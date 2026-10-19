@@ -3,11 +3,12 @@ import Testing
 
 @testable import KotobaCore
 
-/// The recorder's Opus upload copy (`RecordedAudio.upload`) on disk: only the last recording's copy stays, and a
-/// discarded recording (a cancel, an Esc that ends in a discard, a mic test) leaves none. Copies are real files the
-/// fake recorder writes at the close.
+/// The recorder's Opus upload copy (`RecordedAudio.upload`) on disk: it goes in the capture's upload folder, the
+/// first `prepare` empties that folder (a copy a quit or a crash left), and a discarded recording (a cancel, an Esc
+/// that ends in a discard, a mic test) leaves none. Copies are real files the fake recorder writes at the close.
 struct AudioCaptureUploadCopyTests {
     private let folder = URL.temporaryDirectory.appending(path: "kotoba-upload-copy-test-\(UUID().uuidString)")
+    private var uploads: URL { folder.appending(path: "uploads") }
 
     private func recording(_ name: String) throws -> URL {
         try FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true)
@@ -20,26 +21,35 @@ struct AudioCaptureUploadCopyTests {
         file.map { FileManager.default.fileExists(atPath: $0.path) } ?? false
     }
 
-    @Test func theNextRecordingDeletesTheLastOnesCopy() async throws {
+    @Test func theCopyGoesInTheUploadFolder() async throws {
         let hardware = FakeCaptureHardware()
         hardware.writeUploadCopies()
-        let capture = AudioCapture(hardware: hardware)
+        let capture = AudioCapture(hardware: hardware, uploads: uploads)
         defer { try? FileManager.default.removeItem(at: folder) }
 
-        _ = try await capture.beginCapture(into: try recording("first"))
-        let first = try #require(await capture.endCapture()?.upload)
-        #expect(exists(first))
-        _ = try await capture.beginCapture(into: try recording("second"))
-        let second = try #require(await capture.endCapture()?.upload)
+        _ = try await capture.beginCapture(into: try recording("kept"))
+        let copy = try #require(await capture.endCapture()?.upload)
 
-        #expect(await eventually { !exists(first) })
-        #expect(exists(second))
+        #expect(copy == uploads.appending(path: "kept.ogg"))
+        #expect(exists(copy))
+    }
+
+    @Test func theFirstPrepareDeletesCopiesAnEarlierRunLeft() async throws {
+        defer { try? FileManager.default.removeItem(at: folder) }
+        try FileManager.default.createDirectory(at: uploads, withIntermediateDirectories: true)
+        let left = uploads.appending(path: "left.ogg")
+        FileManager.default.createFile(atPath: left.path, contents: Data("OggS".utf8))
+        let capture = AudioCapture(hardware: FakeCaptureHardware(), uploads: uploads)
+
+        await capture.prepare()
+
+        #expect(!exists(left))
     }
 
     @Test func aDiscardedRecordingLeavesNoCopy() async throws {
         let hardware = FakeCaptureHardware()
         hardware.writeUploadCopies()
-        let capture = AudioCapture(hardware: hardware)
+        let capture = AudioCapture(hardware: hardware, uploads: uploads)
         defer { try? FileManager.default.removeItem(at: folder) }
         let file = try recording("discarded")
 
@@ -54,7 +64,7 @@ struct AudioCaptureUploadCopyTests {
     @Test func aCancelledRecordingThatIsDiscardedLeavesNoCopy() async throws {
         let hardware = FakeCaptureHardware()
         hardware.writeUploadCopies()
-        let capture = AudioCapture(hardware: hardware)
+        let capture = AudioCapture(hardware: hardware, uploads: uploads)
         defer { try? FileManager.default.removeItem(at: folder) }
         _ = try await capture.beginCapture(into: try recording("cancelled"))
         let audio = try #require(await capture.cancelCapture())
@@ -70,7 +80,8 @@ struct AudioCaptureUploadCopyTests {
         let hardware = FakeCaptureHardware()
         hardware.writeUploadCopies()
         let clock = ManualClock()
-        let capture = AudioCapture(hardware: hardware, clock: clock)
+        let capture = AudioCapture(hardware: hardware, clock: clock, uploads: uploads)
+        defer { try? FileManager.default.removeItem(at: folder) }
         guard case .running(let levels) = await capture.beginTest(for: .seconds(5)) else {
             Issue.record("The mic test did not start")
             return

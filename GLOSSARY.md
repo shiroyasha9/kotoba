@@ -19,7 +19,7 @@ The microphone a capture records from, or the next dictation will: the first con
 _Avoid_: current device, active input
 
 **Upload copy**:
-The same audio as a capture's FLAC, as Ogg Opus at 24 kbps, written while it records and sent instead of the FLAC by a route measured with it. Only the last capture's copy is kept; the FLAC stays the kept recording.
+The same audio as a capture's FLAC, as Ogg Opus at 24 kbps, written while it records and sent instead of the FLAC by a route measured with it, in the first request only, which deletes it. The FLAC stays the kept recording.
 _Avoid_: compressed audio, opus file
 
 **Input**:

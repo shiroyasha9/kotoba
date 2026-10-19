@@ -24,16 +24,22 @@ public protocol CaptureHardware: Sendable {
     func watchSettling(of device: AudioDevice, onChange: @escaping @Sendable () -> Void) -> AnyObject
     /// Marks the start of a capture: the recorder made next reads the audio from this ring position on.
     func markCaptureStart() -> Int
-    /// A recorder that writes the audio from ring `position` on, at `sampleRate`, into `file`, and an Ogg Opus copy for
-    /// the upload when it can (`RecordedAudio.upload`). It reports the first buffer and the levels on `events`, the
-    /// levels also on `levels`, and finishes `events` when the file closes.
+    /// A recorder that writes the audio from ring `position` on, at `sampleRate`, into `files.recording`, and its Ogg
+    /// Opus copy into `files.upload` when it can (`RecordedAudio.upload`). It reports the first buffer and the levels on
+    /// `events`, the levels also on `levels`, and finishes `events` when the file closes.
     func makeRecorder(
-        file: URL,
+        files: CaptureFiles,
         sampleRate: Double,
         readingFrom position: Int,
         events: AsyncStream<CaptureEvent>.Continuation,
         levels: AsyncStream<Float>.Continuation
     ) throws -> any CaptureRecorder
+}
+
+/// The files one capture writes: the recording, and the Opus copy for its first request (`RecordedAudio.upload`).
+public struct CaptureFiles: Sendable, Equatable {
+    public var recording: URL
+    public var upload: URL
 }
 
 /// A mic input on one device. Releasing it closes it.

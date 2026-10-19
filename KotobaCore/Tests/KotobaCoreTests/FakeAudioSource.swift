@@ -19,8 +19,8 @@ actor FakeAudioSource: AudioSource {
     private var recordedLength: Duration = .seconds(1)
     /// `endCapture` reports that some audio could not be written (`RecordedAudio.loss`).
     private var writeLoss: AudioLoss?
-    /// `endCapture` reports an Opus upload copy next to the file (`RecordedAudio.upload`).
-    private var writesUploadCopies = false
+    /// `endCapture` writes an Opus upload copy into this folder and reports it (`RecordedAudio.upload`).
+    private var uploadFolder: URL?
     /// When set, `beginCapture` waits for this gate.
     var beginGate: Gate?
     var beginError: (any Error)?
@@ -52,9 +52,9 @@ actor FakeAudioSource: AudioSource {
         writeLoss = loss
     }
 
-    /// From now on `endCapture` reports an Opus upload copy, as the app's recorder writes one.
-    func writeUploadCopies() {
-        writesUploadCopies = true
+    /// From now on `endCapture` writes an Opus upload copy into `folder`, as the app's recorder writes one.
+    func writeUploadCopies(in folder: URL) {
+        uploadFolder = folder
     }
 
     func failBegin(with error: any Error) {
@@ -91,9 +91,13 @@ actor FakeAudioSource: AudioSource {
         continuation?.finish()
         guard !isCaptureLost else { return nil }
         let file = files.last ?? URL(filePath: "/dev/null")
-        return RecordedAudio(
-            file: file, duration: recordedLength, loss: writeLoss,
-            upload: writesUploadCopies ? file.deletingPathExtension().appendingPathExtension("ogg") : nil)
+        let upload = uploadFolder?.appending(path: file.deletingPathExtension().lastPathComponent + ".ogg")
+        if let upload {
+            try? FileManager.default.createDirectory(
+                at: upload.deletingLastPathComponent(), withIntermediateDirectories: true)
+            FileManager.default.createFile(atPath: upload.path, contents: Data("OggS".utf8))
+        }
+        return RecordedAudio(file: file, duration: recordedLength, loss: writeLoss, upload: upload)
     }
 
     func cancelCapture() async -> RecordedAudio? {

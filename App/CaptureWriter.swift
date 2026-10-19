@@ -50,7 +50,7 @@ final class CaptureWriter: CaptureRecorder, @unchecked Sendable {
     /// The first chunk lost, and why: the file did not take it or the converter failed. Logged once; the stop
     /// reports it (`RecordedAudio.loss`).
     private var loss: AudioLoss?
-    /// The Opus upload copy of the recording (`OpusUploadWriter`, `RecordedAudio.upload`), in the temporary folder.
+    /// The Opus upload copy of the recording (`OpusUploadWriter`, `RecordedAudio.upload`).
     private let uploadURL: URL
     private var upload = UploadCopy.notStarted
     private var hasReportedFirstBuffer = false
@@ -59,6 +59,7 @@ final class CaptureWriter: CaptureRecorder, @unchecked Sendable {
 
     init(
         file url: URL,
+        upload: URL,
         sampleRate: Double,
         ring: SampleRing,
         readingFrom readPosition: Int,
@@ -67,8 +68,7 @@ final class CaptureWriter: CaptureRecorder, @unchecked Sendable {
     ) throws {
         try FileManager.default.createDirectory(at: url.deletingLastPathComponent(), withIntermediateDirectories: true)
         fileURL = url
-        uploadURL = URL.temporaryDirectory.appending(
-            path: "kotoba-upload-\(url.deletingPathExtension().lastPathComponent).ogg")
+        uploadURL = upload
         file = try Self.makeFile(at: url)
         conversion = try Self.makeConversion(sampleRate: sampleRate)
         self.ring = ring
@@ -308,6 +308,8 @@ extension CaptureWriter {
         do {
             switch upload {
             case .notStarted:
+                try FileManager.default.createDirectory(
+                    at: uploadURL.deletingLastPathComponent(), withIntermediateDirectories: true)
                 let writer = try OpusUploadWriter(file: uploadURL, format: Self.outputFormat)
                 upload = .writing(writer)
                 try writer.write(output)

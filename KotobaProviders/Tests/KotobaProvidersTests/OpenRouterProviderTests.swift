@@ -353,7 +353,7 @@ struct OpenRouterOpusUploadTests {
         #expect(audio["data"] == StubHost.opusBytes.base64EncodedString())
     }
 
-    /// The capture keeps only the last recording's copy: a retry of an older one sends its FLAC.
+    /// A copy that is gone (a launch empties the copies' folder) sends the FLAC.
     @Test func maiRequestSendsTheFLACWhenTheOpusCopyIsGone() async throws {
         let stub = StubHost(reply: .fixture("success"))
         var request = try stub.request()

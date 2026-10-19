@@ -90,8 +90,8 @@ final class FakeCaptureHardware: CaptureHardware {
     }
 
     /// Recorders made from now on wait in `switchSampleRate` until they stop or the test calls `releaseRateSwitch`.
-    /// From now on each recorder writes an Opus upload copy next to its file at the close (`RecordedAudio.upload`), as
-    /// the app's recorder does.
+    /// From now on each recorder writes its Opus upload copy where the capture says, at the close
+    /// (`RecordedAudio.upload`), as the app's recorder does.
     func writeUploadCopies() {
         state.withLock { $0.writesUploadCopies = true }
     }
@@ -185,7 +185,7 @@ final class FakeCaptureHardware: CaptureHardware {
     func markCaptureStart() -> Int { 0 }
 
     func makeRecorder(
-        file: URL,
+        files: CaptureFiles,
         sampleRate: Double,
         readingFrom position: Int,
         events: AsyncStream<CaptureEvent>.Continuation,
@@ -193,8 +193,8 @@ final class FakeCaptureHardware: CaptureHardware {
     ) throws -> any CaptureRecorder {
         state.withLock { state in
             let recorder = FakeCaptureRecorder(
-                file: file, sampleRate: sampleRate, events: events, holdsRateSwitch: state.holdsRateSwitch,
-                writesUploadCopy: state.writesUploadCopies)
+                file: files.recording, sampleRate: sampleRate, events: events, holdsRateSwitch: state.holdsRateSwitch,
+                upload: state.writesUploadCopies ? files.upload : nil)
             state.recorders.append(recorder)
             return recorder
         }
@@ -273,10 +273,10 @@ final class FakeCaptureRecorder: CaptureRecorder {
 
     init(
         file: URL, sampleRate: Double, events: AsyncStream<CaptureEvent>.Continuation, holdsRateSwitch: Bool,
-        writesUploadCopy: Bool = false
+        upload: URL? = nil
     ) {
         self.file = file
-        upload = writesUploadCopy ? file.deletingPathExtension().appendingPathExtension("ogg") : nil
+        self.upload = upload
         self.events = events
         rateSwitchGate = holdsRateSwitch ? Gate() : nil
         state = Mutex(State(rates: [sampleRate]))
@@ -319,7 +319,11 @@ final class FakeCaptureRecorder: CaptureRecorder {
         state.withLock { $0.stops.append(stop) }
         await rateSwitchGate?.open()
         events.finish()
-        if let upload { FileManager.default.createFile(atPath: upload.path, contents: Data("OggS".utf8)) }
+        if let upload {
+            try? FileManager.default.createDirectory(
+                at: upload.deletingLastPathComponent(), withIntermediateDirectories: true)
+            FileManager.default.createFile(atPath: upload.path, contents: Data("OggS".utf8))
+        }
         return RecordedAudio(file: file, duration: .seconds(1), upload: upload)
     }
 }
