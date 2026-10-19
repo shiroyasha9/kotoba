@@ -43,7 +43,8 @@ extension DictationPipeline {
         }
     }
 
-    /// History's Copy: leaves `text` on the clipboard, with no restore.
+    /// History's and Home's Copy, and the Fix window's: leaves `text` on the clipboard, with no restore, and a paste that
+    /// waits for its restore leaves it there.
     public func copyAgain(_ text: String) async {
         await paste.copy(text)
     }

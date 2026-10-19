@@ -35,7 +35,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     let cues = SoundCues()
     lazy var fixWindow = FixLastDictationController(
         last: { [weak self] in await self?.lastDictation?.record() },
-        dictionary: { [weak self] in self?.mainWindow.dictionary })
+        dictionary: { [weak self] in self?.mainWindow.dictionary },
+        copy: { [weak self] in await self?.copyFixed($0) })
     lazy var learner = EditLearner(
         dictionary: { [weak self] in self?.mainWindow.dictionary }, indicator: indicator)
     var statusItem: StatusBarItem?
@@ -340,5 +341,10 @@ extension AppDelegate {
         return ShellStatus.Queues(
             waitingCount: waitingCount, recovered: recovered, hasLastDictation: last != nil,
             hasRawLastDictation: last.flatMap(LastDictation.rawText) != nil)
+    }
+
+    /// The Fix window's Copy goes to the pipeline's clipboard, as History's Copy does.
+    private func copyFixed(_ text: String) async {
+        await pipeline?.copyAgain(text)
     }
 }

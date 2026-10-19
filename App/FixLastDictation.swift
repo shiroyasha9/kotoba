@@ -41,7 +41,9 @@ final class FixLastDictationController: NSObject, NSWindowDelegate {
     private let last: @MainActor () async -> DictationRecord?
     /// Nil until the dictionary is read at launch; the window then learns nothing but still copies.
     private let dictionary: @MainActor () -> DictionaryModel?
-    private let pasteboard = SystemPasteboard()
+    /// Leaves the fixed text on the clipboard through the pipeline (`DictationPipeline.copyAgain`), so a paste that
+    /// waits for its restore does not put the owner's old clipboard back over it.
+    private let copy: @MainActor (String) async -> Void
     private var window: NSWindow?
     private var fixing: Fixing?
     /// Set while the last dictation loads, so a second click does not build a second window.
@@ -49,10 +51,12 @@ final class FixLastDictationController: NSObject, NSWindowDelegate {
 
     init(
         last: @escaping @MainActor () async -> DictationRecord?,
-        dictionary: @escaping @MainActor () -> DictionaryModel?
+        dictionary: @escaping @MainActor () -> DictionaryModel?,
+        copy: @escaping @MainActor (String) async -> Void
     ) {
         self.last = last
         self.dictionary = dictionary
+        self.copy = copy
     }
 
     /// Shows the window with the last dictation. An open window keeps the owner's edit.
@@ -93,8 +97,7 @@ final class FixLastDictationController: NSObject, NSWindowDelegate {
     private func open(_ fixing: Fixing, text: String?) {
         window?.close()
         let model = FixLastDictationModel(
-            pasted: text, learner: dictionary().map(FixLastDictationModel.Learner.live)
-        ) { [pasteboard] in _ = await pasteboard.write($0) }
+            pasted: text, learner: dictionary().map(FixLastDictationModel.Learner.live), copy: copy)
         let window = Self.window(showing: model, title: fixing.title) { [weak self] in self?.window?.close() }
         window.delegate = self
         // Centred at its tallest (`FixLastDictationView` starts there); the content then sets the height, and the top
