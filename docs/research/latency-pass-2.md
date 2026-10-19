@@ -7,7 +7,7 @@ Date: 2026-10-19 23:24 to 2026-10-20 00:40 IST. Agent `latency-2`, branch `laten
 - The release app missed the gate on 2026-10-19: 10-20 s dictations p50 1,280 ms, p90 2,984 ms from the stop to ⌘V sent (n 16). The local steps take about 15 ms. The upload takes 139 ms p50 (the owner's Mac sends through a VPN tunnel, `utun4`, in 59 of 60 dictations). The server wait is the rest: 1,037 ms p50 within a minute of the last answer, 1,245 ms after a quiet minute, and it grows to 2.7 s for dictations of 40 s or more.
 - The primer (`latency-pass.md`) works in part: after a quiet minute, server wait p50 went from 2,409 ms (0.3.x) to 1,466 ms, but warm is 948 ms, and the cold p90 is still 2,954 ms (n 22).
 - The largest measured win that keeps quality: upload Ogg Opus at 24 kbps instead of FLAC. One fifth of the bytes (57 KB against 303 KB for a 15 s clip), stop-to-answer p50 1,238 to 995 ms and p90 2,281 to 1,632 ms (20 clips, warm, same path). WER is the same: 5.68% FLAC against 5.71% (Apple's encoder) on 80 clips, paired 95% CI -0.25 to +0.35 pp.
-- Implemented in this branch: the Ogg framing (`OggOpusStream`, KotobaProviders, tested by a decode in the system's own reader), the encoder that writes the copy during the recording (`App/OpusUploadWriter.swift`), and the request side (`TranscriptionRequest.upload`; MAI through OpenRouter sends it, every other route sends the FLAC). Not yet wired: three lines in `App/CaptureWriter.swift` (owned by `arch-capture`) and one in the request builder (section 3.2).
+- Implemented in this branch (lead go, 2026-10-20 00:20 IST, after the `arch-capture` merge): the capture writes an Ogg Opus copy of each recording while it records (`App/OpusUploadWriter.swift`, framed by `OggOpusStream` in KotobaProviders), the stop returns it in `RecordedAudio.upload`, and MAI through OpenRouter sends it; every other route, every retry from the store and History's Transcribe Again send the FLAC, which stays the kept recording.
 - Dropped after measurement: a hedge (two requests at once) on a cold route (the second request of a pair is 1-4 s slower every time, section 2.5), streaming the upload during the recording (with Opus, about 30 ms is left to win), other ZDR speech models (none clearly faster at MAI's WER).
 - Measured, left for the lead and the owner: upload during the recording in segments split at pauses: for 51-82 s dictations, the stop waits only for the last segment, p50 1,875 to 1,059 ms and p90 3,868 to 1,383 ms; WER 4.3% to 5.0% on 7 clips (section 2.4).
 
@@ -118,20 +118,14 @@ OpenAI GPT Transcribe, Gemini 3.5 Transcribe and Meta Muse Voice have no ZDR end
 
 ### 3.1 In this branch
 
-1. `OggOpusStream` (`KotobaProviders/Sources/KotobaProviders/OggOpusStream.swift`): the two Opus header pages and audio pages of whole packets (RFC 3533, RFC 7845), a page per 50 packets (one second) or before 255 lacing values, the last page's granule set to the recording's own length so the decoder drops the encoder's padding. Tests: `OggOpusStreamTests` (5): the header bytes ffmpeg checked, a decode by AVAudioFile at the exact length, lacing, the page limits.
-2. `OpusUploadWriter` (`App/OpusUploadWriter.swift`): AVAudioConverter to Opus at 24 kbps, 20 ms packets, framed by `OggOpusStream`; `write` per capture chunk, `close` at the stop.
-3. `TranscriptionRequest.upload` (KotobaCore) and `TranscriptionRoute.takesOggOpus` (KotobaProviders): MAI through OpenRouter sends the copy as `input_audio.format: "ogg"` when it is there, else the FLAC. The copy is opened before the body is written, so a delete during the upload cannot cut it. Grok and the direct routes send the FLAC. Tests: `OpenRouterOpusUploadTests` (5).
-4. Bench: the probes of section 2 in `bench/latency/run.ts`.
+1. `OggOpusStream` (`KotobaProviders/Sources/KotobaProviders/OggOpusStream.swift`): the two Opus header pages and audio pages of whole packets (RFC 3533, RFC 7845), a page per 50 packets (one second) or before 255 lacing values. A full page waits for the next packet, so the last page always holds packets and its granule (the recording's own length) trims the encoder's padding (Codex review, 2026-10-20). Tests: `OggOpusStreamTests` (6): the header bytes ffmpeg checked, a decode by AVAudioFile at the exact length, lacing, the page limits, the trim on a full last page.
+2. `OpusUploadWriter` (`App/OpusUploadWriter.swift`): AVAudioConverter to Opus at 24 kbps, 20 ms packets, framed by `OggOpusStream`.
+3. `CaptureWriter` (`App/CaptureWriter.swift`, "Upload copy"): after each FLAC chunk it writes the same chunk to the copy (`<temporary folder>/kotoba-upload-<recording>.ogg`). The writer is made at the first chunk on the writer thread, not at the key-down. At its first failure (or a failed FLAC write) the copy is dropped and deleted, and the stop returns no copy: the upload sends the FLAC, with nothing for the owner to see. Pause and resume (Esc, Undo) keep the same writer.
+4. `RecordedAudio.upload` and `AudioCapture` (KotobaCore): only the last recording's copy stays on disk (the next stop or cancel deletes the one before, off the stop path), and `discard(_:)` deletes the copy with the FLAC, so a discard, an Esc that ends in a discard and the mic test leave no copy. Tests: `AudioCaptureUploadCopyTests` (4), through the `CaptureHardware` fake.
+5. `TranscriptionRequest.upload` (`DictationPipeline.Settings.request(for:at:)`, `KotobaCore/Sources/KotobaCore/PipelineInterface.swift:254`) and `TranscriptionRoute.takesOggOpus`: MAI through OpenRouter sends the copy as `input_audio.format: "ogg"`, opened before the body is written so a delete during the upload cannot cut it; a copy that is gone, and every other route, send the FLAC. The store keeps no copy, so a retry read from the store and History's Transcribe Again send the FLAC. Tests: `PipelineUploadCopyTests` (2), `OpenRouterOpusUploadTests` (5).
+6. Bench: the probes of section 2 in `bench/latency/run.ts`.
 
-### 3.2 Wiring for after the `arch-capture` merge (not done here: `App/CaptureWriter.swift` is theirs)
-
-- `CaptureWriter.init`: `upload = try? OpusUploadWriter(file: <temporary folder>/kotoba-upload-<recording name>.ogg, format: Self.outputFormat)`; a writer that fails to start leaves the FLAC upload as today.
-- `CaptureWriter.write(_:)`: after `file.write(from: output)`, `try upload?.write(output)`; on a throw, log once and drop the copy (`upload = nil`), never the FLAC.
-- `CaptureWriter.close()`: after `file.close()`, `let copy = try? upload?.close()`, returned in `RecordedAudio` as a new `upload: URL?`.
-- `AudioCapture`: deletes the last capture's copy when the next capture begins, so at most one copy is on disk; a retry after that sends the FLAC (`OpenRouterOpusUploadTests.maiRequestSendsTheFLACWhenTheOpusCopyIsGone`).
-- `DictationPipeline.Settings.request(for:at:)` (`KotobaCore/Sources/KotobaCore/PipelineInterface.swift`): pass `upload: audio.upload`.
-- Pause and resume (Esc, Undo) keep the same writer, as for the FLAC.
-- Release note: "Dictation text comes about 0.2 s sooner: kotoba sends MAI a fifth of the bytes it sent before."
+Measured cost (standalone probe of `OpusUploadWriter`, Release-like `-O`): key-down none (the writer is made on the writer thread; its init takes 9.3 ms the first time in a process and 0.26 ms after, and delays only the copy's first chunk); 6.7 ms of encode per second of recording on the writer thread (an 81 s clip in 300 ms chunks), so under 1% of one core; 0.4-1.8 ms at the stop to close the copy; +0.5 MiB footprint once the codec loads. The body build reads 57 KB instead of 303 KB for a 15 s dictation.
 
 ## 4. Checked, no change
 
@@ -146,14 +140,15 @@ OpenAI GPT Transcribe, Gemini 3.5 Transcribe and Meta Muse Voice have no ZDR end
 
 $0.33 of `usage.cost` in the two raw files (`results/latency-raw.jsonl`, `quality/results/latency-raw.jsonl`), of the $1.50 cap. Paid wall time about 34 minutes, over the 30 minute cap: the two cold sets (`hedgecold`, `coldcodec`) need 65 s of quiet each and took 15 and 11 minutes.
 
-## 6. Owner trial (after the wiring of section 3.2)
+## 6. Owner trial
 
 1. `make build`, run kotoba Dev, dictate as usual for a day (Wi-Fi with and without the VPN).
 2. `make latency-log DEV=1 LAST=1d`: the upload lines show `sent` about 4 KB per audio second (FLAC: about 20 KB), and stop to ⌘V sent for 10-20 s dictations near p50 1.0 s.
 3. Listen to two History recordings: the kept file is still the FLAC.
+4. Esc a recording and let the Undo window pass, and run the Settings mic test: no `kotoba-upload-*.ogg` stays in the temporary folder except the last dictation's.
 
 ## Unresolved questions
 
-1. Does a cold route still need the large primer when the dictation's own body is a fifth of the size? The `coldcodec` control ran during a slow period; rerun it, or read `make latency-log` after the wiring (after-a-quiet-minute set).
+1. Does a cold route still need the large primer when the dictation's own body is a fifth of the size? The `coldcodec` control ran during a slow period; rerun it, or read `make latency-log` after a day of use (the after-a-quiet-minute set).
 2. Does a single request on a cold route get the faster time of a hedge pair (section 2.5)? Needs the `coldcodec` FLAC sets on a normal day.
 3. Segments for long dictations (section 2.4): is +0.7 pp WER on 7 clips real, and is the gain worth an upload per pause? Lead and owner decision; it needs the capture to cut at pauses and the pipeline to join texts.

@@ -43,11 +43,16 @@ public struct RecordedAudio: Sendable, Equatable {
     /// Some captured audio could not be written, and why: the file holds only `duration`, and the pipeline says so.
     /// Known only at the stop; the history does not keep it.
     public var loss: AudioLoss?
+    /// The same audio as Ogg Opus at 24 kbps, about a fifth of the FLAC's bytes, written during the recording for the
+    /// first upload (`TranscriptionRequest.upload`); nil when the recorder wrote none (its encoder failed). The capture
+    /// keeps only the last recording's copy and deletes it with a discarded recording; the history does not keep it.
+    public var upload: URL?
 
-    public init(file: URL, duration: Duration, loss: AudioLoss? = nil) {
+    public init(file: URL, duration: Duration, loss: AudioLoss? = nil, upload: URL? = nil) {
         self.file = file
         self.duration = duration
         self.loss = loss
+        self.upload = upload
     }
 
     /// Something to send: a recording with no frames is never sent, and never offered for a retry.

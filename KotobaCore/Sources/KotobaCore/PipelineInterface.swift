@@ -251,7 +251,7 @@ extension DictationPipeline {
         /// The request for one recording, with the language and the keyterms ranked at `now` from these settings.
         func request(for audio: RecordedAudio, at now: Date) -> TranscriptionRequest {
             TranscriptionRequest(
-                audio: audio.file, duration: audio.duration, language: language,
+                audio: audio.file, upload: audio.upload, duration: audio.duration, language: language,
                 dictionaryTerms: TermRanking.keyterms(of: dictionary, use: termUse, at: now))
         }
 

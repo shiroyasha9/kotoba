@@ -35,6 +35,8 @@ public actor AudioCapture: AudioSource {
     private let inputDidChange: @Sendable () -> Void
     private var input: (any CaptureInput)?
     private(set) var capture: Capture?
+    /// The last ended recording's upload copy; the next one replaces it on disk (`RecordedAudio.upload`).
+    private var lastUpload: URL?
     var micTest: MicTest?
     /// In the Undo window after Esc: the input is stopped, the recorder and its file stay open.
     private var isPaused = false
@@ -195,6 +197,7 @@ public actor AudioCapture: AudioSource {
         // recorder's guard.
         let isInputRunning = input != nil && !isRebuilding
         let audio = await isInputRunning ? capture.recorder.stop() : capture.recorder.stopNow()
+        keepUpload(of: audio)
         // Stopping the input runs after the audio goes to upload.
         Task {
             self.stopInputIfIdle()
@@ -234,6 +237,7 @@ public actor AudioCapture: AudioSource {
         isPaused = false
         stopInput()
         let audio = await capture.recorder.stopNow()
+        keepUpload(of: audio)
         await applyDeferredInputChange()
         return audio
     }
@@ -328,9 +332,28 @@ public actor AudioCapture: AudioSource {
     }
 }
 
-// MARK: - Discarded recordings
+// MARK: - Discarded recordings and upload copies
 
 extension AudioCapture {
+    /// Keeps `audio`'s upload copy as the last one and deletes the one it replaces, off the stop path.
+    func keepUpload(of audio: RecordedAudio) {
+        guard lastUpload != audio.upload else { return }
+        let replaced = lastUpload
+        lastUpload = audio.upload
+        Task.detached { Self.remove(replaced) }
+    }
+
+    /// Deletes an upload copy nothing sends any more. A copy that stays costs only temporary space: a later request
+    /// sends the FLAC either way.
+    nonisolated static func remove(_ upload: URL?) {
+        guard let upload else { return }
+        do {
+            try FileManager.default.removeItem(at: upload)
+        } catch {
+            Log.audio.error("Cannot delete an upload copy: \(error)")
+        }
+    }
+
     @discardableResult
     public func discardCapture() async -> Bool {
         guard let audio = await cancelCapture() else { return true }
@@ -339,6 +362,9 @@ extension AudioCapture {
 
     @discardableResult
     public func discard(_ audio: RecordedAudio) async -> Bool {
+        // The copy goes too; the result is the recording's own, as only the FLAC can be sent again.
+        if audio.upload != nil, audio.upload == lastUpload { lastUpload = nil }
+        Self.remove(audio.upload)
         do {
             try FileManager.default.removeItem(at: audio.file)
             return true

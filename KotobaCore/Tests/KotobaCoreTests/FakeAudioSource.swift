@@ -19,6 +19,8 @@ actor FakeAudioSource: AudioSource {
     private var recordedLength: Duration = .seconds(1)
     /// `endCapture` reports that some audio could not be written (`RecordedAudio.loss`).
     private var writeLoss: AudioLoss?
+    /// `endCapture` reports an Opus upload copy next to the file (`RecordedAudio.upload`).
+    private var writesUploadCopies = false
     /// When set, `beginCapture` waits for this gate.
     var beginGate: Gate?
     var beginError: (any Error)?
@@ -48,6 +50,11 @@ actor FakeAudioSource: AudioSource {
     func failWrites(after length: Duration, with loss: AudioLoss = .diskFull) {
         recordedLength = length
         writeLoss = loss
+    }
+
+    /// From now on `endCapture` reports an Opus upload copy, as the app's recorder writes one.
+    func writeUploadCopies() {
+        writesUploadCopies = true
     }
 
     func failBegin(with error: any Error) {
@@ -83,8 +90,10 @@ actor FakeAudioSource: AudioSource {
         isCapturing = false
         continuation?.finish()
         guard !isCaptureLost else { return nil }
+        let file = files.last ?? URL(filePath: "/dev/null")
         return RecordedAudio(
-            file: files.last ?? URL(filePath: "/dev/null"), duration: recordedLength, loss: writeLoss)
+            file: file, duration: recordedLength, loss: writeLoss,
+            upload: writesUploadCopies ? file.deletingPathExtension().appendingPathExtension("ogg") : nil)
     }
 
     func cancelCapture() async -> RecordedAudio? {

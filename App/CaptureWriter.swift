@@ -50,6 +50,9 @@ final class CaptureWriter: CaptureRecorder, @unchecked Sendable {
     /// The first chunk lost, and why: the file did not take it or the converter failed. Logged once; the stop
     /// reports it (`RecordedAudio.loss`).
     private var loss: AudioLoss?
+    /// The Opus upload copy of the recording (`OpusUploadWriter`, `RecordedAudio.upload`), in the temporary folder.
+    private let uploadURL: URL
+    private var upload = UploadCopy.notStarted
     private var hasReportedFirstBuffer = false
     private var levelSum: Float = 0
     private var levelFrames = 0
@@ -64,6 +67,8 @@ final class CaptureWriter: CaptureRecorder, @unchecked Sendable {
     ) throws {
         try FileManager.default.createDirectory(at: url.deletingLastPathComponent(), withIntermediateDirectories: true)
         fileURL = url
+        uploadURL = URL.temporaryDirectory.appending(
+            path: "kotoba-upload-\(url.deletingPathExtension().lastPathComponent).ogg")
         file = try Self.makeFile(at: url)
         conversion = try Self.makeConversion(sampleRate: sampleRate)
         self.ring = ring
@@ -231,7 +236,11 @@ final class CaptureWriter: CaptureRecorder, @unchecked Sendable {
             // ENOSPC in errno (probe on a full 5 MB disk image, 2026-10-17). Read first, before another call sets it.
             let code = errno
             lostAudio(code == ENOSPC ? .diskFull : .other, "FLAC write failed (errno \(code))", error)
+            // The copy holds what the FLAC holds, or nothing.
+            dropUploadCopy(error)
+            return
         }
+        writeUploadCopy(output)
     }
 
     /// Once per capture: a full disk fails every chunk after the first failure, ten a second.
@@ -262,10 +271,11 @@ final class CaptureWriter: CaptureRecorder, @unchecked Sendable {
         drain()
         flushConverter()
         file.close()
+        let copy = closeUploadCopy()
         events.finish()
         rateSwitched?.resume()
         return RecordedAudio(
-            file: fileURL, duration: Self.duration(ofFrames: framesWritten), loss: loss)
+            file: fileURL, duration: Self.duration(ofFrames: framesWritten), loss: loss, upload: copy)
     }
 
     /// RMS over 4,800 input frames (100 ms at 48 kHz), scaled so speech fills most of the range. The
@@ -280,6 +290,57 @@ final class CaptureWriter: CaptureRecorder, @unchecked Sendable {
         events.yield(.level(level))
         levelSum = 0
         levelFrames = 0
+    }
+}
+
+// MARK: - Upload copy
+
+extension CaptureWriter {
+    /// The copy's state on this thread. Made at the first chunk, not in `init`, so the key-down does not wait for the
+    /// encoder; dropped for good at its first failure, so the upload sends the FLAC with no other change.
+    enum UploadCopy {
+        case notStarted
+        case writing(OpusUploadWriter)
+        case dropped
+    }
+
+    private func writeUploadCopy(_ output: AVAudioPCMBuffer) {
+        do {
+            switch upload {
+            case .notStarted:
+                let writer = try OpusUploadWriter(file: uploadURL, format: Self.outputFormat)
+                upload = .writing(writer)
+                try writer.write(output)
+            case .writing(let writer):
+                try writer.write(output)
+            case .dropped:
+                return
+            }
+        } catch {
+            dropUploadCopy(error)
+        }
+    }
+
+    /// The copy at the close, or nil when there is none.
+    private func closeUploadCopy() -> URL? {
+        guard case .writing(let writer) = upload else { return nil }
+        do {
+            let copy = try writer.close()
+            upload = .dropped
+            return copy
+        } catch {
+            dropUploadCopy(error)
+            return nil
+        }
+    }
+
+    private func dropUploadCopy(_ error: any Error) {
+        if case .dropped = upload { return }
+        upload = .dropped
+        Log.audio.error("The upload copy failed, the upload sends the FLAC: \(String(describing: error))")
+        // Also a file the writer's init made before it failed. One that stays costs only temporary space: nothing
+        // sends it.
+        try? FileManager.default.removeItem(at: uploadURL)
     }
 }
 
