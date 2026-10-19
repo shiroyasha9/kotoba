@@ -269,3 +269,19 @@ custom_rules:
     excluded_match_kinds: [comment, doccomment, string]
     message: "Mic input decisions live in KotobaCore's AudioCapture; App/ opens inputs and writers only in HALCaptureHardware, when the capture asks."
     severity: error
+  # A dictation's phase (what is live) and its notices (one-shot outcomes) are two types, so "is a dictation live"
+  # never reads a notice (CODING_STANDARDS.md, Layout).
+  dictation_phase_cases:
+    name: "Phases only in DictationPhase"
+    included: ["KotobaCore/Sources/KotobaCore/DictationPhase\\.swift"]
+    regex: "^\\s*case\\s+(?!(?:idle|recording|transcribing|cleaning|undoable|polishing)\\b)\\w+"
+    excluded_match_kinds: [comment, doccomment, string]
+    message: "A phase is a step a dictation or Polish stays live in. A one-shot outcome is a `DictationNotice`; a new phase is an owner decision, added to this rule's list."
+    severity: error
+  phase_switch_has_no_default:
+    name: "A switch over a phase names every phase"
+    included: ["App/.*\\.swift", "KotobaCore/Sources/KotobaCore/.*\\.swift"]
+    regex: "switch\\s+[\\w.]*\\bphase\\s*\\{(?:(?!\\n\\s*\\}\\n)[\\s\\S])*?\\n\\s*default\\s*:"
+    excluded_match_kinds: [comment, doccomment, string]
+    message: "Name every `DictationPhase` case, so a new phase does not compile until each reader decides; to ask whether a dictation is live, read `phase.isLive`."
+    severity: error

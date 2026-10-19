@@ -69,6 +69,14 @@ _Avoid_: active dictation, current dictation
 Said of a live dictation after its stop, while its audio is sent and its text is cleaned, pasted or saved. Quit waits a little for each one, so its billed text is kept.
 _Avoid_: pending (a status in History), transcribing (one step of it)
 
+**Phase**:
+The step the pipeline is in now: idle, recording, transcribing, cleaning, the Undo window, or polishing. It says whether a dictation or Polish is live, also while a notice shows.
+_Avoid_: state (the phase with its notice), status (a History row's)
+
+**Notice**:
+A one-shot outcome the pill and the menu show over the phase until the next phase change: an error, a warning, or how the text reached the owner (copied, recovered, polished).
+_Avoid_: outcome state, error state, toast
+
 **Quiet**:
 No live dictation and no Polish: only then does Paste Again paste and a retry send begin. Transcribe Again and a retry send paste nothing, so they keep kotoba quiet.
 _Avoid_: idle (what the pill shows), free

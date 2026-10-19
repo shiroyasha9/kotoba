@@ -35,6 +35,7 @@
 - Platform code lives in `App/`; decisions live in `KotobaCore/`, which imports only Foundation, os and Synchronization. If an adapter starts to decide something, move the decision into the core behind a port.
 - The shell (the menu bar icon, the menus' status line and counts, the Dock badge, the start and stop cues) is decided in `ShellStatus` in KotobaCore and tested there. `AppDelegate` and `AppMenu` pass it facts and draw its output; lint refuses a `switch` or `if case` in them.
 - Live dictations: what is live (each dictation from key-down until it ends, its step, its Return request and latency marks, the recording and its Undo window, Polish, Transcribe Again and a retry send), what may begin, and what quit waits for live in `KotobaCore/Sources/KotobaCore/LiveDictations.swift`, tested as a pure type in `LiveDictationsTests`. The pipeline changes it only through its transitions and asks it what is live; lint `live_state_in_ledger` refuses a per-dictation collection on the actor, and `live_questions_to_ledger` a hand-made "recording or Undo window" check.
+- Dictation state: the pipeline reports a `DictationState`, a phase (`DictationPhase`: what is live now) and the notice shown over it (`DictationNotice`: a one-shot outcome). A reader that asks whether a dictation is live reads `phase.isLive`, never a list of cases and never the notice; a switch over a phase names every case (lint `phase_switch_has_no_default`). A new outcome is a notice, never a phase (lint `dictation_phase_cases`): its case and facts in `KotobaCore/Sources/KotobaCore/DictationState.swift`, its words and button in `App/StatusText.swift`, its snapshot row in `App/IndicatorSnapshots.swift`.
 - Mic capture: the input lifecycle (which mic records, when its input is built again, what waits for the end of a capture) lives in `KotobaCore/Sources/KotobaCore/AudioCapture.swift`. `App/HALCaptureHardware.swift` only runs the `CaptureHardware` port on CoreAudio; a new device or route rule is a test in `AudioCaptureTests` first (lint `capture_lifecycle_in_core`).
 
 ## Native components (owner, 2026-10-16)
@@ -65,7 +66,7 @@ Reference: the copy deck in `docs/research/ux-polish.md` (sections 4.1-4.6). A n
 9. One word per concept: Listening (live state), dictation, speech model, key, word, replacement, suggestion.
 10. Counts inflect (`AttributedString(localized: "^[…](inflect: true)")`); hide a zero count instead of "(0)".
 11. Pill and menu status strings live in `App/StatusText.swift` only.
-12. Every new window, pane and `DictationState` gets a snapshot in `App/Snapshots.swift` (light and dark).
+12. Every new window, pane, `DictationPhase` and `DictationNotice` gets a snapshot in `App/Snapshots.swift` (light and dark).
 13. Typographic punctuation: curly apostrophe and quotes (’ “ ”) in UI text, never ' or " inside the visible words.
 
 ## Tests
