@@ -12,7 +12,7 @@ SWIFT_SRC   := App KotobaCore/Sources KotobaCore/Tests KotobaCore/Package.swift 
                KotobaStorage/Sources KotobaStorage/Tests KotobaStorage/Package.swift
 SWIFTFORMAT := xcrun swift-format
 
-.PHONY: gen build build-check test lint lint-files format format-lint privacy check view-checks snapshots readme-images memory window-memory latency latency-log \
+.PHONY: gen build build-check test lint lint-files format format-lint privacy check view-checks snapshots readme-images memory window-memory latency latency-log stop-probe \
 	release dmg appcast
 
 gen:
@@ -97,6 +97,11 @@ latency:
 # The same gate and the stop path split from the unified log (`log show`), with no database read.
 latency-log:
 	DEV=$(DEV) LAST=$(LAST) FROM=$(FROM) scripts/latency-log.sh
+
+# The pipeline's own time from the stop tap to Cmd-V sent, with fakes (scripts/stop-probe.sh). BASE=<ref> runs that ref
+# in turn with this checkout.
+stop-probe:
+	RUNS=$(RUNS) BASE=$(BASE) ROUNDS=$(ROUNDS) CONFIG=$(CONFIG) AGENT=$(AGENT) TEST_LIMIT=$(TEST_LIMIT) scripts/stop-probe.sh
 
 # Release (docs/release.md): `make dmg` builds, notarizes and staples the app and the DMG; `make appcast` writes the
 # Sparkle feed for that DMG. Everything lands in build/release/; nothing is uploaded.
