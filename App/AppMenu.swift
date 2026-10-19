@@ -6,34 +6,17 @@ import KotobaProviders
 
 extension AppDelegate: StatusMenuActions {
     func updateIcon() {
-        statusItem?.icon =
-            if case .recording = state {
-                .listening
-            } else if !readiness.isComplete || pendingCount > 0 || updater?.hasWaitingUpdate == true {
-                .needsAttention
-            } else {
-                .ready
-            }
+        statusItem?.icon = shell.view(shellFacts).icon
     }
 
     func menuModel() -> MenuModel {
         readiness.refresh()
-        let status: MenuModel.Status =
-            if let launchIssue {
-                .text(launchIssue)
-            } else if releaseWatcher.showsYield(in: state) {
-                .text(StatusText.yieldsToRelease)
-            } else if state != .idle {
-                .text(state.statusText(statusContext) ?? "")
-            } else {
-                readiness.firstMissing.map { .finishSetup($0.setupText) } ?? .text(StatusText.ready)
-            }
         let route = routeSettings.route
         let input = audio.inputInUse
         return MenuModel(
-            status: status,
-            pendingCount: pendingCount,
-            recovered: recovered,
+            status: shell.view(shellFacts).status.line(statusContext),
+            pendingCount: shell.queues.waitingCount,
+            recovered: shell.queues.recovered.map { MenuChoice(title: $0.title, value: $0.id.rawValue.uuidString) },
             microphones: AudioDevices.inputs().map { MenuChoice(title: $0.name, value: $0.uid) },
             microphoneInUse: input.map { ($0.uid, $0.name) },
             microphoneWarning: InputDevicePolicy.warning(
@@ -44,8 +27,8 @@ extension AppDelegate: StatusMenuActions {
                 ? MenuModel.Grok(
                     isFormatOn: routeSettings.isGrokFormatOn, keepsFillerWords: routeSettings.keepsGrokFillerWords)
                 : nil,
-            hasLastDictation: hasLastDictation,
-            hasRawLastDictation: hasRawLastDictation,
+            hasLastDictation: shell.queues.hasLastDictation,
+            hasRawLastDictation: shell.queues.hasRawLastDictation,
             suggestionCount: mainWindow.dictionary?.suggestions.count ?? 0,
             updates: updates
         )
@@ -64,7 +47,7 @@ extension AppDelegate: StatusMenuActions {
         guard let pipeline else { return }
         Task {
             await pipeline.retryPending()
-            await refreshQueues()
+            refreshQueues()
         }
     }
 

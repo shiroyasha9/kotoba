@@ -261,6 +261,19 @@ extension DictationState {
     }
 }
 
+extension ShellStatus.MenuStatus where Missing == Readiness.Missing {
+    /// The menu's first line in words.
+    @MainActor func line(_ context: StatusContext) -> MenuModel.Status {
+        switch self {
+        case .historyUnavailable: .text(StatusText.historyUnavailable)
+        case .yieldsToRelease: .text(StatusText.yieldsToRelease)
+        case .dictation(let state): .text(state.statusText(context) ?? "")
+        case .finishSetup(let missing): .finishSetup(missing.setupText)
+        case .ready: .text(StatusText.ready)
+        }
+    }
+}
+
 extension SetupItem {
     /// The button that sets it: the key and the endpoint in Settings, credit on the provider's site.
     var pillAction: PillAction {

@@ -1,18 +1,13 @@
 import AppKit
+import KotobaCore
 
 /// The menu bar item: its icon, and its menu, built fresh from `model()` each time it opens.
 @MainActor
 final class StatusBarItem: NSObject, NSMenuDelegate {
-    /// M10 with the kotoba mark (design/icon/): the full mark when ready, a dot while setup is not complete, a
-    /// dictation waits for a retry or an update waits, and a caret that blinks while listening. Template images from
-    /// App/Assets.xcassets, so they follow the menu bar's appearance.
-    enum Icon {
-        case ready
-        case needsAttention
-        case listening
-    }
-
-    var icon = Icon.ready {
+    /// M10 with the kotoba mark (design/icon/): the full mark when ready, a dot when it needs attention, and a caret
+    /// that blinks while listening (`ShellStatus.Icon`). Template images from App/Assets.xcassets, so they follow the
+    /// menu bar's appearance.
+    var icon = ShellStatus.Icon.ready {
         didSet {
             if icon != oldValue { showIcon() }
         }

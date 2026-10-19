@@ -12,10 +12,6 @@ final class ReleaseAppWatcher {
 
     var isYielding: Bool { yield.isYielding }
 
-    func showsYield(in state: DictationState) -> Bool {
-        yield.showsYield(in: state)
-    }
-
     /// Calls `changed` with the new `isYielding` at each change; at once when the release app already runs. The release
     /// never gives way, so it observes nothing.
     func start(_ changed: @escaping @MainActor (Bool) -> Void) {

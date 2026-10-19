@@ -41,27 +41,14 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     var statusItem: StatusBarItem?
     var pipeline: DictationPipeline?
     var store: HistoryStore?
-    var state: DictationState = .idle
-    /// Dictations that wait for a retry: the menu's Retry item, the icon's dot and the Dock badge.
-    var pendingCount = 0 {
-        didSet { DockAndMenuBar.shared.waitingCount = pendingCount }
-    }
-    /// A dictation was pasted or copied, so "Fix Last Dictation…" has something to fix.
-    var hasLastDictation = false
-    /// The last dictation was cleaned up, so "Paste Last Without Cleanup" has the raw transcript.
-    var hasRawLastDictation = false
+    /// What the menu bar icon, the menus, the Dock badge and the cues show (`ShellStatus`).
+    var shell = ShellStatus()
     var lastDictation: LastDictation?
-    private var queueRefresh: Task<Void, Never>?
-    private var isQueueRefreshDue = false
     /// The spoken command toggles, in click order, to the pipeline (one consumer, as for the Undo holds).
     let pasteSettingChanges = AsyncStream.makeStream(of: PasteSetting.self)
     /// The History section's retention choices and "Delete Audio Now…", in click order, to the pipeline.
     let audioRequests = AsyncStream.makeStream(of: AudioRequest.self)
-    /// Menu previews from the last 24 h, newest first; full transcripts stay in the store until copied.
-    var recovered: [MenuChoice] = []
     private var isSecureInputOn = false
-    /// Set when the history database does not open; the menu shows it instead of the status.
-    var launchIssue: String?
     let updater = Updater.forThisBuild()
     /// A development build gives way while the release app runs (`InstallYield`).
     let releaseWatcher = ReleaseAppWatcher()
@@ -130,12 +117,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             // Audio left with no row (a crash during a recording) joins this launch's retry.
             await OrphanAudioRecovery.run(in: AppFiles.audio, store: store, launchedAt: launchedAt)
             await pipeline.retryAtLaunch()
-            await refreshQueues()
+            refreshQueues()
         }
         startHotkeys(feeding: pipeline)
         // With "Show indicator: Always" the idle pill appears after the launch work, so building it (about 50 ms)
         // never delays the hotkey tap.
-        Task { indicator.show(state, context: statusContext) }
+        Task { indicator.show(shell.dictation, context: statusContext) }
         watchNetwork(for: pipeline)
         AwayWatcher.watch(feeding: pipeline)
     }
@@ -157,7 +144,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             store = try HistoryStore(url: AppFiles.history, audio: AppFiles.audio)
         } catch {
             Log.app.fault("Cannot open the history database: \(error)")
-            launchIssue = StatusText.historyUnavailable
+            shell.isHistoryUnavailable = true
             return nil
         }
         self.store = store
@@ -250,34 +237,27 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private func setupChanged(_ pipeline: DictationPipeline) async {
         readiness.refresh()
         await pipeline.setupChanged()
-        await refreshQueues()
+        refreshQueues()
     }
 
     private func render(_ newState: DictationState) {
-        let wasRecording = if case .recording = state { true } else { false }
-        state = newState
+        let reactions = shell.dictationChanged(newState)
         learner.dictationStateChanged(newState)
-        if case .recording = newState {
-            if !wasRecording {
-                isSecureInputOn = IsSecureEventInputEnabled()
-                cues.play(.start)
-            }
-            hotkeys.setRecordingShown(true)
-        } else {
-            hotkeys.setRecordingShown(false)
-            if wasRecording, newState == .transcribing {
-                cues.play(.stop)
-            }
+        // Before the cue: a stopped recording lets Esc and Return through to the front app at once.
+        hotkeys.setRecordingShown(reactions.isRecordingShown)
+        if reactions.readsSecureInput {
+            isSecureInputOn = IsSecureEventInputEnabled()
+        }
+        if let cue = reactions.cue {
+            cues.play(cue)
+        }
+        if reactions.readsGrants {
+            readiness.refresh()
+        }
+        if reactions.readsQueues {
+            refreshQueues()
         }
         updateIcon()
-        switch newState {
-        // Their text and button depend on the mic and Accessibility grants now (I2).
-        // The mic can go silent because its access was turned off while kotoba runs.
-        case .captureFailed, .copied, .recording(_, isSilent: true, _): readiness.refresh()
-        // A recovered text the store could not write is listed from memory, with no write to announce it.
-        case .recovered: scheduleQueueRefresh()
-        default: break
-        }
         indicator.show(newState, context: statusContext)
     }
 
@@ -313,6 +293,13 @@ extension AppDelegate {
             longRecordingMinutes: Int(settings.longRecordingWarning / .seconds(60)), undoWindow: settings.undoWindow,
             isYielding: releaseWatcher.isYielding)
     }
+
+    /// What the shell reads from the other owners at each draw.
+    var shellFacts: ShellStatus.Facts<Readiness.Missing> {
+        ShellStatus.Facts(
+            firstMissing: readiness.firstMissing, isYielding: releaseWatcher.isYielding,
+            hasWaitingUpdate: updater?.hasWaitingUpdate == true)
+    }
 }
 
 // MARK: - History writes
@@ -322,38 +309,36 @@ extension AppDelegate {
     /// window's panes.
     private func historyChanged(_ change: HistoryChange) {
         mainWindow.historyChanged(change)
-        if change.isRowChanged { scheduleQueueRefresh() }
+        if change.isRowChanged { refreshQueues() }
     }
 
-    /// A dictation writes the history two or three times; the menu reads its counts once for such a burst: one
-    /// refresh runs, and one more when a write came during it.
-    private func scheduleQueueRefresh() {
-        isQueueRefreshDue = true
-        guard queueRefresh == nil else { return }
-        queueRefresh = Task {
-            while isQueueRefreshDue {
-                isQueueRefreshDue = false
-                await refreshQueues()
+    /// Reads the menu's counts, or once more after the read in progress (`ShellStatus.queueReadRequested`).
+    func refreshQueues() {
+        guard shell.queueReadRequested() else { return }
+        Task {
+            var isDue = true
+            while isDue {
+                let queues = await readQueues()
+                isDue = shell.queueRead(queues)
+                DockAndMenuBar.shared.waitingCount = shell.queues.waitingCount
+                updateIcon()
             }
-            queueRefresh = nil
         }
     }
 
-    func refreshQueues() async {
-        guard let store, let pipeline else { return }
-        recovered = await pipeline.retries.recovered().map { record in
-            let preview = (record.deliveredText ?? "").prefix(41)
-            let title = preview.count > 40 ? String(preview.prefix(40)) + "…" : String(preview)
-            return MenuChoice(title: title, value: record.id.rawValue.uuidString)
-        }
+    /// A count the history cannot read keeps its last value.
+    private func readQueues() async -> ShellStatus.Queues {
+        guard let store, let pipeline else { return shell.queues }
+        let recovered = await pipeline.retries.recovered()
+        var waitingCount = shell.queues.waitingCount
         do {
-            pendingCount = try await store.pendingCount()
+            waitingCount = try await store.pendingCount()
         } catch {
             Log.app.error("Cannot read the dictation history: \(error)")
         }
         let last = await lastDictation?.record()
-        hasLastDictation = last != nil
-        hasRawLastDictation = last.flatMap(LastDictation.rawText) != nil
-        updateIcon()
+        return ShellStatus.Queues(
+            waitingCount: waitingCount, recovered: recovered, hasLastDictation: last != nil,
+            hasRawLastDictation: last.flatMap(LastDictation.rawText) != nil)
     }
 }
