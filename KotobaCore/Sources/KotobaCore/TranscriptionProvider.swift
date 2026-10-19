@@ -70,6 +70,10 @@ public enum PrimerSize: Sendable, Equatable {
 public struct TranscriptionRequest: Sendable, Equatable {
     /// 16 kHz mono FLAC.
     public var audio: URL
+    /// The same audio as Ogg Opus at 24 kbps, about a fifth of the FLAC's bytes, written during the recording; nil, or
+    /// a copy already deleted (the capture keeps only the last one), sends `audio`. Only a route measured with it sends
+    /// it (docs/research/latency-pass-2.md).
+    public var upload: URL?
     /// The recording's length: the audio count and the cost estimate for a route whose answer has neither.
     public var duration: Duration
     public var language: Locale.Language
@@ -80,9 +84,11 @@ public struct TranscriptionRequest: Sendable, Equatable {
     public var model: String?
 
     public init(
-        audio: URL, duration: Duration, language: Locale.Language, dictionaryTerms: [String], model: String? = nil
+        audio: URL, upload: URL? = nil, duration: Duration, language: Locale.Language, dictionaryTerms: [String],
+        model: String? = nil
     ) {
         self.audio = audio
+        self.upload = upload
         self.duration = duration
         self.language = language
         self.dictionaryTerms = dictionaryTerms

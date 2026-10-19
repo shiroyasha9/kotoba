@@ -48,12 +48,21 @@ final class OpenRouterProvider: RouteClient {
         let label = options.route.rawValue
         let fields = Self.fields(terms: request.dictionaryTerms, language: request.language, options: options)
         let rest = try ProviderHTTP.encode(fields)
+        // The Opus copy when the route takes it and it is still there (the capture deletes it when the next recording
+        // starts); opened now, so a delete during the upload cannot cut it. Else the FLAC.
+        let opus = options.route.takesOggOpus ? request.upload.flatMap { try? FileHandle(forReadingFrom: $0) } : nil
+        defer { try? opus?.close() }  // Read-only: closing cannot lose data.
         let reply = try await connection.send(
             baseURL.appending(path: "audio/transcriptions"), contentType: "application/json", label: label,
             body: .streamed { writer in
-                // `input_audio` first, its base64 streamed from the FLAC, then the other fields from `rest`.
-                try writer.write(#"{"input_audio":{"format":"flac","data":""#)
-                try writer.write(contentsOf: request.audio, base64: true)
+                // `input_audio` first, its base64 streamed from the audio file, then the other fields from `rest`.
+                if let opus {
+                    try writer.write(#"{"input_audio":{"format":"ogg","data":""#)
+                    try writer.write(contentsOf: opus, base64: true)
+                } else {
+                    try writer.write(#"{"input_audio":{"format":"flac","data":""#)
+                    try writer.write(contentsOf: request.audio, base64: true)
+                }
                 try writer.write(#""},"#)
                 try writer.write(rest.dropFirst())  // `rest` is a non-empty object: drop its "{".
             }, idleTimeout: ProviderHTTP.idleTimeout(for: request))

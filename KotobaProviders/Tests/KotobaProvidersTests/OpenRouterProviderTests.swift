@@ -338,3 +338,47 @@ struct OpenRouterProviderTests {
         #expect(stub.requests.isEmpty)
     }
 }
+
+/// The Ogg Opus copy of a recording (`TranscriptionRequest.upload`): sent only on the route measured with it.
+struct OpenRouterOpusUploadTests {
+    /// MAI through OpenRouter answers about 240 ms sooner for the Ogg Opus copy at the WER of the FLAC
+    /// (docs/research/latency-pass-2.md).
+    @Test func maiRequestSendsTheOggOpusCopyWhenTheRecordingHasOne() async throws {
+        let stub = StubHost(reply: .fixture("success"))
+
+        _ = try await stub.provider().transcribe(stub.request(upload: StubHost.opusBytes))
+
+        let audio = try #require(try stub.requests.only?.json()["input_audio"] as? [String: String])
+        #expect(audio["format"] == "ogg")
+        #expect(audio["data"] == StubHost.opusBytes.base64EncodedString())
+    }
+
+    /// The capture keeps only the last recording's copy: a retry of an older one sends its FLAC.
+    @Test func maiRequestSendsTheFLACWhenTheOpusCopyIsGone() async throws {
+        let stub = StubHost(reply: .fixture("success"))
+        var request = try stub.request()
+        request.upload = FileManager.default.temporaryDirectory.appending(path: "\(UUID().uuidString).ogg")
+
+        _ = try await stub.provider().transcribe(request)
+
+        let audio = try #require(try stub.requests.only?.json()["input_audio"] as? [String: String])
+        #expect(audio["format"] == "flac")
+        #expect(audio["data"] == StubHost.audioBytes.base64EncodedString())
+    }
+
+    /// Only a route measured with the Opus copy sends it.
+    @Test(arguments: [TranscriptionRoute.openRouterGrok, .xaiGrok, .azureMAI])
+    func otherRoutesSendTheFLACAlsoWhenThereIsAnOpusCopy(route: TranscriptionRoute) async throws {
+        let stub = StubHost(
+            reply: .fixture(route == .azureMAI ? "azure-success" : route == .xaiGrok ? "xai-success" : "success"))
+        if route == .azureMAI { stub.useAzure() } else { stub.settings.route = route }
+
+        _ = try await stub.provider().transcribe(stub.request(upload: StubHost.opusBytes))
+
+        let body = try #require(stub.requests.only).body
+        #expect(body.range(of: StubHost.opusBytes) == nil)
+        #expect(body.range(of: StubHost.opusBytes.base64EncodedData()) == nil)
+        let flac = route == .openRouterGrok ? StubHost.audioBytes.base64EncodedData() : StubHost.audioBytes
+        #expect(body.range(of: flac) != nil)
+    }
+}

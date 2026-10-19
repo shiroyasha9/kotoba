@@ -69,6 +69,7 @@ extension [String: Any] {
 final class StubHost {
     static let key = "sk-or-test"
     static let audioBytes = Data("fLaC\u{0}\u{0}\u{0}\"stub audio".utf8)
+    static let opusBytes = Data("OggS\u{0}\u{2}stub opus".utf8)
 
     let host = "openrouter-\(UUID().uuidString.lowercased()).test"
     var baseURL: URL { url("/api/v1") }
@@ -90,11 +91,13 @@ final class StubHost {
 
     deinit {
         StubURLProtocol.routes.withLock { $0[host] = nil }
-        // The file exists only for tests that built a request.
+        // The files exist only for tests that built a request.
         try? FileManager.default.removeItem(at: audioFile)
+        try? FileManager.default.removeItem(at: uploadFile)
     }
 
     private var audioFile: URL { FileManager.default.temporaryDirectory.appending(path: "\(host).flac") }
+    private var uploadFile: URL { FileManager.default.temporaryDirectory.appending(path: "\(host).ogg") }
 
     /// The multipart boundary the direct routes use in tests, so their bodies match the fixtures byte for byte.
     static let boundary = "test-boundary"
@@ -137,12 +140,15 @@ final class StubHost {
         return configuration
     }
 
+    /// `upload` writes the recording's Ogg Opus copy too (`TranscriptionRequest.upload`).
     func request(
-        terms: [String] = [], audio: Data = StubHost.audioBytes, duration: Duration = .seconds(10)
+        terms: [String] = [], audio: Data = StubHost.audioBytes, upload: Data? = nil, duration: Duration = .seconds(10)
     ) throws -> TranscriptionRequest {
         try audio.write(to: audioFile)
+        try upload?.write(to: uploadFile)
         return TranscriptionRequest(
-            audio: audioFile, duration: duration, language: Locale.Language(identifier: "en"), dictionaryTerms: terms)
+            audio: audioFile, upload: upload.map { _ in uploadFile }, duration: duration,
+            language: Locale.Language(identifier: "en"), dictionaryTerms: terms)
     }
 }
 

@@ -102,6 +102,11 @@ public enum TranscriptionRoute: String, CaseIterable, Sendable {
     /// OpenRouter routes only: sent as `provider.zdr`, so OpenRouter uses only endpoints that keep no data (spec
     /// story 40). Grok has no such endpoint there.
     var hasZeroDataRetention: Bool { self == .openRouterMAI }
+
+    /// The route takes the Ogg Opus copy of a recording (`TranscriptionRequest.upload`) at the WER of the FLAC: MAI
+    /// through OpenRouter, measured on 80 bench clips (2026-10-19). WebM and MP4 come back 400 there. The other routes
+    /// send the FLAC until a bench run checks them.
+    var takesOggOpus: Bool { self == .openRouterMAI }
 }
 
 /// The transcription and cleanup choices the owner makes in the menu or Settings, kept in UserDefaults. Every read
