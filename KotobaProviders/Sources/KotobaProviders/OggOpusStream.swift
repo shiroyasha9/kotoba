@@ -33,16 +33,18 @@ public struct OggOpusStream {
         header += page([Self.comment], flags: 0)
     }
 
-    /// Adds one Opus packet that holds `frames` input frames. Returns a finished page when one filled, else nil.
+    /// Adds one Opus packet that holds `frames` input frames. Returns the page before it when that one is full, else
+    /// nil. A full page waits for the next packet, so the last page always holds packets and its granule can trim the
+    /// padding (end trimming applies only to the packets of the last page, RFC 7845 section 4.4).
     public mutating func append(_ packet: Data, frames: Int) -> Data? {
         let segments = packet.count / 255 + 1
         // A page holds at most 255 lacing values.
-        let full = pendingSegments + segments > 255 ? flush(flags: 0) : nil
+        let full =
+            pending.count >= Self.packetsPerPage || pendingSegments + segments > 255 ? flush(flags: 0) : nil
         pending.append(packet)
         pendingSegments += segments
         granule += Int64(frames) * samplesPerFrame
-        if let full { return full }
-        return pending.count >= Self.packetsPerPage ? flush(flags: 0) : nil
+        return full
     }
 
     /// The last page, marked as the end of the stream. Its granule is the audio's own length (`inputFrames`), so a

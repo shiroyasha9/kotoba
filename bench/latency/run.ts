@@ -540,7 +540,12 @@ async function plan(): Promise<Job[][]> {
 			// Which containers does the route take? One short clip in each.
 			const [clip] = await pick(4, 6, 1);
 			if (!clip) fail("no 4-6 s clip in the bench data");
-			const files = [["flac", audioPath(p, clip.clipId, "flac")], ...(await Promise.all(Object.keys(CODECS).map(async (c) => [c, await encoded(clip.clipId, c)])))];
+			const files = [["flac", audioPath(p, clip.clipId, "flac")], ...(await Promise.all(
+					// Codecs made outside the probe (no ffmpeg settings) go only to the codec experiment.
+					Object.keys(CODECS)
+						.filter((c) => CODECS[c]!.args.length > 0)
+						.map(async (c) => [c, await encoded(clip.clipId, c)]),
+				))];
 			return files.map(([key, file]) => [{ exp, variant: { ...APP, key: key! }, clipId: clip.clipId, file: file!, durationSec: clip.durationSec }]);
 		}
 		case "codec": {

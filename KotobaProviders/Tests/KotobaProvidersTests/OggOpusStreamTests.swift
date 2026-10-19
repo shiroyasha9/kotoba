@@ -56,16 +56,29 @@ struct OggOpusStreamTests {
     }
 
     /// The granule counts every sample the packets hold, the encoder's priming too: the decoder subtracts the
-    /// pre-skip.
+    /// pre-skip. A full page goes out when the next packet comes.
     @Test func aPageCarriesASecondOfPackets() throws {
         var stream = OggOpusStream(inputSampleRate: 16_000, preSkip: 104, serial: 1)
 
-        let pages = (0..<OggOpusStream.packetsPerPage).compactMap { _ in stream.append(Data(count: 60), frames: 320) }
+        let pages = (0...OggOpusStream.packetsPerPage).compactMap { _ in stream.append(Data(count: 60), frames: 320) }
 
         let page = try #require(pages.only)
         #expect(page[26] == UInt8(OggOpusStream.packetsPerPage))
         #expect(page.oggGranule == Int64(OggOpusStream.packetsPerPage * 320 * 3))
         #expect(page[18..<22] == Data([2, 0, 0, 0]))  // Sequence: after the two header pages.
+    }
+
+    /// A recording that ends on a full page still trims its padding: the last page holds that page's packets.
+    @Test func aRecordingThatEndsOnAFullPageKeepsItsTrim() throws {
+        var stream = OggOpusStream(inputSampleRate: 16_000, preSkip: 104, serial: 1)
+        let pages = (0..<OggOpusStream.packetsPerPage).compactMap { _ in stream.append(Data(count: 60), frames: 320) }
+
+        let last = stream.finish(inputFrames: 15_800)
+
+        #expect(pages.isEmpty)
+        #expect(last[5] == 0x04)
+        #expect(last[26] == UInt8(OggOpusStream.packetsPerPage))
+        #expect(last.oggGranule == Int64((104 + 15_800) * 3))
     }
 
     // MARK: Helpers
