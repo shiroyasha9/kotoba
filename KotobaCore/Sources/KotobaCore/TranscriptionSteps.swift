@@ -213,7 +213,8 @@ enum Deadlined<Value: Sendable>: Sendable {
 
 extension PendingWork {
     /// `request`'s answer, or `.tooSlow` when `deadline` passes first on `clock`: a live cleanup and Polish, whose
-    /// paste waits. The request is not cancelled: a late answer was billed, so it goes to `late` when it comes.
+    /// paste waits. The request is not cancelled: a late answer was billed, so it goes to `late` when it comes, as
+    /// billed work that quit waits for.
     func answer<Value: Sendable>(
         to request: @escaping @Sendable () async throws -> Value, within deadline: Duration,
         on clock: any PipelineClock,
@@ -221,7 +222,7 @@ extension PendingWork {
     ) async -> Deadlined<Value> {
         let first = FirstOf<Deadlined<Value>>()
         let timer = schedule(at: clock.now + deadline) { first.settle(.tooSlow) }
-        track {
+        bill {
             let result: Result<Value, any Error>
             do {
                 result = .success(try await request())

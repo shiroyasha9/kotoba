@@ -271,6 +271,14 @@ custom_rules:
     excluded_match_kinds: [comment, doccomment, string]
     message: "Ask `live` (`isQuiet`, `isDictationLive`, `hasRecording`) instead of combining the recording and the Undo window by hand."
     severity: error
+  # Quit waits for billed work only when it is tracked as billed (`PendingWork.bill`); a ledger write in plain tracked
+  # work or a bare task is lost at quit (CODING_STANDARDS.md, Layout).
+  billed_work_is_billed:
+    name: "Billed work runs as work.bill"
+    included: ["KotobaCore/Sources/KotobaCore/.*\\.swift"]
+    regex: "(?:\\.track\\b|\\bTask)\\s*(?:\\([^)]*\\))?\\s*\\{(?:(?!\\bfunc\\s|\\.track\\b|\\.bill\\b|\\bTask\\s*[({])[\\s\\S]){0,1500}?\\baddUsage"
+    message: "A request whose cost goes to the usage ledger runs as `work.bill`, so quit waits for it (CODING_STANDARDS.md, Layout)."
+    severity: error
   capture_lifecycle_in_core:
     name: "Capture lifecycle in KotobaCore"
     included: ["App/.*\\.swift"]

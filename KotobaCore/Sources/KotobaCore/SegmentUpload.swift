@@ -128,7 +128,7 @@ struct SegmentUpload: Sendable {
     ) {
         for request in unused {
             request.cancel()
-            steps.work.track { [store = steps.store, clock = steps.clock] in
+            steps.work.bill { [store = steps.store, clock = steps.clock] in
                 guard case .success(let answer) = await request.result else { return }
                 do {
                     try await store.addUsage([

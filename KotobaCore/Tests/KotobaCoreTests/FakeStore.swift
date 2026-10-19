@@ -14,7 +14,15 @@ actor FakeStore: Store {
         ledger += record.usage.filter { entry in !ledger.contains { $0.id == entry.id } }
     }
 
+    /// When set, `addUsage` waits for this gate, as a slow disk.
+    private var usageGate: Gate?
+
+    func holdUsage(at gate: Gate) {
+        usageGate = gate
+    }
+
     func addUsage(_ entries: [UsageEntry]) async throws {
+        await usageGate?.pass()
         ledger += entries.filter { entry in !ledger.contains { $0.id == entry.id } }
     }
 

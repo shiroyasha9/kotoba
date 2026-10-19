@@ -202,7 +202,9 @@ public actor DictationPipeline {
     /// Quit: a live recording is saved `.pending` (transcribed at the next launch, into Recovered),
     /// and a recording in its Undo window is saved `.cancelled`. Nothing is lost. A dictation being sent gets up to
     /// `quitWait` for its answer, so its billed text is saved and the next launch does not send it again; one that
-    /// takes longer stays `.pending`; a retry being sent gets the same wait, and a paste that went out gets its restore.
+    /// takes longer stays `.pending`; a retry send, Polish, Transcribe Again and every billed answer on its way (a
+    /// primer, unused segments, a late cleanup: `PendingWork.bill`) get the same wait, so their cost reaches the usage
+    /// ledger, and a paste that went out gets its restore. All share one bound.
     /// From the start nothing new is sent (a send now could be billed now and again at the next launch), recorded or
     /// pasted: the paste of an answer that comes during the wait would return before its restore.
     public func shutdown() async {
@@ -228,6 +230,8 @@ public actor DictationPipeline {
             await withCheckedContinuation { live.wait(until: .sendsEnded, $0) }
             bound.cancel()
         }
+        // Billed answers on their way beside the sends (primers, unused segments, late cleanups) reach the ledger.
+        await work.billsEnded(by: deadline)
         // A paste that went out before quit began gets its restore, so the owner's clipboard comes back.
         await paste.waitUntilRestored(by: deadline)
     }
@@ -314,6 +318,9 @@ extension DictationPipeline {
 
     /// Test seam: events that wait for their turn (`inTurn`).
     var turnWaiterCount: Int { turnWaiters.count }
+
+    /// Test seam: quits that wait for billed work.
+    var billWaiterCount: Int { work.billWaiterCount }
 
     /// Test seam: Polish or its Undo runs.
     var isPolishing: Bool { live.isRunning(.polish) }

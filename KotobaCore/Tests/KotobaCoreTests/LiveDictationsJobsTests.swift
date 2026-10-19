@@ -140,6 +140,16 @@ struct LiveDictationsJobsTests {
         #expect(await wakes(.sendsEnded, &live) { $0.end(.retrySend) })
     }
 
+    /// Every job sends a billed request (Polish, Transcribe Again, a retry send): quit waits for each.
+    @Test(arguments: [Live.Job.polish, .transcribeAgain(DictationID()), .retrySend])
+    func quitWaitsForEveryJob(_ job: Live.Job) async {
+        var live = makeLive()
+        _ = live.begin(job)
+        #expect(!live.areSendsEnded)
+
+        #expect(await wakes(.sendsEnded, &live) { $0.end(job) })
+    }
+
     /// A recording is no send: quit keeps it as pending, it does not wait for it.
     @Test func aRecordingIsNoSendOnItsWay() {
         var live = makeLive()

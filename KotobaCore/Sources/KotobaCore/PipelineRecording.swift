@@ -120,7 +120,7 @@ extension DictationPipeline {
         primedAt = ports.clock.now
         armPrimer(for: id)
         let language = settings.language
-        work.track { [provider = ports.provider, store = ports.store, clock = ports.clock] in
+        work.bill { [provider = ports.provider, store = ports.store, clock = ports.clock] in
             let primer = await provider.prime(language: language, size: size)
             await self.primerFinished(isAnswered: primer != nil)
             guard let primer else { return }

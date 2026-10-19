@@ -8,3 +8,4 @@
 
 - With AirPods as the Mac’s default mic, kotoba records from the built-in mic. When the built-in mic does not open, kotoba now says so instead of recording from the AirPods, which switched them to call quality.
 - A press right after you click Undo now stops the resumed dictation. Before, it could start a second recording over the first and mix their audio. Quitting while a dictation starts or resumes now keeps it for the next launch.
+- Quitting while History’s Transcribe Again, a Polish or kotoba’s connection warm-up waits for its answer now waits up to 3 seconds for it, so Insights counts what it cost.

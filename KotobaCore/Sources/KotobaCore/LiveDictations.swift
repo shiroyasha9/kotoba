@@ -282,10 +282,10 @@ struct LiveDictations<Recording: Identifiable> where Recording.ID == DictationID
         }
     }
 
-    /// No dictation is being sent and no retry send is on its way: quit's wait ends. A recording is no send; quit keeps
-    /// it for the next launch.
+    /// No dictation is being sent and no job is on its way (each sends a billed request: Polish, Transcribe Again, a
+    /// retry send): quit's wait ends. A recording is no send; quit keeps it for the next launch.
     var areSendsEnded: Bool {
-        !jobs.contains(.retrySend) && !entries.values.contains { $0.send != nil }
+        jobs.isEmpty && !entries.values.contains { $0.send != nil }
     }
 
     // MARK: - Answers

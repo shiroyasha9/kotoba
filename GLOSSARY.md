@@ -77,6 +77,10 @@ _Avoid_: active dictation, current dictation
 Said of a live dictation after its stop, while its audio is sent and its text is cleaned, pasted or saved. Quit waits a little for each one, so its billed text is kept.
 _Avoid_: pending (a status in History), transcribing (one step of it)
 
+**Billed work**:
+A request whose cost goes to the usage ledger outside a dictation's send or a job: a primer, the segments a recording did not use, a late cleanup or Polish answer. Quit waits a little for it, as for a dictation in flight, so its cost is counted.
+_Avoid_: background billing, usage task
+
 **Phase**:
 The step the pipeline is in now: idle, recording, transcribing, cleaning, the Undo window, or polishing. It says whether a dictation or Polish is live, also while a notice shows.
 _Avoid_: state (the phase with its notice), status (a History row's)
