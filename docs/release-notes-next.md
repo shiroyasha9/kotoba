@@ -1,5 +1,5 @@
-## kotoba 0.4.2
+## kotoba 0.4.3
 
-### Improved
+### Fixed
 
-- kotoba gives memory back after you close its window. On a test build, memory after closing the window went from about 69 MB to about 41 MB.
+- The recording pill shows on every desktop (Space) again. Before, after some time it could stop showing on one desktop while it still showed on the others.
