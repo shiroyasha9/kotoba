@@ -19,8 +19,16 @@ The microphone a capture records from, or the next dictation will: the first con
 _Avoid_: current device, active input
 
 **Upload copy**:
-The same audio as a capture's FLAC, as Ogg Opus at 24 kbps, written while it records and sent instead of the FLAC by a route measured with it, in the first request only, which deletes it. The FLAC stays the kept recording.
+The same audio as a capture's FLAC, as Ogg Opus at 24 kbps, written while it records and sent instead of the FLAC by a route measured with it, in the first request only, which deletes it. After a cut it holds only the audio after the last cut. The FLAC stays the kept recording.
 _Avoid_: compressed audio, opus file
+
+**Segment**:
+A part of a dictation's upload copy, cut at the first pause of 0.4 s that starts 15 s or more after the last cut, and sent while the dictation records.
+_Avoid_: chunk (one buffer the capture writer converts), part, slice
+
+**Segment upload**:
+Sending a dictation's segments while it records, then at the stop the copy after the last cut, and joining their texts in order; any segment that fails sends the whole recording instead.
+_Avoid_: streaming, chunked upload
 
 **Input**:
 The open connection to the mic in use. It is ready while idle and runs only during a capture, so the mic is on only while recording.
