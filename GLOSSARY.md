@@ -18,6 +18,10 @@ _Avoid_: session, recording session
 The microphone a capture records from, or the next dictation will: the first connected mic in the owner's order, else the system default with a Bluetooth default replaced by the built-in mic.
 _Avoid_: current device, active input
 
+**Upload copy**:
+The same audio as a capture's FLAC, as Ogg Opus at 24 kbps, written while it records and sent instead of the FLAC by a route measured with it. Only the last capture's copy is kept; the FLAC stays the kept recording.
+_Avoid_: compressed audio, opus file
+
 **Input**:
 The open connection to the mic in use. It is ready while idle and runs only during a capture, so the mic is on only while recording.
 _Avoid_: engine, unit, stream
