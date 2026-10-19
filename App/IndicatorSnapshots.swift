@@ -162,21 +162,15 @@ extension IndicatorPanel {
         case .failed, .timedOut, .connectionBlocked, .cleanupFailed, .cleanupTooSlow, .returnSkipped, .recovered,
             .nothingRecorded, .clipboardNotKept:
             [SnapshotRow(name: String("\(notice)".prefix { $0 != "(" }), notice)]
-        case .audioNotSaved, .audioCut: lossRows(of: notice)
-        case .polished, .polishFailed:
-            polishRows(for: notice)
-        }
-    }
-
-    /// Polish's notices: the replaced and the new-text outcome, and each failure.
-    private static func polishRows(for notice: DictationNotice) -> [SnapshotRow] {
-        switch notice {
+        case .audioNotSaved: lossRows(named: "audioNotSaved") { .audioNotSaved($0) }
+        case .audioCut(let id, _): lossRows(named: "audioCut") { .audioCut(id, $0) }
+        // The replaced and the new-text outcome.
         case .polished(let id, _):
             [
                 SnapshotRow(name: "polished", .polished(id, isReplaced: true)),
                 SnapshotRow(name: "polished-copied", .polished(id, isReplaced: false)),
             ]
-        default:
+        case .polishFailed:
             [PolishFailure.nothingToPolish, .cutOff, .tooSlow, .needsSetup(.key), .needsSetup(.credit), .failed].map {
                 SnapshotRow(name: "polishFailed-\(Self.snapshotName(of: $0))", .polishFailed($0))
             }
@@ -214,14 +208,8 @@ extension IndicatorPanel {
     }
 
     /// A lost-audio notice once for each cause: only a full disk says "Disk full?".
-    private static func lossRows(of notice: DictationNotice) -> [SnapshotRow] {
-        [AudioLoss.diskFull, .other].compactMap { loss in
-            switch notice {
-            case .audioNotSaved: SnapshotRow(name: "audioNotSaved-\(loss)", .audioNotSaved(loss))
-            case .audioCut(let id, _): SnapshotRow(name: "audioCut-\(loss)", .audioCut(id, loss))
-            default: nil
-            }
-        }
+    private static func lossRows(named name: String, _ notice: (AudioLoss) -> DictationNotice) -> [SnapshotRow] {
+        [AudioLoss.diskFull, .other].map { SnapshotRow(name: "\(name)-\($0)", notice($0)) }
     }
 
     private static func snapshotName(of failure: PolishFailure) -> String {

@@ -280,10 +280,12 @@ custom_rules:
     excluded_match_kinds: [comment, doccomment, string]
     message: "A phase is a step a dictation or Polish stays live in. A one-shot outcome is a `DictationNotice`; a new phase is an owner decision, added to this rule's list."
     severity: error
-  phase_switch_has_no_default:
-    name: "A switch over a phase names every phase"
+  state_switch_has_no_default:
+    name: "A switch over a phase or a notice names every case"
     included: ["App/.*\\.swift", "KotobaCore/Sources/KotobaCore/.*\\.swift"]
-    regex: "switch\\s+[\\w.]*\\bphase\\s*\\{(?:(?!\\n\\s*\\}\\n)[\\s\\S])*?\\n\\s*default\\s*:"
-    excluded_match_kinds: [comment, doccomment, string]
-    message: "Name every `DictationPhase` case, so a new phase does not compile until each reader decides; to ask whether a dictation is live, read `phase.isLive`."
+    # From the switch to its own closing brace, the line at the switch's indent (a closure's `}` in a case does not
+    # end it), for a `default:` at that indent too (a nested switch's is deeper). No excluded_match_kinds: the match
+    # spans the cases, so a string in any case would hide it.
+    regex: "(?m)^( *)(?! )[^\\n]*\\bswitch\\s+[\\w.]*\\b(?:phase|notice)\\s*\\{(?:(?!\\n\\1\\}\\n)[\\s\\S])*?\\n\\1default\\s*:"
+    message: "Name every `DictationPhase` or `DictationNotice` case, so a new one does not compile until each reader decides; to ask whether a dictation is live, read `phase.isLive`."
     severity: error
