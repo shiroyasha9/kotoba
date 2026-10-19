@@ -196,9 +196,10 @@ final class OwnClipboardWrites: Sendable {
 
 /// A transient transcript the pasteboard asks for when an app reads it. The first ask is the paste target's read: the
 /// text goes over, then `onRead` runs at once, on this thread, so the pipeline compares the read's moment with the
-/// Cmd-V's exactly. The pasteboard holds the text once `setString` returns (spike, 2026-10-17: it releases the
-/// provider inside that call), so the restore that follows never races the hand-over. At quit AppKit asks for every
-/// promise, so an unread text stays on the clipboard.
+/// Cmd-V's exactly. The ask is the start of the read, not its end: the pasteboard hands the text to the reader after
+/// this returns, and a new clipboard before then gives the reader nothing (spike, 2026-10-19: 380 of 1000 reads lost
+/// to a restore at once; `pasteboardFinishedWithDataProvider` comes before the hand-over too). So the restore waits
+/// `ClipboardGuard.readSettle`. At quit AppKit asks for every promise, so an unread text stays on the clipboard.
 private final class PromisedText: NSObject, NSPasteboardItemDataProvider, Sendable {
     private let text: String
     private let onRead: Mutex<(@Sendable () -> Void)?>

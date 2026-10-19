@@ -126,6 +126,8 @@ struct PipelineQuitTests {
         let world = FakeWorld(transcript: "done")
         let pipeline = world.makePipeline()
         await pipeline.dictate(world)
+        world.clock.advance(by: ClipboardGuard.readSettle)
+        await pipeline.settle()
 
         await pipeline.shutdown()
 
@@ -173,6 +175,9 @@ struct PipelineQuitTests {
         async let quit: Void = pipeline.shutdown()
         #expect(await eventually { await pipeline.clipboard.isQuitWaiting })
         _ = await world.pasteboard.appReads()
+        let restoreAt = world.clock.now + ClipboardGuard.readSettle
+        #expect(await eventually { world.clock.deadlines.contains(restoreAt) })
+        world.clock.advance(by: ClipboardGuard.readSettle)
         await quit
 
         #expect(await world.pasteboard.text == "user's clipboard")

@@ -28,6 +28,8 @@ struct PipelinePasteAgainTests {
 
         await pipeline.pasteAgain("Fix the login bug.", of: DictationID())
         await pipeline.settle()
+        world.clock.advance(by: ClipboardGuard.readSettle)
+        await pipeline.settle()
 
         #expect(await world.paster.pasted == ["Fix the login bug."])
         #expect(await world.pasteboard.text == "user's clipboard")
@@ -81,6 +83,8 @@ struct PipelinePasteAgainTests {
         await pipeline.dictate(world)
 
         await pipeline.handle(.pasteLast)
+        await pipeline.settle()
+        world.clock.advance(by: ClipboardGuard.readSettle)
         await pipeline.settle()
 
         #expect(await world.paster.pasted == ["Fix the login bug.", "Fix the login bug."])

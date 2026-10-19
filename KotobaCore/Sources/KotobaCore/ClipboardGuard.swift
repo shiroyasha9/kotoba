@@ -1,7 +1,7 @@
 import Synchronization
 
 /// The owner's clipboard around a paste: a snapshot at the announcement, the transcript written as a transient item,
-/// and a restore once the paste target read it, only if nothing else replaced it (docs/spec.md, "Paste").
+/// and a restore `readSettle` after the paste target read it, only if nothing else replaced it (docs/spec.md, "Paste").
 actor ClipboardGuard {
     /// The clipboard as it was, and its change count at that moment.
     struct Snapshot: Sendable {
@@ -37,6 +37,15 @@ actor ClipboardGuard {
         }
     }
 
+    /// Who read the text so far.
+    private enum Read {
+        case notYet
+        /// An app read it before the Cmd-V went out: a clipboard manager that ignores the markers.
+        case early
+        /// The paste target read it after the Cmd-V.
+        case byTarget
+    }
+
     /// The latest transient write, its text, and the clipboard it replaced.
     private struct Waiting {
         let write: Write
@@ -44,16 +53,16 @@ actor ClipboardGuard {
         let original: PasteboardSnapshot
         let posted: Posted
         let unread: Unread
-        /// An app read the text before the Cmd-V went out.
-        var isReadEarly = false
-        /// Ends the wait for the read (`willPaste`); a read or a newer write cancels it.
+        var read = Read.notYet
+        /// Ends the wait for the read (`willPaste`), then the wait for the restore (`restore(_:after:)`); a newer write
+        /// cancels it.
         var timer: Task<Void, Never>?
     }
 
     private let pasteboard: any Pasteboard
     /// Sends the ⌘V of `paste`, the one paste path.
     private let paster: any Paster
-    /// Runs the restore that a read sets off, so `settle()` waits for it.
+    /// Runs what a read sets off and the restore timers, so `settle()` waits for a read's work and for a timer that is due.
     private let work: PendingWork
     private var pending: Waiting? {
         didSet {
@@ -74,6 +83,13 @@ actor ClipboardGuard {
     /// target's own read cannot be seen: the clipboard comes back this long after the Cmd-V, the rule before the read
     /// signal (Jot and FreeFlow use 1 s too).
     static let earlyReadRestoreDelay = Duration.seconds(1)
+    /// From the paste target's read to the restore. The read is when the target asks for the text, not when it has
+    /// it, and macOS tells the writer nothing later: the pasteboard can still be handing the text over (0.1-0.5 ms in a
+    /// spike, about 1 ms in cmux), and a target can check the change count again after its read (cmux drops the paste
+    /// when it moved) or read again in the same paste (Chromium). A restore in that time pastes nothing or the old
+    /// clipboard (2026-10-19, docs/research/paste-restore.md). 200 ms as in Handy (owner, 2026-10-19); revisit with
+    /// the notes in that file if a paste is lost again.
+    static let readSettle = Duration.milliseconds(200)
 
     init(pasteboard: any Pasteboard, paster: any Paster, work: PendingWork, clock: any PipelineClock) {
         self.pasteboard = pasteboard
@@ -94,7 +110,7 @@ actor ClipboardGuard {
     }
 
     /// Writes the transcript as a transient item (a step of `paste`, the one paste path; tests call it to place a
-    /// read between the steps); the owner's clipboard comes back once the paste target reads it.
+    /// read between the steps); the owner's clipboard comes back `readSettle` after the paste target reads it.
     /// If the owner copied something after `snapshot`, that newer clipboard is the one to restore; one too large to
     /// keep (`PasteboardSnapshot.isTooLarge`) is not restored (`Write.isClipboardKept`), but the read is still waited
     /// for. An earlier paste whose Cmd-V went out and that no app read is replaced here: it learns so (`Unread`, not
@@ -110,14 +126,15 @@ actor ClipboardGuard {
             let isAfterPaste = posted.isPosted
             work.track { await self.read(number, isAfterPaste: isAfterPaste) }
         }
-        // An early read took the earlier one's signal: it was probably pasted, so it is not reported.
-        if let earlier = pending, earlier.posted.isPosted, !earlier.isReadEarly {
+        // An earlier paste that the target read was pasted, and one whose signal an early read took probably was: neither
+        // is reported.
+        if let earlier = pending, earlier.posted.isPosted, earlier.read == .notYet {
             // Tracked, so this paste does not wait for the earlier dictation's row.
             work.track { await earlier.unread(false) }
         }
         let write = Write(changeCount: changeCount, number: number, isClipboardKept: !original.isTooLarge)
         pending = Waiting(write: write, text: text, original: original, posted: posted, unread: unread)
-        pending?.isReadEarly = earlyReadNumber == number
+        if earlyReadNumber == number { pending?.read = .early }
         earlyReadNumber = nil
         return write
     }
@@ -128,8 +145,8 @@ actor ClipboardGuard {
     func willPaste(_ write: Write, readBy deadline: ContinuousClock.Instant) {
         guard let waiting = pending, waiting.write == write else { return }
         waiting.posted.post()
-        if waiting.isReadEarly {
-            restoreSoon(write)
+        if waiting.read == .early {
+            restore(after: Self.earlyReadRestoreDelay)
         } else {
             pending?.timer = work.schedule(at: deadline) { await self.readWaitEnded(write) }
         }
@@ -176,10 +193,10 @@ actor ClipboardGuard {
         _ = await pasteboard.write(text)
     }
 
-    /// An app read write `number`. After the Cmd-V it is the paste target: the owner's clipboard comes back, unless
-    /// something replaced the transcript since. Before it, it is a clipboard manager that ignores the markers: the
-    /// target's read cannot be seen now, so the clipboard comes back soon after the Cmd-V instead, and the text is not
-    /// taken for unread.
+    /// An app read write `number`. After the Cmd-V it is the paste target: the owner's clipboard comes back
+    /// `readSettle` later, unless something replaced the transcript since. Before it, it is a clipboard manager that
+    /// ignores the markers: the target's read cannot be seen now, so the clipboard comes back soon after the Cmd-V
+    /// instead. Either way the text is not taken for unread.
     private func read(_ number: Int, isAfterPaste: Bool) async {
         guard let waiting = pending, waiting.write.number == number else {
             // The write is still on its way (`writeTransient` waits on the pasteboard): it takes this early read.
@@ -189,22 +206,22 @@ actor ClipboardGuard {
         guard isAfterPaste else {
             let delay = Self.earlyReadRestoreDelay
             Log.pipeline.notice("An app read the transient text before the Cmd-V; the restore follows it by \(delay)")
-            pending?.isReadEarly = true
-            if waiting.posted.isPosted { restoreSoon(waiting.write) }
+            pending?.read = .early
+            if waiting.posted.isPosted { restore(after: delay) }
             return
         }
-        pending = nil
-        await restoreOriginal(of: waiting)
+        pending?.read = .byTarget
+        restore(after: Self.readSettle)
     }
 
-    private func restoreSoon(_ write: Write) {
+    /// The pending write's clipboard comes back `delay` from now, in place of the wait for its read.
+    private func restore(after delay: Duration) {
+        guard let write = pending?.write else { return }
         pending?.timer?.cancel()
-        pending?.timer = work.schedule(at: clock.now + Self.earlyReadRestoreDelay) {
-            await self.restoreAfterEarlyRead(write)
-        }
+        pending?.timer = work.schedule(at: clock.now + delay) { await self.restoreAfterRead(write) }
     }
 
-    private func restoreAfterEarlyRead(_ write: Write) async {
+    private func restoreAfterRead(_ write: Write) async {
         guard let waiting = takePending(write) else { return }
         await restoreOriginal(of: waiting)
     }
@@ -226,7 +243,8 @@ actor ClipboardGuard {
     /// paste (and clipboard managers keep), and the earlier clipboard is not restored (lead, 2026-10-17). When the
     /// owner copied something since, that stays. Either way the dictation learns it was not pasted.
     func readWaitEnded(_ write: Write) async {
-        guard let waiting = takePending(write) else { return }
+        // A read just before the deadline cancels this timer, but one that already woke still gets here.
+        guard pending?.read == .notYet, let waiting = takePending(write) else { return }
         let isLeft = await pasteboard.restore(.plainText(waiting.text), ifChangeCount: write.changeCount)
         await waiting.unread(isLeft)
     }

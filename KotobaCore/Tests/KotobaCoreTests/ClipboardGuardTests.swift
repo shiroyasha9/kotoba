@@ -29,9 +29,17 @@ struct ClipboardGuardTests {
         }
     }
 
-    /// The paste target reads the transcript; the restore it sets off has run.
+    /// An app reads the transcript; the guard has heard of it.
     func appReads() async -> String? {
         let text = await pasteboard.appReads()
+        await work.settle()
+        return text
+    }
+
+    /// The paste target reads the transcript, and the settle after its read passes: the restore has run.
+    func appReadsAndSettles() async -> String? {
+        let text = await appReads()
+        clock.advance(by: ClipboardGuard.readSettle)
         await work.settle()
         return text
     }
@@ -40,8 +48,39 @@ struct ClipboardGuardTests {
         _ = try await paste("dictated")
         #expect(await pasteboard.text == "dictated")
         #expect(await pasteboard.isTransient)
-        #expect(await appReads() == "dictated")
+        #expect(await appReadsAndSettles() == "dictated")
 
+        #expect(await pasteboard.text == "owner's")
+    }
+
+    /// The read is when the target asks for the text, not when it has it: the pasteboard can still be handing it over,
+    /// and the target can check the clipboard again after its read (cmux drops a paste whose change count moved). A
+    /// restore in that time pastes nothing (2026-10-19), so the clipboard comes back `readSettle` after the read.
+    @Test func theClipboardComesBackOnlyAfterTheSettle() async throws {
+        _ = try await paste("dictated")
+        _ = await appReads()
+        clock.advance(by: ClipboardGuard.readSettle - .milliseconds(1))
+        await work.settle()
+        let beforeTheSettle = await pasteboard.text
+        clock.advance(by: .milliseconds(1))
+        await work.settle()
+
+        #expect(beforeTheSettle == "dictated")
+        #expect(await pasteboard.text == "owner's")
+        clock.advance(by: .seconds(10))
+        await work.settle()
+        #expect(unread.list.isEmpty)
+    }
+
+    /// A paste read and replaced by the next one before its settle passed was pasted: it is not reported, and the
+    /// owner's clipboard is the one that comes back.
+    @Test func aPasteReplacedDuringItsSettleIsNotReported() async throws {
+        _ = try await paste("A")
+        _ = await appReads()
+        _ = try await paste("B")
+        _ = await appReadsAndSettles()
+
+        #expect(unread.list.isEmpty)
         #expect(await pasteboard.text == "owner's")
     }
 
@@ -50,7 +89,7 @@ struct ClipboardGuardTests {
         await pasteboard.userCopies("copied while speaking")
         let write = await clipboard.writeTransient("dictated", over: snapshot) { _ in }
         await clipboard.willPaste(write, readBy: clock.now + .seconds(10))
-        _ = await appReads()
+        _ = await appReadsAndSettles()
 
         #expect(await pasteboard.text == "copied while speaking")
     }
@@ -68,7 +107,7 @@ struct ClipboardGuardTests {
     @Test func aSnapshotDuringAPendingRestoreIsTheOwnersClipboard() async throws {
         _ = try await paste("one")
         _ = try await paste("two")
-        #expect(await appReads() == "two")
+        #expect(await appReadsAndSettles() == "two")
 
         #expect(await pasteboard.text == "owner's")
     }
@@ -136,7 +175,7 @@ struct ClipboardGuardTests {
         await work.settle()
 
         #expect(unread.list == [false])
-        #expect(await appReads() == "B")
+        #expect(await appReadsAndSettles() == "B")
         #expect(await pasteboard.text == "owner's")
     }
 
@@ -166,7 +205,7 @@ struct ClipboardGuardTests {
 
         let first = try await paste("dictated")
         #expect(first.isClipboardKept == false)
-        #expect(await appReads() == "dictated")
+        #expect(await appReadsAndSettles() == "dictated")
         #expect(await pasteboard.text == "dictated")
         let unreadOne = try await paste("second")
         await clipboard.readWaitEnded(unreadOne)

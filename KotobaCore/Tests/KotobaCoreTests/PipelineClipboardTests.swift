@@ -11,18 +11,24 @@ struct PipelineClipboardTests {
         let pipeline = world.makePipeline()
 
         await pipeline.dictate(world)
+        let afterTheRead = await world.pasteboard.text
+        world.clock.advance(by: ClipboardGuard.readSettle)
+        await pipeline.settle()
 
         #expect(await world.paster.pasted == ["dictated"])
+        #expect(afterTheRead == "dictated")
         #expect(await world.pasteboard.text == "user's clipboard")
         #expect(await world.pasteboard.isTransient == false)
     }
 
-    /// A read ends the wait for it: no timer is left to wake at idle.
+    /// A read ends the wait for it, and the restore ends the settle: no timer is left to wake at idle.
     @Test func aReadPasteLeavesNoTimer() async {
         let world = FakeWorld(transcript: "dictated")
         let pipeline = world.makePipeline()
 
         await pipeline.dictate(world)
+        world.clock.advance(by: ClipboardGuard.readSettle)
+        await pipeline.settle()
 
         #expect(world.clock.deadlines.isEmpty)
     }
@@ -38,6 +44,8 @@ struct PipelineClipboardTests {
         world.clock.advance(by: .seconds(9))
         await pipeline.settle()
         let read = await world.pasteboard.appReads()
+        await pipeline.settle()
+        world.clock.advance(by: ClipboardGuard.readSettle)
         await pipeline.settle()
 
         #expect(read == "dictated")
@@ -101,6 +109,8 @@ struct PipelineClipboardTests {
         await pipeline.dictate(world)
         await world.pasteboard.appReads()
         await pipeline.settle()
+        world.clock.advance(by: ClipboardGuard.readSettle)
+        await pipeline.settle()
 
         let records = await world.store.records
         #expect(records.map(\.transcript) == ["first", "second"])
@@ -131,6 +141,8 @@ struct PipelineClipboardTests {
         await pipeline.dictate(world)
         world.clock.advance(by: .milliseconds(300))
         await pipeline.dictate(world)
+        world.clock.advance(by: ClipboardGuard.readSettle)
+        await pipeline.settle()
         #expect(await world.paster.pasted == ["dictated", "dictated"])
         #expect(await world.pasteboard.text == "user's clipboard")
     }
