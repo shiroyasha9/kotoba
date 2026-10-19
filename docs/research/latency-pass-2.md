@@ -169,6 +169,8 @@ Harness: `bun run latency --exp segrules` (`--rules`, `--wholes`, `--parallel 8`
 
 ### 7.1 Design the numbers support (for the pipeline owner; not built)
 
+Status (owner, 2026-10-20): the extra sentence breaks are acceptable, but the build waits; the owner may research it more first. Not scheduled.
+
 1. Rule: s15p0.4. A segment ends at the first pause of 0.4 s (every 10 ms frame under -40 dBFS) that starts 15 s or more after the last cut, and not in the last 2 s before the stop. The cut is 0.2 s into the pause, so each side keeps silence.
 2. Capture (`CaptureWriter`, writer thread): a pause detector over the 16 kHz chunks it already converts (RMS per 10 ms frame, no new buffers). At a cut it closes the current Opus copy and starts the next one (`OggOpusStream` per segment); the FLAC stays one file. It reports the closed segment as a capture event (file, start, length).
 3. Pipeline: on each segment event while recording, send it as its own request (the copy, the phrase list, the language), keep its answer by index, and do not wait. A segment request also keeps the route warm, so no re-prime is due while segments flow.
