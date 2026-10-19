@@ -50,9 +50,8 @@ final class CaptureWriter: CaptureRecorder, @unchecked Sendable {
     /// The first chunk lost, and why: the file did not take it or the converter failed. Logged once; the stop
     /// reports it (`RecordedAudio.loss`).
     private var loss: AudioLoss?
-    /// The Opus upload copy of the recording (`OpusUploadWriter`, `RecordedAudio.upload`).
-    private let uploadURL: URL
-    private var upload = UploadCopy.notStarted
+    /// The Opus upload copy of the recording, cut into segments at pauses (`RecordedAudio.upload`); nil once it failed.
+    private var upload: UploadSegments<OpusUploadWriter>?
     private var hasReportedFirstBuffer = false
     private var levelSum: Float = 0
     private var levelFrames = 0
@@ -68,7 +67,10 @@ final class CaptureWriter: CaptureRecorder, @unchecked Sendable {
     ) throws {
         try FileManager.default.createDirectory(at: url.deletingLastPathComponent(), withIntermediateDirectories: true)
         fileURL = url
-        uploadURL = upload
+        // Its first writer opens at the first chunk, so the key-down does not wait for the encoder.
+        self.upload = UploadSegments(first: upload, sampleRate: Self.outputFormat.sampleRate) {
+            try OpusUploadWriter(file: $0, format: Self.outputFormat)
+        }
         file = try Self.makeFile(at: url)
         conversion = try Self.makeConversion(sampleRate: sampleRate)
         self.ring = ring
@@ -275,7 +277,8 @@ final class CaptureWriter: CaptureRecorder, @unchecked Sendable {
         events.finish()
         rateSwitched?.resume()
         return RecordedAudio(
-            file: fileURL, duration: Self.duration(ofFrames: framesWritten), loss: loss, upload: copy)
+            file: fileURL, duration: Self.duration(ofFrames: framesWritten), loss: loss, upload: copy?.file,
+            uploadStart: copy?.start ?? .zero)
     }
 
     /// RMS over 4,800 input frames (100 ms at 48 kHz), scaled so speech fills most of the range. The
@@ -296,39 +299,24 @@ final class CaptureWriter: CaptureRecorder, @unchecked Sendable {
 // MARK: - Upload copy
 
 extension CaptureWriter {
-    /// The copy's state on this thread. Made at the first chunk, not in `init`, so the key-down does not wait for the
-    /// encoder; dropped for good at its first failure, so the upload sends the FLAC with no other change.
-    enum UploadCopy {
-        case notStarted
-        case writing(OpusUploadWriter)
-        case dropped
-    }
-
+    /// Writes the chunk to the copy; a segment that a pause closed goes to the pipeline now (`CaptureEvent.segment`).
     private func writeUploadCopy(_ output: AVAudioPCMBuffer) {
+        guard upload != nil, let samples = output.int16ChannelData?[0] else { return }
         do {
-            switch upload {
-            case .notStarted:
-                try FileManager.default.createDirectory(
-                    at: uploadURL.deletingLastPathComponent(), withIntermediateDirectories: true)
-                let writer = try OpusUploadWriter(file: uploadURL, format: Self.outputFormat)
-                upload = .writing(writer)
-                try writer.write(output)
-            case .writing(let writer):
-                try writer.write(output)
-            case .dropped:
-                return
-            }
+            let closed = try upload?.write(
+                output, samples: UnsafeBufferPointer(start: samples, count: Int(output.frameLength)),
+                endingAt: framesWritten)
+            if let closed { events.yield(.segment(closed)) }
         } catch {
             dropUploadCopy(error)
         }
     }
 
-    /// The copy at the close, or nil when there is none.
-    private func closeUploadCopy() -> URL? {
-        guard case .writing(let writer) = upload else { return nil }
+    /// The copy after the last cut at the close, and where it starts; nil when there is none.
+    private func closeUploadCopy() -> (file: URL, start: Duration)? {
         do {
-            let copy = try writer.close()
-            upload = .dropped
+            let copy = try upload?.close()
+            upload = nil
             return copy
         } catch {
             dropUploadCopy(error)
@@ -336,15 +324,17 @@ extension CaptureWriter {
         }
     }
 
+    /// Dropped for good at its first failure, so the upload sends the FLAC with no other change. A file that stays
+    /// costs only temporary space: nothing sends it.
     private func dropUploadCopy(_ error: any Error) {
-        if case .dropped = upload { return }
-        upload = .dropped
+        guard upload != nil else { return }
         Log.audio.error("The upload copy failed, the upload sends the FLAC: \(String(describing: error))")
-        // Also a file the writer's init made before it failed. One that stays costs only temporary space: nothing
-        // sends it.
-        try? FileManager.default.removeItem(at: uploadURL)
+        upload?.drop()
+        upload = nil
     }
 }
+
+extension OpusUploadWriter: UploadSegmentWriter {}
 
 // MARK: - File, conversion and time
 
