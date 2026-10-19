@@ -231,7 +231,10 @@ public actor AudioCapture: AudioSource {
         self.capture = nil
         isPaused = false
         stopInput()
-        let audio = await capture.recorder.stopNow()
+        var audio = await capture.recorder.stopNow()
+        // A cancelled recording is never sent at once (Esc keeps it for History, a discard deletes it): its copy goes.
+        Self.removeUploadCopy(audio.upload)
+        audio.upload = nil
         await applyDeferredInputChange()
         return audio
     }

@@ -4,8 +4,8 @@ import Testing
 @testable import KotobaCore
 
 /// The recorder's Opus upload copy (`RecordedAudio.upload`) on disk: it goes in the capture's upload folder, the
-/// first `prepare` empties that folder (a copy a quit or a crash left), and a discarded recording (a cancel, an Esc
-/// that ends in a discard, a mic test) leaves none. Copies are real files the fake recorder writes at the close.
+/// first `prepare` empties that folder (a copy a quit or a crash left), and a cancelled or discarded recording (an Esc,
+/// a discard, a mic test) leaves none. Copies are real files the fake recorder writes at the close.
 struct AudioCaptureUploadCopyTests {
     private let folder = URL.temporaryDirectory.appending(path: "kotoba-upload-copy-test-\(UUID().uuidString)")
     private var uploads: URL { folder.appending(path: "uploads") }
@@ -60,20 +60,19 @@ struct AudioCaptureUploadCopyTests {
         #expect(!exists(try #require(hardware.recorders.first?.upload)))
     }
 
-    /// Esc keeps the file for the Undo window; when the window ends the pipeline discards it.
-    @Test func aCancelledRecordingThatIsDiscardedLeavesNoCopy() async throws {
+    /// An Esc whose Undo window ends keeps the FLAC for History and sends nothing (`DictationPipeline.cancel`).
+    @Test func aCancelledRecordingKeepsItsFLACAndLeavesNoCopy() async throws {
         let hardware = FakeCaptureHardware()
         hardware.writeUploadCopies()
         let capture = AudioCapture(hardware: hardware, uploads: uploads)
         defer { try? FileManager.default.removeItem(at: folder) }
         _ = try await capture.beginCapture(into: try recording("cancelled"))
+
         let audio = try #require(await capture.cancelCapture())
-        #expect(exists(audio.upload))
 
-        #expect(await capture.discard(audio))
-
-        #expect(!exists(audio.file))
-        #expect(!exists(audio.upload))
+        #expect(exists(audio.file))
+        #expect(audio.upload == nil)
+        #expect(!exists(try #require(hardware.recorders.first?.upload)))
     }
 
     @Test func theMicTestLeavesNoCopy() async throws {
