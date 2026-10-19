@@ -16,22 +16,47 @@ struct InputDevicePolicyTests {
 
     @Test func airPodsAsTheDefaultInputSwitchToTheBuiltInMic() {
         let devices = [builtInSpeakers, airPods, builtInMic]
-        #expect(InputDevicePolicy.preferredInput(defaultInput: airPods, devices: devices) == builtInMic)
+        #expect(InputDevicePolicy.micInUse(defaultInput: airPods, devices: devices) == builtInMic)
     }
 
     @Test func theBuiltInMicAsDefaultIsKept() {
         let devices = [builtInMic, builtInSpeakers, airPods]
-        #expect(InputDevicePolicy.preferredInput(defaultInput: builtInMic, devices: devices) == nil)
+        #expect(InputDevicePolicy.micInUse(defaultInput: builtInMic, devices: devices) == builtInMic)
     }
 
     @Test func aWiredMicAsDefaultIsKept() {
         let devices = [builtInMic, usbMic, airPods]
-        #expect(InputDevicePolicy.preferredInput(defaultInput: usbMic, devices: devices) == nil)
+        #expect(InputDevicePolicy.micInUse(defaultInput: usbMic, devices: devices) == usbMic)
     }
 
     @Test func aMacWithNoBuiltInMicKeepsTheBluetoothDefault() {
         let devices = [builtInSpeakers, airPods]
-        #expect(InputDevicePolicy.preferredInput(defaultInput: airPods, devices: devices) == nil)
+        #expect(InputDevicePolicy.micInUse(defaultInput: airPods, devices: devices) == airPods)
+    }
+
+    @Test func aDefaultThatIsNotConnectedIsNoMic() {
+        #expect(InputDevicePolicy.micInUse(defaultInput: usbMic, devices: [builtInSpeakers]) == nil)
+        #expect(InputDevicePolicy.micInUse(defaultInput: nil, devices: [builtInMic]) == nil)
+    }
+
+    // MARK: Mics that did not open
+
+    @Test func aListedMicThatDidNotOpenGivesWayToTheNextInTheOrder() {
+        let devices = [builtInMic, usbMic, airPods]
+        let choice = InputDevicePolicy.micInUse(
+            defaultInput: builtInMic, devices: devices, order: ["USBMic", "AirPods"], leftOut: ["USBMic"])
+        #expect(choice == airPods)
+    }
+
+    @Test func aDefaultThatDidNotOpenLeavesNoMic() {
+        let devices = [builtInMic, usbMic]
+        #expect(InputDevicePolicy.micInUse(defaultInput: usbMic, devices: devices, leftOut: ["USBMic"]) == nil)
+    }
+
+    /// The built-in mic replaced the Bluetooth default; when it does not open, the default stays avoided.
+    @Test func aBuiltInMicThatDidNotOpenNeverGivesWayToTheBluetoothDefault() {
+        let devices = [builtInMic, airPods]
+        #expect(InputDevicePolicy.micInUse(defaultInput: airPods, devices: devices, leftOut: ["BuiltInMic"]) == nil)
     }
 
     // MARK: Preference order
@@ -39,26 +64,26 @@ struct InputDevicePolicyTests {
     @Test func theFirstConnectedDeviceInTheOrderWins() {
         let devices = [builtInMic, usbMic, airPods]
         let order = ["StudioMic", "USBMic", "BuiltInMic"]
-        #expect(InputDevicePolicy.preferredInput(defaultInput: builtInMic, devices: devices, order: order) == usbMic)
+        #expect(InputDevicePolicy.micInUse(defaultInput: builtInMic, devices: devices, order: order) == usbMic)
     }
 
     @Test func aBluetoothMicInTheOrderIsUsedAsListed() {
         let devices = [builtInMic, airPods]
         #expect(
-            InputDevicePolicy.preferredInput(defaultInput: builtInMic, devices: devices, order: ["AirPods"]) == airPods)
+            InputDevicePolicy.micInUse(defaultInput: builtInMic, devices: devices, order: ["AirPods"]) == airPods)
     }
 
     @Test func withNoListedDeviceConnectedTheDefaultRulesApply() {
         let devices = [builtInMic, airPods]
-        let choice = InputDevicePolicy.preferredInput(defaultInput: airPods, devices: devices, order: ["StudioMic"])
+        let choice = InputDevicePolicy.micInUse(defaultInput: airPods, devices: devices, order: ["StudioMic"])
         #expect(choice == builtInMic)
     }
 
     @Test func anOutputOnlyDeviceInTheOrderIsSkipped() {
         let devices = [builtInSpeakers, usbMic]
-        let choice = InputDevicePolicy.preferredInput(
+        let choice = InputDevicePolicy.micInUse(
             defaultInput: usbMic, devices: devices, order: ["BuiltInSpeakers"])
-        #expect(choice == nil)
+        #expect(choice == usbMic)
     }
 
     @Test func choosingAMicMovesItToTheTopOfTheOrder() {

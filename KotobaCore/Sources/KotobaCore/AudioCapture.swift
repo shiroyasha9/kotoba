@@ -118,7 +118,7 @@ public actor AudioCapture: AudioSource {
     /// changes mic mid-sentence.
     public func inputMayHaveChanged() async {
         let devices = hardware.devices()
-        guard preferredInput(among: devices)?.uid != currentInput?.uid else { return }
+        guard micInUse(among: devices)?.uid != currentInput?.uid else { return }
         if capture != nil, devices.contains(where: { $0.uid == currentInput?.uid }) {
             isInputChangeDeferred = true
             return
@@ -255,9 +255,10 @@ public actor AudioCapture: AudioSource {
     /// opens a Bluetooth default the rule avoids.
     private func makeInput() -> (any CaptureInput)? {
         settling = nil
-        var devices = hardware.devices()
+        let devices = hardware.devices()
+        var leftOut: Set<String> = []
         var attempt = 1
-        while let device = preferredInput(among: devices), devices.contains(device) {
+        while let device = micInUse(among: devices, leftOut: leftOut) {
             do {
                 let input = try hardware.openInput(on: device) { [weak self] in
                     Task { await self?.requestRebuild(reason: "audio route changed") }
@@ -271,13 +272,14 @@ public actor AudioCapture: AudioSource {
                 case .retry:
                     attempt += 1
                 case .chooseAnother:
-                    devices.removeAll { $0.uid == device.uid }
+                    leftOut.insert(device.uid)
                     attempt = 1
                 case .waitForDevice:
-                    devices = []
                     settling = hardware.watchSettling(of: device) { [weak self] in
                         Task { await self?.requestRebuild(reason: "the mic finished its change") }
                     }
+                    currentInput = nil
+                    return nil
                 }
             }
         }
@@ -332,13 +334,12 @@ public actor AudioCapture: AudioSource {
 // MARK: - Mic choice
 
 extension AudioCapture {
-    /// The mic to record from among `devices`: the first one in the owner's order, else the system default (a
-    /// Bluetooth default replaced by the built-in mic, `InputDevicePolicy`).
-    private func preferredInput(among devices: [AudioDevice]) -> AudioDevice? {
-        let defaultInput = hardware.defaultInput()
-        let order = hardware.microphoneOrder()
-        return InputDevicePolicy.preferredInput(defaultInput: defaultInput, devices: devices, order: order)
-            ?? defaultInput
+    /// The mic to record from among `devices`, without the ones in `leftOut`: the first one in the owner's order, else
+    /// the system default (a Bluetooth default replaced by the built-in mic, `InputDevicePolicy`).
+    private func micInUse(among devices: [AudioDevice], leftOut: Set<String> = []) -> AudioDevice? {
+        InputDevicePolicy.micInUse(
+            defaultInput: hardware.defaultInput(), devices: devices, order: hardware.microphoneOrder(),
+            leftOut: leftOut)
     }
 }
 

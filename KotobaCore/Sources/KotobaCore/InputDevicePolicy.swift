@@ -41,20 +41,26 @@ public enum MicrophoneWarning: Sendable, Equatable {
 /// with low quality and a slow start that clips the first words, and opening it drops the headset's
 /// playback to call quality.
 public enum InputDevicePolicy {
-    /// The device to record from, or nil to follow the system default input.
-    public static func preferredInput(
+    /// The mic to record from among the connected `devices`; nil when none is left. The mics in `leftOut` (by UID) did
+    /// not open: the next in the order goes first, and the rules hold without them, so a Bluetooth default that the
+    /// built-in mic replaced stays out when the built-in mic is left out.
+    public static func micInUse(
         defaultInput: AudioDevice?,
         devices: [AudioDevice],
-        order: [String] = []
+        order: [String] = [],
+        leftOut: Set<String> = []
     ) -> AudioDevice? {
         let inputs = devices.filter(\.hasInput)
+        let open = inputs.filter { !leftOut.contains($0.uid) }
         for uid in order {
-            if let listed = inputs.first(where: { $0.uid == uid }) {
+            if let listed = open.first(where: { $0.uid == uid }) {
                 return listed
             }
         }
-        guard let defaultInput, defaultInput.transport == .bluetooth else { return nil }
-        return inputs.first { $0.transport == .builtIn }
+        guard let followed = inputs.first(where: { $0.uid == defaultInput?.uid }) else { return nil }
+        let chosen =
+            followed.transport == .bluetooth ? inputs.first { $0.transport == .builtIn } ?? followed : followed
+        return leftOut.contains(chosen.uid) ? nil : chosen
     }
 
     /// The order after the owner picks `uid` in the menu: it moves to the top, the rest keep their order.

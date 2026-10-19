@@ -275,7 +275,7 @@ custom_rules:
     name: "Capture lifecycle in KotobaCore"
     included: ["App/.*\\.swift"]
     excluded: ["App/HALCaptureHardware\\.swift"]
-    regex: "\\b(?:HALInput|CaptureWriter|SettlingInput)\\s*\\(|\\bInputFormatPolicy\\s*\\.\\s*recovery\\b|\\bInputDevicePolicy\\s*\\.\\s*preferredInput\\b"
+    regex: "\\b(?:HALInput|CaptureWriter|SettlingInput)\\s*\\(|\\bInputFormatPolicy\\s*\\.\\s*recovery\\b|\\bInputDevicePolicy\\s*\\.\\s*micInUse\\b"
     excluded_match_kinds: [comment, doccomment, string]
     message: "Mic input decisions live in KotobaCore's AudioCapture; App/ opens inputs and writers only in HALCaptureHardware, when the capture asks."
     severity: error

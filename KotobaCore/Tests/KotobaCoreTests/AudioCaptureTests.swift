@@ -264,4 +264,23 @@ struct AudioCaptureTests {
         #expect(hardware.opened == ["built-in"])
         #expect(capture.inputInUse == FakeCaptureHardware.builtIn)
     }
+
+    /// The Bluetooth rule replaced the AirPods default by the built-in mic; when that does not open, the AirPods stay
+    /// closed too (no call profile), and the press says no mic opened.
+    @Test func aBuiltInMicThatDoesNotOpenNeverOpensTheBluetoothDefault() async {
+        let hardware = FakeCaptureHardware(
+            devices: [FakeCaptureHardware.builtIn, FakeCaptureHardware.airPods],
+            defaultInput: FakeCaptureHardware.airPods)
+        hardware.failOpens(of: FakeCaptureHardware.builtIn, with: [UnitFailure(), UnitFailure()])
+        let capture = AudioCapture(hardware: hardware)
+
+        await capture.prepare()
+        #expect(hardware.opened.isEmpty)
+        #expect(capture.inputInUse == nil)
+
+        await #expect(throws: AudioCapture.CaptureError.noInputDevice) {
+            _ = try await capture.beginCapture(into: Self.file)
+        }
+        #expect(hardware.opened.isEmpty)
+    }
 }
