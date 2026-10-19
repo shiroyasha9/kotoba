@@ -33,8 +33,9 @@ struct ClipboardPaste: Sendable {
         /// Paste Last, Paste Again: a stored text.
         case again
         /// Polish or its Undo: `backspaces` Backspaces delete the old text right before the ⌘V (0 pastes over the
-        /// selection).
-        case polish(backspaces: Int)
+        /// selection). They were judged safe at `place` (`PolishPlacement`), so they go only while the place read
+        /// right before the ⌘V is still that one: same app and window, no key or click since.
+        case polish(backspaces: Int, at: InputMark?)
     }
 
     /// What the pipeline knows once a ⌘V could go out (`PasteGate.facts(for:)`).
@@ -138,8 +139,13 @@ struct ClipboardPaste: Sendable {
         }
         // Read after the write, right before the ⌘V, so a window switch during the write cannot leave a wrong place.
         let place = place?()
+        if case .polish(let backspaces, let judgedAt) = request.kind, backspaces > 0, place != judgedAt {
+            Log.pipeline.info("Polish: the owner typed or moved during the write; the text goes to the clipboard")
+            await clipboard.copy(request.text)
+            return .copied
+        }
         do {
-            if case .polish(let backspaces) = request.kind, backspaces > 0 {
+            if case .polish(let backspaces, _) = request.kind, backspaces > 0 {
                 try await paster.sendBackspaces(backspaces)
             }
             try await paster.sendPaste()

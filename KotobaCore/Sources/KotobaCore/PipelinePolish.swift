@@ -111,13 +111,14 @@ extension DictationPipeline {
             if selection == .selected { await ports.selector?.restoreSelection() }
             return .skipped
         }
-        guard let backspaces = backspaces(replacing: old, selection: selection) else {
+        let now = ports.inputMark()
+        guard let backspaces = backspaces(replacing: old, selection: selection, now: now) else {
             Log.pipeline.info("Polish: no safe way to replace the text; it goes to the clipboard")
             await paste.copy(new)
             return .copied
         }
         let request = ClipboardPaste.Request(
-            id: record.id, text: new, kind: .polish(backspaces: backspaces), app: front)
+            id: record.id, text: new, kind: .polish(backspaces: backspaces, at: now), app: front)
         let outcome = await paste.run(request, gate: self)
         switch outcome {
         case .pasted(let pasted): markPasted(new, at: pasted.place)
@@ -129,10 +130,8 @@ extension DictationPipeline {
     }
 
     /// How many Backspaces delete `old` before the paste (0 over the selection); nil when no way is safe.
-    private func backspaces(replacing old: String, selection: SelectionResult) -> Int? {
-        switch PolishPlacement.choose(
-            replacing: old, selection: selection, lastPaste: lastPaste, now: ports.inputMark())
-        {
+    private func backspaces(replacing old: String, selection: SelectionResult, now: InputMark?) -> Int? {
+        switch PolishPlacement.choose(replacing: old, selection: selection, lastPaste: lastPaste, now: now) {
         case .overSelection: 0
         case .backspaces(let count): count
         case .clipboard: nil

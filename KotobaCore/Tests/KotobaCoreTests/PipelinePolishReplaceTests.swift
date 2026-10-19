@@ -95,6 +95,25 @@ struct PipelinePolishReplaceTests {
         #expect(await world.pasteboard.text == Self.polished)
     }
 
+    /// The owner types while kotoba writes the polished text: the insertion point may have moved, so no Backspace goes
+    /// out and the polished text waits on the clipboard.
+    @Test func typingDuringTheWriteSendsNoBackspace() async throws {
+        let world = FakeWorld(transcript: Self.spoken)
+        let input = FakeInput()
+        let pipeline = world.makePipeline(
+            polisher: FakePolisher(answer: Self.polished), selector: FakeSelector(), input: input)
+        await pipeline.dictate(world)
+        await world.pasteboard.whenWritingTransient { input.apply(.typed) }
+
+        await pipeline.polishLast()
+
+        let id = try #require(await world.store.records.first?.id)
+        #expect(await world.paster.keystrokes == [.commandV])
+        #expect(await world.pasteboard.text == Self.polished)
+        #expect(await world.pasteboard.isTransient == false)
+        #expect(await pipeline.state == .polished(id, isReplaced: false))
+    }
+
     /// The place is read just before the ⌘V: a window that comes to the front as the paste lands is not taken for it.
     @Test func aWindowThatComesAsThePasteLandsIsNotThePastesPlace() async {
         let world = FakeWorld(transcript: Self.spoken)

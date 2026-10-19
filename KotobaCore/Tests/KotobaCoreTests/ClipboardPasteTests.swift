@@ -113,9 +113,22 @@ struct ClipboardPasteTests {
     // MARK: - Keys and place
 
     @Test func polishDeletesTheOldTextByBackspaceRightBeforeTheCmdV() async {
-        await run("polished", kind: .polish(backspaces: 3))
+        await run("polished", kind: .polish(backspaces: 3, at: input.current))
 
         #expect(await paster.keystrokes == [.backspaces(3), .commandV])
+    }
+
+    /// The Backspaces were judged safe before the write; a key or a window switch since then could move the insertion
+    /// point, so none go out and the text waits on the clipboard.
+    @Test(arguments: [FakeInput.Change.typed, .otherWindow])
+    func aChangeDuringTheWriteSendsNoBackspace(_ change: FakeInput.Change) async {
+        let judgedAt = input.current
+        await pasteboard.whenWritingTransient { [input] in input.apply(change) }
+
+        #expect(await run("polished", kind: .polish(backspaces: 3, at: judgedAt)) == .copied)
+        #expect(await paster.keystrokes.isEmpty)
+        #expect(await pasteboard.text == "polished")
+        #expect(await pasteboard.isTransient == false)
     }
 
     /// The place is read after the write, right before the ⌘V: a window switch during the write is where the paste
