@@ -43,7 +43,7 @@ kotoba is a native, open-source alternative to Wispr Flow, built for developers 
 - Your words appear about one second after you stop.
 - Add names and terms to your dictionary, and kotoba spells them your way. On 62 real dictations it got 84.6% of technical terms exactly right, against 50.0% for Wispr Flow.
 - You need no account, kotoba has no server of its own, and it sends no telemetry. Your audio goes only to the speech service you choose, with your own key.
-- There is no subscription. You pay OpenRouter about $0.10 per hour of audio, and kotoba uses 15.9 MB of memory at idle after launch, and about 40 MB once you have used its window.
+- There is no subscription. You pay OpenRouter about $0.10 per hour of audio, and kotoba uses 15.9 MB of memory at idle after launch, and about 75 MB after a day of use.
 
 ## kotoba vs Wispr Flow
 
@@ -52,9 +52,10 @@ kotoba is a native, open-source alternative to Wispr Flow, built for developers 
 | Technical terms transcribed exactly | **84.6%** (44 of 52) | 50.0% (26 of 52) |
 | Word error rate on real dictations | **3.3%** | 6.0% |
 | Memory at idle (after launch, no window opened) | **15.9 MB** | 748 MB (third-party test) |
+| Stop tap to paste in the app, p50 / p90 | 987 ms / 2,047 ms | not compared |
 | Speech round trip, p50 / p90 | 902 ms / 1,083 ms | not compared |
 | Price | **about $0.10 per hour of audio** | $12-15 per month for Pro |
-| Download | 5.7 MB DMG | |
+| Download | 6.5 MB DMG | |
 
 62 real dictations from one developer, mostly coding prompts. Methods, sources and limits: [docs/benchmarks.md](docs/benchmarks.md).
 
@@ -65,6 +66,7 @@ kotoba is a native, open-source alternative to Wispr Flow, built for developers 
 - Tap ⌃⌥⌘ to start and again to stop, or hold it while you speak. Any shortcut works, even fn alone or a middle or side mouse button, and push to talk can have its own, even ⌥ alone. Double-tap push to talk to go hands-free.
 - Text goes into the focused app: terminals, editors, browsers, chat. Your clipboard comes back once that app has read the paste. If you switch apps before the text arrives, kotoba copies it instead of pasting it into the wrong place.
 - Esc cancels, with 5 seconds to Undo. Press Return while you speak, or end with "press enter", to paste and send in one step.
+- Say "new line" or "new paragraph" for a line break (turn it on in Settings > General).
 - A small indicator shows the mic level and warns when the mic hears nothing.
 - When AirPods play your music, kotoba records from the built-in mic, so your music does not drop to call quality.
 - kotoba lives in the Dock and the menu bar, and you can hide either one.
@@ -97,7 +99,7 @@ kotoba is a native, open-source alternative to Wispr Flow, built for developers 
 
 MAI-Transcribe-2 (recommended) or Grok through OpenRouter, with one key. Under Advanced, you can use Grok through xAI or MAI-Transcribe-2 through Azure with your own key.
 
-With MAI-Transcribe-2 through OpenRouter, kotoba sends a short clip of silence when a dictation starts, so the route is warm when you stop. Each one costs one billed second (about $0.00003) and shows in Usage.
+With MAI-Transcribe-2 through OpenRouter, kotoba sends a short clip of silence when a dictation starts, so the route is warm when you stop; when the route was quiet, one second of noise follows. Each clip costs one billed second (about $0.00003) and shows in Usage. Your audio goes up compressed (Opus), and in a long dictation kotoba sends each part that ends at a short pause while you speak, so at the stop it waits only for the last part.
 
 ## Screenshots
 
