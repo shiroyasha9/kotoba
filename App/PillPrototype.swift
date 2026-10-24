@@ -200,8 +200,10 @@ final class PillPrototypeView: NSView {
             bars.color = PillBars.accent
             return [bars]
         case .hover(let keys):
-            keycaps.rootView = PillKeycaps(keys: keys, axis: isVertical ? .vertical : .horizontal)
-            return [keycaps]
+            // A chord never shows alone: the word says what it starts (owner, 2026-10-25).
+            keycaps.rootView = PillKeycaps(keys: keys)
+            label.stringValue = PillLook.dictate
+            return [label, keycaps]
         case .recording(let recording): return views(for: recording)
         case .message(let message):
             label.stringValue = message.text

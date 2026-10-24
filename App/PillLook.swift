@@ -6,7 +6,8 @@ import Foundation
 enum PillLook: Equatable {
     /// "Show indicator: Always" at idle: a still bar.
     case idle
-    /// The pointer is on the idle bar: the hands-free chord's keys ("⌃", "⌥", "⌘").
+    /// The pointer is on the idle bar: "Dictate" and the hands-free chord's keys ("⌃", "⌥", "⌘"); words, so horizontal
+    /// at every anchor.
     case hover(keys: [String])
     case recording(PillRecording)
     /// Text is on its way: the bars sweep.
@@ -16,10 +17,14 @@ enum PillLook: Equatable {
     /// Words with an optional fix button: an error, Undo, an added word.
     case message(PillMessage)
 
+    /// What the hover's chord starts, before its keys (owner, 2026-10-25).
+    static let dictate = "Dictate"
+
     /// A look with no words stands vertical at a side edge; words keep the pill horizontal at every anchor.
     var canStandVertical: Bool {
         switch self {
-        case .idle, .hover, .processing, .done: true
+        case .idle, .processing, .done: true
+        case .hover: false
         case .recording(let recording): !recording.isSilent && !recording.isSecureInputOn && recording.elapsed == nil
         case .message: false
         }

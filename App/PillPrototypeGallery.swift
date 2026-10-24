@@ -126,7 +126,8 @@ final class PillPrototypeGallery: NSView {
         column.alignment = .leading
         let row = NSStackView(views: [
             cell(holding: live, size: NSSize(width: PillGeometry.maxLength + 40, height: 160)),
-            cell(holding: liveSide, size: NSSize(width: 80, height: 160)), column,
+            // Wide enough for the hover's words, which stay horizontal at a side edge.
+            cell(holding: liveSide, size: NSSize(width: 200, height: 160)), column,
         ])
         row.alignment = .top
         row.spacing = PillGeometry.gap

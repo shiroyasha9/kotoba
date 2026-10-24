@@ -85,18 +85,14 @@ final class PillFillButtonHost: NSHostingView<PillFillButton> {
     }
 }
 
-/// The idle pill's keycaps on hover: one cap per key of the chord ("⌃", "⌥", "⌘"). Custom: macOS has no keycap view.
-/// Each cap is as tall as a regular button, so it sits in the capsule with the same margin as one.
+/// The idle pill's keycaps on hover: one cap per key of the chord ("⌃", "⌥", "⌘"), after the word that says what the
+/// chord does. Custom: macOS has no keycap view. Each cap is as tall as a regular button, so it sits in the capsule
+/// with the same margin as one.
 struct PillKeycaps: View {
     var keys: [String] = []
-    var axis = Axis.horizontal
 
     var body: some View {
-        let layout =
-            axis == .horizontal
-            ? AnyLayout(HStackLayout(spacing: PillGeometry.keycapGap))
-            : AnyLayout(VStackLayout(spacing: PillGeometry.keycapGap))
-        layout {
+        HStack(spacing: PillGeometry.keycapGap) {
             ForEach(Array(keys.enumerated()), id: \.offset) { _, key in
                 Text(key)
                     .font(.body)
