@@ -20,7 +20,7 @@
 <p align="center">
   <picture>
     <source media="(prefers-color-scheme: dark)" srcset="docs/images/readme-home-dark.png">
-    <img src="docs/images/readme-home-light.png" alt="The kotoba window on Home: kotoba is ready to dictate, with today’s words, this week’s words, the streak and the newest dictations">
+    <img src="docs/images/readme-home-light.png" alt="The kotoba window on Home: today’s words with the week’s bars, the time saved and the streak, the keys for hands-free and push to talk, and the last dictation with Fix, Copy and Paste Again">
   </picture>
 </p>
 
@@ -108,39 +108,30 @@ With MAI-Transcribe-2 through OpenRouter, kotoba sends a short clip of silence w
     <td width="50%">
       <picture>
         <source media="(prefers-color-scheme: dark)" srcset="docs/images/readme-history-dark.png">
-        <img src="docs/images/readme-history-light.png" alt="History: dictations by day, with the app, length and word count of each, and the ones not yet transcribed">
+        <img src="docs/images/readme-history-light.png" alt="History: a search field, how long kotoba keeps audio, and dictations by day with the app, length and word count of each, and the one waiting for a retry">
       </picture>
       <p align="center">History</p>
     </td>
     <td width="50%">
       <picture>
-        <source media="(prefers-color-scheme: dark)" srcset="docs/images/readme-insights-dark.png">
-        <img src="docs/images/readme-insights-light.png" alt="Insights: words per minute, streak, time saved, a 30-day chart of words dictated and words learned">
+        <source media="(prefers-color-scheme: dark)" srcset="docs/images/readme-activity-dark.png">
+        <img src="docs/images/readme-activity-light.png" alt="Activity: the daily average with a week of words per day, then words per minute, streak, time saved and words learned">
       </picture>
-      <p align="center">Insights</p>
+      <p align="center">Activity</p>
     </td>
   </tr>
   <tr>
-    <td width="50%">
-      <picture>
-        <source media="(prefers-color-scheme: dark)" srcset="docs/images/readme-usage-dark.png">
-        <img src="docs/images/readme-usage-light.png" alt="Usage: dictations, words, audio and spend, spend per model and top apps">
-      </picture>
-      <p align="center">Usage</p>
-    </td>
     <td width="50%">
       <picture>
         <source media="(prefers-color-scheme: dark)" srcset="docs/images/readme-modes-dark.png">
-        <img src="docs/images/readme-modes-light.png" alt="Modes: cleanup for code apps and writing apps, an example of each, and the mode of each app">
+        <img src="docs/images/readme-modes-light.png" alt="Cleanup: what cleanup does with an example, cleanup for every dictation in code or writing apps, the cleanup shortcut, and Rewrite with an example">
       </picture>
-      <p align="center">Modes</p>
+      <p align="center">Cleanup</p>
     </td>
-  </tr>
-  <tr>
-    <td colspan="2" align="center">
+    <td width="50%">
       <picture>
         <source media="(prefers-color-scheme: dark)" srcset="docs/images/readme-general-dark.png">
-        <img src="docs/images/readme-general-light.png" width="50%" alt="General: sound, indicator, saved audio, and whether kotoba opens at login and shows in the Dock and menu bar">
+        <img src="docs/images/readme-general-light.png" alt="General: sounds, the indicator, open at login, and whether kotoba shows in the Dock and menu bar">
       </picture>
       <p align="center">General</p>
     </td>
