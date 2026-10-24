@@ -18,7 +18,6 @@ extension DictionaryModel.Row: Identifiable {
 private struct DictionaryPane: View {
     @Bindable var model: DictionaryModel
     @State private var search = ""
-    @Environment(\.addWordRequest) private var addWordRequest
     /// The sheet: nil row adds a new entry.
     @State private var editing: Editing?
     @State private var isAdvancedShown = false
@@ -43,11 +42,6 @@ private struct DictionaryPane: View {
                 SuggestionsSection(model: model)
             }
             words
-        }
-        .onChange(of: addWordRequest.wrappedValue, initial: true) { _, isRequested in
-            guard isRequested else { return }
-            addWordRequest.wrappedValue = false
-            add()
         }
         .wisprImportAlert(model)
         .sheet(item: $editing) { editing in
