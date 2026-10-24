@@ -63,14 +63,11 @@ struct ChartDays: Equatable {
     }
 }
 
-/// The day bars of Activity's chart and of Home's today card: one bar shape for both, always in the brand colour, as
-/// Screen Time's charts keep their own colours whatever the accent. All four corners rounded and no base line, as
-/// Screen Time's (review-window.md T6).
+/// The day bars of Activity's chart: always in the brand colour, as Screen Time's charts keep their own colours whatever
+/// the accent. All four corners rounded and no base line, as Screen Time's (review-window.md T6). Home's week draws the
+/// same bar with shapes (`WeekBars`).
 struct DayBars: ChartContent {
     let days: ChartDays
-    /// Home's today card, as Screen Time's week: today in the brand colour, the other days muted, an empty day after the
-    /// first dictation as a stub on the base line so the week does not look broken.
-    var marksToday = false
 
     var body: some ChartContent {
         ForEach(days.slots, id: \.start) { day in
@@ -78,25 +75,77 @@ struct DayBars: ChartContent {
                 // A blank slot before the first dictation: a bar of no height, so the slot keeps its room.
                 BarMark(x: .value("Day", day.start, unit: .day), y: .value("Words", 0))
                     .opacity(0)
-            } else if marksToday && day.words == 0 {
-                // A stub as tall as a bar's corner, standing on the base line.
-                RectangleMark(
-                    x: .value("Day", day.start, unit: .day), y: .value("Words", 0),
-                    width: .ratio(PageMetrics.barWidthRatio), height: .fixed(PageMetrics.barStubHeight)
-                )
-                .offset(y: -PageMetrics.barStubLift)
-                .clipShape(.capsule)
-                .foregroundStyle(Color.brand.secondary)
             } else {
                 BarMark(
                     x: .value("Day", day.start, unit: .day), y: .value("Words", day.words),
                     width: .ratio(PageMetrics.barWidthRatio)
                 )
-                .clipShape(.rect(cornerRadius: PageMetrics.barCornerRadius, style: .continuous))
-                .foregroundStyle(
-                    marksToday && day.start != days.slots.last?.start
-                        ? AnyShapeStyle(Color.brand.secondary) : AnyShapeStyle(Color.brand))
+                .clipShape(DayBarShape())
+                .foregroundStyle(Color.brand)
             }
+        }
+    }
+}
+
+/// A day bar's shape, in Activity's chart and Home's week: all four corners rounded, continuous.
+struct DayBarShape: Shape {
+    func path(in rect: CGRect) -> Path {
+        RoundedRectangle(cornerRadius: PageMetrics.barCornerRadius, style: .continuous).path(in: rect)
+    }
+}
+
+/// The week's words on Home's today card, as Screen Time's week: Activity's bar (`DayBarShape`) with today in the brand
+/// colour, the other days muted, an empty day after the first dictation as a stub on the base line so the week does not
+/// look broken, the day initials under them and no word counts. It takes the height of the headline beside it.
+/// Plain shapes, not Swift Charts: the window opens on Home, and its first chart cost about 108 MB of footprint
+/// (measured with `make window-memory`, 2026-10-25), which Activity's axes and average line need and seven bars do not.
+struct WeekBars: View {
+    let days: ChartDays
+
+    var body: some View {
+        VStack(spacing: PageMetrics.weekLabelGap) {
+            GeometryReader { plot in
+                HStack(alignment: .bottom, spacing: 0) {
+                    ForEach(days.slots, id: \.start) { day in
+                        bar(day, plotHeight: plot.size.height)
+                            .frame(width: plot.size.width / CGFloat(days.slots.count) * PageMetrics.barWidthRatio)
+                            .frame(maxWidth: .infinity)
+                    }
+                }
+                .frame(maxHeight: .infinity, alignment: .bottom)
+            }
+            HStack(spacing: 0) {
+                ForEach(days.slots, id: \.start) { day in
+                    Text(days.started.contains(day) ? day.start.formatted(.dateTime.weekday(.narrow)) : "")
+                        .frame(maxWidth: .infinity)
+                }
+            }
+            .font(.subheadline)
+            .foregroundStyle(.secondary)
+        }
+        // Headroom over the tallest bar: the system's padding, so the bars stay level with the figure, not the label.
+        .padding(.top)
+        // No height of its own: it takes the height of the text beside it.
+        .frame(maxWidth: .infinity, minHeight: 0, idealHeight: 0, maxHeight: .infinity)
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel("Words per day this week")
+    }
+
+    @ViewBuilder private func bar(_ day: DictationInsights.Day, plotHeight: CGFloat) -> some View {
+        if !days.started.contains(day) {
+            // A blank slot before the first dictation.
+            Color.clear.frame(height: 0)
+        } else if day.words == 0 {
+            Capsule()
+                .fill(Color.brand.secondary)
+                .frame(height: PageMetrics.barStubHeight)
+        } else {
+            DayBarShape()
+                .fill(
+                    day.start == days.slots.last?.start
+                        ? AnyShapeStyle(Color.brand) : AnyShapeStyle(Color.brand.secondary)
+                )
+                .frame(height: plotHeight * CGFloat(day.words) / CGFloat(days.top))
         }
     }
 }
