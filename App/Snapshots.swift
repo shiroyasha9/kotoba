@@ -90,20 +90,24 @@ enum Snapshots {
         }
     }
 
-    /// A real window at the size its content asks for (the hosting controller's size constraints), drawn once its
-    /// layout has settled: a view that measures itself (`onScrollGeometryChange`) takes its height a run loop turn
-    /// later. The run fails when the size still changes after a few rounds.
+    /// A real window at the size its content asks for (its content view's fitting size), drawn once its layout has
+    /// settled: a view that measures itself (`onScrollGeometryChange`) takes its height a run loop turn later. The run
+    /// fails when the size still changes after a few rounds.
     static func fittedWindow(named name: String, _ make: @escaping @MainActor () -> NSWindow) -> Snapshot {
         var isSettled = false
         return Snapshot(name: name) {
             let window = make()
             isSettled = false
             // Each round applies the measured height; the next one finds it unchanged.
+            // The harness sizes the window itself: the hosting controller applies its size to the window in a later
+            // turn that `settle()` does not wait for, so a round could see no change yet and stop at size zero or at
+            // a half point (fix-last-dictation-learned came out 408 or 410 pt).
             for _ in 0..<10 where !isSettled {
-                let size = window.contentLayoutRect.size
+                let fitting = window.contentView?.fittingSize ?? .zero
+                window.setContentSize(fitting)
                 settle()
                 window.layoutIfNeeded()
-                isSettled = window.contentLayoutRect.size == size
+                isSettled = window.contentView?.fittingSize == fitting
             }
             return WindowCarrier(window: window, contentSize: window.contentLayoutRect.size)
         } check: { _ in
