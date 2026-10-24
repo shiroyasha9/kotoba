@@ -53,11 +53,14 @@ struct HomePrototype: View {
                 lastDictation(last)
                 earlier(Array(data.recent.dropFirst().prefix(Self.earlierCount)))
             } else {
+                // One row in the form's own type, not a pane-sized empty view in a card (review-window.md, 8).
                 Section {
-                    EmptyState(
-                        "No Dictations Yet", systemImage: "waveform",
-                        description: "Press \(data.chords.handsFree.title) to start, press it again to stop. "
-                            + "Each dictation appears here.")
+                    LabeledContent {
+                        Button("Try It…") {}
+                    } label: {
+                        Text("No dictations yet")
+                        Text("Press \(data.chords.handsFree.title) to start, press it again to stop.")
+                    }
                 }
             }
             if data.todayWords > 0 || data.streak > 0 {
@@ -76,12 +79,12 @@ struct HomePrototype: View {
                     .buttonStyle(.borderedProminent)
             } label: {
                 PageHeader(title: "Not ready to dictate", summary: missing.problemText) {
-                    SymbolTile(systemImage: "exclamationmark.triangle", tint: .orange, side: PageMetrics.rowTileSide)
+                    SymbolTile(systemImage: "exclamationmark.triangle", tint: .orange, side: PageMetrics.headerTileSide)
                 }
             }
         } else {
             PageHeader(title: "Ready to dictate", summary: "Works in any app where you can type.") {
-                AppIconView(icon: data.appIcon, side: PageMetrics.rowTileSide)
+                AppIconView(icon: data.appIcon, side: PageMetrics.headerTileSide)
             }
         }
     }
@@ -102,10 +105,10 @@ struct HomePrototype: View {
                 LabeledContent {
                     Text(record.createdAt.formatted(date: .omitted, time: .shortened))
                 } label: {
-                    Label {
-                        Text(record.app.flatMap(data.apps.name(of:)) ?? "Unknown app")
-                        Text(Self.details(of: record))
-                    } icon: {
+                    TileLabel(
+                        title: record.app.flatMap(data.apps.name(of:)) ?? "Unknown app",
+                        subtitle: Self.details(of: record)
+                    ) {
                         AppIconView(icon: data.apps.icon(of: record.app), side: PageMetrics.rowTileSide)
                     }
                 }
@@ -129,14 +132,13 @@ struct HomePrototype: View {
     private func earlier(_ records: [DictationRecord]) -> some View {
         Section {
             ForEach(records) { record in
+                let status = HistoryStatus(record, isSending: false, isTranscribingAgain: false)
                 LabeledContent {
                     HStack {
-                        if let status = HistoryStatus(record, isSending: false, isTranscribingAgain: false),
-                            status.isProblem
-                        {
+                        if let status, status.isProblem {
                             Image(systemName: status.systemImage)
                                 .foregroundStyle(.orange)
-                                .accessibilityLabel(status.title)
+                                .accessibilityHidden(true)
                         }
                         Text(record.createdAt.formatted(date: .omitted, time: .shortened))
                             .monospacedDigit()
@@ -146,7 +148,8 @@ struct HomePrototype: View {
                         if record.hasText, let text = record.latestText {
                             Text(text).lineLimit(1)
                         } else {
-                            Text("No text").foregroundStyle(.secondary)
+                            // What happened ("Not transcribed", "Canceled"), as History says it.
+                            Text(status?.title ?? "No text").foregroundStyle(.secondary)
                         }
                     } icon: {
                         AppIconView(icon: data.apps.icon(of: record.app), side: PageMetrics.lineTileSide)

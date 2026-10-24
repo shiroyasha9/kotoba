@@ -65,7 +65,7 @@ struct ActivityPrototype: View {
                 PageHeader(title: "Activity", summary: "How much you dictate, in which apps, and what it costs.") {
                     SymbolTile(
                         systemImage: PrototypePage.activity.systemImage, tint: PrototypePage.activity.tint,
-                        side: PageMetrics.rowTileSide)
+                        side: PageMetrics.headerTileSide)
                 }
             }
             Section {
@@ -85,16 +85,16 @@ struct ActivityPrototype: View {
         return Section("Highlights") {
             row(
                 "Words per minute", "speedometer", .blue, value: insights.wordsPerMinute?.formatted() ?? "None",
-                detail: "Your speaking speed, pauses included")
+                detail: "Speaking speed, pauses included")
             row(
                 "Streak", "flame", .orange, value: StatusText.counted(insights.streak, "day"),
                 detail: insights.streakDetail)
             row(
-                "Time saved", "clock", .green,
+                "Time saved", "stopwatch", .green,
                 value: Self.duration(insights.timeSaved(typingSpeed: InsightsModel.typingSpeed)),
                 detail: "Compared with typing at \(InsightsModel.typingSpeed) words a minute")
             row(
-                "Words learned", "character.book.closed", .purple, value: learned.formatted(),
+                "Words learned", "text.badge.checkmark", .purple, value: learned.formatted(),
                 detail: learned == 0
                     ? "kotoba learns a word when you correct a dictation" : learnedParts.joined(separator: " · "))
         }
@@ -125,17 +125,18 @@ struct ActivityPrototype: View {
                 Text(Self.dollars(month.cost))
             } label: {
                 Text("Spend")
-                if month.isCostEstimated {
-                    Text("Partly estimated from list prices")
-                }
+                // The facts stay on screen in the row (copy rules), not in a footer beside the button.
+                Text(
+                    "What your speech and cleanup services billed. It stays when you delete dictations."
+                        + (month.isCostEstimated ? " Partly estimated from list prices." : ""))
             }
             LabeledContent("Dictations", value: month.dictations.formatted())
             LabeledContent("Audio", value: Self.duration(month.audio))
         } header: {
             Text("This Month")
         } footer: {
-            HStack(alignment: .firstTextBaseline) {
-                Text("What your speech and cleanup services billed. It stays when you delete dictations.")
+            // Alone at the trailing edge under the group, as Battery's "Options…".
+            HStack {
                 Spacer()
                 Button("Advanced…") {}
             }
@@ -147,10 +148,7 @@ struct ActivityPrototype: View {
         LabeledContent {
             Text(value).monospacedDigit()
         } label: {
-            Label {
-                Text(title)
-                Text(detail)
-            } icon: {
+            TileLabel(title: title, subtitle: detail) {
                 SymbolTile(systemImage: symbol, tint: tint, side: PageMetrics.rowTileSide)
             }
         }
@@ -207,7 +205,7 @@ private struct DailyWords: View {
                 if average > 0 {
                     RuleMark(y: .value("Daily average", average))
                         .foregroundStyle(Color.secondary)
-                        .lineStyle(PageMetrics.averageLine)
+                        .lineStyle(PageMetrics.dashedLine)
                 }
             }
             .chartXAxis {
@@ -215,17 +213,25 @@ private struct DailyWords: View {
                 case .week:
                     AxisMarks(values: .stride(by: .day)) {
                         AxisValueLabel(format: .dateTime.weekday(.narrow), centered: true, anchor: .top)
+                            .font(.body)
                     }
                 case .month:
+                    // A dashed line at each date, as Battery's, so a date points to its bar.
                     AxisMarks(values: .stride(by: .weekOfYear)) {
+                        AxisGridLine(stroke: PageMetrics.dashedLine)
                         AxisValueLabel(format: .dateTime.month(.abbreviated).day(), anchor: .topLeading)
+                            .font(.body)
                     }
                 }
             }
             .chartYAxis {
+                // Labels only, as Screen Time: a grid line beside the average line read as two lines. The base line stays.
                 AxisMarks(position: .trailing, values: .automatic(desiredCount: 3)) {
-                    AxisGridLine()
                     AxisValueLabel(anchor: .leading)
+                        .font(.body)
+                }
+                AxisMarks(values: [0]) {
+                    AxisGridLine()
                 }
             }
             .frame(height: PageMetrics.chartHeight)
