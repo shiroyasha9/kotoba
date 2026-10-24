@@ -30,14 +30,14 @@ Cause (research): the code, not a missing library. No MIT or Apache-2.0 library 
 ### Window
 - Resizable. The content column has a maximum width and is centred, so lines do not stretch.
 - No sidebar search and no back/forward buttons (about 9 pages, no drill-downs). Look again if the page map grows.
-- Sidebar: keep the coloured tiles (System Settings look). Draw each symbol at its real weight and optical size, centred in a tile that follows `sidebarRowSize`. Do not use `.resizable()` on symbols.
+- Sidebar (owner, 2026-10-24 prototype review): the floating inset glass sidebar of Finder and Notes, not the edge-to-edge sidebar of System Settings, if SwiftUI or AppKit gives it natively; if not, keep the edge-to-edge one. Keep the coloured tiles (System Settings look). Draw each symbol at its real weight and optical size, centred in a tile that follows `sidebarRowSize`. Do not use `.resizable()` on symbols.
 - Content symbols match the weight and scale of their text (for example "Words per minute").
 - No hard-coded spacing, row heights or radii: system styles, `containerShape` and concentric corners. Text colours come from the system label colours. Few dividers: grouped sections separate the content.
 
 ### Page map
-- **Home**: a status line with the Hands-free and Push to talk keycaps shown large (when setup is not complete, the problem and its fix button); the last dictation as a card (full text, app icon, time, Copy, Paste Again, Fix); the 4 dictations before it as compact one-line rows with "Show All"; one line with today's words and the streak that opens Activity. "How to Dictate" moves to Shortcuts.
+- **Home** (owner, 2026-10-24 prototype review): first a "today" card in the Screen Time style: "640 words today" as the headline, "About 16 min saved · 5-day streak" under it, and a 7-day mini chart that opens Activity. No "Ready to dictate": when setup is not complete, the problem and its fix button take this place. Then the Hands-free and Push to talk rows with keycaps at a smaller size; the last dictation as a card (full text, app icon, time, Copy, Paste Again, Fix); the 4 dictations before it as compact one-line rows with "Show All". "How to Dictate" moves to Shortcuts.
 - **History**: as now, restyled. Audio retention ("Keep audio", "Delete Audio Now…") moves here from General.
-- **Activity**: Insights and Usage in one page. A Screen Time-style chart (Swift Charts): one headline number, 7 rounded bars in the accent colour, an average line, axis labels on the right, a Week/Month switch; the chart starts at the first dictation. Then highlights, top apps and spend.
+- **Activity**: Insights and Usage in one page. A Screen Time-style chart (Swift Charts): one headline number, 7 rounded bars in the accent colour, no grid lines, one average line with "avg" in the axis column on the right, axis labels on the right; the Week/Month switch sits in the window toolbar, not in the chart card; the chart starts at the first dictation. Then highlights, top apps and spend.
 - Settings group:
   - **Shortcuts**: every chord, and the "press enter" and "new line" voice commands (split from General).
   - **Speech**: the service and its key.
@@ -73,6 +73,7 @@ Pattern: one small glass capsule that changes shape; no status words (Hex, Wispr
 - Words show only when the user must know something or can act: errors with a fix button (Retry, Add Key…, Choose Mic…), a silent mic (orange bars and "No sound from the mic"), Undo after Esc or a rewrite, "Added ‘word’", the 10-minute timer. The capsule widens for them and stays one glass shape.
 - VoiceOver reads a label for each state ("Recording", "Recording, hands-free", …). Undo and Retry stay real buttons.
 - No work at idle: no timer, display link or animation while idle.
+- Owner, 2026-10-24 prototype review: the bars use the accent colour, made brighter on light glass so they read over warm backdrops. Hover shows only the Hands-free chord. No Undo countdown bar: Undo goes away by itself and the capsule keeps one height. Secure Input keeps a short message ("Secure Input is on"), because it explains why a paste can fail. With a silent mic in hands-free, Cancel goes (Esc cancels). The capsule height comes from the measured button height, passed to the placement code. Buttons keep their full width, and the snapshot run fails on content longer than the pill.
 
 ### Copy
 - Each row: a short title and at most one grey subtitle. A page's header line says what the page does. An ⓘ popover holds only the optional "why"; costs, privacy facts, warnings and steps the user must do stay on screen.
