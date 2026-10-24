@@ -156,7 +156,6 @@ extension HistoryStore {
             app_bundle_id TEXT,
             app_name TEXT
         );
-        CREATE INDEX IF NOT EXISTS usage_ledger_time ON usage_ledger (time);
         """
 
     /// Billed answers with no row to write (`Store.addUsage`): a cleanup answer that came after its deadline.
