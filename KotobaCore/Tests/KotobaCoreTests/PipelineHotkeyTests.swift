@@ -176,6 +176,17 @@ struct PipelineHotkeyTests {
         #expect(await world.store.records.isEmpty)
     }
 
+    @Test func aBluetoothMicKeptOutByTheSwitchIsNamed() async {
+        let world = FakeWorld(transcript: "hello")
+        let pipeline = world.makePipeline()
+        await world.audio.failBegin(with: AudioCapture.CaptureError.bluetoothNotListed(name: "AirPods Pro"))
+
+        await pipeline.tap(world)
+
+        #expect(await pipeline.state.notice == .bluetoothMicNotListed("AirPods Pro"))
+        #expect(await world.store.records.isEmpty)
+    }
+
     /// The adapter lost the capture before the stop: nothing was written, so no dictation with a made-up length is
     /// kept, and nothing is sent.
     @Test func aStopThatFindsNoCaptureKeepsNothing() async {

@@ -47,6 +47,9 @@ public enum DictationNotice: Sendable, Equatable {
     case recovered(DictationID)
     /// Capture did not start: no microphone access or no input device.
     case captureFailed
+    /// Capture did not start: the only mic is a Bluetooth mic (named) outside the owner's list, which the Microphone
+    /// page's switch keeps out.
+    case bluetoothMicNotListed(String)
     /// The stop found no capture running (the audio source had lost it): nothing was recorded, kept or sent.
     case nothingRecorded
     /// The recording file took too little audio to send (`RecordedAudio.loss`): nothing was kept or sent.
@@ -66,8 +69,8 @@ public enum DictationNotice: Sendable, Equatable {
         switch self {
         case .recovered, .copied, .polished: true
         case .failed, .timedOut, .connectionBlocked, .hostNotFound, .rejected, .needsSetup, .cleanupFailed,
-            .cleanupTooSlow, .returnSkipped, .captureFailed, .nothingRecorded, .audioNotSaved, .audioCut,
-            .clipboardNotKept, .polishFailed:
+            .cleanupTooSlow, .returnSkipped, .captureFailed, .bluetoothMicNotListed, .nothingRecorded, .audioNotSaved,
+            .audioCut, .clipboardNotKept, .polishFailed:
             false
         }
     }
@@ -77,8 +80,8 @@ public enum DictationNotice: Sendable, Equatable {
         switch self {
         case .captureFailed, .copied: true
         case .failed, .timedOut, .connectionBlocked, .hostNotFound, .rejected, .needsSetup, .cleanupFailed,
-            .cleanupTooSlow, .returnSkipped, .recovered, .nothingRecorded, .audioNotSaved, .audioCut, .clipboardNotKept,
-            .polished, .polishFailed:
+            .cleanupTooSlow, .returnSkipped, .recovered, .bluetoothMicNotListed, .nothingRecorded, .audioNotSaved,
+            .audioCut, .clipboardNotKept, .polished, .polishFailed:
             false
         }
     }

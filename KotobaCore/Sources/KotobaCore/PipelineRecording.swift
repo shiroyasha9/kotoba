@@ -3,6 +3,16 @@ import Foundation
 // MARK: - Recording
 
 extension DictationPipeline {
+    /// A press whose capture did not start: a Bluetooth mic the owner's switch keeps out is named, so the owner can add
+    /// it to the list; any other failure is a missing mic or mic access.
+    static func notice(forCaptureError error: any Error) -> DictationNotice {
+        if case AudioCapture.CaptureError.bluetoothNotListed(let name) = error {
+            .bluetoothMicNotListed(name)
+        } else {
+            .captureFailed
+        }
+    }
+
     func start(_ gesture: ChordGesture, at now: Instant) async {
         assert(isTurnTaken, "A capture changes only in its turn (`inTurn`)")
         let id = DictationID()
@@ -20,7 +30,7 @@ extension DictationPipeline {
             events = try await ports.audio.beginCapture(into: file)
         } catch {
             Log.pipeline.error("Capture did not start: \(error)")
-            show(.captureFailed)
+            show(Self.notice(forCaptureError: error))
             return
         }
         let captureEvents = Task {

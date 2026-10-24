@@ -29,11 +29,6 @@ struct InputDevicePolicyTests {
         #expect(InputDevicePolicy.micInUse(defaultInput: usbMic, devices: devices) == usbMic)
     }
 
-    @Test func aMacWithNoBuiltInMicKeepsTheBluetoothDefault() {
-        let devices = [builtInSpeakers, airPods]
-        #expect(InputDevicePolicy.micInUse(defaultInput: airPods, devices: devices) == airPods)
-    }
-
     @Test func aDefaultThatIsNotConnectedIsNoMic() {
         #expect(InputDevicePolicy.micInUse(defaultInput: usbMic, devices: [builtInSpeakers]) == nil)
         #expect(InputDevicePolicy.micInUse(defaultInput: nil, devices: [builtInMic]) == nil)
@@ -84,6 +79,46 @@ struct InputDevicePolicyTests {
         let choice = InputDevicePolicy.micInUse(
             defaultInput: usbMic, devices: devices, order: ["BuiltInSpeakers"])
         #expect(choice == usbMic)
+    }
+
+    // MARK: Bluetooth only when listed (the Microphone page's switch, on by default)
+
+    @Test func anUnlistedBluetoothDefaultIsNeverUsed() {
+        let devices = [builtInSpeakers, airPods]
+        #expect(InputDevicePolicy.micInUse(defaultInput: airPods, devices: devices) == nil)
+        #expect(
+            InputDevicePolicy.micInUse(defaultInput: airPods, devices: devices, order: ["StudioMic"]) == nil)
+    }
+
+    @Test func aListedBluetoothMicIsUsedWithTheSwitchOn() {
+        let devices = [builtInSpeakers, airPods]
+        #expect(InputDevicePolicy.micInUse(defaultInput: airPods, devices: devices, order: ["AirPods"]) == airPods)
+    }
+
+    @Test func withTheSwitchOffTheBluetoothDefaultIsFollowed() {
+        let devices = [builtInMic, airPods]
+        let choice = InputDevicePolicy.micInUse(
+            defaultInput: airPods, devices: devices, bluetoothOnlyWhenListed: false)
+        #expect(choice == airPods)
+    }
+
+    @Test func withTheSwitchOffTheOrderStillComesFirst() {
+        let devices = [builtInMic, airPods]
+        let choice = InputDevicePolicy.micInUse(
+            defaultInput: airPods, devices: devices, order: ["BuiltInMic"], bluetoothOnlyWhenListed: false)
+        #expect(choice == builtInMic)
+    }
+
+    /// A Mac mini with AirPods: the failure names the mic the switch kept out, so the owner can add it.
+    @Test func theBluetoothDefaultKeptOutIsNamedOnlyWhenItLeavesNoMic() {
+        let macMini = [builtInSpeakers, airPods]
+        #expect(InputDevicePolicy.bluetoothKeptOut(defaultInput: airPods, devices: macMini) == airPods)
+        #expect(
+            InputDevicePolicy.bluetoothKeptOut(defaultInput: airPods, devices: macMini, bluetoothOnlyWhenListed: false)
+                == nil)
+        #expect(InputDevicePolicy.bluetoothKeptOut(defaultInput: airPods, devices: macMini, order: ["AirPods"]) == nil)
+        #expect(InputDevicePolicy.bluetoothKeptOut(defaultInput: airPods, devices: [builtInMic, airPods]) == nil)
+        #expect(InputDevicePolicy.bluetoothKeptOut(defaultInput: nil, devices: [builtInSpeakers]) == nil)
     }
 
     @Test func choosingAMicMovesItToTheTopOfTheOrder() {

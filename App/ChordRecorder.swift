@@ -1,5 +1,3 @@
-// 0.5.0 ratchet: the Shortcuts page's rollout puts this file on the page system and removes the next line.
-// swiftlint:disable ui_layout_constant
 import AppKit
 import KotobaCore
 import Observation
@@ -7,7 +5,7 @@ import SwiftUI
 
 // Custom: AppKit and SwiftUI have no shortcut recorder control.
 /// The shortcut recorder for one chord: click, press the chord, and it is saved. A refused chord keeps the old one
-/// and shows why. General and onboarding use it.
+/// and shows why. The Shortcuts page and onboarding use it.
 struct ChordRecorder: View {
     let chords: HotkeyChords
     let role: HotkeyChords.Role
@@ -27,7 +25,7 @@ struct ChordRecorder: View {
                     Button("Turn Off", systemImage: "xmark.circle") { save(nil) }
                         .labelStyle(.iconOnly)
                         .buttonStyle(.borderless)
-                        .help(role == .cleanup ? "Turn off cleanup dictation" : "Turn off this shortcut")
+                        .help(role == .cleanup ? "Turn off the cleanup shortcut" : "Turn off this shortcut")
                 }
                 // A default Copy Last that a dictation chord turned off would be refused: the note says why instead.
                 if let defaultChord, chord != defaultChord, role != .copyLast || chords.copyLastOffReason == nil {
@@ -36,21 +34,21 @@ struct ChordRecorder: View {
                         .buttonStyle(.borderless)
                         .help("Reset to \(defaultChord.title)")
                 }
-                // Polish Last is off until the owner records one: one tap takes the suggestion.
+                // Rewrite Last is off until the owner records one: one click takes the suggestion.
                 if role == .polishLast, chord == nil, !listener.isListening,
                     let suggestion = chords.polishLastSuggestion
                 {
                     Button("Use \(suggestion.title)") { save(suggestion) }
                         .buttonStyle(.borderless)
-                        .help(
-                            suggestion == Chord.polishLastSuggestions[0]
-                                ? "Polish with \(suggestion.title), as in Wispr Flow"
-                                : "Polish with \(suggestion.title)")
+                        .help("Rewrite with \(suggestion.title)")
                 }
                 Button(action: toggle) {
-                    Text(caption)
-                        .frame(minWidth: Self.captionWidth)
-                        .foregroundStyle(listener.isListening ? AnyShapeStyle(.tint) : AnyShapeStyle(.primary))
+                    // As wide as the widest caption, so the button keeps its width while it listens.
+                    ZStack {
+                        ForEach(Self.widestCaptions, id: \.self) { Text($0).hidden() }
+                        Text(caption)
+                            .foregroundStyle(listener.isListening ? AnyShapeStyle(.tint) : AnyShapeStyle(.primary))
+                    }
                 }
                 .help(
                     listener.isListening ? "Press the new shortcut, or Esc to stop" : "Click to record a new shortcut")
@@ -66,12 +64,13 @@ struct ChordRecorder: View {
         .onDisappear { listener.stop() }
     }
 
-    /// Fits ⌃⌥⇧⌘ and "Press a shortcut", so the button keeps its width while it listens.
-    private static let captionWidth: CGFloat = 96
+    /// The four modifiers and the listening caption: the button is as wide as the wider of the two.
+    private static let widestCaptions = ["⌃⌥⇧⌘", listeningCaption]
+    private static let listeningCaption = "Press a shortcut"
 
     private var chord: Chord? { chords.chord(role) }
 
-    /// Push to talk's is the hands-free chord. Paste Last and Polish Last have none: they are off until the owner records
+    /// Push to talk's is the hands-free chord. Paste Last and Rewrite Last have none: they are off until the owner records
     /// one.
     private var defaultChord: Chord? {
         switch role {
@@ -86,7 +85,7 @@ struct ChordRecorder: View {
 
     private var caption: String {
         guard listener.isListening else { return chord?.title ?? "Off" }
-        return listener.held.isEmpty ? "Press a shortcut" : Chord(modifiers: listener.held.kinds).title
+        return listener.held.isEmpty ? Self.listeningCaption : Chord(modifiers: listener.held.kinds).title
     }
 
     /// Why the last recorded chord was refused, or a hint: a dictation recorder that listens also takes a mouse button,
@@ -273,11 +272,11 @@ extension ChordProblem {
         case .cleanup: "cleanup"
         case .pasteLast: "Paste Last"
         case .copyLast: "Copy Last"
-        case .polishLast: "Polish Last"
+        case .polishLast: "Rewrite Last"
         }
     }
 
-    /// The Paste Last, Copy Last and Polish Last problems: `chord` was recorded for `role`, the last-dictation chord or
+    /// The Paste Last, Copy Last and Rewrite Last problems: `chord` was recorded for `role`, the last-dictation chord or
     /// the chord it clashes with.
     @MainActor
     private func lastText(_ chord: Chord, role: HotkeyChords.Role, chords: HotkeyChords) -> String {
@@ -303,7 +302,7 @@ extension ChordProblem {
         }
     }
 
-    /// The `last` chord (Paste Last, Copy Last or Polish Last) is the chord of `other`.
+    /// The `last` chord (Paste Last, Copy Last or Rewrite Last) is the chord of `other`.
     private static func sameAsText(_ other: HotkeyChords.Role, last: HotkeyChords.Role, role: HotkeyChords.Role)
         -> String
     {
@@ -311,7 +310,7 @@ extension ChordProblem {
             let action =
                 switch last {
                 case .pasteLast: "paste"
-                case .polishLast: "polish"
+                case .polishLast: "rewrite"
                 default: "copy"
                 }
             return "This is the shortcut to \(action) the last dictation."
@@ -319,7 +318,7 @@ extension ChordProblem {
         return "This is the \(name(other)) shortcut."
     }
 
-    /// The `last` chord (Paste Last, Copy Last or Polish Last) holds the modifier-only chord of `other` on the way to its
+    /// The `last` chord (Paste Last, Copy Last or Rewrite Last) holds the modifier-only chord of `other` on the way to its
     /// key.
     @MainActor
     private static func includesText(

@@ -12,8 +12,10 @@ final class MainWindowController {
     private let microphones: MicrophonePreferences
     private let audio: AudioCapture
     private let router: TranscriptionRouter
-    /// Builds the General pane's model each time the window builds its panes, so it shows current values.
+    /// Build the General and Shortcuts pages' models each time the window builds its panes, so they show current
+    /// values.
     private let makeGeneral: @MainActor () -> GeneralModel
+    private let makeShortcuts: @MainActor () -> ShortcutsModel
     /// The dictionary the Dictionary pane edits; "Fix Last Dictation…" adds to it and the menu counts its suggestions.
     /// Built once the dictionary file is read at launch.
     private(set) var dictionary: DictionaryModel?
@@ -37,8 +39,6 @@ final class MainWindowController {
     /// The open window's Activity page model, which reads again after each usage ledger, insights or dictionary write
     /// while shown.
     private weak var activity: ActivityModel?
-    /// The open window's General pane model; its History section measures the saved audio again the same way.
-    private weak var general: GeneralModel?
     /// The pipeline's newest activity, kept while the window is closed so Home opens with it.
     private var pipelineActivity = PipelineActivity(isQuiet: true, inFlight: [])
     /// The open window's Home, which reads again after each history write while shown.
@@ -52,7 +52,8 @@ final class MainWindowController {
         routeSettings: TranscriptionSettings, vault: KeyVault, router: TranscriptionRouter,
         microphones: MicrophonePreferences, audio: AudioCapture, readiness: Readiness,
         finishSetup: @escaping @MainActor () -> Void, tryIt: @escaping @MainActor () -> Void,
-        fixLast: @escaping @MainActor () -> Void, makeGeneral: @escaping @MainActor () -> GeneralModel
+        fixLast: @escaping @MainActor () -> Void, makeGeneral: @escaping @MainActor () -> GeneralModel,
+        makeShortcuts: @escaping @MainActor () -> ShortcutsModel
     ) {
         self.readiness = readiness
         self.finishSetup = finishSetup
@@ -64,6 +65,7 @@ final class MainWindowController {
         self.microphones = microphones
         self.audio = audio
         self.makeGeneral = makeGeneral
+        self.makeShortcuts = makeShortcuts
         window.onClose = { [weak self] in self?.historyPane?.windowClosed() }
     }
 
@@ -97,16 +99,12 @@ final class MainWindowController {
     /// shown pane reads again only when the write changed what it shows. Home shows rows and ledger figures; Activity
     /// only ledger figures, so each dictation's pending save at upload start changes none of its. Activity also takes
     /// each answered dictation's recorded length, which a later row write keeps and a delete takes away (it falls back
-    /// to the billed length). The History section measures the kept audio, which a ledger write leaves
-    /// alone.
+    /// to the billed length).
     func historyChanged(_ change: HistoryChange) {
         historyPane?.historyChanged(change)
         home?.historyChanged(change)
         if change.isUsageAdded || change.isInsightsChanged {
             activity?.storeChanged()
-        }
-        if change.isKeptAudioChanged {
-            general?.audio?.keptAudioChanged()
         }
     }
 
@@ -142,9 +140,8 @@ final class MainWindowController {
         if let historyPane {
             panes.append(historyPane.pane())
         }
-        let general = makeGeneral()
-        self.general = general
-        panes.append(.general(general))
+        panes.append(.general(makeGeneral()))
+        panes.append(.shortcuts(makeShortcuts()))
         if let dictionary {
             panes.append(.dictionary(dictionary))
         }

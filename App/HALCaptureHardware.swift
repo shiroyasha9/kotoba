@@ -29,6 +29,10 @@ final class HALCaptureHardware: CaptureHardware {
         preferences.order
     }
 
+    func bluetoothOnlyWhenListed() -> Bool {
+        preferences.isBluetoothOnlyWhenListed
+    }
+
     func observeDevices(_ onChange: @escaping @Sendable (AudioDeviceChange) -> Void) -> AnyObject {
         AudioDevices.observe(onChange)
     }

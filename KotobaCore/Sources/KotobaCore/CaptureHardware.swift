@@ -11,6 +11,8 @@ public protocol CaptureHardware: Sendable {
     func defaultInput() -> AudioDevice?
     /// The owner's microphone order by UID, first choice first (`InputDevicePolicy`).
     func microphoneOrder() -> [String]
+    /// The Microphone page's switch: a Bluetooth mic only when it is in the order (`InputDevicePolicy`).
+    func bluetoothOnlyWhenListed() -> Bool
     /// Calls `onChange` on each device connect, disconnect and default change, and on a restart of the audio service,
     /// until the returned value is released.
     func observeDevices(_ onChange: @escaping @Sendable (AudioDeviceChange) -> Void) -> AnyObject
