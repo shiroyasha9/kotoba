@@ -103,8 +103,7 @@ extension HistoryModel {
 
     /// Transcribe Again keeps no copy of the old text: the audio is what can bring a text back.
     static let transcribeAgainHelp =
-        "Transcribe the saved audio again. The new text replaces this one; the audio stays saved, so you can do it "
-        + "again at any time."
+        "Send the saved audio again and replace this text with the result."
 }
 
 /// The menu bar's Dictation menu: History's actions on the selected rows, on while History is shown in the key

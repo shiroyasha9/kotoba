@@ -7,7 +7,7 @@ import os
 
 /// Opens the focused text field of the frontmost app for a readback session (docs/research/auto-learning.md,
 /// "Readback (phase 2.6)"). It uses the Accessibility grant the paste already has, so it asks for nothing new. With
-/// "Learn from my edits" off, `EditReadback` never asks, so no observer and no thread is ever made.
+/// "Learn from edits" off, `EditReadback` never asks, so no observer and no thread is ever made.
 struct AXFieldWatcher: FieldWatcher {
     /// The front app, read on the main thread (no call to the app).
     struct FrontApp: Sendable {
@@ -321,7 +321,7 @@ final class EditLearner {
                     self?.received(edit)
                 }
             })
-        // The "Learn from my edits" switch writes UserDefaults; each change in this process posts this.
+        // The "Learn from edits" switch writes UserDefaults; each change in this process posts this.
         tasks.append(
             Task { [weak self] in
                 await readback.setEnabled(AppDefaults.isLearningFromEdits)

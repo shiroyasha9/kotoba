@@ -21,7 +21,8 @@ private struct MicrophonePane: View {
                 PageHeader(
                     page: .microphones,
                     summary:
-                        "kotoba uses the first connected mic in the list. When one is unplugged, it moves to the next.")
+                        "kotoba uses the first connected microphone in the list. When one is unplugged, it moves to the next."
+                )
             }
             if let warning = model.warning {
                 Section {
@@ -37,7 +38,8 @@ private struct MicrophonePane: View {
                     rows: model.listed,
                     emptyText: emptyText,
                     addTitle: "Add to List",
-                    addHelp: model.others.isEmpty ? "No other mics are connected" : "Add a connected mic to the list",
+                    addHelp: model.others.isEmpty
+                        ? "No other microphones are connected" : "Add a connected microphone to the list",
                     isAddDisabled: model.others.isEmpty, removeTitle: "Remove from List", remove: model.remove,
                     move: model.move
                 ) { row in
@@ -72,8 +74,8 @@ private struct MicrophonePane: View {
             }
             Section {
                 PageToggle(
-                    title: "Use Bluetooth mics only from the list",
-                    subtitle: "Bluetooth mics record at call quality and can miss your first word.",
+                    title: "Use Bluetooth microphones only from the list",
+                    subtitle: "Bluetooth microphones record at call quality and can miss your first word.",
                     isOn: $model.isBluetoothOnlyWhenListed)
             }
             Section {
@@ -93,9 +95,9 @@ private struct MicrophonePane: View {
                 // Before a test the footer says what the click does, so the bar at rest is not read as broken; a quiet
                 // room moves the bar little, so the running test says so.
                 if model.testLevel != nil {
-                    Text("Listening for \(MicrophoneModel.testSeconds) seconds. Speak to see the level.")
+                    Text("Testing for \(MicrophoneModel.testSeconds) seconds. Speak to see the level.")
                 } else {
-                    Text("Records \(MicrophoneModel.testSeconds) seconds from the mic in use and keeps nothing.")
+                    Text("Records \(MicrophoneModel.testSeconds) seconds from the microphone in use and keeps nothing.")
                 }
             }
         }
@@ -105,8 +107,9 @@ private struct MicrophonePane: View {
 
     /// What an empty list means: the switch keeps a Bluetooth input chosen in System Settings out.
     private var emptyText: String {
-        let rule = "No mics in the list. kotoba uses the input chosen in System Settings"
-        return model.isBluetoothOnlyWhenListed ? rule + ", or another mic when that input is Bluetooth." : rule + "."
+        let rule = "No microphones in the list. kotoba uses the input chosen in System Settings"
+        return model.isBluetoothOnlyWhenListed
+            ? rule + ", or another microphone when that input is Bluetooth." : rule + "."
     }
 
     /// "In use", "Not connected" and the Bluetooth note, the ones that apply.

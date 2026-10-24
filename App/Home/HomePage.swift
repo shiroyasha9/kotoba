@@ -180,7 +180,7 @@ private struct HomePage: View {
         }
     }
 
-    /// What happened to a dictation with no text ("Not transcribed", "Canceled"), in History's words.
+    /// What happened to a dictation with no text ("Waiting for retry", "Canceled"), in History's words.
     private func status(of record: DictationRecord) -> HistoryStatus? {
         HistoryStatus(
             record, isSending: model.activity.inFlight.contains(record.id),

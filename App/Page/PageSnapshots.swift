@@ -44,7 +44,7 @@ private struct SystemSheet: View {
             Section {
                 PageToggle(title: "Keep filler words", subtitle: "Leaves “um” and “uh” in the text.", isOn: $isOn)
                 PageToggle(
-                    title: "Learn from my edits",
+                    title: "Learn from edits",
                     subtitle:
                         "kotoba watches the text field for a minute after a paste and suggests the words you correct, "
                         + "so they can go into your dictionary.",

@@ -97,7 +97,7 @@ targets:
         # The brand colour (App/Assets.xcassets/Brand, the icon's coral caret) as the app's accent: macOS uses it only
         # while the user's accent is Multicolor; any other accent the user picks wins.
         NSAccentColorName: Brand
-        NSMicrophoneUsageDescription: kotoba records your voice while you dictate and sends the audio to the speech provider you chose.
+        NSMicrophoneUsageDescription: kotoba records your voice while you dictate and sends the audio to the speech service you chose.
     entitlements:
       path: App/Kotoba.entitlements
       properties:

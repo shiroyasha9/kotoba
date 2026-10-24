@@ -148,7 +148,9 @@ struct ActivityPage: View {
     /// What the spend is, that it outlives deleted dictations (review-window.md T10), and what it leaves out or
     /// estimates.
     private static func spendDetail(_ month: UsageSummary) -> String {
-        var parts = ["What your speech and cleanup services billed. Spend stays when you delete dictations."]
+        var parts = [
+            "What your services billed for speech, cleanup and rewrite. Spend stays when you delete dictations."
+        ]
         if month.isCostEstimated {
             parts.append("Partly estimated from list prices.")
         }

@@ -225,7 +225,7 @@ struct PriceLine: View {
 
     /// The price sentence for `route`, or nil when it shows only the link.
     static func text(for route: TranscriptionRoute) -> String? {
-        route == .openRouterMAI ? "You pay OpenRouter directly, a few cents per hour of speech." : nil
+        route == .openRouterMAI ? "You pay OpenRouter directly for each hour of speech." : nil
     }
 
     var body: some View {

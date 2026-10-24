@@ -273,13 +273,13 @@ struct HistoryStatus {
         case .pending where isSending:
             (title, systemImage, isProblem) = ("Transcribing", "ellipsis.circle", false)
         case .pending, .failed:
-            (title, systemImage, isProblem) = ("Not transcribed", "exclamationmark.triangle.fill", true)
+            (title, systemImage, isProblem) = ("Waiting for retry", "exclamationmark.triangle.fill", true)
         case .rejected where record.rejectReason == .emptyTranscript:
             (title, systemImage, isProblem) = ("No speech heard", "waveform.slash", true)
         case .rejected where record.rejectReason == .audioMissing:
             (title, systemImage, isProblem) = ("Audio missing", "questionmark.folder", true)
         case .rejected:
-            (title, systemImage, isProblem) = ("Refused", "exclamationmark.triangle.fill", true)
+            (title, systemImage, isProblem) = ("Can’t transcribe", "exclamationmark.triangle.fill", true)
         }
     }
 }

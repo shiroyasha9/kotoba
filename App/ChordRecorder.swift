@@ -40,7 +40,7 @@ struct ChordRecorder: View {
                 {
                     Button("Use \(suggestion.title)") { save(suggestion) }
                         .buttonStyle(.borderless)
-                        .help("Rewrite with \(suggestion.title)")
+                        .help("Use \(suggestion.title) to rewrite the last dictation")
                 }
                 Button(action: toggle) {
                     // As wide as the widest caption, so the button keeps its width while it listens.
@@ -113,7 +113,7 @@ struct ChordRecorder: View {
         }
         if chord.opensMicBriefly {
             let shortcuts = chord.modifiers.kindCount == 1 ? "Shortcuts with" : "Shortcuts that start with"
-            return ("\(shortcuts) \(chord.title) open the mic for a moment.", false)
+            return ("\(shortcuts) \(chord.title) open the microphone for a moment.", false)
         }
         return nil
     }
@@ -239,41 +239,38 @@ extension ChordProblem {
         case .reserved: return "macOS uses \(chord.title). Choose another shortcut."
         case .escape: return "Esc cancels a dictation. Choose another shortcut."
         case .sameAsCleanup(let dictation):
-            return role == .cleanup ? "This is the \(Self.name(dictation)) shortcut." : "This is the cleanup shortcut."
+            return "This is the \(Self.name(role == .cleanup ? dictation : .cleanup)) shortcut."
         case .dictationIncludesCleanup(let dictation):
             let held = role == dictation ? chord : (chords.chord(dictation) ?? chord)
             let cleanup = role == .cleanup ? chord : (chords.cleanup ?? chord)
             return "\(held.title) includes \(cleanup.title), so every dictation would clean up."
-        case .mouseButtonOnlyForDictation: return "Only Hands-free and Push to talk can use a mouse button."
+        case .mouseButtonOnlyForDictation:
+            return "Only \(Self.name(.handsFree)) and \(Self.name(.pushToTalk)) can use a mouse button."
         case .needsKey, .pasteLastSameAs, .pasteLastIncludes, .copyLastSameAs, .copyLastIncludes, .polishLastSameAs,
             .polishLastIncludes:
             return lastText(chord, role: role, chords: chords)
         }
     }
 
-    /// Why the default Copy Last chord is off: "⌃⌘C includes right ⌘, the hands-free shortcut, so Copy Last is off."
+    /// Why the default Copy Last chord is off: "⌃⌘C includes right ⌘, the “Hands-free” shortcut, so “Copy last
+    /// dictation” is off."
     @MainActor
     func defaultCopyLastText(chords: HotkeyChords) -> String {
         let copyLast = Chord.defaultCopyLast.title
         switch self {
         case .copyLastIncludes(let other):
             let held = chords.chord(other)?.title ?? ""
-            return "\(copyLast) includes \(held), the \(Self.name(other)) shortcut, so Copy Last is off."
-        case .copyLastSameAs(let other): return "\(copyLast) is the \(Self.name(other)) shortcut, so Copy Last is off."
-        default: return "Copy Last is off."
+            return "\(copyLast) includes \(held), the \(Self.name(other)) shortcut, so \(Self.name(.copyLast)) is off."
+        case .copyLastSameAs(let other):
+            return "\(copyLast) is the \(Self.name(other)) shortcut, so \(Self.name(.copyLast)) is off."
+        default: return "\(Self.name(.copyLast)) is off."
         }
     }
 
-    /// A shortcut's name in a sentence: "This is the push-to-talk shortcut."
+    /// A shortcut's name in a sentence, as its row on the Shortcuts page names it: "This is the “Push to talk”
+    /// shortcut."
     private static func name(_ role: HotkeyChords.Role) -> String {
-        switch role {
-        case .handsFree: "hands-free"
-        case .pushToTalk: "push-to-talk"
-        case .cleanup: "cleanup"
-        case .pasteLast: "Paste Last"
-        case .copyLast: "Copy Last"
-        case .polishLast: "Rewrite Last"
-        }
+        "“\(StatusText.shortcutTitle(role))”"
     }
 
     /// The Paste Last, Copy Last and Rewrite Last problems: `chord` was recorded for `role`, the last-dictation chord or

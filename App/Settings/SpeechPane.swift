@@ -255,8 +255,8 @@ extension TranscriptionRoute {
     var summary: String {
         switch self {
         case .openRouterMAI: "Recommended: the most accurate in kotoba’s tests. OpenRouter keeps none of your audio."
-        case .openRouterGrok: "Grok from xAI. OpenRouter may keep your audio."
-        case .xaiGrok: "Grok straight from xAI, with your own xAI key."
+        case .openRouterGrok: "Grok from xAI, which keeps your audio for 30 days."
+        case .xaiGrok: "Grok with your own xAI key. xAI keeps your audio for 30 days."
         case .azureMAI: "MAI-Transcribe-2 from your own Azure Speech resource."
         }
     }

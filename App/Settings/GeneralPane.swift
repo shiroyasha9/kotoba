@@ -151,7 +151,7 @@ private struct GeneralPane: View {
     var body: some View {
         PageForm {
             Section {
-                PageHeader(page: .general, summary: "How kotoba sounds and shows itself, opens and updates.")
+                PageHeader(page: .general, summary: "Sounds, the indicator, the Dock and menu bar, login and updates.")
             }
             Section("Sounds") {
                 PageToggle(

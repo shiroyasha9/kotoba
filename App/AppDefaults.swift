@@ -71,7 +71,7 @@ enum AppDefaults {
         set { UserDefaults.standard.set(newValue, forKey: Key.lineBreakPhrase.rawValue) }
     }
 
-    /// "Learn from my edits": after a paste, kotoba follows the field and adds the words the owner fixes. On by
+    /// "Learn from edits": after a paste, kotoba follows the field and adds the words the owner fixes. On by
     /// default; read on each paste, from any thread.
     static var isLearningFromEdits: Bool {
         UserDefaults.standard.bool(forKey: Key.learnsFromEdits.rawValue)

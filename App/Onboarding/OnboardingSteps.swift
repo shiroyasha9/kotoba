@@ -10,7 +10,9 @@ struct WelcomeStep: View {
     var body: some View {
         let chords = HotkeyChords.shared
         Section {
-            Point("Fast", systemImage: "bolt", tint: .green, text: "Your words appear about a second after you stop.")
+            Point(
+                "Fast", systemImage: "bolt", tint: .green,
+                text: "Your words usually appear about a second after you stop.")
             Point(
                 "Accurate", page: .dictionary,
                 text: "Add names and terms to your dictionary, and kotoba spells them your way.")
@@ -19,7 +21,7 @@ struct WelcomeStep: View {
                 text: "No account. Your audio goes only to the speech service you choose, with your own key.")
         } header: {
             StepHeading(
-                title: "Talk Instead of Type",
+                title: "Talk Instead of Typing",
                 text: Text("Speak in any app, and kotoba types your words where your cursor is.")
             ) {
                 AppIconView(icon: NSApp.applicationIconImage, side: PageMetrics.welcomeIconSide)
@@ -134,7 +136,7 @@ struct PermissionsStep: View {
         } footer: {
             VStack(alignment: .leading) {
                 Text(
-                    "kotoba reads only the text field it pasted into, and only when “Learn from my edits” is on, "
+                    "kotoba reads only the text field it pasted into, and only when “Learn from edits” is on, "
                         + "to learn your corrections. It never reads your screen.")
                 if !model.readiness.isAccessibilityAllowed {
                     Text(
@@ -253,14 +255,14 @@ struct DoneStep: View {
         }
         Section {
             Toggle(
-                "Open kotoba when you log in",
+                "Open at login",
                 isOn: Binding(get: { model.opensAtLogin }, set: { model.setOpensAtLogin($0) }))
             if let problem = model.loginProblem {
                 PageRow(title: problem.text, subtitle: nil) {
                     Button("Open Login Items…", action: model.openLoginItemsSettings)
                 }
             }
-            Toggle("Play a sound when dictation starts and stops", isOn: $model.playsSounds)
+            Toggle("Play sounds when a dictation starts and stops", isOn: $model.playsSounds)
         } header: {
             if model.firstMissingStep == nil {
                 heading(isReady: isReady)

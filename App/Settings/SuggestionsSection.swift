@@ -30,7 +30,7 @@ struct SuggestionsSection: View {
     }
 }
 
-/// "Learn from my edits", at the top of the Dictionary page: a page-level setting, as System Settings places them. Off,
+/// "Learn from edits", at the top of the Dictionary page: a page-level setting, as System Settings places them. Off,
 /// kotoba never observes another app's field (`AXFieldWatcher`).
 struct LearnFromEditsToggle: View {
     // The registered default applies; the initial value here is only what @AppStorage requires.
@@ -39,7 +39,7 @@ struct LearnFromEditsToggle: View {
 
     var body: some View {
         PageToggle(
-            title: "Learn from my edits",
+            title: "Learn from edits",
             subtitle: "When you fix a word after kotoba pastes it, the word goes into your dictionary.",
             isOn: $isLearningFromEdits)
     }

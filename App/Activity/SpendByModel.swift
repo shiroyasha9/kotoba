@@ -46,7 +46,7 @@ struct SpendByModel: View {
         switch kind {
         case .speech: "Speech model"
         case .cleanup: "Cleanup model"
-        case .polish: "Polish model"
+        case .polish: "Rewrite model"
         }
     }
 
@@ -58,7 +58,7 @@ struct SpendByModel: View {
         case .speech:
             TranscriptionRoute(rawValue: spend.model)?.menuTitle ?? "Earlier speech model"
         case .polish:
-            PolishModel(rawValue: spend.model)?.title ?? "Earlier polish model"
+            PolishModel(rawValue: spend.model)?.title ?? "Earlier rewrite model"
         }
     }
 
