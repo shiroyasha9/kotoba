@@ -122,8 +122,8 @@ extension IndicatorPanel {
                         context: StatusContext(provider: .azure, microphone: .denied)),
                 ]
             // Named after the case.
-            case .failed, .timedOut, .connectionBlocked, .cleanupFailed, .cleanupTooSlow, .returnSkipped, .recovered,
-                .nothingRecorded, .clipboardNotKept:
+            case .failed, .timedOut, .connectionBlocked, .retriesUsedUp, .cleanupFailed, .cleanupTooSlow,
+                .returnSkipped, .recovered, .nothingRecorded, .clipboardNotKept:
                 [sample(snapshotName(of: notice), .init(.idle, notice: notice))]
             case .audioNotSaved:
                 [AudioLoss.diskFull, .other].map {
@@ -149,7 +149,8 @@ extension IndicatorPanel {
     /// One of each notice; `noticeSamples` draws each wording of it.
     private static func sampleNotices(_ id: DictationID) -> [DictationNotice] {
         [
-            .failed(id), .timedOut(id), .connectionBlocked(id), .hostNotFound(id, host: "x"), .rejected(id, .other),
+            .failed(id), .timedOut(id), .connectionBlocked(id), .hostNotFound(id, host: "x"), .retriesUsedUp(id),
+            .rejected(id, .other),
             .needsSetup(id, .key), .cleanupFailed(id), .cleanupTooSlow(id), .returnSkipped(id), .copied(id),
             .recovered(id), .captureFailed, .bluetoothMicNotListed("Alex’s AirPods Pro"), .nothingRecorded,
             .polishFailed(.failed),

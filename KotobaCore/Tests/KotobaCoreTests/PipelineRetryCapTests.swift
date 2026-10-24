@@ -28,6 +28,21 @@ struct PipelineRetryCapTests {
         #expect(record.attempts == 3)
     }
 
+    /// The pill says no more sends come on their own only once the third has failed.
+    @Test func theNoticeSaysWhenTheAutomaticSendsAreUsedUp() async throws {
+        let world = FakeWorld(transcript: "unused")
+        let pipeline = world.makePipeline()
+        await world.provider.fail(with: ProviderError.server(status: 503))
+        await pipeline.dictate(world)
+        let id = try #require(await world.store.records.first).id
+
+        await pipeline.retryAtLaunch()
+        #expect(await pipeline.state.notice == .failed(id))
+        await pipeline.retryAtLaunch()
+
+        #expect(await pipeline.state.notice == .retriesUsedUp(id))
+    }
+
     @Test func theOwnersRetrySendsADictationPastTheCap() async throws {
         let world = FakeWorld(transcript: "at last")
         let pipeline = world.makePipeline()

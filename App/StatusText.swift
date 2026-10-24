@@ -247,7 +247,7 @@ extension DictationNotice {
     func statusText(_ context: StatusContext) -> String {
         let provider = context.provider.title
         return switch self {
-        case .failed, .timedOut, .connectionBlocked, .hostNotFound: queuedText(provider)
+        case .failed, .timedOut, .connectionBlocked, .hostNotFound, .retriesUsedUp: queuedText(provider)
         case .needsSetup(_, let item):
             item == .credit ? "\(provider) is out of credit. Saved." : StatusText.add(item, for: context.provider)
         case .rejected(_, let reason): reason.text(provider: provider)
@@ -266,6 +266,7 @@ extension DictationNotice {
 
     /// The dictation is kept and queued: why it was not transcribed.
     private func queuedText(_ provider: String) -> String {
+        if case .retriesUsedUp = self { return "No text after \(RetrySelection.automaticAttempts) tries. Audio kept." }
         if case .timedOut = self { return "\(provider) took too long. Saved." }
         if case .connectionBlocked = self { return "Secure connection blocked. Saved." }
         if case .hostNotFound(_, let host) = self { return StatusText.hostNotFound(host) }
@@ -285,8 +286,8 @@ extension DictationNotice {
         case .clipboardNotKept: "Pasted. Old clipboard too large to keep."
         case .polished(_, let isReplaced): isReplaced ? "Polished" : "Polished. Copied, press ⌘V"
         // `statusText` says these.
-        case .failed, .timedOut, .connectionBlocked, .hostNotFound, .needsSetup, .rejected, .captureFailed,
-            .bluetoothMicNotListed, .nothingRecorded, .audioNotSaved, .polishFailed:
+        case .failed, .timedOut, .connectionBlocked, .hostNotFound, .retriesUsedUp, .needsSetup, .rejected,
+            .captureFailed, .bluetoothMicNotListed, .nothingRecorded, .audioNotSaved, .polishFailed:
             ""
         }
     }
@@ -299,7 +300,7 @@ extension DictationNotice {
 
     func pillAction(_ context: StatusContext) -> PillAction? {
         switch self {
-        case .failed, .timedOut, .connectionBlocked, .hostNotFound: .retry
+        case .failed, .timedOut, .connectionBlocked, .hostNotFound, .retriesUsedUp: .retry
         case .needsSetup(_, let item): item.pillAction
         case .recovered(let id): .copy(id)
         case .copied: context.isPasteAllowed ? nil : .allowPasting

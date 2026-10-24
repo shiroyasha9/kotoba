@@ -30,6 +30,9 @@ public enum DictationNotice: Sendable, Equatable {
     case connectionBlocked(DictationID)
     /// The owner's endpoint `host` does not resolve (`ProviderError.hostNotFound`). The audio is kept and queued.
     case hostNotFound(DictationID, host: String)
+    /// The last send failed and the dictation used its automatic sends (`RetrySelection.automaticAttempts`): the audio
+    /// is kept, and only the owner's Retry sends it again.
+    case retriesUsedUp(DictationID)
     /// The route refused the request; a retry cannot help. The audio is kept.
     case rejected(DictationID, RejectReason)
     /// The route needs an API key. The audio is kept and retried when the owner saves one.
@@ -68,8 +71,9 @@ public enum DictationNotice: Sendable, Equatable {
     public var isGood: Bool {
         switch self {
         case .recovered, .copied, .polished: true
-        case .failed, .timedOut, .connectionBlocked, .hostNotFound, .rejected, .needsSetup, .cleanupFailed,
-            .cleanupTooSlow, .returnSkipped, .captureFailed, .bluetoothMicNotListed, .nothingRecorded, .audioNotSaved,
+        case .failed, .timedOut, .connectionBlocked, .hostNotFound, .retriesUsedUp, .rejected, .needsSetup,
+            .cleanupFailed, .cleanupTooSlow, .returnSkipped, .captureFailed, .bluetoothMicNotListed, .nothingRecorded,
+            .audioNotSaved,
             .audioCut, .clipboardNotKept, .polishFailed:
             false
         }
@@ -79,8 +83,8 @@ public enum DictationNotice: Sendable, Equatable {
     public var dependsOnGrants: Bool {
         switch self {
         case .captureFailed, .bluetoothMicNotListed, .copied: true
-        case .failed, .timedOut, .connectionBlocked, .hostNotFound, .rejected, .needsSetup, .cleanupFailed,
-            .cleanupTooSlow, .returnSkipped, .recovered, .nothingRecorded, .audioNotSaved,
+        case .failed, .timedOut, .connectionBlocked, .hostNotFound, .retriesUsedUp, .rejected, .needsSetup,
+            .cleanupFailed, .cleanupTooSlow, .returnSkipped, .recovered, .nothingRecorded, .audioNotSaved,
             .audioCut, .clipboardNotKept, .polished, .polishFailed:
             false
         }
@@ -101,8 +105,10 @@ public enum DictationNotice: Sendable, Equatable {
     }
 
     /// A queued dictation, by why its last send failed. "Offline" would send the owner to check a network that works.
+    /// One that used its automatic sends says so: launch and a returning network no longer send it.
     private static func queued(_ record: DictationRecord) -> Self {
-        switch record.lastError {
+        if record.attempts >= RetrySelection.automaticAttempts { return .retriesUsedUp(record.id) }
+        return switch record.lastError {
         case .timedOut: .timedOut(record.id)
         case .connectionBlocked: .connectionBlocked(record.id)
         case .hostNotFound(let host): .hostNotFound(record.id, host: host)
