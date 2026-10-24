@@ -44,15 +44,10 @@ extension MainWindow {
     }
 
     /// The README images (`Pane.readmeSnapshots`, `make readme-images`): the whole window content at one size, as
-    /// `windowSnapshot` draws it.
-    /// `isScrolledToEnd` shows the end of a pane that scrolls; 610 pt high, General's end then starts at a section. The
-    /// pane's scroll bar, which shows for a moment after a scroll, is not in the image.
-    static func readmeSnapshot(
-        of panes: [Pane], selecting id: Pane.ID, named name: String, isScrolledToEnd: Bool = false
-    ) -> Snapshot {
+    /// `windowSnapshot` draws it, each page from its top, so its header shows. The pane's scroll bar is not in the image.
+    static func readmeSnapshot(of panes: [Pane], selecting id: Pane.ID, named name: String) -> Snapshot {
         var snapshot = Snapshots.fixedWindow(named: name, size: NSSize(width: 960, height: 610), check: overflow) {
             MainView(panes: panes, selection: Selection(panes: panes, showing: id), identity: .release)
-                .defaultScrollAnchor(isScrolledToEnd ? .bottom : nil)
                 .scrollIndicators(.hidden)
         }
         snapshot.scale = 2

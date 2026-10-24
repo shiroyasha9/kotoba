@@ -105,14 +105,12 @@ extension Pane {
     }
 
     /// The images in the README's "Screenshots" section, which `make readme-images` copies to docs/images: the whole
-    /// window content at one size, as the release shows it. General is scrolled to its end, for Sound, Dock and menu
-    /// bar.
+    /// window content at one size, as the release shows it, each page from its top.
     static func readmeSnapshots() -> [Snapshot] {
         let panes = samplePanes(home: .readme)
         let ids: [PaneID] = [.home, .history, .activity, .modes, .general]
         return ids.map { id in
-            MainWindow.readmeSnapshot(
-                of: panes, selecting: id, named: "readme-\(id.rawValue)", isScrolledToEnd: id == .general)
+            MainWindow.readmeSnapshot(of: panes, selecting: id, named: "readme-\(id.rawValue)")
         }
     }
 
