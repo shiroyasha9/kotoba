@@ -38,6 +38,11 @@ enum PageMetrics {
 
     // MARK: Page
 
+    /// How much deeper an inset `List` starts its row text than a grouped form's card does: 6 pt, measured in the
+    /// probe snapshots (text at 386 px against 374 px at 2x in the same column). `PageList` takes it off its margin,
+    /// so History's rows start where Home's do; its selection then sits 7 pt inside a card's edge.
+    static let listRowExtraInset: CGFloat = 6
+
     /// The widest the content column gets; a wider window adds margin on both sides. The form keeps its own inset
     /// inside it, so sections are 520 pt wide at most: about 80 characters of body text per line (measured in the
     /// Home snapshot at 6.2 pt a character), near the usual 45-75 for reading. System Settings keeps its sections near

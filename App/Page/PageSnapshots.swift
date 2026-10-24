@@ -9,6 +9,7 @@ extension MainWindow {
     static func pageSystemSnapshots() -> [Snapshot] {
         [
             snapshot(of: Pane(id: .general) { AnyView(SystemSheet()) }, named: "page-system"),
+            pageList,
             // A sheet longer than the smallest window stops at its height and scrolls.
             sheetSnapshot(named: "page-sheet-long") {
                 PageSheet(title: "Long") {
@@ -67,6 +68,34 @@ extension MainWindow {
             window.styleMask = [.borderless]
             window.isReleasedWhenClosed = false
             return window
+        }
+    }
+}
+
+/// A list page in a wide detail column: its rows start where a form's card text does (`PageList`).
+@MainActor
+private var pageList: Snapshot {
+    var snapshot = Snapshot(name: "page-list") {
+        let view = NSHostingView(rootView: ListSample().frame(width: 840, height: 500))
+        view.setFrameSize(NSSize(width: 840, height: 500))
+        return view
+    }
+    snapshot.settlesInWindow = true
+    return snapshot
+}
+
+private struct ListSample: View {
+    @State private var selection: Set<Int> = [2]
+
+    var body: some View {
+        PageList(selection: $selection) {
+            Section {
+                PageHeader(page: .history, summary: "Every dictation, newest first.")
+            }
+            .selectionDisabled()
+            Section("Today") {
+                ForEach(1...6, id: \.self) { Text("Dictation \($0)") }
+            }
         }
     }
 }
