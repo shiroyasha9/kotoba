@@ -31,7 +31,7 @@ enum PillAction: Sendable, Equatable {
         case .undo, .undoLearned, .undoPolish: "Undo"
         case .retry, .retryPolish: "Retry"
         case .addKey: "Add Key…"
-        case .addEndpoint: "Settings…"
+        case .addEndpoint: "Add Endpoint…"
         case .addCredit, .addOpenRouterCredit: "Add Credit…"
         case .copy: "Copy"
         case .allowPasting: "Allow Pasting…"

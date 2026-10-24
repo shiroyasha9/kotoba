@@ -47,7 +47,7 @@ enum StatusText {
 
     /// The silent recording pill's help tag; `microphone` is the device's name.
     static func noSoundHelp(_ microphone: String?) -> String {
-        "kotoba hears nothing from \(microphone ?? "the mic"). Check that it is on and not muted."
+        "kotoba hears nothing from \(microphone ?? "the microphone"). Check that it’s on and not muted."
     }
 
     /// About the longest pill message that fits beside its button in the 360 pt pill (CODING_STANDARDS.md, "User-facing
@@ -57,8 +57,8 @@ enum StatusText {
     /// The pill when the owner's endpoint does not resolve: it names the host's first label, the resource name the
     /// owner typed, so a typo in it shows; a name too long for the pill is left out.
     static func hostNotFound(_ host: String) -> String {
-        let named = "Couldn’t find \(host.prefix { $0 != "." }). Saved."
-        return named.count <= pillCharacters ? named : "Endpoint not found. Saved."
+        let named = "Can’t find \(host.prefix { $0 != "." }). Will retry."
+        return named.count <= pillCharacters ? named : "Endpoint not found. Will retry."
     }
 
     /// The idle pill's hover, before the hands-free chord's keys: a chord never shows alone (owner, 2026-10-25).
@@ -97,7 +97,7 @@ enum StatusText {
     /// The Microphone menu and pane warning while a Bluetooth mic is in use (`MicrophoneWarning`).
     static func title(_ warning: MicrophoneWarning) -> String {
         switch warning {
-        case .bluetoothMic: "Bluetooth mic: lower quality"
+        case .bluetoothMic: "Bluetooth microphone: lower quality"
         }
     }
 
@@ -115,9 +115,9 @@ enum StatusText {
     static func detail(_ warning: MicrophoneWarning) -> String {
         switch warning {
         case .bluetoothMic(interruptsPlayback: true):
-            "Playback drops to call quality. Start and stop are slower, and kotoba can miss the first word."
+            "Playback drops to call quality, and this microphone can miss your first word."
         case .bluetoothMic(interruptsPlayback: false):
-            "Start and stop are slower, and kotoba can miss the first word."
+            "This microphone can start late and miss your first word."
         }
     }
 
@@ -152,7 +152,8 @@ enum StatusText {
         switch role {
         case .handsFree: "Press to start. Press again to stop and paste."
         case .pushToTalk: "Hold while you speak. Let go to paste."
-        case .cleanup: "Press or hold to dictate. Removes filler words and fixes punctuation; takes 1-2 s longer."
+        case .cleanup:
+            "Press or hold to dictate. Removes filler words and fixes punctuation; the paste comes 1-2 seconds later."
         case .pasteLast: "Pastes your last dictation again."
         case .copyLast: "Puts your last dictation on the clipboard."
         case .polishLast: "Makes your last dictation shorter and clearer."
@@ -168,6 +169,11 @@ enum StatusText {
 
     /// The line under `cancelLabel` on the Shortcuts page, by the Esc keycap.
     static let cancelHelp = "Press while you dictate. Nothing is pasted."
+
+    /// "10 minutes", in the system's words (plan, Copy: durations).
+    static func minutes(_ count: Int) -> String {
+        Duration.seconds(count * 60).formatted(.units(allowed: [.minutes], width: .wide))
+    }
 
     /// "1 Saved Dictation", "2 Saved Dictations": Foundation's grammar agreement picks the plural.
     static func counted(_ count: Int, _ noun: String) -> String {
@@ -216,11 +222,11 @@ extension DictationPhase {
         case .idle: nil
         case .recording(_, isSilent: true, _, _):
             context.isMicrophoneOff ? StatusText.microphoneOff : StatusText.noSound
-        case .recording(isLong: true, _, _, _): "Still listening · \(context.longRecordingMinutes) min"
-        case .recording: context.isSecureInputOn ? "Listening · Secure Input on" : "Listening"
+        case .recording(isLong: true, _, _, _): "Still recording · \(StatusText.minutes(context.longRecordingMinutes))"
+        case .recording: context.isSecureInputOn ? "Recording · Secure Input on" : "Recording"
         case .transcribing: "Transcribing"
         case .cleaning: "Cleaning up"
-        case .polishing: "Polishing"
+        case .polishing: "Rewriting"
         case .undoable: "Canceled"
         }
     }
@@ -249,7 +255,7 @@ extension DictationNotice {
         return switch self {
         case .failed, .timedOut, .connectionBlocked, .hostNotFound, .retriesUsedUp: queuedText(provider)
         case .needsSetup(_, let item):
-            item == .credit ? "\(provider) is out of credit. Saved." : StatusText.add(item, for: context.provider)
+            item == .credit ? "No \(provider) credit. Will retry." : StatusText.add(item, for: context.provider)
         case .rejected(_, let reason): reason.text(provider: provider)
         case .captureFailed: context.isMicrophoneOff ? StatusText.microphoneOff : "No microphone found"
         case .bluetoothMicNotListed(let name):
@@ -267,10 +273,10 @@ extension DictationNotice {
     /// The dictation is kept and queued: why it was not transcribed.
     private func queuedText(_ provider: String) -> String {
         if case .retriesUsedUp = self { return "No text after \(RetrySelection.automaticAttempts) tries. Audio kept." }
-        if case .timedOut = self { return "\(provider) took too long. Saved." }
-        if case .connectionBlocked = self { return "Secure connection blocked. Saved." }
+        if case .timedOut = self { return "\(provider) timed out. Will retry." }
+        if case .connectionBlocked = self { return "Connection blocked. Will retry." }
         if case .hostNotFound(_, let host) = self { return StatusText.hostNotFound(host) }
-        return "Couldn’t reach \(provider). Saved."
+        return "Can’t reach \(provider). Will retry."
     }
 
     /// The text reached the owner, with a note on how.
@@ -284,7 +290,7 @@ extension DictationNotice {
         case .audioCut(_, let loss):
             loss == .diskFull ? "Pasted what was saved. Disk full?" : "Pasted what was saved. Some audio was lost."
         case .clipboardNotKept: "Pasted. Old clipboard too large to keep."
-        case .polished(_, let isReplaced): isReplaced ? "Polished" : "Polished. Copied, press ⌘V"
+        case .polished(_, let isReplaced): isReplaced ? "Rewritten" : "Rewritten and copied. Press ⌘V."
         // `statusText` says these.
         case .failed, .timedOut, .connectionBlocked, .hostNotFound, .retriesUsedUp, .needsSetup, .rejected,
             .captureFailed, .bluetoothMicNotListed, .nothingRecorded, .audioNotSaved, .polishFailed:
@@ -346,12 +352,12 @@ extension PolishFailure {
     /// Polish runs on OpenRouter whatever the speech model, so its texts name OpenRouter.
     var text: String {
         switch self {
-        case .nothingToPolish: "Nothing to polish yet"
-        case .cutOff: "Polish cut off. Nothing changed."
-        case .tooSlow: "Polish too slow. Nothing changed."
+        case .nothingToPolish: "Nothing to rewrite yet"
+        case .cutOff: "Rewrite cut off. Nothing changed."
+        case .tooSlow: "Rewrite too slow. Nothing changed."
         case .needsSetup(.credit): "\(ProviderAccount.openRouter.title) is out of credit"
         case .needsSetup(let item): StatusText.add(item, for: .openRouter)
-        case .failed: "Couldn’t polish. Nothing changed."
+        case .failed: "Couldn’t rewrite. Nothing changed."
         }
     }
 }
@@ -361,7 +367,7 @@ extension RejectReason {
         switch self {
         case .emptyTranscript: "No speech heard"
         case .audioMissing: "Audio file is missing. Can’t retry."
-        case .other: "\(provider) refused the audio. Saved."
+        case .other: "Refused by \(provider). Audio kept."
         }
     }
 }
