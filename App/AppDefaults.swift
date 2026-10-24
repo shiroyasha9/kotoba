@@ -90,9 +90,10 @@ enum AppDefaults {
     }
 
     /// The pane the main window showed last: a window that opens without a named pane opens at it (owner,
-    /// 2026-10-16), also after a relaunch. Nil before the window first opens, or for a pane this build does not have.
+    /// 2026-10-16), also after a relaunch. Nil before the window first opens, or for a pane this build does not have;
+    /// a 0.4 pane that became another page opens that page (`PaneID(saved:)`).
     static var lastPane: PaneID? {
-        get { UserDefaults.standard.string(forKey: Key.mainWindowPane.rawValue).flatMap(PaneID.init) }
+        get { PaneID(saved: UserDefaults.standard.string(forKey: Key.mainWindowPane.rawValue)) }
         set { UserDefaults.standard.set(newValue?.rawValue, forKey: Key.mainWindowPane.rawValue) }
     }
 

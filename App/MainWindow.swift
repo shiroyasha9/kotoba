@@ -18,19 +18,8 @@ struct Pane: Identifiable {
 
 /// In sidebar order: the app's own pages first, then the settings, where the pages a new user needs first come first
 /// (docs/research/ui-redesign.md, "Page map").
-/// The raw value is stored (`AppDefaults.lastPane`), so a case keeps its name when its page is renamed: `modes` is the
-/// Cleanup page (Cleanup, Rewrite and App styles).
-enum PaneID: String, Hashable, CaseIterable {
-    case home
-    case history
-    case activity
-    case shortcuts
-    case speech
-    case dictionary
-    case modes
-    case microphones
-    case general
-
+/// A page's name, symbol and tint (its identity and order are `PaneID` in KotobaCore).
+extension PaneID {
     var title: String {
         switch self {
         case .home: "Home"
@@ -75,18 +64,6 @@ enum PaneID: String, Hashable, CaseIterable {
         case .general: .gray
         }
     }
-
-    /// The sidebar's second group, under the "Settings" header.
-    var isSetting: Bool {
-        switch self {
-        case .home, .history, .activity: false
-        case .shortcuts, .speech, .dictionary, .modes, .microphones, .general: true
-        }
-    }
-
-    /// The panes with a toolbar search field: Edit > Find… (⌘F) puts the cursor in it. In the other panes Find stays
-    /// off.
-    var hasSearch: Bool { self == .dictionary || self == .history }
 }
 
 extension EnvironmentValues {

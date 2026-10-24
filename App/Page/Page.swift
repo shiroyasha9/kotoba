@@ -1,3 +1,4 @@
+import KotobaCore
 import SwiftUI
 
 // The main window's visual system for 0.5.0 (docs/research/ui-redesign.md, "Window"; CODING_STANDARDS.md, "Pages"). A

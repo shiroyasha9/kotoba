@@ -1,4 +1,5 @@
 import AppKit
+import KotobaCore
 import SwiftUI
 
 /// A page's search field, in the page and not in a toolbar (a page has no toolbar, so the title bar keeps one height):
