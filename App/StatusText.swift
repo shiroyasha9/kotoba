@@ -320,11 +320,12 @@ extension ShellStatus.MenuStatus where Missing == Readiness.Missing {
 }
 
 extension SetupItem {
-    /// The button that sets it: the key and the endpoint in Settings, credit on the provider's site.
+    /// The button that sets it: the key on the Speech page, the endpoint in its "Advanced…" sheet, credit on the
+    /// provider's site.
     var pillAction: PillAction {
         switch self {
         case .key: .addKey
-        case .endpoint: .openSpeechSettings
+        case .endpoint: .addEndpoint
         case .credit: .addCredit
         }
     }

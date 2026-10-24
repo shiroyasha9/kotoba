@@ -64,20 +64,18 @@ final class OnboardingModel {
     private var hasPromptedAccessibility = false
 
     @ObservationIgnored private let source: Source
-    /// The Speech page: Done's "Add Your Azure Endpoint…".
-    @ObservationIgnored let openSpeechSettings: @MainActor () -> Void
-    /// The Speech page with its "Advanced…" sheet open: the key step's "Use xAI or Azure Instead…".
+    /// The Speech page with its "Advanced…" sheet open, where the xAI and Azure routes and the Azure endpoint are: the
+    /// key step's "Use xAI or Azure Instead…" and Done's "Add Your Azure Endpoint…".
     @ObservationIgnored let openOtherSpeechServices: @MainActor () -> Void
 
     init(
         step: OnboardingStep, readiness: Readiness, keyChecks: KeyChecks, source: Source,
-        openSpeechSettings: @escaping @MainActor () -> Void, openOtherSpeechServices: @escaping @MainActor () -> Void
+        openOtherSpeechServices: @escaping @MainActor () -> Void
     ) {
         self.step = step
         self.readiness = readiness
         self.keyChecks = keyChecks
         self.source = source
-        self.openSpeechSettings = openSpeechSettings
         self.openOtherSpeechServices = openOtherSpeechServices
         opensAtLogin = source.opensAtLogin()
         playsSounds = source.playsSounds()

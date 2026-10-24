@@ -9,7 +9,8 @@ enum PillAction: Sendable, Equatable {
     case undo
     case retry
     case addKey
-    case openSpeechSettings
+    /// The Azure endpoint, in the Speech page's "Advanced…" sheet.
+    case addEndpoint
     case addCredit
     /// Puts recovered dictation `id` on the clipboard.
     case copy(DictationID)
@@ -30,7 +31,7 @@ enum PillAction: Sendable, Equatable {
         case .undo, .undoLearned, .undoPolish: "Undo"
         case .retry, .retryPolish: "Retry"
         case .addKey: "Add Key…"
-        case .openSpeechSettings: "Settings…"
+        case .addEndpoint: "Settings…"
         case .addCredit, .addOpenRouterCredit: "Add Credit…"
         case .copy: "Copy"
         case .allowPasting: "Allow Pasting…"
@@ -47,8 +48,10 @@ extension AppDelegate {
             performOnPipeline(action)
         case .retry:
             retryFailed()
-        case .addKey, .openSpeechSettings, .chooseMicrophone:
+        case .addKey, .chooseMicrophone:
             mainWindow.show(selecting: action.settingsPane)
+        case .addEndpoint:
+            mainWindow.showOtherSpeechServices()
         case .addCredit:
             NSWorkspace.shared.open(routeSettings.route.account.creditsPage)
         case .copy(let id):
@@ -87,7 +90,7 @@ extension PillAction {
     /// The Settings pane the button opens; nil for a button that opens none.
     var settingsPane: PaneID? {
         switch self {
-        case .addKey, .openSpeechSettings: .speech
+        case .addKey: .speech
         case .chooseMicrophone: .microphones
         default: nil
         }
