@@ -15,6 +15,8 @@ struct Pane: Identifiable {
 
 /// In sidebar order: the app's own pages first, then the settings, where the pages a new user needs first come first
 /// (docs/research/ui-redesign.md, "Page map").
+/// The raw value is stored (`AppDefaults.lastPane`), so a case keeps its name when its page is renamed: `modes` is the
+/// Cleanup page (Cleanup, Rewrite and App styles).
 enum PaneID: String, Hashable, CaseIterable {
     case home
     case history
@@ -34,7 +36,7 @@ enum PaneID: String, Hashable, CaseIterable {
         case .shortcuts: "Shortcuts"
         case .speech: "Speech"
         case .dictionary: "Dictionary"
-        case .modes: "Modes"
+        case .modes: "Cleanup"
         case .microphones: "Microphone"
         case .general: "General"
         }
@@ -50,7 +52,8 @@ enum PaneID: String, Hashable, CaseIterable {
         case .shortcuts: "keyboard"
         case .speech: "waveform"
         case .dictionary: "character.book.closed"
-        case .modes: "square.grid.2x2"
+        // The pill's cleanup wand (`PillView`), so one symbol names one thing.
+        case .modes: "wand.and.sparkles"
         case .microphones: "mic"
         case .general: "gearshape"
         }
