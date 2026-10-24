@@ -237,7 +237,7 @@ struct UsageLedgerTests {
         #expect(try await store.queuedRecord(pasted.id) == nil)
     }
 
-    /// The cost the Usage pane pays when it opens: two ranges over 10,000 dictations of two answers on average.
+    /// The cost the 0.4 Usage pane paid when it opened (Activity reads one range): two ranges over 10,000 dictations of two answers on average.
     /// Measured 2026-10-16 (debug build): about 18 ms for both. The bound is loose for other agents' builds on the same
     /// machine.
     @Test func aSummaryOf10000DictationsStaysFast() async throws {

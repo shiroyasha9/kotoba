@@ -1,3 +1,5 @@
+// 0.5.0 ratchet: the History page's rollout puts this file on the page system and removes the next line.
+// swiftlint:disable ui_layout_literal appkit_layout_literal
 import KotobaCore
 import SwiftUI
 

@@ -3,7 +3,7 @@ import Testing
 
 @testable import KotobaCore
 
-/// Each billed answer becomes one usage ledger entry, for the Usage pane: values the answers already carry.
+/// Each billed answer becomes one usage ledger entry, for the Activity page: values the answers already carry.
 struct PipelineUsageTests {
     @Test func aPastedDictationAddsOneSpeechEntry() async throws {
         let world = FakeWorld(transcript: "ship it now")

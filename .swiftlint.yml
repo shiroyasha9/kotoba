@@ -51,6 +51,13 @@ opt_in_rules:
   - strict_fileprivate
   - unavailable_function
 
+# A page not on the 0.5.0 page system yet disables the page rules for the whole file (the ratchet line, CODING_STANDARDS.md
+# "Pages"); `superfluous_disable_command` fails a line that hides nothing, and `scripts/ratchet-done.sh` fails the release
+# while one remains.
+blanket_disable_command:
+  allowed_rules: [ui_layout_literal, appkit_layout_literal, ui_layout_constant, ui_divider, ui_fixed_color,
+    row_is_page_row, page_form]
+
 force_try: error
 force_cast: error
 force_unwrapping: error
@@ -174,28 +181,28 @@ custom_rules:
   ui_text_ellipsis:
     name: "UI text: one-character ellipsis"
     included: ["App/.*\\.swift"]
-    regex: "\\.\\.\\.(?<=(?:\\b(?:Text|Button|Toggle|Section|Label|Picker|LabeledContent|Link|Menu|TextField|SecureField|GroupBox|NSMenuItem|NSButton|NSTextField|NSAlert|MenuChoice|StepText|help|navigationTitle|confirmationDialog|alert)\\(|\\.(?:title|subtitle|toolTip|messageText|informativeText|placeholderString|stringValue|prompt) = )(?:[ \\t]{0,4}\\n[ \\t]{0,40})?[^\\n]{0,200}\\.\\.\\.)"
+    regex: "\\.\\.\\.(?<=(?:\\b(?:Text|Button|Toggle|Section|Label|Picker|LabeledContent|Link|Menu|TextField|SecureField|GroupBox|NSMenuItem|NSButton|NSTextField|NSAlert|MenuChoice|StepText|PageRow|PageHeader|ChartHeadline|PageSheet|help|navigationTitle|confirmationDialog|alert)\\(|\\.(?:title|subtitle|toolTip|messageText|informativeText|placeholderString|stringValue|prompt) = )(?:[ \\t]{0,4}\\n[ \\t]{0,40})?[^\\n]{0,200}\\.\\.\\.)"
     match_kinds: [string]
     message: "Use the one-character ellipsis \"…\", only on an item that opens a window or asks for more input (CODING_STANDARDS.md, User-facing text 3)."
     severity: error
   ui_text_internal_terms:
     name: "UI text: no internal terms"
     included: ["App/.*\\.swift"]
-    regex: "(?i:\\b(?:routes?|keyterms?|ZDR|zero-data-retention|needsSetup|untested|(?:microsoft|x-ai|openai|google)/[\\w.-]{1,64})\\b)(?<=(?:\\b(?:Text|Button|Toggle|Section|Label|Picker|LabeledContent|Link|Menu|TextField|SecureField|GroupBox|NSMenuItem|NSButton|NSTextField|NSAlert|MenuChoice|StepText|help|navigationTitle|confirmationDialog|alert)\\(|\\.(?:title|subtitle|toolTip|messageText|informativeText|placeholderString|stringValue|prompt) = )(?:[ \\t]{0,4}\\n[ \\t]{0,40})?[^\\n]{0,200}(?i:\\b(?:routes?|keyterms?|ZDR|zero-data-retention|needsSetup|untested|(?:microsoft|x-ai|openai|google)/[\\w.-]{1,64})\\b))"
+    regex: "(?i:\\b(?:routes?|keyterms?|ZDR|zero-data-retention|needsSetup|untested|(?:microsoft|x-ai|openai|google)/[\\w.-]{1,64})\\b)(?<=(?:\\b(?:Text|Button|Toggle|Section|Label|Picker|LabeledContent|Link|Menu|TextField|SecureField|GroupBox|NSMenuItem|NSButton|NSTextField|NSAlert|MenuChoice|StepText|PageRow|PageHeader|ChartHeadline|PageSheet|help|navigationTitle|confirmationDialog|alert)\\(|\\.(?:title|subtitle|toolTip|messageText|informativeText|placeholderString|stringValue|prompt) = )(?:[ \\t]{0,4}\\n[ \\t]{0,40})?[^\\n]{0,200}(?i:\\b(?:routes?|keyterms?|ZDR|zero-data-retention|needsSetup|untested|(?:microsoft|x-ai|openai|google)/[\\w.-]{1,64})\\b))"
     match_kinds: [string]
     message: "No internal terms in UI text: route, keyterm, ZDR, zero-data-retention, needsSetup, untested, model slugs (CODING_STANDARDS.md, User-facing text 5)."
     severity: error
   ui_text_dash:
     name: "UI text: no \" - \" between phrases"
     included: ["App/.*\\.swift"]
-    regex: " - (?<=(?:\\b(?:Text|Button|Toggle|Section|Label|Picker|LabeledContent|Link|Menu|TextField|SecureField|GroupBox|NSMenuItem|NSButton|NSTextField|NSAlert|MenuChoice|StepText|help|navigationTitle|confirmationDialog|alert)\\(|\\.(?:title|subtitle|toolTip|messageText|informativeText|placeholderString|stringValue|prompt) = )(?:[ \\t]{0,4}\\n[ \\t]{0,40})?[^\\n]{0,200} - )"
+    regex: " - (?<=(?:\\b(?:Text|Button|Toggle|Section|Label|Picker|LabeledContent|Link|Menu|TextField|SecureField|GroupBox|NSMenuItem|NSButton|NSTextField|NSAlert|MenuChoice|StepText|PageRow|PageHeader|ChartHeadline|PageSheet|help|navigationTitle|confirmationDialog|alert)\\(|\\.(?:title|subtitle|toolTip|messageText|informativeText|placeholderString|stringValue|prompt) = )(?:[ \\t]{0,4}\\n[ \\t]{0,40})?[^\\n]{0,200} - )"
     match_kinds: [string]
     message: "No \" - \" between phrases in UI text: two sentences, a colon, or \"·\" before a value (CODING_STANDARDS.md, User-facing text 8)."
     severity: error
   ui_text_straight_quotes:
     name: "UI text: curly apostrophe and quotes"
     included: ["App/.*\\.swift"]
-    regex: "(?:'|\\\\\")(?<=(?:\\b(?:Text|Button|Toggle|Section|Label|Picker|LabeledContent|Link|Menu|TextField|SecureField|GroupBox|NSMenuItem|NSButton|NSTextField|NSAlert|MenuChoice|StepText|help|navigationTitle|confirmationDialog|alert)\\(|\\.(?:title|subtitle|toolTip|messageText|informativeText|placeholderString|stringValue|prompt) = )(?:[ \\t]{0,4}\\n[ \\t]{0,40})?[^\\n]{0,200}(?:'|\\\\\"))"
+    regex: "(?:'|\\\\\")(?<=(?:\\b(?:Text|Button|Toggle|Section|Label|Picker|LabeledContent|Link|Menu|TextField|SecureField|GroupBox|NSMenuItem|NSButton|NSTextField|NSAlert|MenuChoice|StepText|PageRow|PageHeader|ChartHeadline|PageSheet|help|navigationTitle|confirmationDialog|alert)\\(|\\.(?:title|subtitle|toolTip|messageText|informativeText|placeholderString|stringValue|prompt) = )(?:[ \\t]{0,4}\\n[ \\t]{0,40})?[^\\n]{0,200}(?:'|\\\\\"))"
     match_kinds: [string]
     message: "Use the curly apostrophe and quotes (’ “ ”) in UI text, not ' or \\\" (CODING_STANDARDS.md, User-facing text 13)."
     severity: error
@@ -204,14 +211,14 @@ custom_rules:
   ui_text_key_names:
     name: "UI text: keys as symbols"
     included: ["App/.*\\.swift"]
-    regex: "(?i:\\b(?:Ctrl|Control|Opt|Option|Alt|Cmd|Command|Shift|Fn)[-+ ](?:Ctrl|Control|Opt|Option|Alt|Cmd|Command|Shift|Fn|Enter|Return|Escape|Esc|Tab|Space|Delete|Backspace|F\\d{1,2}|[A-Z0-9])\\b)(?<=(?:\\b(?:Text|Button|Toggle|Section|Label|Picker|LabeledContent|Link|Menu|TextField|SecureField|GroupBox|NSMenuItem|NSButton|NSTextField|NSAlert|MenuChoice|StepText|help|navigationTitle|confirmationDialog|alert)\\(|\\.(?:title|subtitle|toolTip|messageText|informativeText|placeholderString|stringValue|prompt) = )(?:[ \\t]{0,4}\\n[ \\t]{0,40})?[^\\n]{0,200}(?i:\\b(?:Ctrl|Control|Opt|Option|Alt|Cmd|Command|Shift|Fn)[-+ ](?:Ctrl|Control|Opt|Option|Alt|Cmd|Command|Shift|Fn|Enter|Return|Escape|Esc|Tab|Space|Delete|Backspace|F\\d{1,2}|[A-Z0-9])\\b))"
+    regex: "(?i:\\b(?:Ctrl|Control|Opt|Option|Alt|Cmd|Command|Shift|Fn)[-+ ](?:Ctrl|Control|Opt|Option|Alt|Cmd|Command|Shift|Fn|Enter|Return|Escape|Esc|Tab|Space|Delete|Backspace|F\\d{1,2}|[A-Z0-9])\\b)(?<=(?:\\b(?:Text|Button|Toggle|Section|Label|Picker|LabeledContent|Link|Menu|TextField|SecureField|GroupBox|NSMenuItem|NSButton|NSTextField|NSAlert|MenuChoice|StepText|PageRow|PageHeader|ChartHeadline|PageSheet|help|navigationTitle|confirmationDialog|alert)\\(|\\.(?:title|subtitle|toolTip|messageText|informativeText|placeholderString|stringValue|prompt) = )(?:[ \\t]{0,4}\\n[ \\t]{0,40})?[^\\n]{0,200}(?i:\\b(?:Ctrl|Control|Opt|Option|Alt|Cmd|Command|Shift|Fn)[-+ ](?:Ctrl|Control|Opt|Option|Alt|Cmd|Command|Shift|Fn|Enter|Return|Escape|Esc|Tab|Space|Delete|Backspace|F\\d{1,2}|[A-Z0-9])\\b))"
     match_kinds: [string]
     message: "Write keys as symbols in UI text: ⌃ ⌥ ⌘ ⇧ fn, ⌘V, never \"Control-Option-Command\" or \"Cmd+V\" (CODING_STANDARDS.md, User-facing text 4)."
     severity: error
   ui_text_plain_words:
     name: "UI text: plain words"
     included: ["App/.*\\.swift"]
-    regex: "(?i:\\b(?:we|our|(?-i:us)|please|(?:en|dis)abl(?:e|ed|es|ing)|toggl(?:e|ed|es|ing)|oops|whoops|uh-oh|sorry|yay|hooray|woohoo)\\b)(?<=(?:\\b(?:Text|Button|Toggle|Section|Label|Picker|LabeledContent|Link|Menu|TextField|SecureField|GroupBox|NSMenuItem|NSButton|NSTextField|NSAlert|MenuChoice|StepText|help|navigationTitle|confirmationDialog|alert)\\(|\\.(?:title|subtitle|toolTip|messageText|informativeText|placeholderString|stringValue|prompt) = )(?:[ \\t]{0,4}\\n[ \\t]{0,40})?[^\\n]{0,200}(?i:\\b(?:we|our|(?-i:us)|please|(?:en|dis)abl(?:e|ed|es|ing)|toggl(?:e|ed|es|ing)|oops|whoops|uh-oh|sorry|yay|hooray|woohoo)\\b))"
+    regex: "(?i:\\b(?:we|our|(?-i:us)|please|(?:en|dis)abl(?:e|ed|es|ing)|toggl(?:e|ed|es|ing)|oops|whoops|uh-oh|sorry|yay|hooray|woohoo)\\b)(?<=(?:\\b(?:Text|Button|Toggle|Section|Label|Picker|LabeledContent|Link|Menu|TextField|SecureField|GroupBox|NSMenuItem|NSButton|NSTextField|NSAlert|MenuChoice|StepText|PageRow|PageHeader|ChartHeadline|PageSheet|help|navigationTitle|confirmationDialog|alert)\\(|\\.(?:title|subtitle|toolTip|messageText|informativeText|placeholderString|stringValue|prompt) = )(?:[ \\t]{0,4}\\n[ \\t]{0,40})?[^\\n]{0,200}(?i:\\b(?:we|our|(?-i:us)|please|(?:en|dis)abl(?:e|ed|es|ing)|toggl(?:e|ed|es|ing)|oops|whoops|uh-oh|sorry|yay|hooray|woohoo)\\b))"
     match_kinds: [string]
     message: "Plain words in UI text: no \"we\", no \"please\", no \"enable\", \"disable\" or \"toggle\" (name what is on: \"Keep filler words\"), no interjections such as \"oops\" or \"sorry\"; \"our\" and \"us\" also go (CODING_STANDARDS.md, User-facing text 14)."
     severity: error
@@ -348,4 +355,71 @@ custom_rules:
     # spans the cases, so a string in any case would hide it.
     regex: "(?m)^( *)(?! )[^\\n]*\\bswitch\\s+[\\w.]*\\b(?:phase|notice)\\s*\\{(?:(?!\\n\\1\\}\\n)[\\s\\S])*?\\n\\1default\\s*:"
     message: "Name every `DictationPhase` or `DictationNotice` case, so a new one does not compile until each reader decides; to ask whether a dictation is live, read `phase.isLive`."
+    severity: error
+
+  # The 0.5.0 page system (CODING_STANDARDS.md, "Pages"; docs/research/ui-redesign.md). These cover the window code in
+  # App/: the pill's files have their own rules (the pill rollout), and snapshot files set render sizes. A page not on
+  # the system yet has a ratchet line (`// swiftlint:disable <rules>`) that its rollout removes;
+  # `scripts/ratchet-done.sh` fails the release while one remains.
+  ui_layout_literal:
+    name: "Layout: no number in a SwiftUI layout modifier"
+    included: ["App/.*\\.swift"]
+    excluded: ["App/(?:\\w+/)?\\w*Snapshots\\.swift", "App/(?:Indicator|Pill)\\w*\\.swift", "App/Page/PageMetrics\\.swift"]
+    regex: "(?:\\.padding\\((?:[^()\\n]*?,\\s*)?|\\.frame\\([^()\\n]*?\\b(?:width|height|minWidth|idealWidth|maxWidth|minHeight|idealHeight|maxHeight)\\s*:\\s*|\\b(?:spacing|cornerRadius|minLength)\\s*:\\s*|\\.(?:lineSpacing|offset)\\((?:[xy]\\s*:\\s*)?)[^,()\\n]*?(?<![\\w.])(?:[1-9][\\d_]*(?:\\.\\d+)?|0\\.\\d*[1-9]\\d*)\\b"
+    excluded_match_kinds: [comment, doccomment]
+    message: "No number in padding, frame, spacing or a corner radius. Let the system style set it (Form, Section, LabeledContent, controlSize, `.rect(corner: .containerConcentric)`), or name a value in `PageMetrics` (App/Page/PageMetrics.swift) with its source (CODING_STANDARDS.md, Pages). 0 is allowed."
+    severity: error
+  appkit_layout_literal:
+    name: "Layout: no number in an AppKit inset, constant, size or radius"
+    included: ["App/.*\\.swift"]
+    excluded: ["App/(?:\\w+/)?\\w*Snapshots\\.swift", "App/(?:Indicator|Pill)\\w*\\.swift", "App/Page/.*\\.swift"]
+    regex: "\\bNSEdgeInsets\\([^)\\n]*?(?<![\\w.])(?:[1-9][\\d_]*(?:\\.\\d+)?|0\\.\\d*[1-9]\\d*)\\b|\\bconstant\\s*:\\s*-?\\s*(?<![\\w.])(?:[1-9][\\d_]*(?:\\.\\d+)?|0\\.\\d*[1-9]\\d*)\\b|\\.cornerRadius\\s*=\\s*(?<![\\w.])(?:[1-9][\\d_]*(?:\\.\\d+)?|0\\.\\d*[1-9]\\d*)\\b|\\b(?:NSSize|CGSize|NSRect|CGRect)\\([^()\\n]*?\\b(?:width|height)\\s*:\\s*[^,()\\n]*?(?<![\\w.])(?:[1-9][\\d_]*(?:\\.\\d+)?|0\\.\\d*[1-9]\\d*)\\b"
+    excluded_match_kinds: [comment, doccomment]
+    message: "No number in an AppKit inset, constraint constant, size or corner radius. Name it in `PageMetrics` (App/Page/PageMetrics.swift) with its source, or let the system style set it (CODING_STANDARDS.md, Pages)."
+    severity: error
+  ui_layout_constant:
+    name: "Layout: no CGFloat constant with a number outside the page system"
+    included: ["App/.*\\.swift"]
+    excluded: ["App/(?:\\w+/)?\\w*Snapshots\\.swift", "App/(?:Indicator|Pill)\\w*\\.swift", "App/Page/.*\\.swift"]
+    regex: "\\b(?:let|var)\\s+\\w+\\s*:\\s*CGFloat\\s*=\\s*-?\\s*(?<![\\w.])(?:[1-9][\\d_]*(?:\\.\\d+)?|0\\.\\d*[1-9]\\d*)\\b"
+    excluded_match_kinds: [comment, doccomment]
+    message: "A CGFloat constant with a number is a hard-coded size with a name. Move it to `PageMetrics` (App/Page/PageMetrics.swift) with a one-line source, or use the system style (CODING_STANDARDS.md, Pages)."
+    severity: error
+  symbol_not_resizable:
+    name: "Symbols: no .resizable() on an SF Symbol"
+    included: ["App/.*\\.swift"]
+    regex: "\\bImage\\(systemName:(?:(?!\\bImage\\(|\\n[ \\t]*\\n)[\\s\\S]){0,400}?\\.resizable\\(\\)"
+    excluded_match_kinds: [comment, doccomment]
+    message: "Do not call `.resizable()` on `Image(systemName:)`: it scales the glyph as a shape and loses its weight and optical size. Size a symbol with `.font(_:)` and `.imageScale(_:)`, at the weight of the text beside it; a tile is `SymbolTile` (HIG SF Symbols)."
+    severity: error
+  ui_divider:
+    name: "Layout: grouped sections, not dividers"
+    included: ["App/.*\\.swift"]
+    excluded: ["App/(?:\\w+/)?\\w*Snapshots\\.swift", "App/(?:Indicator|Pill)\\w*\\.swift"]
+    regex: "\\bDivider\\s*\\(\\s*\\)|\\bNSColor\\.separatorColor\\b|\\bNSBox\\s*\\("
+    excluded_match_kinds: [comment, doccomment, string]
+    message: "Grouped sections separate the content (Form, Section, List). Do not add a `Divider()` or draw a separator (CODING_STANDARDS.md, Pages)."
+    severity: error
+  ui_fixed_color:
+    name: "Color: system colors only"
+    included: ["App/.*\\.swift"]
+    excluded: ["App/(?:\\w+/)?\\w*Snapshots\\.swift", "App/(?:Indicator|Pill)\\w*\\.swift"]
+    regex: "\\b(?:Color|NSColor)\\((?:red|white|hue|calibratedRed|srgbRed|deviceRed)\\s*:|\\b(?:Color|NSColor)\\.(?:black|white|gray|grey|darkGray|lightGray)\\b|\\.(?:foregroundStyle|foregroundColor|fill|tint)\\(\\s*\\.(?:black|white|gray)\\s*\\)"
+    excluded_match_kinds: [comment, doccomment, string]
+    message: "Take colors from the system: `.primary`, `.secondary`, `.tint`, semantic NSColors (`labelColor`, `secondaryLabelColor`), or `Color.brand` for charts. A tile's white glyph is `SymbolTile` (CODING_STANDARDS.md, Pages)."
+    severity: error
+  row_is_page_row:
+    name: "Pages: a row with a title and a subtitle is a PageRow"
+    included: ["App/.*\\.swift"]
+    excluded: ["App/(?:\\w+/)?\\w*Snapshots\\.swift", "App/(?:Indicator|Pill)\\w*\\.swift", "App/Page/.*\\.swift"]
+    regex: "(?:\\blabel:|\\bLabel)\\s*\\{\\s*Text\\([^\\n]*\\n\\s*Text\\("
+    message: "A row with a title and a grey subtitle is `PageRow(title:subtitle:icon:trailing:)`: it centres an icon on both lines and puts the trailing content where System Settings does (CODING_STANDARDS.md, Pages). A `LabeledContent` or `Label` with two Texts drifts from it."
+    severity: error
+  page_form:
+    name: "Pages: a grouped form is a PageForm"
+    included: ["App/.*\\.swift"]
+    excluded: ["App/(?:\\w+/)?\\w*Snapshots\\.swift", "App/(?:Indicator|Pill)\\w*\\.swift", "App/Page/.*\\.swift"]
+    regex: "\\.formStyle\\(\\s*\\.grouped\\s*\\)"
+    excluded_match_kinds: [comment, doccomment, string]
+    message: "A page is a `PageForm` (its sections stay in the centred column) and a sheet is a `PageSheet`; do not build a grouped form of your own (CODING_STANDARDS.md, Pages)."
     severity: error

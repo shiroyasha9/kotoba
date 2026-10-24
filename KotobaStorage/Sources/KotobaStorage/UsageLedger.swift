@@ -1,7 +1,7 @@
 import Foundation
 import KotobaCore
 
-/// What kotoba cost and how much it was used between two dates, for the Usage pane: summed from the usage ledger in
+/// What kotoba cost and how much it was used between two dates, for the Activity page: summed from the usage ledger in
 /// SQLite when the pane asks, never at idle. An answer counts in the period of its entry's time (a cleanup's is its
 /// transcript's).
 public struct UsageSummary: Sendable, Equatable {
@@ -192,7 +192,7 @@ extension HistoryStore {
 
     /// Once per database (`user_version` 0 to 1), inside the migration's transaction: one ledger entry per kept
     /// answer of a history from before the ledger (v0.1.0 and later), dated when it came (the retry time of a
-    /// recovered dictation, else its key-down). Those builds kept no costs, so the entries have none and the Usage pane
+    /// recovered dictation, else its key-down). Those builds kept no costs, so the entries have none and the Activity page
     /// says so; a row with cleaned text also had a cleanup request, whose model was not kept.
     static func fillLedger(_ database: SQLiteDatabase) throws(SQLiteError) {
         guard try database.query("PRAGMA user_version;").first?.first?.integer == 0 else { return }

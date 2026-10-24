@@ -1,3 +1,5 @@
+// 0.5.0 ratchet: the Fix Last Dictation window's rollout puts this file on the page system and removes the next line.
+// swiftlint:disable ui_layout_literal ui_layout_constant page_form
 import AppKit
 import KotobaCore
 import Observation

@@ -1,7 +1,7 @@
 import Foundation
 import KotobaCore
 
-/// How the owner dictates, for the Insights pane: summed from the usage ledger when the pane asks, never at idle. The
+/// How the owner dictates, for the Activity page: summed from the usage ledger when the page asks, never at idle. The
 /// ledger outlives deleted dictations, so the figures do too. Days are the calendar's days (the local time zone).
 public struct DictationInsights: Sendable, Equatable {
     /// One day of the chart.

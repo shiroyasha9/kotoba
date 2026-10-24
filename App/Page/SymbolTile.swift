@@ -34,6 +34,7 @@ struct SymbolTile: View {
         Image(systemName: name)
             .font(.system(size: pointSize, weight: .medium))
             // White on the tile's colour in light and dark, as System Settings' tiles.
+            // swiftlint:disable:next ui_fixed_color
             .foregroundStyle(.white)
             .frame(width: side, height: side)
             .background {

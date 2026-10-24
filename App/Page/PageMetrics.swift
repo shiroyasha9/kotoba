@@ -111,6 +111,11 @@ enum PageMetrics {
     /// takes only a fixed radius, so a month's thin bar keeps it too.
     static let barCornerRadius: CGFloat = 4
 
+    /// Home's stub for an empty day: as tall as a bar's corner, lifted by half its height so it stands on the base line
+    /// (a `RectangleMark` is centred on its value).
+    static let barStubHeight = barCornerRadius
+    static let barStubLift = barStubHeight / 2
+
     /// A chart's average line and a month's date lines: a hairline of short dashes, as Screen Time's average and
     /// Battery's time lines.
     static let dashedLine = StrokeStyle(lineWidth: 1, dash: [2, 2])

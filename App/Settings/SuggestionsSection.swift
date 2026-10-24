@@ -1,3 +1,5 @@
+// 0.5.0 ratchet: the Dictionary page's rollout puts this file on the page system and removes the next line.
+// swiftlint:disable ui_layout_literal
 import AppKit
 import KotobaCore
 import SwiftUI

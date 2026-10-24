@@ -227,7 +227,7 @@ struct InsightsTests {
         #expect(try await store.learnedWords() == [.edit: 1, .fix: 1])
     }
 
-    /// The cost the Insights pane pays when it opens, over 10,000 kept dictations in 70 days (a streak past the
+    /// The cost the Activity page pays for its insights when it opens, over 10,000 kept dictations in 70 days (a streak past the
     /// chart). Measured 2026-10-16: see `docs/research/memory-spike.md`, "Insights pane". The bound is loose for other
     /// agents' builds on the same machine.
     @Test func insightsOf10000DictationsStayFast() async throws {

@@ -646,6 +646,8 @@ Record ⌥ for **Push to talk** first; Hands-free stays ⌃⌥⌘.
 
 ## Main window (0.3.0)
 
+0.5.0 replaces rows 482-486 and 490-493 (Home, Back and Forward, Insights, Usage) with "Main window on the page system (0.5.0)" below.
+
 One window for Home, History, Insights, Usage and the settings. Rows 480-493 use kotoba Dev with the release kotoba quit.
 
 | # | Do this | Expect | Result |
@@ -666,6 +668,8 @@ One window for Home, History, Insights, Usage and the settings. Rows 480-493 use
 | 493 | Show **Usage**, close the window; click the pill’s **Add Key…** (no key saved) | The window opens at **Speech**, not Usage | |
 
 ## UI polish (0.3.0)
+
+0.5.0 replaces rows 700 and 702 (Usage, Home's rows) with "Main window on the page system (0.5.0)" below.
 
 Layout and copy pass over the main window. Snapshots cannot show the toolbar's glass text or a real resize.
 
@@ -878,3 +882,23 @@ A press, an Undo, an absence and quit take turns (`DictationPipeline.inTurn`), a
 | 988 | Start a dictation, speak, press Esc, click **Undo** and press ⌘Q at once | kotoba quits; at the next launch the dictation is in Recovered (sent once) | |
 | 989 | In History, choose **Transcribe Again** on a dictation and press ⌘Q at once | kotoba quits within about 3 s; at the next launch the row has the new text and Insights counts the second answer | |
 | 990 | AirPods as the system default, none in your order. Dictate (built-in mic). Then, if you can make the built-in mic fail to open (for example, another app holds it exclusively), dictate again | The first dictation records on the built-in mic. With the built-in mic not opening, the pill says no mic opened; the AirPods never switch to call quality | |
+
+## Main window on the page system (0.5.0, kotoba Dev)
+
+Home, Activity and the window shell on the 0.5.0 page system (docs/research/ui-redesign.md). Snapshots cannot show a real click, the sidebar on screen, a resize or a paste into another app.
+
+| # | Do this | Expect | Result |
+|---|---|---|---|
+| 1100 | Open the window (menu > **Open kotoba…**). Look at the sidebar; drag the window wider until it stops | The sidebar starts with the kotoba Dev icon and name; it is as wide as System Settings' sidebar (215 pt). The window stops growing at about 1,055 pt; the page column stays in the middle with no wide blank side | |
+| 1101 | System Settings > Appearance > Sidebar icon size: Small, then Large; look at the kotoba sidebar each time | The tiles and the app icon follow the size; no symbol is cut off or blurred | |
+| 1102 | Click **Home**, **Activity**, **Speech**, **Modes**, **Microphone**, **General** in turn | The title bar, traffic lights and sidebar rows do not move. (History and Dictionary still have a toolbar until their rollout.) | |
+| 1103 | With "Prefer tabs: Always" (System Settings > Desktop & Dock), open the window, then Menu > **Fix Last Dictation…** | Two separate windows, no tabs | |
+| 1104 | Dictate in TextEdit, then open Home; click **Paste Again** on the Last Dictation card | TextEdit comes to the front and the text pastes there once | |
+| 1105 | On Home's Last Dictation card, click **Copy**, then press ⌘V in TextEdit; click **Fix…** | The text pastes; the Fix window opens on the last dictation | |
+| 1106 | Start a hands-free dictation, and while it records look at Home's Last Dictation card | **Paste Again** is dimmed until the dictation ends | |
+| 1107 | On Home, click the today card; click **Home**, then **Show All** | The window shows Activity, then History | |
+| 1108 | A new install with a key but no dictation (or a test user): on Home, click **Try It…** | Onboarding opens on the Try It step | |
+| 1109 | Turn kotoba Dev off in System Settings > Privacy & Security > Accessibility; look at Home; click **Allow Accessibility…**; turn it on again | Home's first card says “Not ready to dictate” with the button; it opens onboarding on the Accessibility step; after the grant the today card comes back within about a second | |
+| 1110 | On Activity, click **Month**, then **Week**; dictate in TextEdit with Activity shown | The chart changes period; today's bar and the figures go up after the dictation | |
+| 1111 | On Activity, click **Advanced…**, then **Done** | A sheet lists this month's spend by model; Done closes it | |
+| 1112 | Show **Activity**, close the window; open kotoba Dev again from Spotlight. Then with 0.4 having left the window on Insights or Usage, open it | It opens at Activity; a pane saved as Insights or Usage opens Home | |

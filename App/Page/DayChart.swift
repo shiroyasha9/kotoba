@@ -82,9 +82,9 @@ struct DayBars: ChartContent {
                 // A stub as tall as a bar's corner, standing on the base line.
                 RectangleMark(
                     x: .value("Day", day.start, unit: .day), y: .value("Words", 0),
-                    width: .ratio(PageMetrics.barWidthRatio), height: .fixed(PageMetrics.barCornerRadius)
+                    width: .ratio(PageMetrics.barWidthRatio), height: .fixed(PageMetrics.barStubHeight)
                 )
-                .offset(y: -PageMetrics.barCornerRadius / 2)
+                .offset(y: -PageMetrics.barStubLift)
                 .clipShape(.capsule)
                 .foregroundStyle(Color.brand.secondary)
             } else {

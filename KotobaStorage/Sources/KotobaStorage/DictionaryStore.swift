@@ -213,7 +213,7 @@ extension DictionaryStore {
     }
 
     /// Words learned from corrections that are still in the dictionary, by where the correction came from (the
-    /// Insights pane): an added word the owner deleted is dismissed, so it no longer counts.
+    /// Activity page): an added word the owner deleted is dismissed, so it no longer counts.
     public func learnedWords() throws -> [SuggestionCandidate.Origin: Int] {
         let rows = try database.query(
             "SELECT origin, count(*) FROM dictionary_suggestions WHERE status = ?1 GROUP BY origin;",

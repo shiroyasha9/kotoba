@@ -1,3 +1,5 @@
+// 0.5.0 ratchet: the Microphone page's rollout puts this file on the page system and removes the next line.
+// swiftlint:disable row_is_page_row page_form
 import KotobaCore
 import Observation
 import SwiftUI

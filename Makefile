@@ -121,9 +121,11 @@ SPARKLE_BIN    := $(RELEASE)/DerivedData/SourcePackages/artifacts/sparkle/Sparkl
 SPARKLE_ACCOUNT := kotoba
 DOWNLOAD_URL   := https://github.com/shiroyasha9/kotoba/releases/download/v$(VERSION)/
 
+# 0.5.0 ships only when every page is on the page system (scripts/ratchet-done.sh), first, before the archive.
 # Archive, not build: only the archive export re-signs Sparkle's XPC services, Autoupdate and Updater.app with the
 # Developer ID, hardened runtime and a secure timestamp. The archive is also universal (arm64 and x86_64).
 release: gen
+	scripts/ratchet-done.sh
 	test -n "$(NOTARY_PROFILE)" || { echo "Set NOTARY_PROFILE to your notarytool keychain profile: make dmg NOTARY_PROFILE=<name>"; exit 1; }
 	rm -rf $(ARCHIVE) $(RELEASE)/export
 	xcodebuild -project $(PROJECT) -scheme $(SCHEME) -configuration Release -quiet \

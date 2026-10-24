@@ -223,7 +223,7 @@ struct PipelineHistoryChangeTests {
         #expect(await changes.next() == .deleted([id]))
     }
 
-    /// No answer was billed, so the Usage and Insights panes have nothing to read again.
+    /// No answer was billed, so the Activity page has nothing to read again.
     @Test func aDictationWithNoAnswerAddsNoUsage() async throws {
         let world = FakeWorld(transcript: "offline")
         let pipeline = world.makePipeline()

@@ -1,3 +1,5 @@
+// 0.5.0 ratchet: the Cleanup page's rollout puts this file on the page system and removes the next line.
+// swiftlint:disable ui_layout_literal row_is_page_row page_form
 import AppKit
 import KotobaCore
 import KotobaProviders
