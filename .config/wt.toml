@@ -1,0 +1,4 @@
+# Build output holds absolute paths of the worktree it was built in, so a
+# copy in a new worktree is stale. Every make target rebuilds it.
+[step.copy-ignored]
+exclude = ["build/", ".build/", ".build-*/", ".DS_Store"]
