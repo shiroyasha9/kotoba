@@ -218,21 +218,19 @@ struct StatusLine: View {
     }
 }
 
-/// The cost line next to a key field: "a few cents per hour" only for the model with a known low price, and a
-/// "See Pricing…" link to the provider's price page for every model (lead decision 11).
+/// The cost line next to a key field: who bills the owner, and a "See Pricing…" link to the provider's price page
+/// (lead decision 11). No price in words: MAI's is a promotion until 2026-12-31 (copy pass, chief of staff).
 struct PriceLine: View {
     let route: TranscriptionRoute
 
-    /// The price sentence for `route`, or nil when it shows only the link.
-    static func text(for route: TranscriptionRoute) -> String? {
-        route == .openRouterMAI ? "You pay OpenRouter directly for each hour of speech." : nil
+    /// Who bills the owner for `route`.
+    static func text(for route: TranscriptionRoute) -> String {
+        "\(route.account.title) bills you for what you use."
     }
 
     var body: some View {
         HStack {
-            if let text = Self.text(for: route) {
-                Text(text).foregroundStyle(.secondary)
-            }
+            Text(Self.text(for: route)).foregroundStyle(.secondary)
             Button("See Pricing…") { NSWorkspace.shared.open(route.account.pricingPage) }
                 .buttonStyle(.link)
         }

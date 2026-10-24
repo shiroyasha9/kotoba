@@ -139,12 +139,9 @@ private struct SpeechPane: View {
             } header: {
                 Text("\(account.title) Key")
             } footer: {
-                // The links sit with the price under the box, as "Learn More" links do in System Settings. Only the
-                // recommended model has a known price; every model links to its price page.
+                // The links sit with the price under the box, as "Learn More" links do in System Settings.
                 VStack(alignment: .leading) {
-                    if let price = PriceLine.text(for: model.route) {
-                        Text(price)
-                    }
+                    Text(PriceLine.text(for: model.route))
                     HStack {
                         Button("Get a Key…") { NSWorkspace.shared.open(account.keysPage) }
                         Button("See Pricing…") { NSWorkspace.shared.open(account.pricingPage) }

@@ -133,8 +133,8 @@ struct PermissionsStep: View {
         } footer: {
             VStack(alignment: .leading) {
                 Text(
-                    "kotoba reads only the text field it pasted into, and only when “Learn from edits” is on, "
-                        + "to learn your corrections. It never reads your screen.")
+                    "To learn your corrections, kotoba reads only the text field it pasted into, and only while "
+                        + "“Learn from edits” is on in Dictionary. It never reads your screen.")
                 if !model.readiness.isAccessibilityAllowed {
                     Text(
                         "If kotoba is on in the Accessibility list already and this step stays open, turn it off "
@@ -169,7 +169,9 @@ struct KeyStep: View {
         } header: {
             StepHeading(
                 title: "Connect a Speech Service",
-                text: Text("kotoba sends your audio to \(provider), which turns it into text."))
+                text: Text(
+                    "kotoba sends your audio to \(provider), which turns it into text. Get a key there and paste it "
+                        + "here."))
         } footer: {
             VStack(alignment: .leading) {
                 PriceLine(route: model.route)
