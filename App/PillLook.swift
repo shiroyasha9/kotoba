@@ -20,7 +20,7 @@ enum PillLook: Equatable {
     var canStandVertical: Bool {
         switch self {
         case .idle, .hover, .processing, .done: true
-        case .recording(let recording): !recording.isSilent && recording.elapsed == nil
+        case .recording(let recording): !recording.isSilent && !recording.isSecureInputOn && recording.elapsed == nil
         case .message: false
         }
     }
@@ -46,12 +46,18 @@ struct PillRecording: Equatable {
     var isSilent = false
     /// The time recorded, shown from the 10-minute mark; nil before it.
     var elapsed: Duration?
+    /// Another app turned on Secure Input: the words say so, since a paste can fail (owner, 2026-10-24). A silent mic's
+    /// words win over them.
+    var isSecureInputOn = false
+
+    /// Sample copy until the copy pass.
+    static let secureInput = "Secure Input is on"
 
     var accessibilityLabel: String {
         var parts = [isHandsFree ? "Recording, hands-free" : "Recording"]
         if isCleaned { parts.append("with cleanup") }
         if let elapsed { parts.append(elapsed.formatted(.units(allowed: [.minutes, .seconds], width: .wide))) }
-        if isSilent { parts.append(StatusText.noSound) }
+        if isSilent { parts.append(StatusText.noSound) } else if isSecureInputOn { parts.append(Self.secureInput) }
         return parts.joined(separator: ", ")
     }
 }

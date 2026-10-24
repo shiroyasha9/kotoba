@@ -1,4 +1,5 @@
 import AppKit
+import KotobaCore
 import SwiftUI
 
 // The 0.5.0 indicator pill, as a prototype next to today's `IndicatorPillView` (docs/research/ui-redesign.md, "Pill"):
@@ -30,8 +31,10 @@ final class PillPrototypeView: NSView {
     }
     var onAction: ((Action) -> Void)?
 
-    private let glass = NSGlassEffectView()
-    private let stack = NSStackView()
+    /// The capsule; read by hover (PillPrototypeInput.swift).
+    let glass = NSGlassEffectView()
+    /// The content; read by VoiceOver (PillPrototypeInput.swift).
+    let stack = NSStackView()
     private let bars = PillBars()
     private let wand = PillPrototypeView.symbolView("wand.and.sparkles", color: .labelColor)
     private let warning = PillPrototypeView.symbolView("exclamationmark.triangle.fill", color: .systemOrange)
@@ -171,7 +174,7 @@ final class PillPrototypeView: NSView {
         stackHeight.constant = size.height
         check.isHidden = look != .done
         drawCheck(isShown: look == .done && old != .done)
-        toolTip = look == .idle || look.isHover ? StatusText.idlePillHelp : nil
+        toolTip = look == .idle || look.isHover ? StatusText.idlePillHelp : help(for: look)
         setAccessibilityRole(look == .idle || look.isHover ? .button : .group)
         setAccessibilityLabel(look.accessibilityLabel)
         NSAccessibility.post(element: self, notification: .layoutChanged)
@@ -194,7 +197,7 @@ final class PillPrototypeView: NSView {
         case .idle: return []
         case .done: return []
         case .processing:
-            bars.color = .controlAccentColor
+            bars.color = PillBars.accent
             return [bars]
         case .hover(let keys):
             keycaps.rootView = PillKeycaps(keys: keys, axis: isVertical ? .vertical : .horizontal)
@@ -205,26 +208,6 @@ final class PillPrototypeView: NSView {
             button.rootView.face = .text(message.button ?? "")
             return (message.isProblem ? [warning] : []) + [label] + (message.button == nil ? [] : [button])
         }
-    }
-
-    private func views(for recording: PillRecording) -> [NSView] {
-        bars.color = recording.isSilent ? .systemOrange : .controlAccentColor
-        var views: [NSView] = []
-        // Silent and hands-free, the words and Choose Mic… need Cancel's room; Esc still cancels.
-        if recording.isHandsFree, !recording.isSilent { views.append(cancel) }
-        if recording.isCleaned { views.append(wand) }
-        views.append(bars)
-        if let time = recording.elapsed {
-            elapsed.stringValue = time.formatted(.time(pattern: .minuteSecond))
-            views.append(elapsed)
-        }
-        if recording.isSilent {
-            label.stringValue = StatusText.noSound
-            button.rootView.face = .text("Choose Mic…")
-            views += [label, button]
-        }
-        if recording.isHandsFree { views.append(stop) }
-        return views
     }
 
     /// The ends: a button keeps `inset` from the capsule's end, anything else `endPadding`.
@@ -309,60 +292,36 @@ final class PillPrototypeView: NSView {
     }
 }
 
+// MARK: Content
+
 extension PillPrototypeView {
-    // MARK: Accessibility
-
-    override func isAccessibilityElement() -> Bool {
-        true
+    /// The help tag of a look with words that need the why: Secure Input.
+    private func help(for look: PillLook) -> String? {
+        guard case .recording(let recording) = look, recording.isSecureInputOn, !recording.isSilent else { return nil }
+        return DictationState.secureInputHelp
     }
 
-    /// The buttons the look shows; the bars, words and symbols are in the pill's label.
-    override func accessibilityChildren() -> [Any]? {
-        stack.arrangedSubviews.filter { $0 is PillFillButtonHost && !$0.isHidden }
-    }
-
-    override func accessibilityPerformPress() -> Bool {
-        guard accessibilityRole() == .button else { return false }
-        onAction?(.click)
-        return true
-    }
-
-    // MARK: Mouse
-
-    /// Hover follows the capsule, with a margin of half its height around the idle bar, which is only 8 pt tall; not
-    /// the whole view (the gallery's cell is far larger than the pill).
-    private var hoverRect: NSRect {
-        let margin = PillGeometry.height / 2
-        return glass.frame.insetBy(dx: -margin, dy: -margin)
-    }
-
-    /// Hover is where the pointer is now, not a count of enter and exit events: the pill used to add its own area
-    /// again at each glass move, and a lost exit left the idle row showing its keys (owner trial, round 2). Only the
-    /// pointer's moves over the view call this; at idle with the pointer away nothing runs.
-    private func updateHover(with event: NSEvent?) {
-        let isInside = event.map { hoverRect.contains(convert($0.locationInWindow, from: nil)) } ?? false
-        if isInside, look == .idle, !hoverKeys.isEmpty {
-            look = .hover(keys: hoverKeys)
-        } else if !isInside, look.isHover, !hoverKeys.isEmpty {
-            look = .idle
+    private func views(for recording: PillRecording) -> [NSView] {
+        bars.color = recording.isSilent ? .systemOrange : PillBars.accent
+        var views: [NSView] = []
+        // Silent and hands-free, the words and Choose Mic… need Cancel's room; Esc still cancels.
+        if recording.isHandsFree, !recording.isSilent { views.append(cancel) }
+        if recording.isCleaned { views.append(wand) }
+        views.append(bars)
+        if let time = recording.elapsed {
+            elapsed.stringValue = time.formatted(.time(pattern: .minuteSecond))
+            views.append(elapsed)
         }
-    }
-
-    override func mouseEntered(with event: NSEvent) {
-        updateHover(with: event)
-    }
-
-    override func mouseMoved(with event: NSEvent) {
-        updateHover(with: event)
-    }
-
-    override func mouseExited(with event: NSEvent) {
-        updateHover(with: nil)
-    }
-
-    override func mouseUp(with event: NSEvent) {
-        if hoverRect.contains(convert(event.locationInWindow, from: nil)) {
-            onAction?(.click)
+        if recording.isSecureInputOn, !recording.isSilent {
+            label.stringValue = PillRecording.secureInput
+            views.append(label)
         }
+        if recording.isSilent {
+            label.stringValue = StatusText.noSound
+            button.rootView.face = .text("Choose Mic…")
+            views += [label, button]
+        }
+        if recording.isHandsFree { views.append(stop) }
+        return views
     }
 }

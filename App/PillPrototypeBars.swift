@@ -39,8 +39,21 @@ final class PillBars: NSView {
         }
     }
 
+    /// The level's colour: the accent, brighter on light glass (owner, 2026-10-24). Light glass over a warm backdrop
+    /// dulls the plain accent; mixing in white washed it out, and a brightness lift of 0.2 kept its hue and read best
+    /// on the gallery's colour band (0.35 went pink on pink).
+    static let accent = NSColor(name: nil) { appearance in
+        let accent = NSColor.controlAccentColor
+        guard appearance.bestMatch(from: [.aqua, .darkAqua]) == .aqua, let rgb = accent.usingColorSpace(.sRGB) else {
+            return accent
+        }
+        return NSColor(
+            hue: rgb.hueComponent, saturation: rgb.saturationComponent,
+            brightness: min(1, rgb.brightnessComponent + 0.2), alpha: rgb.alphaComponent)
+    }
+
     /// The bars' fill: a system color, resolved again when the appearance changes.
-    var color = NSColor.controlAccentColor {
+    var color = PillBars.accent {
         didSet { updateColors() }
     }
 

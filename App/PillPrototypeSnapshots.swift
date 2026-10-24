@@ -18,6 +18,8 @@ extension PillPrototypeView {
         ("done", .done),
         ("silent", .recording(.init(isSilent: true))),
         ("silent-hands-free", .recording(.init(isHandsFree: true, isSilent: true))),
+        ("secure-input", .recording(.init(isSecureInputOn: true))),
+        ("secure-input-hands-free", .recording(.init(isHandsFree: true, isSecureInputOn: true))),
         ("timer", .recording(.init(elapsed: .seconds(600)))),
         ("timer-hands-free", .recording(.init(isHandsFree: true, elapsed: .seconds(612)))),
         (
