@@ -11,7 +11,6 @@ extension AppDelegate: StatusMenuActions {
 
     func menuModel() -> MenuModel {
         readiness.refresh()
-        let route = routeSettings.route
         let input = audio.inputInUse
         return MenuModel(
             status: shell.view(shellFacts).status.line(statusContext),
@@ -21,15 +20,7 @@ extension AppDelegate: StatusMenuActions {
             microphoneInUse: input.map { ($0.uid, $0.name) },
             microphoneWarning: InputDevicePolicy.warning(
                 input: input, outputTransport: AudioDevices.defaultOutputTransport()),
-            routes: MenuModel.routes(current: route),
-            route: MenuChoice(title: route.menuTitle, value: route.rawValue),
-            grok: route.isGrok
-                ? MenuModel.Grok(
-                    isFormatOn: routeSettings.isGrokFormatOn, keepsFillerWords: routeSettings.keepsGrokFillerWords)
-                : nil,
             hasLastDictation: shell.queues.hasLastDictation,
-            hasRawLastDictation: shell.queues.hasRawLastDictation,
-            suggestionCount: mainWindow.dictionary?.suggestions.count ?? 0,
             updates: updates
         )
     }
@@ -63,21 +54,6 @@ extension AppDelegate: StatusMenuActions {
         Task { await audio.inputMayHaveChanged() }
     }
 
-    func selectRoute(_ sender: NSMenuItem) {
-        guard let raw = sender.representedObject as? String, let route = TranscriptionRoute(rawValue: raw) else {
-            return
-        }
-        routeSettings.route = route
-    }
-
-    func toggleGrokFormat() {
-        routeSettings.isGrokFormatOn.toggle()
-    }
-
-    func toggleGrokFillerWords() {
-        routeSettings.keepsGrokFillerWords.toggle()
-    }
-
     func fixLastDictation() {
         fixWindow.show()
     }
@@ -86,32 +62,17 @@ extension AppDelegate: StatusMenuActions {
         lastDictation?.perform(.paste)
     }
 
-    func pasteLastWithoutCleanup() {
-        lastDictation?.perform(.pasteWithoutCleanup)
-    }
-
     func copyLastDictation() {
         lastDictation?.perform(.copy)
-    }
-
-    func polishLastDictation() {
-        lastDictation?.perform(.polish)
     }
 
     func pasteSettingChanged(_ change: PasteSetting) {
         pasteSettingChanges.continuation.yield(change)
     }
 
-    func openSuggestions() {
-        mainWindow.show(selecting: .dictionary)
-    }
-
-    func addWord() {
-        mainWindow.addWord()
-    }
-
-    func openHistory() {
-        mainWindow.show(selecting: .history)
+    /// "Open kotoba…": the window on the page it showed last, Home the first time.
+    func openKotoba() {
+        mainWindow.show()
     }
 
     func openSettings() {

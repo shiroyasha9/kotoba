@@ -2,30 +2,26 @@ import AppKit
 import KotobaCore
 import KotobaProviders
 
-/// The menu bar menu's actions. AppDelegate implements them; a snapshot run builds the menu with no target.
+/// The menu bar menu's actions. AppDelegate implements them; a snapshot run builds the menu with no target. The app
+/// menu (`MainMenu`) sends About and Settings… here too.
 @MainActor
 @objc protocol StatusMenuActions {
     func finishSetup()
     func retryFailed()
     func copyRecovered(_ sender: NSMenuItem)
     func chooseMicrophone(_ sender: NSMenuItem)
-    func selectRoute(_ sender: NSMenuItem)
-    func toggleGrokFormat()
-    func toggleGrokFillerWords()
     func fixLastDictation()
     func pasteLastDictation()
-    func pasteLastWithoutCleanup()
     func copyLastDictation()
-    func polishLastDictation()
-    func openSuggestions()
-    func addWord()
-    func openHistory()
+    func openKotoba()
     func openSettings()
     func showAbout()
     func checkForUpdates()
 }
 
-/// Everything the menu bar menu shows, as values, so the menu can be built and read without the running app.
+/// Everything the menu bar menu shows, as values, so the menu can be built and read without the running app. The menu
+/// holds what a user reaches for while another app is in front (docs/research/ui-redesign.md, "Status menu"): the
+/// status line, the last dictation, the microphone, and the way into the window; everything else lives there.
 @MainActor
 struct MenuModel {
     enum Status {
@@ -33,11 +29,6 @@ struct MenuModel {
         case finishSetup(String)
         /// A disabled line: the dictation state, or the ready hint.
         case text(String)
-    }
-
-    struct Grok {
-        var isFormatOn: Bool
-        var keepsFillerWords: Bool
     }
 
     var status: Status
@@ -49,16 +40,8 @@ struct MenuModel {
     var microphoneInUse: (uid: String, name: String)?
     /// Shown at the foot of the Microphone submenu (`InputDevicePolicy.warning`).
     var microphoneWarning: MicrophoneWarning?
-    var routes: [MenuChoice] = []
-    var route: MenuChoice?
-    /// The Grok options, shown when the current speech model is Grok.
-    var grok: Grok?
     /// A dictation was pasted or copied; the Last Dictation items hide until then.
     var hasLastDictation = false
-    /// The last dictation was cleaned up; "Paste Last Without Cleanup" hides otherwise.
-    var hasRawLastDictation = false
-    /// Pending dictionary suggestions; the item hides at 0.
-    var suggestionCount = 0
     /// The update item's state; nil in a Debug build, which has no updater, so the item hides.
     var updates: Updates?
 
@@ -67,14 +50,6 @@ struct MenuModel {
         var canCheck = true
         /// A scheduled check found an update the user has not looked at: the item reads "Install Update…".
         var hasWaitingUpdate = false
-    }
-
-    /// The speech models the menu offers: the OpenRouter ones, plus a direct route only while it is the current one
-    /// (the others sit under Advanced in Settings).
-    static func routes(current: TranscriptionRoute) -> [MenuChoice] {
-        TranscriptionRoute.allCases.filter { !$0.isAdvanced || $0 == current }.map {
-            MenuChoice(title: $0.title, value: $0.rawValue, subtitle: $0.note)
-        }
     }
 
     /// The menu bar icon's menu, or the Dock icon's right-click menu (story 35), which has the same items but Quit: the
@@ -87,14 +62,13 @@ struct MenuModel {
     /// Builds the whole menu into `menu`, replacing its items.
     func build(into menu: NSMenu, target: StatusMenuActions?, for place: Place = .menuBar) {
         menu.removeAllItems()
-        for item in topItems(target: target) + [.separator()] + settingItems(target: target) + [.separator()] {
+        for item in topItems(target: target) + [.separator(), microphoneItem(target: target), .separator()] {
             menu.addItem(item)
         }
-        menu.addItem(.action("History…", target: target, action: #selector(StatusMenuActions.openHistory)))
         menu.addItem(
-            .action("Settings…", target: target, action: #selector(StatusMenuActions.openSettings), keyEquivalent: ","))
-        menu.addItem(
-            .action("About \(Install.displayName)", target: target, action: #selector(StatusMenuActions.showAbout)))
+            .action("Open \(Install.displayName)…", target: target, action: #selector(StatusMenuActions.openKotoba)))
+        // The update item stays here: with "Show in Dock" off there is no app menu until a window opens, and a waiting
+        // update has no other place to show.
         if let updates {
             menu.addItem(Self.updateItem(updates, target: target))
         }
@@ -133,38 +107,18 @@ struct MenuModel {
                     action: #selector(StatusMenuActions.copyRecovered(_:))))
         }
         if hasLastDictation {
-            items += lastDictationItems(target: target)
-        }
-        if suggestionCount > 0 {
-            items.append(
+            items += [
                 .action(
-                    "\(StatusText.counted(suggestionCount, "Word Suggestion"))…", target: target,
-                    action: #selector(StatusMenuActions.openSuggestions)))
+                    "Paste Last Dictation", target: target, action: #selector(StatusMenuActions.pasteLastDictation)),
+                .action("Copy Last Dictation", target: target, action: #selector(StatusMenuActions.copyLastDictation)),
+                .action("Fix Last Dictation…", target: target, action: #selector(StatusMenuActions.fixLastDictation)),
+            ]
         }
-        items.append(.action("Add Word…", target: target, action: #selector(StatusMenuActions.addWord)))
         return items
     }
 
-    /// Paste, copy, polish or fix the last dictation.
-    private func lastDictationItems(target: StatusMenuActions?) -> [NSMenuItem] {
-        var items: [NSMenuItem] = [
-            .action("Paste Last Dictation", target: target, action: #selector(StatusMenuActions.pasteLastDictation))
-        ]
-        if hasRawLastDictation {
-            items.append(
-                .action(
-                    "Paste Last Without Cleanup", target: target,
-                    action: #selector(StatusMenuActions.pasteLastWithoutCleanup)))
-        }
-        items += [
-            .action("Copy Last Dictation", target: target, action: #selector(StatusMenuActions.copyLastDictation)),
-            .action("Polish Last Dictation", target: target, action: #selector(StatusMenuActions.polishLastDictation)),
-            .action("Fix Last Dictation…", target: target, action: #selector(StatusMenuActions.fixLastDictation)),
-        ]
-        return items
-    }
-
-    private func settingItems(target: StatusMenuActions?) -> [NSMenuItem] {
+    /// The connected mics, the one in use checked; picking one puts it first in the Microphone page's list.
+    private func microphoneItem(target: StatusMenuActions?) -> NSMenuItem {
         let microphone = NSMenuItem.choices(
             "Microphone", subtitle: microphoneInUse?.name ?? "None", microphones,
             selected: microphoneInUse?.uid, target: target,
@@ -177,23 +131,7 @@ struct MenuModel {
             submenu.addItem(.separator())
             submenu.addItem(warning)
         }
-        var items = [microphone]
-        let model = NSMenuItem.choices(
-            "Speech Model", subtitle: route?.title, routes, selected: route?.value, target: target,
-            action: #selector(StatusMenuActions.selectRoute(_:)))
-        if let grok, let submenu = model.submenu {
-            submenu.addItem(.separator())
-            submenu.addItem(
-                .toggle(
-                    "Format Numbers and Units", isOn: grok.isFormatOn, target: target,
-                    action: #selector(StatusMenuActions.toggleGrokFormat)))
-            submenu.addItem(
-                .toggle(
-                    "Keep Filler Words", isOn: grok.keepsFillerWords, target: target,
-                    action: #selector(StatusMenuActions.toggleGrokFillerWords)))
-        }
-        items.append(model)
-        return items
+        return microphone
     }
 
     /// "Check for Updates…" or "Install Update…", in this menu and in the app menu (`MainMenu`). Without an action the
@@ -210,7 +148,8 @@ struct MenuModel {
     }
 
     /// Menus for the snapshot run's `menu-<name>.txt`: ready, setup not complete (a Debug build: no update item),
-    /// listening (with Sparkle busy), failed with a retry and an update waiting, and a Bluetooth mic.
+    /// recording (with Sparkle busy), failed with a retry and an update waiting, a Bluetooth mic, and kotoba Dev while
+    /// the release app runs.
     static func samples() -> [(name: String, model: Self)] {
         let mics = [MenuChoice(title: "MacBook Pro Microphone", value: "builtin")]
         // Each status line comes from the shell, as the running app's does, so a sample shows its priorities.
@@ -220,12 +159,9 @@ struct MenuModel {
             _ = shell.dictationChanged(state)
             return shell.view(facts).status.line(StatusContext(provider: .openRouter))
         }
-        func route(_ route: TranscriptionRoute) -> MenuChoice {
-            MenuChoice(title: route.menuTitle, value: route.rawValue)
-        }
         var ready = Self(
             status: status(), microphones: mics, microphoneInUse: ("builtin", "MacBook Pro Microphone"),
-            routes: routes(current: .openRouterMAI), route: route(.openRouterMAI), updates: Updates())
+            updates: Updates())
         var setup = ready
         setup.updates = nil
         setup.status = status(.idle, .init(firstMissing: .setup(.key, .openRouter)))
@@ -234,16 +170,11 @@ struct MenuModel {
         listening.updates?.canCheck = false
         ready.recovered = [MenuChoice(title: "Send the draft to the team by Friday", value: "1")]
         ready.hasLastDictation = true
-        ready.hasRawLastDictation = true
-        ready.suggestionCount = 2
         var yielding = ready
         yielding.status = status(.idle, .init(isYielding: true))
         var failed = ready
         failed.status = status(.init(.idle, notice: .failed(DictationID())))
         failed.pendingCount = 2
-        failed.routes = routes(current: .xaiGrok)
-        failed.route = route(.xaiGrok)
-        failed.grok = Grok(isFormatOn: true, keepsFillerWords: false)
         failed.updates?.hasWaitingUpdate = true
         var bluetooth = listening
         bluetooth.microphones.append(MenuChoice(title: "AirPods Pro", value: "airpods"))

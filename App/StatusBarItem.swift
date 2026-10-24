@@ -1,5 +1,3 @@
-// 0.5.0 ratchet: the status menu's rollout puts this file on the page system and removes the next line.
-// swiftlint:disable appkit_layout_literal
 import AppKit
 import KotobaCore
 
@@ -48,10 +46,10 @@ final class StatusBarItem: NSObject, NSMenuDelegate {
         model()?.build(into: menu, target: target)
     }
 
-    /// Loaded once each, so an icon change during a dictation builds no image.
-    private static let idle = glyph("MenuBarIdle")
-    private static let caretOff = glyph("MenuBarListening")
-    private static let attention = glyph("MenuBarAttention")
+    /// Loaded once each, so an icon change during a dictation builds no image. The snapshot run draws them too.
+    static let idle = glyph("MenuBarIdle")
+    static let caretOff = glyph("MenuBarListening")
+    static let attention = glyph("MenuBarAttention")
 
     private static func glyph(_ name: String) -> NSImage? {
         let image = NSImage(named: name)
@@ -83,28 +81,5 @@ final class StatusBarItem: NSObject, NSMenuDelegate {
                 }
             }
         }
-    }
-}
-
-extension StatusBarItem {
-    /// The menu bar glyphs at 2x, in state order: ready, needs attention, listening (caret on), listening (caret
-    /// off). Tinted like the menu bar, so each appearance shows its contrast.
-    static func snapshots() -> [Snapshot] {
-        [
-            Snapshot(name: "menubar-icons") {
-                let views = [idle, attention, idle, caretOff].map { image in
-                    let view = NSImageView(image: image ?? NSImage())
-                    view.imageScaling = .scaleProportionallyUpOrDown
-                    view.contentTintColor = .labelColor
-                    view.widthAnchor.constraint(equalToConstant: 36).isActive = true
-                    view.heightAnchor.constraint(equalToConstant: 36).isActive = true
-                    return view
-                }
-                let row = NSStackView(views: views)
-                row.spacing = 16
-                row.edgeInsets = NSEdgeInsets(top: 8, left: 8, bottom: 8, right: 8)
-                return row
-            }
-        ]
     }
 }
