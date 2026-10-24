@@ -179,7 +179,7 @@ custom_rules:
     excluded_match_kinds: [comment, doccomment, string]
     message: "Every paste is one transaction: run it through `ClipboardPaste.run(_:gate:)`, which owns the gate, the clipboard and the keys; a copy goes through `DictationPipeline.copyAgain`, so a waiting restore cannot overwrite it (docs/spec.md, \"Paste\")."
     severity: error
-  # CODING_STANDARDS.md "User-facing text" rules 3, 4, 5, 8, 13 and 14, on UI strings in App/ only: strings on a line
+  # CODING_STANDARDS.md "User-facing text" rules 3, 4, 5, 8, 9, 13, 14 and 15, on UI strings in App/ only: strings on a line
   # that builds UI (Text(, Button(, NSMenuItem(title:, .toolTip = …), or on the line after its `(`, and every string in
   # App/StatusText.swift. Log strings are not on such lines, so they never trip these rules.
   # Each ui_text_* regex is `T(?<=<builders>…T)`: the target first, then a lookbehind that ends with the same target.
@@ -229,6 +229,21 @@ custom_rules:
     regex: "(?i:\\b(?:we|our|(?-i:us)|please|(?:en|dis)abl(?:e|ed|es|ing)|toggl(?:e|ed|es|ing)|oops|whoops|uh-oh|sorry|yay|hooray|woohoo)\\b)(?<=(?:\\b(?:Text|Button|Toggle|Section|Label|Picker|LabeledContent|Link|Menu|TextField|SecureField|GroupBox|NSMenuItem|NSButton|NSTextField|NSAlert|MenuChoice|StepHeading|StatusLine|Point|PageRow|PageHeader|ChartHeadline|PageSheet|PageToggle|ChoiceRow|CleanupSample|PageSearchField|help|navigationTitle|confirmationDialog|alert)\\(|\\.(?:title|subtitle|toolTip|messageText|informativeText|placeholderString|stringValue|prompt) = )(?:[ \\t]{0,4}\\n[ \\t]{0,40})?[^\\n]{0,200}(?i:\\b(?:we|our|(?-i:us)|please|(?:en|dis)abl(?:e|ed|es|ing)|toggl(?:e|ed|es|ing)|oops|whoops|uh-oh|sorry|yay|hooray|woohoo)\\b))"
     match_kinds: [string]
     message: "Plain words in UI text: no \"we\", no \"please\", no \"enable\", \"disable\" or \"toggle\" (name what is on: \"Keep filler words\"), no interjections such as \"oops\" or \"sorry\"; \"our\" and \"us\" also go (CODING_STANDARDS.md, User-facing text 14)."
+    severity: error
+  ui_text_press_not_tap:
+    name: "UI text: press and hold, not tap"
+    included: ["App/.*\\.swift"]
+    regex: "(?i:\\b(?:double-)?tap(?:s|ped|ping)?\\b)(?<=(?:\\b(?:Text|Button|Toggle|Section|Label|Picker|LabeledContent|Link|Menu|TextField|SecureField|GroupBox|NSMenuItem|NSButton|NSTextField|NSAlert|MenuChoice|StepHeading|StatusLine|Point|PageRow|PageHeader|ChartHeadline|PageSheet|PageToggle|ChoiceRow|CleanupSample|PageSearchField|help|navigationTitle|confirmationDialog|alert)\\(|\\.(?:title|subtitle|toolTip|messageText|informativeText|placeholderString|stringValue|prompt) = )(?:[ \\t]{0,4}\\n[ \\t]{0,40})?[^\\n]{0,200}(?i:\\b(?:double-)?tap(?:s|ped|ping)?\\b))"
+    match_kinds: [string]
+    message: "Say “press” or “hold” for a key, not “tap”: “Press ⌃⌥⌘ to start, press it again to stop.” (CODING_STANDARDS.md, User-facing text 15)."
+    severity: error
+  # The 0.5.0 names (docs/research/ui-redesign.md, Copy): Rewrite was Polish, App styles was Modes, Recording was Listening.
+  ui_text_old_names:
+    name: "UI text: Rewrite, App styles and Recording"
+    included: ["App/.*\\.swift"]
+    regex: "(?:(?i:\\bpolish(?:es|ed|ing)?\\b|\\blistening\\b)|(?-i:\\bModes?\\b))(?<=(?:\\b(?:Text|Button|Toggle|Section|Label|Picker|LabeledContent|Link|Menu|TextField|SecureField|GroupBox|NSMenuItem|NSButton|NSTextField|NSAlert|MenuChoice|StepHeading|StatusLine|Point|PageRow|PageHeader|ChartHeadline|PageSheet|PageToggle|ChoiceRow|CleanupSample|PageSearchField|help|navigationTitle|confirmationDialog|alert)\\(|\\.(?:title|subtitle|toolTip|messageText|informativeText|placeholderString|stringValue|prompt) = )(?:[ \\t]{0,4}\\n[ \\t]{0,40})?[^\\n]{0,200}(?:(?i:\\bpolish(?:es|ed|ing)?\\b|\\blistening\\b)|(?-i:\\bModes?\\b)))"
+    match_kinds: [string]
+    message: "Use the 0.5.0 names in UI text: “Rewrite” (not Polish), “App styles” (not Modes), “Recording” (not Listening) (CODING_STANDARDS.md, User-facing text 9)."
     severity: error
   # What the shell shows is decided in KotobaCore's `ShellStatus` and tested there; these two files only collect its
   # facts and draw its output. b235fa0 and 3a9743b changed such rules here with no test: a pattern match on a state in
@@ -323,6 +338,13 @@ custom_rules:
     regex: "(?i:\\b(?:double-)?tap(?:s|ped|ping)?\\b)"
     match_kinds: [string]
     message: "Say “press” or “hold” for a key, not “tap”: “Press ⌃⌥⌘ to start, press it again to stop.” (CODING_STANDARDS.md, User-facing text 15)."
+    severity: error
+  status_text_old_names:
+    name: "Status text: Rewrite and Recording"
+    included: ["App/StatusText\\.swift", "KotobaCore/Sources/KotobaCore/ShellStatus\\.swift"]
+    regex: "(?:(?i:\\bpolish(?:es|ed|ing)?\\b|\\blistening\\b)|(?-i:\\bModes?\\b))"
+    match_kinds: [string]
+    message: "Use the 0.5.0 names in pill and menu text: “Rewrite” (not Polish), “App styles” (not Modes), “Recording” (not Listening) (CODING_STANDARDS.md, User-facing text 9)."
     severity: error
   live_state_in_ledger:
     name: "Live dictation state in LiveDictations"
