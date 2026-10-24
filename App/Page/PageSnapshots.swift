@@ -73,7 +73,7 @@ extension MainWindow {
     }
 }
 
-/// A list page in a wide detail column (`PageList`), with its pinned search.
+/// A list page in a wide detail column (`PageList`), with its pinned header, a setting and the search.
 @MainActor
 private var pageList: Snapshot {
     var snapshot = Snapshot(name: "page-list") {
@@ -97,14 +97,16 @@ private struct ListSample: View {
     @State private var search = ""
 
     var body: some View {
-        PageList(selection: $selection, search: ($search, "Search")) {
-            Section {
-                PageHeader(page: .history, summary: "Every dictation, newest first.")
-            }
-            .selectionDisabled()
+        PageList(selection: $selection) {
             Section("Today") {
                 ForEach(1...6, id: \.self) { Text("Dictation \($0)") }
             }
+        } pinned: {
+            PageHeader(page: .history, summary: "Every dictation, newest first.")
+            PageRow(title: "Keep audio", subtitle: "For Retry and Play. The text always stays.") {
+                Text("7 Days").foregroundStyle(.secondary)
+            }
+            PageSearchField(text: $search, prompt: "Search")
         }
     }
 }

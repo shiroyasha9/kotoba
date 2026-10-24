@@ -3,8 +3,7 @@ import SwiftUI
 
 /// A page's search field, in the page and not in a toolbar (a page has no toolbar, so the title bar keeps one height):
 /// AppKit's own search field, with its magnifier, its clear button and Esc to clear. Edit > Find… (⌘F) puts the cursor
-/// in it (`findRequests`, with `PaneID.hasSearch` on for the page). On a `PageList`, pass it as `search:`, which pins it
-/// above the rows; on a `PageForm`, put it alone in the header of the section it searches. Custom: SwiftUI's
+/// in it (`findRequests`, with `PaneID.hasSearch` on for the page). On a `PageList`, put it in `pinned`, above the rows; on a `PageForm`, put it alone in the header of the section it searches. Custom: SwiftUI's
 /// only search field is `.searchable`, which lives in the toolbar or the sidebar.
 struct PageSearchField: NSViewRepresentable {
     @Binding var text: String
