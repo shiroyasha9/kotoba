@@ -68,16 +68,20 @@ final class PillPrototypeView: NSView {
         stack.translatesAutoresizingMaskIntoConstraints = false
         let container = NSView()
         container.addSubview(stack)
+        // The content keeps the size of the look's capsule, centred, so it never reflows while the glass morphs
+        // (a reflow cut the words to "No sound fro…" mid-morph, owner trial 2026-10-24).
         NSLayoutConstraint.activate([
-            stack.leadingAnchor.constraint(equalTo: container.leadingAnchor),
-            stack.trailingAnchor.constraint(equalTo: container.trailingAnchor),
-            stack.topAnchor.constraint(equalTo: container.topAnchor),
-            stack.bottomAnchor.constraint(equalTo: container.bottomAnchor),
+            stack.centerXAnchor.constraint(equalTo: container.centerXAnchor),
+            stack.centerYAnchor.constraint(equalTo: container.centerYAnchor), stackWidth, stackHeight,
         ])
+        // The lone check is centred by its image's frame, not through the stack: the stack centres a symbol's
+        // alignment rect, which sits off its drawn centre.
+        check.frame = container.bounds
+        check.autoresizingMask = [.width, .height]
+        check.imageAlignment = .alignCenter
+        container.addSubview(check)
         glass.contentView = container
         addSubview(glass)
-        addTrackingArea(
-            NSTrackingArea(rect: .zero, options: [.mouseEnteredAndExited, .activeAlways, .inVisibleRect], owner: self))
         apply(from: look)
     }
 
@@ -101,6 +105,11 @@ final class PillPrototypeView: NSView {
 
     var isVertical: Bool { isAtSideEdge && look.canStandVertical }
 
+    private lazy var stackWidth = stack.widthAnchor.constraint(equalToConstant: 0)
+    private lazy var stackHeight = stack.heightAnchor.constraint(equalToConstant: 0)
+    /// What the look's content needs along the capsule, ends included; set by `apply`.
+    private var contentLength: CGFloat = 0
+
     /// The capsule's size for the look: idle is the bar, done a circle, the rest as long as the content.
     var shapeSize: NSSize {
         let height = PillGeometry.height
@@ -111,8 +120,7 @@ final class PillPrototypeView: NSView {
                 : NSSize(width: PillGeometry.idleLength, height: PillGeometry.idleThickness)
         case .done: return NSSize(width: height, height: height)
         default:
-            let fitting = stack.fittingSize
-            let length = min(PillGeometry.maxLength, max(height, isVertical ? fitting.height : fitting.width))
+            let length = min(PillGeometry.maxLength, max(height, contentLength))
             return isVertical ? NSSize(width: height, height: length) : NSSize(width: length, height: height)
         }
     }
@@ -127,6 +135,7 @@ final class PillPrototypeView: NSView {
     }
 
     private var isMorphing = false
+    private var hoverArea: NSTrackingArea?
 
     private func placeGlass() {
         let size = shapeSize
@@ -134,6 +143,7 @@ final class PillPrototypeView: NSView {
             x: (bounds.width - size.width) / 2, y: (bounds.height - size.height) / 2, width: size.width,
             height: size.height)
         glass.cornerRadius = min(size.width, size.height) / 2
+        trackHover()
     }
 
     /// Shows the views the look needs, in order, and moves the capsule to its new shape: animated on screen, at once
@@ -142,24 +152,39 @@ final class PillPrototypeView: NSView {
         bars.isVertical = isVertical
         bars.isSweeping = look == .processing
         let views = views(for: look)
+        let isNewContent = views != stack.arrangedSubviews
         stack.orientation = isVertical ? .vertical : .horizontal
         stack.alignment = isVertical ? .centerX : .centerY
         stack.setViews(views, in: .center)
         stack.edgeInsets = edgeInsets(for: views)
+        contentLength = naturalLength()
+        let size = shapeSize
+        stackWidth.constant = size.width
+        stackHeight.constant = size.height
+        check.isHidden = look != .done
         drawCheck(isShown: look == .done && old != .done)
         toolTip = look == .idle || look.isHover ? StatusText.idlePillHelp : nil
         setAccessibilityRole(look == .idle || look.isHover ? .button : .group)
         setAccessibilityLabel(look.accessibilityLabel)
         NSAccessibility.post(element: self, notification: .layoutChanged)
         invalidateIntrinsicContentSize()
-        morph()
+        morph(fadesContentIn: isNewContent)
+    }
+
+    /// The content's natural length along the capsule, ends included: the stack's fitting size without the
+    /// look's size.
+    private func naturalLength() -> CGFloat {
+        NSLayoutConstraint.deactivate([stackWidth, stackHeight])
+        defer { NSLayoutConstraint.activate([stackWidth, stackHeight]) }
+        let fitting = stack.fittingSize
+        return isVertical ? fitting.height : fitting.width
     }
 
     /// The views `look` shows, in order, filled with its words.
     private func views(for look: PillLook) -> [NSView] {
         switch look {
         case .idle: return []
-        case .done: return [check]
+        case .done: return []
         case .processing:
             bars.color = .controlAccentColor
             return [bars]
@@ -214,24 +239,64 @@ final class PillPrototypeView: NSView {
         check.removeSymbolEffect(ofType: .drawOn, animated: true)
     }
 
-    /// The glass moves to the new shape with one animation per change; offscreen it jumps.
-    private func morph() {
+    /// The glass moves to the new shape with one animation per change; offscreen it jumps. New content fades in once
+    /// the glass has its shape, so no item shows outside the glass mid-morph; the same content (a new level, the
+    /// timer's next second) does not fade.
+    private func morph(fadesContentIn: Bool) {
         guard window?.isVisible == true else {
             needsLayout = true
             return
         }
         layoutSubtreeIfNeeded()
         isMorphing = true
+        if fadesContentIn {
+            stack.alphaValue = 0
+        }
         NSAnimationContext.runAnimationGroup { context in
             context.duration = 0.3
             context.timingFunction = CAMediaTimingFunction(controlPoints: 0.2, 0.9, 0.3, 1)
             context.allowsImplicitAnimation = true
             placeGlass()
         } completionHandler: { [weak self] in
-            MainActor.assumeIsolated { self?.isMorphing = false }
+            MainActor.assumeIsolated {
+                self?.isMorphing = false
+                guard let stack = self?.stack, stack.alphaValue < 1 else { return }
+                NSAnimationContext.runAnimationGroup { context in
+                    context.duration = 0.15
+                    stack.animator().alphaValue = 1
+                }
+            }
         }
     }
 
+    /// Every layer under the pill with a running animation: the idle-cost check wants none at idle.
+    var animatedLayers: [CALayer] {
+        // A view's layer is also its parent view's sublayer, so each layer counts once.
+        var seen = Set<ObjectIdentifier>()
+        func walk(_ layer: CALayer) -> [CALayer] {
+            guard seen.insert(ObjectIdentifier(layer)).inserted else { return [] }
+            let own = (layer.animationKeys() ?? []).isEmpty ? [] : [layer]
+            return own + (layer.sublayers ?? []).flatMap(walk)
+        }
+        func walk(_ view: NSView) -> [CALayer] {
+            (view.layer.map(walk) ?? []) + view.subviews.flatMap(walk)
+        }
+        return walk(self)
+    }
+
+    /// The content is longer than the capsule, so an item sits outside it. Valid after layout.
+    var isOverflowing: Bool {
+        let content = stack.arrangedSubviews.map(\.frame).reduce(NSRect.null) { $0.union($1) }
+        return !content.isNull && !stack.bounds.insetBy(dx: -0.5, dy: -0.5).contains(content)
+    }
+
+    /// The words end in "…" because the pill is at its longest. Valid after layout.
+    var isTextTruncated: Bool {
+        stack.arrangedSubviews.contains(label) && label.intrinsicContentSize.width > label.frame.width + 0.5
+    }
+}
+
+extension PillPrototypeView {
     // MARK: Accessibility
 
     override func isAccessibilityElement() -> Bool {
@@ -251,6 +316,21 @@ final class PillPrototypeView: NSView {
 
     // MARK: Mouse
 
+    /// Hover follows the capsule, with a margin of half its height around the idle bar, which is only 8 pt tall; not
+    /// the whole view (the gallery's cell is far larger than the pill). A pointer already inside counts as inside.
+    private func trackHover() {
+        if let hoverArea { removeTrackingArea(hoverArea) }
+        let margin = PillGeometry.height / 2
+        let rect = glass.frame.insetBy(dx: -margin, dy: -margin)
+        var options: NSTrackingArea.Options = [.mouseEnteredAndExited, .activeAlways]
+        if let window, rect.contains(convert(window.mouseLocationOutsideOfEventStream, from: nil)) {
+            options.insert(.assumeInside)
+        }
+        let area = NSTrackingArea(rect: rect, options: options, owner: self)
+        addTrackingArea(area)
+        hoverArea = area
+    }
+
     override func acceptsFirstMouse(for event: NSEvent?) -> Bool {
         true
     }
@@ -268,32 +348,8 @@ final class PillPrototypeView: NSView {
     }
 
     override func mouseUp(with event: NSEvent) {
-        onAction?(.click)
-    }
-
-    /// Every layer under the pill with a running animation: the idle-cost check wants none at idle.
-    var animatedLayers: [CALayer] {
-        // A view's layer is also its parent view's sublayer, so each layer counts once.
-        var seen = Set<ObjectIdentifier>()
-        func walk(_ layer: CALayer) -> [CALayer] {
-            guard seen.insert(ObjectIdentifier(layer)).inserted else { return [] }
-            let own = (layer.animationKeys() ?? []).isEmpty ? [] : [layer]
-            return own + (layer.sublayers ?? []).flatMap(walk)
+        if hoverArea?.rect.contains(convert(event.locationInWindow, from: nil)) == true {
+            onAction?(.click)
         }
-        func walk(_ view: NSView) -> [CALayer] {
-            (view.layer.map(walk) ?? []) + view.subviews.flatMap(walk)
-        }
-        return walk(self)
-    }
-
-    /// The content is longer than the capsule, so an end item sits outside it. Valid after layout.
-    var isOverflowing: Bool {
-        isVertical
-            ? stack.frame.height > glass.bounds.height + 0.5 : stack.frame.width > glass.bounds.width + 0.5
-    }
-
-    /// The words end in "…" because the pill is at its longest. Valid after layout.
-    var isTextTruncated: Bool {
-        stack.arrangedSubviews.contains(label) && label.intrinsicContentSize.width > label.frame.width + 0.5
     }
 }

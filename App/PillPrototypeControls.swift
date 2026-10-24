@@ -100,7 +100,8 @@ struct PillKeycaps: View {
             ForEach(Array(keys.enumerated()), id: \.offset) { _, key in
                 Text(key)
                     .font(.body)
-                    .foregroundStyle(.secondary)
+                    // Primary: secondary keys were almost gone on coloured glass (owner trial, 2026-10-24).
+                    .foregroundStyle(.primary)
                     .frame(width: PillGeometry.controlHeight, height: PillGeometry.controlHeight)
                     .background(.fill.tertiary, in: .rect(cornerRadius: PillGeometry.keycapRadius))
             }
