@@ -266,10 +266,11 @@ struct DailyWords: View {
     }
 }
 
-/// The day bars of Activity's chart and of Home's today card: one bar shape for both.
+/// The day bars of Activity's chart and of Home's today card: one bar shape for both, always in the brand colour, as
+/// Screen Time's charts keep their own colours whatever the accent.
 struct DayBars: ChartContent {
     let days: [DictationInsights.Day]
-    /// Home's today card, as Screen Time's week: today in the accent colour, the other days muted, an empty day as a
+    /// Home's today card, as Screen Time's week: today in the brand colour, the other days muted, an empty day as a
     /// stub on the base line so the week does not look broken.
     var marksToday = false
 
@@ -283,7 +284,7 @@ struct DayBars: ChartContent {
                 )
                 .offset(y: -PageMetrics.barCornerRadius / 2)
                 .cornerRadius(PageMetrics.barCornerRadius / 2)
-                .foregroundStyle(.tint.secondary)
+                .foregroundStyle(Color.brand.secondary)
             } else {
                 BarMark(
                     x: .value("Day", day.start, unit: .day), y: .value("Words", day.words),
@@ -291,7 +292,8 @@ struct DayBars: ChartContent {
                 )
                 .cornerRadius(PageMetrics.barCornerRadius)
                 .foregroundStyle(
-                    marksToday && day.start != days.last?.start ? AnyShapeStyle(.tint.secondary) : AnyShapeStyle(.tint))
+                    marksToday && day.start != days.last?.start
+                        ? AnyShapeStyle(Color.brand.secondary) : AnyShapeStyle(Color.brand))
             }
         }
     }

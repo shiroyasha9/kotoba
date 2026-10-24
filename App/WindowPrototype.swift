@@ -84,6 +84,18 @@ struct WindowPrototypeView: View {
     var body: some View {
         NavigationSplitView {
             List(selection: Binding($page)) {
+                // The app's name at the top of the sidebar on every page (owner, 2026-10-25: the window looked like
+                // another System Settings pane). A row that cannot be selected, so it takes the list's own insets and
+                // its icon sits in the tiles' column; the traffic lights keep the title bar above it.
+                Label {
+                    // Bold, as a title: the sidebar list sets its own size on row text, so only the weight is set.
+                    Text(Install.displayName)
+                        .fontWeight(.bold)
+                } icon: {
+                    SidebarAppIcon()
+                }
+                .selectionDisabled()
+                .accessibilityAddTraits(.isHeader)
                 Section {
                     rows(PrototypePage.allCases.filter { !$0.isSetting })
                 }
@@ -124,6 +136,16 @@ struct WindowPrototypeView: View {
                 "Not in the Prototype", systemImage: page.systemImage,
                 description: "This page is built once Home and Activity are approved.")
         }
+    }
+}
+
+/// The running app's icon at the sidebar's tile size: the release or the Dev icon, as the Dock shows it.
+private struct SidebarAppIcon: View {
+    @Environment(\.sidebarRowSize) private var rowSize
+
+    var body: some View {
+        AppIconView(
+            icon: NSApplication.shared.applicationIconImage, side: PageMetrics.sidebarTileSide(rowSize))
     }
 }
 
