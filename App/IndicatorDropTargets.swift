@@ -118,8 +118,10 @@ extension IndicatorPanel {
     /// The pill becomes a circle under the pointer, and a target shows at each anchor.
     func beginDrag() {
         guard let screen else { return }
-        pill.look = .dragged
         dropTargets = DropTargets(in: screen.visibleFrame, below: panel)
+        // The window goes under the pointer first, so the circle takes its shape in its new room.
+        moveDrag(to: NSEvent.mouseLocation)
+        pill.look = .dragged
     }
 
     func moveDrag(to point: NSPoint) {

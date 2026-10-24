@@ -220,8 +220,9 @@ final class IndicatorPanel {
         case .button:
             guard let pillAction = content?.look.action else { return }
             onAction?(pillAction)
-            // The pipeline ends the Undo window itself; any other action is done with the pill.
-            if pillAction != .undo {
+            // The pipeline ends the Undo window itself; any other message is done. A recording's fix (Choose Mic…)
+            // leaves the recording on the pill.
+            if pillAction != .undo, case .message = content?.look {
                 showQuiet()
             }
         }

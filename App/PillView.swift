@@ -198,8 +198,9 @@ final class PillView: NSView {
         drawCheck(isShown: look == .done && old != .done)
         runClock()
         updateAccessibility()
-        trackHover()
         morph(fadesContentIn: isNewContent)
+        // Last: the hover it finds can change the look (the idle bar's keys), and that change runs its own apply.
+        trackHover()
     }
 
     /// The content's natural length along the capsule, ends included: the stack's fitting size without the look's
