@@ -94,6 +94,11 @@ struct PageSheet<Content: View>: View {
         }
         .frame(width: PageMetrics.sheetWidth)
         .navigationTitle(title)
+        // Esc closes the sheet, as every macOS sheet: Cancel (`.cancellationAction`) takes it when the sheet has one;
+        // a sheet with Done alone has no cancel action, so Esc would only beep.
+        .onExitCommand {
+            if confirm == nil { dismiss() }
+        }
         .toolbar {
             if let confirm {
                 ToolbarItem(placement: .cancellationAction) {

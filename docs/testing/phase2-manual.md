@@ -952,3 +952,11 @@ Shortcut recorders, the spoken commands, the Bluetooth switch and the Microphone
 | 1156 | In History's Audio section, choose a shorter **Keep audio** period than now, with older audio saved; then click **Delete Audio Now…** and confirm | Both ask first and say the size; after Delete the “Saved audio” size goes down; General no longer has these rows | |
 | 1157 | With more than 200 dictations, scroll History to the end | The next rows load as the end comes into view, with no click | |
 | 1158 | Look at History and then at Home, Activity and General in turn | The title bar keeps one height on every page; History has no toolbar | |
+
+## Page system: sheets and list pages (0.5.0, kotoba Dev)
+
+| # | Do this | Expect | Result |
+|---|---|---|---|
+| 1195 | Open Activity > **Advanced…** (a sheet with Done only) and press Esc; open it again and press Return | Esc closes the sheet; Return closes it too (Done) | |
+| 1196 | Open Dictionary > Add Word (a sheet with Cancel and Add), type a word, press Esc | The sheet closes and nothing is added | |
+| 1197 | On History, type in the search field, then scroll the list down and up, and wait for a new dictation to arrive | The search field stays above the rows and keeps the cursor; the title bar has one tint across the whole page in light and dark | |
