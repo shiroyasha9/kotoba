@@ -138,7 +138,7 @@ final class SetupFlow {
     private let openOtherSpeechServices: @MainActor () -> Void
     private lazy var onboarding = OnboardingController(
         readiness: readiness, routeSettings: routeSettings, vault: vault, router: router, dictionary: dictionary,
-        openSpeechSettings: openSpeechSettings, openOtherSpeechServices: openOtherSpeechServices)
+        openOtherSpeechServices: openOtherSpeechServices)
     private let routeSettings: TranscriptionSettings
     private let vault: KeyVault
     private let router: TranscriptionRouter
@@ -151,8 +151,9 @@ final class SetupFlow {
     /// Reads Readiness again when the system disables the tap for user input (`HotkeyTap.disabledByUserInput`).
     private var tapDisables: Task<Void, Never>?
 
-    /// `router` checks a key in onboarding. `openSpeechSettings` opens the Speech page, where a setup fix lands;
-    /// `openOtherSpeechServices` opens it with its "Advanced…" sheet, where the xAI and Azure routes are.
+    /// `router` checks a key in onboarding. `openSpeechSettings` opens the Speech page, where the credit fix lands;
+    /// `openOtherSpeechServices` opens it with its "Advanced…" sheet, where the xAI and Azure routes and the Azure
+    /// endpoint are.
     init(
         readiness: Readiness, routeSettings: TranscriptionSettings, vault: KeyVault, router: TranscriptionRouter,
         dictionary: @escaping @MainActor () -> DictionaryModel?, openSpeechSettings: @escaping @MainActor () -> Void,
@@ -180,12 +181,14 @@ final class SetupFlow {
         onboarding.dictionaryOpened()
     }
 
-    /// "Finish Setting Up kotoba…": onboarding on the first missing step. An Azure endpoint is set in Settings.
+    /// "Finish Setting Up kotoba…" and Home's fix: onboarding on the first missing step. The Azure endpoint is set in the
+    /// Speech page's "Advanced…" sheet, credit from the Speech page.
     func finishSetup() {
         switch readiness.firstMissing {
         case .microphone, .accessibility: onboarding.show(step: .permissions)
         case .setup(.key, _): onboarding.show(step: .key)
-        case .setup(.endpoint, _), .setup(.credit, _): openSpeechSettings()
+        case .setup(.endpoint, _): openOtherSpeechServices()
+        case .setup(.credit, _): openSpeechSettings()
         case nil: onboarding.show()
         }
     }

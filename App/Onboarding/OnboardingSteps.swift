@@ -242,7 +242,7 @@ struct DoneStep: View {
                     SymbolTile(systemImage: "exclamationmark.triangle", tint: .orange, side: PageMetrics.rowTileSide)
                 } trailing: {
                     if model.readiness.missingSetup?.item == .endpoint {
-                        Button("Add Your Azure Endpoint…", action: model.openSpeechSettings)
+                        Button("Add Your Azure Endpoint…", action: model.openOtherSpeechServices)
                     } else {
                         Button(Self.fixTitle(step)) { model.step = step }
                     }
