@@ -20,9 +20,8 @@ private struct MicrophonePane: View {
             Section {
                 PageHeader(
                     page: .microphones,
-                    summary:
-                        "kotoba uses the first connected microphone in the list. When one is unplugged, it moves to the next."
-                )
+                    summary: "kotoba uses the first connected microphone in the list. When one is unplugged, it moves "
+                        + "to the next.")
             }
             if let warning = model.warning {
                 Section {
