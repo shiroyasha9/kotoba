@@ -30,7 +30,7 @@ Cause (research): the code, not a missing library. No MIT or Apache-2.0 library 
 ### Window
 - Resizable. The content column has a maximum width and is centred, so lines do not stretch.
 - No sidebar search and no back/forward buttons (about 9 pages, no drill-downs). Look again if the page map grows.
-- Sidebar (owner, 2026-10-24 prototype review): the floating inset glass sidebar of Finder and Notes, not the edge-to-edge sidebar of System Settings, if SwiftUI or AppKit gives it natively; if not, keep the edge-to-edge one. Keep the coloured tiles (System Settings look). Draw each symbol at its real weight and optical size, centred in a tile that follows `sidebarRowSize`. Do not use `.resizable()` on symbols.
+- Sidebar (owner, 2026-10-24 prototype review): the floating inset glass sidebar of Finder and Notes, not the edge-to-edge sidebar of System Settings, if SwiftUI or AppKit gives it natively; if not, keep the edge-to-edge one. Result (spike, 2026-10-24, `<runbooks>/2026-10-24-kotoba-ui-redesign/sidebar-spike/`): macOS 27 draws every sidebar edge to edge, Apple's apps too, and the floating look exists only behind private switches that do nothing. So the sidebar stays edge to edge. Keep the coloured tiles (System Settings look). Draw each symbol at its real weight and optical size, centred in a tile that follows `sidebarRowSize`. Do not use `.resizable()` on symbols.
 - Content symbols match the weight and scale of their text (for example "Words per minute").
 - No hard-coded spacing, row heights or radii: system styles, `containerShape` and concentric corners. Text colours come from the system label colours. Few dividers: grouped sections separate the content.
 
