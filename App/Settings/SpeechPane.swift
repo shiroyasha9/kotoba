@@ -262,7 +262,7 @@ extension TranscriptionRoute {
     }
 }
 
-/// The Azure endpoint: edited in a draft and saved on Return or when the field loses focus.
+/// The Azure endpoint: edited in a draft and saved on Return, when the field loses focus, or when the sheet closes.
 private struct EndpointField: View {
     let model: SpeechSettingsModel
     @State private var draft: String
@@ -285,6 +285,9 @@ private struct EndpointField: View {
             .onChange(of: isFocused) { _, isFocused in
                 if !isFocused { model.commitAzureEndpoint(draft) }
             }
+            // The sheet can close while the field has the focus (Done, Esc), which ends no editing: the draft is
+            // saved then too, so a typed endpoint is never lost.
+            .onDisappear { model.commitAzureEndpoint(draft) }
         if !isDraftValid {
             Text("Use the https endpoint from the Azure portal (Keys and Endpoint).").foregroundStyle(.red)
         }

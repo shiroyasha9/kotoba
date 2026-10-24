@@ -8,8 +8,6 @@ import SwiftUI
 struct KeyField: View {
     let account: ProviderAccount
     let keyChecks: KeyChecks
-    /// Nil: the field takes the room its row leaves (the Speech page). Onboarding sets a width.
-    var fieldWidth: CGFloat?
     /// The owner clicked Change…: the field shows over the saved key until Save or Cancel.
     @State private var isChanging = false
     @State private var draft = ""
@@ -42,7 +40,6 @@ struct KeyField: View {
                     .labelsHidden()
                     .multilineTextAlignment(.leading)
                     .textFieldStyle(.roundedBorder)
-                    .frame(width: fieldWidth)
                     .focused($isFieldFocused)
                     .onSubmit(save)
                     // After Change…, the cursor goes in the field for the new key.

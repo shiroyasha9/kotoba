@@ -38,7 +38,8 @@ private struct DictionaryPane: View {
             Section {
                 LearnFromEditsToggle()
             }
-            if !model.suggestions.isEmpty {
+            // Not while a search runs: the matches come first, as in 0.4.
+            if !model.suggestions.isEmpty && search.isEmpty {
                 SuggestionsSection(model: model)
             }
             words
@@ -47,6 +48,8 @@ private struct DictionaryPane: View {
         .sheet(item: $editing) { editing in
             EntryEditor(draft: editing.draft, isNew: editing.row == nil) { draft throws(DictionaryError) in
                 try model.save(draft, replacing: editing.row)
+                // A new word shows in the list, whatever the search was.
+                if editing.row == nil { search = "" }
             }
         }
         .sheet(isPresented: $isAdvancedShown) {
@@ -72,8 +75,9 @@ private struct DictionaryPane: View {
                 }
             }
         } header: {
-            // The field names the list ("Search words"), so the group needs no other header.
-            if model.rows.isEmpty {
+            // The field names the list ("Search words"), so the group needs no other header. It stays while it
+            // filters, even when no word is left, so a search never hides words with no field to clear it.
+            if model.rows.isEmpty && search.isEmpty {
                 Text("Words")
             } else {
                 PageSearchField(text: $search, prompt: "Search words")
@@ -140,8 +144,13 @@ struct DictionaryAdvanced: View {
 
     /// The rows that send a hint, then the ones too long to send. A replacement that deletes its word sends none and has
     /// no row.
+    /// A hint two rows send (the word "Vercel" and the replacement "versel → Vercel") has one row: they share one star.
     private var rows: [DictionaryModel.Row] {
-        let sent = model.rows.filter { model.keyterm(for: $0) != nil }
+        var seen: Set<String> = []
+        let sent = model.rows.filter { row in
+            guard let keyterm = model.keyterm(for: row) else { return false }
+            return seen.insert(TermUse.key(for: keyterm)).inserted
+        }
         let tooLong = model.rows.filter { row in
             let draft = model.draft(for: row)
             return model.keyterm(for: row) == nil && !(draft.isReplacing && draft.replacement.isEmpty)
