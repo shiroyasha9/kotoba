@@ -87,6 +87,13 @@ custom_rules:
     excluded_match_kinds: [comment, doccomment, string]
     message: "A test in `make test` never times work or waits on the wall clock: load from other builds fails it while the code is fine. Count the work (`costs(on:of:)` in KotobaStorage's tests) or control time with ManualClock; a time limit goes in a `TimingTests` suite (`make timing`)."
     severity: error
+  test_waits_on_events:
+    name: "Tests wait on events"
+    included: [".*/Tests/.*\\.swift"]
+    regex: "for _ in 0\\.\\.<\\d[\\d_]*\\s*\\{\\s*await Task\\.yield\\(\\)\\s*\\}|=\\s*await eventually\\b|\\beventually\\s*[({][^\\n]*[)}]\\s*==\\s*false"
+    excluded_match_kinds: [comment, doccomment, string]
+    message: "A count of yields proves nothing on a busy machine, and `eventually` only waits for an event that comes: expect it (`#expect(await eventually { … })`). To show that nothing happened, first wait for the event that fixes the moment (`ManualClock.waitForTimer`, `settleTimers`, `settle`, a fake's call), then check the fact."
+    severity: error
   no_task_sleep_in_core:
     name: "No Task.sleep in KotobaCore"
     included: ["KotobaCore/Sources/.*\\.swift"]

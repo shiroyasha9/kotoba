@@ -12,9 +12,11 @@ struct IndicatorLookTests {
         states.map { IndicatorLook($0, showsIdleBar: false, isSecureInputOn: false) }
     }
 
-    /// The first `count` states the pipeline published, and any after them, so a state too many fails the test; nil
-    /// when fewer came, so a missing state fails it too and never hangs it.
-    private static func published(by pipeline: DictationPipeline, count: Int) async -> [DictationState]? {
+    /// Every state the pipeline published once its work settled, each one taken from `states`: the count comes from
+    /// the pipeline (`publishedStateCount`), so a state too many or too few fails the test, and none is missed.
+    private static func published(by pipeline: DictationPipeline) async -> [DictationState] {
+        await pipeline.settle()
+        let count = await pipeline.publishedStateCount
         let log = Mutex<[DictationState]>([])
         let reader = Task {
             for await state in pipeline.states {
@@ -22,8 +24,7 @@ struct IndicatorLookTests {
             }
         }
         defer { reader.cancel() }
-        guard await eventually({ log.withLock { $0.count >= count } }) else { return nil }
-        for _ in 0..<100 { await Task.yield() }
+        #expect(await eventually { log.withLock { $0.count >= count } })
         return log.withLock { $0 }
     }
 
@@ -51,7 +52,7 @@ struct IndicatorLookTests {
         await pipeline.handle(.chordUp)
         await pipeline.settle()
 
-        let shown = Self.looks(of: await Self.published(by: pipeline, count: 4) ?? [])
+        let shown = Self.looks(of: await Self.published(by: pipeline))
         #expect(
             shown == [.recording(IndicatorRecording(isHandsFree: false)), .processing, .done, .hidden])
     }
@@ -109,7 +110,7 @@ struct IndicatorLookTests {
         await pipeline.settle()
         await pipeline.handle(.chordUp, at: pressedAt + .milliseconds(100))
 
-        let published = await Self.published(by: pipeline, count: 2) ?? []
+        let published = await Self.published(by: pipeline)
         #expect(published.map(\.phase) == [.recording(isLong: false, isPushToTalk: true), .recording(isLong: false)])
     }
 
@@ -121,7 +122,7 @@ struct IndicatorLookTests {
 
         await pipeline.dictate(world)
 
-        let published = await Self.published(by: pipeline, count: 4) ?? []
+        let published = await Self.published(by: pipeline)
         #expect(published.map(\.phase) == [.recording(isLong: false), .transcribing, .idle, .idle])
         #expect(published.map(\.isPasted) == [false, false, true, false])
         #expect(Self.looks(of: published) == [.recording(.init(isHandsFree: true)), .processing, .done, .hidden])
@@ -152,7 +153,7 @@ struct IndicatorLookTests {
         await secondGate.open()
         await pipeline.settle()
 
-        let published = await Self.published(by: pipeline, count: 6) ?? []
+        let published = await Self.published(by: pipeline)
         let checks = published.filter(\.isPasted)
         #expect(checks == [DictationState(.idle, isPasted: true)])
         #expect(await world.paster.pasteCount == 2)
@@ -166,7 +167,7 @@ struct IndicatorLookTests {
 
         await pipeline.dictate(world)
 
-        let published = await Self.published(by: pipeline, count: 3) ?? []
+        let published = await Self.published(by: pipeline)
         #expect(Self.looks(of: published) == [.recording(.init(isHandsFree: true)), .processing, .hidden])
     }
 
@@ -177,7 +178,7 @@ struct IndicatorLookTests {
 
         await pipeline.dictate(world)
 
-        let published = await Self.published(by: pipeline, count: 3) ?? []
+        let published = await Self.published(by: pipeline)
         #expect(Self.looks(of: published) == [.recording(.init(isHandsFree: true)), .processing, .message])
         #expect(published.allSatisfy { !$0.isPasted })
     }

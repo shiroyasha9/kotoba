@@ -33,7 +33,7 @@ struct PipelinePrimerSizeTests {
 
         await pipeline.tap(world)
         await pipeline.tap(world)
-        _ = await eventually { await world.paster.pasteCount > 0 }
+        #expect(await eventually { await world.paster.pasteCount > 0 })
         await primer.open()
         await pipeline.settle()
 

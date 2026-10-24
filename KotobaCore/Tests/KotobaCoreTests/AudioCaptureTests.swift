@@ -170,8 +170,7 @@ struct AudioCaptureTests {
 
         hardware.disconnect(FakeCaptureHardware.builtIn)
         #expect(await eventually { capture.inputInUse == nil })
-        // A rebuild with still no mic says nothing more.
-        for _ in 0..<100 { await Task.yield() }
+        // A rebuild with still no mic says nothing more: the events at the end are exactly two losses.
         let reads = hardware.deviceReads
         hardware.restartService()
         #expect(await eventually { hardware.deviceReads > reads })
@@ -245,7 +244,7 @@ struct AudioCaptureTests {
             try await capture.resumeCapture()
             isResumed.withLock { $0 = true }
         }
-        for _ in 0..<100 { await Task.yield() }
+        #expect(await eventually { await capture.rebuildWaiterCount == 1 })
         #expect(hardware.running == nil)
 
         await recorder.releaseRateSwitch()

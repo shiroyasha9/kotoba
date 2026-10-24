@@ -66,9 +66,14 @@ actor ClipboardGuard {
     private var pending: Waiting? {
         didSet {
             if oldValue?.write != pending?.write { oldValue?.timer?.cancel() }
-            if pending == nil { restoreWaiters.resumeAll() }
+            if !isRestoreWaiting { restoreWaiters.resumeAll() }
         }
     }
+    /// Restores taken from `pending` (`takePending`) whose pasteboard write has not ended: the app may end as soon as
+    /// quit returns, so quit waits for them too.
+    private var restoresWriting = 0
+    /// A paste waits for its read and restore, or a restore is being written.
+    private var isRestoreWaiting: Bool { pending != nil || restoresWriting > 0 }
     /// Quit, waiting for the paste that waits for its restore (`waitUntilRestored(by:)`).
     private var restoreWaiters = Waiters()
     /// Test seam: whether quit waits for a restore.
@@ -150,7 +155,7 @@ actor ClipboardGuard {
     /// Quit: returns once no paste waits for its read and restore, or at `deadline`. An unread paste's text then stays
     /// (AppKit hands over every promise at quit).
     func waitUntilRestored(by deadline: ContinuousClock.Instant) async {
-        guard pending != nil else { return }
+        guard isRestoreWaiting else { return }
         let bound = work.schedule(at: deadline) { await self.endRestoreWait() }
         await withCheckedContinuation { restoreWaiters.add($0) }
         bound.cancel()
@@ -197,14 +202,22 @@ actor ClipboardGuard {
     private func restoreAfterRead(_ write: Write) async {
         guard let waiting = takePending(write) else { return }
         await restoreOriginal(of: waiting)
+        restoreWritten()
     }
 
     /// Ends the wait for `write`, from its own timer: the timer is not cancelled with it. Nil when it no longer waits.
+    /// The caller writes the restore, then calls `restoreWritten`; quit waits until then.
     private func takePending(_ write: Write) -> Waiting? {
         guard let waiting = pending, waiting.write == write else { return nil }
+        restoresWriting += 1
         pending?.timer = nil
         pending = nil
         return waiting
+    }
+
+    private func restoreWritten() {
+        restoresWriting -= 1
+        if !isRestoreWaiting { restoreWaiters.resumeAll() }
     }
 
     private func restoreOriginal(of waiting: Waiting) async {
@@ -219,6 +232,7 @@ actor ClipboardGuard {
         // A read just before the deadline cancels this timer, but one that already woke still gets here.
         guard pending?.read == .notYet, let waiting = takePending(write) else { return }
         let isLeft = await pasteboard.restore(.plainText(waiting.text), ifChangeCount: write.changeCount)
+        restoreWritten()
         await waiting.unread(isLeft)
     }
 }

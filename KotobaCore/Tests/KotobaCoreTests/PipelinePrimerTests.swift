@@ -41,11 +41,9 @@ struct PipelinePrimerTests {
 
         await pipeline.tap(world)
         await pipeline.tap(world)
-        let isPasted = await eventually { await world.paster.pasted == ["no wait"] }
+        #expect(await eventually { await world.paster.pasted == ["no wait"] })
         await primer.open()
         await pipeline.settle()
-
-        #expect(isPasted)
     }
 
     /// The primer is billed, so its cost goes to the ledger with the dictation that sent it; it adds no audio and no
@@ -107,13 +105,19 @@ struct PipelinePrimerTests {
         let pipeline = world.makePipeline()
         let interval = DictationPipeline.Settings(audioDirectory: URL(filePath: "/tmp")).primerInterval
 
+        let primed = world.clock.now
         await pipeline.tap(world)
+        #expect(await eventually { await primer.hasWaiters })
+        await world.clock.waitForTimer(at: primed + interval)
         world.clock.advance(by: interval)
-        let isSentBeside = await eventually { await world.provider.primes > 1 }
+        // The primer timer ran while the first primer is held: it sent none beside it (a primer sent sets `primedAt`
+        // in the timer's own turn; its request goes in a task of its own).
+        await pipeline.settleTimers()
+        let lastPrimed = await pipeline.primedAt
         await primer.open()
         await pipeline.settle()
 
-        #expect(isSentBeside == false)
+        #expect(lastPrimed == primed)
         #expect(await world.provider.maxPrimesInFlight == 1)
         // The held primer's timer passed while it was on its way, so the next goes as soon as it is back.
         #expect(await world.provider.primes == 2)

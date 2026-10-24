@@ -63,7 +63,7 @@ struct EditReadbackTests {
         #expect(world.field.reads.isEmpty)
         #expect(world.field.isClosed)
         #expect(await world.readback.isFollowing == false)
-        #expect(await world.nextEdit() == nil)
+        #expect(await world.readback.reportedEdits == 0)
     }
 
     @Test func theTimeLimitReportsTheLastEdit() async {
@@ -178,7 +178,7 @@ struct EditReadbackTests {
 
         #expect(world.field.isClosed)
         #expect(await world.readback.isFollowing == false)
-        #expect(await world.nextEdit() == nil)
+        #expect(await world.readback.reportedEdits == 0)
     }
 
     @Test func withLearningOffAPasteOpensNoField() async {
@@ -243,7 +243,8 @@ struct EditReadbackTests {
         await world.quiet()
         await world.leave()
 
-        #expect(await world.nextEdit() == nil)
+        #expect(await world.readback.isFollowing == false)
+        #expect(await world.readback.reportedEdits == 0)
     }
 
     @Test func noReadableFieldMeansNoSession() async {

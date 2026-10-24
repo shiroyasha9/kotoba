@@ -247,6 +247,7 @@ public actor EditReadback {
         current.events.cancel()
         work.track { await current.field.close() }
         guard reporting, let edited = current.edited, edited != current.pasted else { return }
+        reportedEdits += 1
         editsContinuation.yield(
             Edit(
                 pasted: current.pasted, edited: edited, appBundleID: current.field.appBundleID, endedBy: reason,
@@ -261,6 +262,9 @@ public actor EditReadback {
     var isFollowing: Bool {
         session != nil
     }
+
+    /// Test seam: the edits reported so far, counted when each is sent to `edits`, so a test can show that none was.
+    private(set) var reportedEdits = 0
 
     /// Waits for all work that can finish now; tests call it after each step.
     func settle() async {

@@ -176,10 +176,34 @@ struct PipelineQuitTests {
         #expect(await eventually { await pipeline.paste.isQuitWaiting })
         _ = await world.pasteboard.appReads()
         let restoreAt = world.clock.now + ClipboardPaste.readSettle
-        #expect(await eventually { world.clock.deadlines.contains(restoreAt) })
+        await world.clock.waitForTimer(at: restoreAt)
         world.clock.advance(by: ClipboardPaste.readSettle)
         await quit
 
+        #expect(await world.pasteboard.text == "user's clipboard")
+    }
+
+    /// Quit waits for the restore's write, not only for its start: the app may end as soon as quit returns.
+    @Test func quitWaitsUntilTheRestoreIsWritten() async {
+        let world = FakeWorld(transcript: "pasted")
+        let pipeline = world.makePipeline()
+        await world.paster.readLater()
+        await pipeline.dictate(world)
+        let write = Gate()
+        await world.pasteboard.holdNextRestore(at: write)
+
+        async let quit: Void = pipeline.shutdown()
+        #expect(await eventually { await pipeline.paste.isQuitWaiting })
+        _ = await world.pasteboard.appReads()
+        let restoreAt = world.clock.now + ClipboardPaste.readSettle
+        await world.clock.waitForTimer(at: restoreAt)
+        world.clock.advance(by: ClipboardPaste.readSettle)
+        #expect(await eventually { await write.hasWaiters })
+        let waitsDuringTheWrite = await pipeline.paste.isQuitWaiting
+        await write.open()
+        await quit
+
+        #expect(waitsDuringTheWrite)
         #expect(await world.pasteboard.text == "user's clipboard")
     }
 

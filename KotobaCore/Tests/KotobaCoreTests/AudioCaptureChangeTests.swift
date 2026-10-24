@@ -34,7 +34,7 @@ struct AudioCaptureChangeTests {
         _ = try await capture.beginCapture(into: Self.file)
 
         hardware.connect(FakeCaptureHardware.usb)
-        for _ in 0..<100 { await Task.yield() }
+        #expect(await eventually { await capture.isInputChangeDeferred })
         #expect(hardware.opened == ["built-in"])
 
         _ = await capture.cancelCapture()
@@ -124,11 +124,12 @@ struct AudioCaptureChangeTests {
         let hardware = FakeCaptureHardware()
         let clock = ManualClock()
         let capture = AudioCapture(hardware: hardware, clock: clock)
+        let start = clock.now
         guard case .running(let levels) = await capture.beginTest(for: .seconds(5)) else {
             Issue.record("The mic test did not start")
             return
         }
-        #expect(await eventually { !clock.deadlines.isEmpty })
+        await clock.waitForTimer(at: start + .seconds(5))
 
         clock.advance(by: .seconds(5))
 

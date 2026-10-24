@@ -339,6 +339,7 @@ actor FakePolisher: TextPolisher {
     }
 
     func polish(_ text: String) async throws -> RewrittenText {
+        await Slowness.pause()
         texts.append(text)
         await gate?.pass()
         return RewrittenText(text: try result.get(), model: "fake/polisher", cost: cost, isComplete: isComplete)
@@ -368,12 +369,14 @@ actor FakeSelector: PastedTextSelector {
     }
 
     func select(_ text: String, in app: DictationApp?) async -> SelectionResult {
+        await Slowness.pause()
         requests.append(text)
         await gate?.pass()
         return answer
     }
 
     func restoreSelection() async {
+        await Slowness.pause()
         restores += 1
     }
 }

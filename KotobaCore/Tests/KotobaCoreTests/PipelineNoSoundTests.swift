@@ -222,7 +222,7 @@ extension FakeWorld {
             clock.advance(by: .milliseconds(100))
             let taken = await pipeline.handledSoundEvents
             await audio.deliverLevel(level)
-            _ = await eventually { await pipeline.handledSoundEvents > taken }
+            #expect(await eventually { await pipeline.handledSoundEvents > taken })
         }
     }
 
@@ -230,6 +230,6 @@ extension FakeWorld {
     func loseInput(_ pipeline: DictationPipeline) async {
         let taken = await pipeline.handledSoundEvents
         await audio.loseInput()
-        _ = await eventually { await pipeline.handledSoundEvents > taken }
+        #expect(await eventually { await pipeline.handledSoundEvents > taken })
     }
 }

@@ -57,7 +57,7 @@ final class ReadbackWorld: Sendable {
     }
 
     private func taken() async {
-        _ = await eventually { field.isEventTaken }
+        #expect(await eventually { field.isEventTaken })
         await readback.settle()
     }
 
@@ -67,9 +67,10 @@ final class ReadbackWorld: Sendable {
         await readback.settle()
     }
 
-    /// The first edit reported, or nil when none came.
+    /// The first edit reported, once it is collected; nil, with an issue, when none comes within `eventually`'s
+    /// bound. A test that shows no edit came asserts `EditReadback.reportedEdits` once the session ended.
     func nextEdit() async -> EditReadback.Edit? {
-        _ = await eventually { !collected.edits.withLock(\.isEmpty) }
+        #expect(await eventually { !collected.edits.withLock(\.isEmpty) })
         return collected.edits.withLock(\.first)
     }
 }
@@ -107,8 +108,8 @@ final class FakeFocusedField: FocusedField {
     /// The radius of each read.
     var reads: [Int] { shared.state.withLock(\.reads) }
     var isClosed: Bool { shared.state.withLock(\.isClosed) }
-    /// The session took every event sent and asks for the next.
-    var isEventTaken: Bool { shared.state.withLock { $0.asked > $0.sent } }
+    /// The session took every event sent: it asks for the next, or it ended on it and closed the field.
+    var isEventTaken: Bool { shared.state.withLock { $0.asked > $0.sent || $0.isClosed } }
 
     func type(_ text: String) {
         shared.state.withLock { $0.text = text }
@@ -148,13 +149,15 @@ final class FakeFocusedField: FocusedField {
     }
 
     func read(radius: Int) async -> String? {
-        shared.state.withLock { state in
+        await Slowness.pause()
+        return shared.state.withLock { state in
             state.reads.append(radius)
             return state.text
         }
     }
 
     func close() async {
+        await Slowness.pause()
         let waiter = shared.state.withLock { state in
             state.isClosed = true
             defer { state.waiter = nil }
@@ -179,6 +182,7 @@ final class FakeFieldWatcher: FieldWatcher {
     var opens: Int { count.withLock { $0 } }
 
     func focusedField() async -> (any FocusedField)? {
+        await Slowness.pause()
         count.withLock { $0 += 1 }
         if isHeld { await gate.pass() }
         return field

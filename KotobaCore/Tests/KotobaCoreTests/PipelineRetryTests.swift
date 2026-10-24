@@ -239,7 +239,9 @@ struct PipelineRetryTests {
         #expect(await eventually { await liveGate.hasWaiters })
         async let retried: Void = pipeline.retryPending()
 
-        #expect(await eventually { await world.provider.requests.count >= 3 } == false)
+        // The retry waits for the live send to end: no request of its own until then.
+        #expect(await eventually { await pipeline.waiterCount(.quiet) == 1 })
+        #expect(await world.provider.requests.count == 2)
         #expect(await pipeline.state.phase == .transcribing)
         await liveGate.open()
         await pipeline.settle()

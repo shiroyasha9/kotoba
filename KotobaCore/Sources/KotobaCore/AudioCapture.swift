@@ -35,7 +35,7 @@ public actor AudioCapture: AudioSource {
     /// Mic level 0...1, about ten updates a second while recording, for the indicator.
     public nonisolated let levels: AsyncStream<Float>
     private let levelContinuation: AsyncStream<Float>.Continuation
-    private let hardware: any CaptureHardware
+    let hardware: any CaptureHardware
     let clock: any PipelineClock
     private let inputDidChange: @Sendable () -> Void
     private var input: (any CaptureInput)?
@@ -70,7 +70,7 @@ public actor AudioCapture: AudioSource {
     /// A device burst (connect, then default change) is handled once: one check queued, not one per event.
     private var isDeviceCheckQueued = false
     /// A mic change that arrived during a capture; it applies when the capture ends.
-    private var isInputChangeDeferred = false
+    private(set) var isInputChangeDeferred = false
 
     /// `inputDidChange` is called when the mic in use (`inputInUse`) changes, for the Microphone pane. `clock` times
     /// the mic test.
@@ -306,6 +306,9 @@ public actor AudioCapture: AudioSource {
         }
     }
 
+    /// Test seam: resumes that wait for a rebuild to end.
+    var rebuildWaiterCount: Int { rebuildWaiters.count }
+
     /// No mic is open during the capture; its events say so once (`CaptureEvent.inputLost`).
     private func reportInputLost() {
         guard let events = capture?.events, capture?.isInputLossReported == false else { return }
@@ -340,27 +343,5 @@ extension AudioCapture {
             await requestRebuild(reason: "the mic did not resume")
             guard capture?.recorder === recorder, self.input != nil else { throw error }
         }
-    }
-}
-
-// MARK: - Mic choice
-
-extension AudioCapture {
-    /// The mic to record from among `devices`, without the ones in `leftOut`: the first one in the owner's order, else
-    /// the system default (a Bluetooth default replaced by the built-in mic while the owner's switch says so,
-    /// `InputDevicePolicy`).
-    private func micInUse(among devices: [AudioDevice], leftOut: Set<String> = []) -> AudioDevice? {
-        InputDevicePolicy.micInUse(
-            defaultInput: hardware.defaultInput(), devices: devices, order: hardware.microphoneOrder(),
-            leftOut: leftOut, bluetoothOnlyWhenListed: hardware.bluetoothOnlyWhenListed())
-    }
-
-    /// Why no mic opened: a Bluetooth mic the owner's switch keeps out, by name, else no input. Read only on a failed
-    /// press.
-    private func noMicError() -> CaptureError {
-        let keptOut = InputDevicePolicy.bluetoothKeptOut(
-            defaultInput: hardware.defaultInput(), devices: hardware.devices(), order: hardware.microphoneOrder(),
-            bluetoothOnlyWhenListed: hardware.bluetoothOnlyWhenListed())
-        return keptOut.map { .bluetoothNotListed(name: $0.name) } ?? .noInputDevice
     }
 }

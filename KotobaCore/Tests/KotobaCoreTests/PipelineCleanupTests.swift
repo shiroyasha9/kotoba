@@ -242,10 +242,12 @@ actor FakeTextCleaner: TextCleaner {
     }
 
     func warmUp() async {
+        await Slowness.pause()
         warmUps += 1
     }
 
     func clean(_ transcript: String, vocabulary: [String], mode: AppMode) async throws -> RewrittenText {
+        await Slowness.pause()
         requests.append(Request(transcript: transcript, vocabulary: vocabulary, mode: mode))
         await gate?.pass()
         return RewrittenText(text: try result.get(), model: "fake/cleaner", cost: cost, isComplete: isComplete)

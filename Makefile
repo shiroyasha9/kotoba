@@ -12,7 +12,7 @@ SWIFT_SRC   := App KotobaCore/Sources KotobaCore/Tests KotobaCore/Package.swift 
                KotobaStorage/Sources KotobaStorage/Tests KotobaStorage/Package.swift
 SWIFTFORMAT := xcrun swift-format
 
-.PHONY: gen build build-check test lint lint-files format format-lint privacy check view-checks snapshots readme-images memory window-memory latency latency-log stop-probe timing \
+.PHONY: gen build build-check test lint lint-files format format-lint privacy check view-checks snapshots readme-images memory window-memory latency latency-log stop-probe timing test-slow \
 	release dmg appcast
 
 gen:
@@ -43,6 +43,12 @@ test:
 	$(call RUN_TESTS,KotobaProviders)
 	$(call RUN_TESTS,KotobaStorage)
 
+# KotobaCore's tests with each fake port call slowed (`Slowness` in Fakes.swift: 1,000 yields first), as on a busy
+# machine: a test that passes only because the pipeline's tasks ran before its next step fails here.
+test-slow: export KOTOBA_TEST_SLOW = 1000
+test-slow:
+	$(call RUN_TESTS,KotobaCore)
+
 # Wall-clock checks (the TimingTests suites): the History pane's reads, Activity, retention and the ledger fill on
 # 10,000 dictations, the Polish diff and the dictionary's replacements, each against a time limit. Off in `make test`,
 # where load from other builds fails a time limit; run it on an idle machine. KotobaProviders has no such suite.
@@ -72,7 +78,7 @@ format-lint:
 privacy:
 	scripts/privacy.sh
 
-check: privacy format-lint lint build-check view-checks test
+check: privacy format-lint lint build-check view-checks test test-slow
 
 # Every registered view's layout checks and the pills' VoiceOver checks (App/Snapshots.swift `--snapshot-checks`), with
 # no image written.

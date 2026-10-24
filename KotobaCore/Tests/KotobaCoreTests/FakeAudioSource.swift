@@ -71,6 +71,7 @@ actor FakeAudioSource: AudioSource {
     }
 
     func beginCapture(into file: URL) async throws -> AsyncStream<CaptureEvent> {
+        await Slowness.pause()
         await beginGate?.pass()
         if let beginError { throw beginError }
         guard !isOpen else { throw AudioCapture.CaptureError.alreadyCapturing }
@@ -110,6 +111,7 @@ actor FakeAudioSource: AudioSource {
     }
 
     func endCapture() async -> RecordedAudio? {
+        await Slowness.pause()
         isCapturing = false
         isOpen = false
         continuation?.finish()
@@ -127,6 +129,7 @@ actor FakeAudioSource: AudioSource {
     }
 
     func cancelCapture() async -> RecordedAudio? {
+        await Slowness.pause()
         isCapturing = false
         isOpen = false
         continuation?.finish()
@@ -134,11 +137,13 @@ actor FakeAudioSource: AudioSource {
     }
 
     func pauseCapture() async {
+        await Slowness.pause()
         isCapturing = false
         isPaused = true
     }
 
     func resumeCapture() async throws {
+        await Slowness.pause()
         await resumeGate?.pass()
         isCapturing = true
         isPaused = false
@@ -146,6 +151,7 @@ actor FakeAudioSource: AudioSource {
     }
 
     func discardCapture() async -> Bool {
+        await Slowness.pause()
         isCapturing = false
         isOpen = false
         continuation?.finish()
@@ -154,7 +160,8 @@ actor FakeAudioSource: AudioSource {
     }
 
     func discard(_ audio: RecordedAudio) async -> Bool {
-        remove(audio.file)
+        await Slowness.pause()
+        return remove(audio.file)
     }
 
     private func remove(_ file: URL) -> Bool {

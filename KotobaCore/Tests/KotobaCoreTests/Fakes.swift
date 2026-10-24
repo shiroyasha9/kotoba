@@ -22,6 +22,12 @@ struct FakeWorld {
     let setup = FakeSetup()
     let microphone = FakeMicrophoneAccess()
 
+    /// Returns once `pipeline`'s paste waits for the release of the press made at `press`: the bound on its lost
+    /// release (`Settings.chordReleaseWait`) is armed, after the transcript came. From then no paste is a fact.
+    func waitForReleaseWait(_ pipeline: DictationPipeline, pressedAt press: ContinuousClock.Instant) async {
+        await clock.waitForTimer(at: press + pipeline.settings.chordReleaseWait)
+    }
+
     /// The fake mic sends no levels, so the no-sound deadline (`Settings.noSoundWarning`) stays out of other
     /// tests' way unless a test sets it.
     func makePipeline(noSoundWarning: Duration = .seconds(3_600)) -> DictationPipeline {
@@ -43,6 +49,19 @@ struct FakeWorld {
 }
 
 struct FakeError: Error {}
+
+/// `KOTOBA_TEST_SLOW=<yields>` (`make test-slow`): each fake port call yields that many times before it acts, as a busy
+/// machine delays the pipeline's tasks. A test that passes only because those tasks ran before its next step (a clock
+/// advance before a timer was armed, a check that nothing happened yet) fails under it.
+enum Slowness {
+    static let yields = ProcessInfo.processInfo.environment["KOTOBA_TEST_SLOW"].flatMap { Int($0) } ?? 0
+
+    static func pause() async {
+        for _ in 0..<yields {
+            await Task.yield()
+        }
+    }
+}
 
 /// Whether Microphone access is on; tests turn it off as the owner would in System Settings.
 final class FakeMicrophoneAccess: Sendable {
@@ -165,6 +184,7 @@ actor FakeTranscriptionProvider: TranscriptionProvider {
     private var primesInFlight = 0
 
     func prime(language: Locale.Language, size: PrimerSize) async -> Transcript? {
+        await Slowness.pause()
         primeSizes.append(size)
         primesInFlight += 1
         maxPrimesInFlight = max(maxPrimesInFlight, primesInFlight)
@@ -174,6 +194,7 @@ actor FakeTranscriptionProvider: TranscriptionProvider {
     }
 
     func transcribe(_ request: TranscriptionRequest) async throws -> Transcript {
+        await Slowness.pause()
         requests.append(request)
         await gate?.pass()
         await gates[request.audio]?.pass()
@@ -219,6 +240,7 @@ actor FakePaster: Paster {
     }
 
     func sendPaste() async throws {
+        await Slowness.pause()
         if let error { throw error }
         onNextPaste?()
         onNextPaste = nil
@@ -238,141 +260,30 @@ actor FakePaster: Paster {
     private(set) var keystrokes: [Keystroke] = []
 
     func sendReturn() async throws {
+        await Slowness.pause()
         if let error { throw error }
         keystrokes.append(.returnKey)
     }
 
     func sendBackspaces(_ count: Int) async throws {
+        await Slowness.pause()
         if let error { throw error }
         keystrokes.append(.backspaces(count))
     }
 }
 
-actor FakePasteboard: Pasteboard {
-    private var count = 0
-    /// Holds the next `changeCount` read, once, after it took its value.
-    private var changeCountGate: Gate?
-
-    var changeCount: Int {
-        get async {
-            // The value is read first, so a held read returns what was true before the hold.
-            let value = count
-            if let gate = changeCountGate {
-                changeCountGate = nil
-                await gate.pass()
-            }
-            return value
-        }
-    }
-
-    func holdNextChangeCountRead(at gate: Gate) {
-        changeCountGate = gate
-    }
-
-    /// The next write changes the contents at once but returns only when `gate` opens.
-    private var writeReturnGate: Gate?
-
-    func holdNextWriteReturn(at gate: Gate) {
-        writeReturnGate = gate
-    }
-    private(set) var text: String?
-    private(set) var isTransient = false
-    /// How many times the full contents were read.
-    private(set) var snapshots = 0
-
-    init(text: String? = nil) {
-        self.text = text
-    }
-
-    /// The clipboard holds more than `PasteboardSnapshot.byteLimit`.
-    private var isOverLimit = false
-
-    func holdMoreThanTheLimit() {
-        isOverLimit = true
-    }
-
-    func snapshot() async -> PasteboardSnapshot {
-        snapshots += 1
-        if isOverLimit { return PasteboardSnapshot(items: [], isTooLarge: true) }
-        return text.map(PasteboardSnapshot.plainText) ?? PasteboardSnapshot(items: [])
-    }
-
-    /// Called at the first read of the transient text on the pasteboard now.
-    private var onRead: (@Sendable () -> Void)?
-
-    /// An app reads the clipboard (a paste target at its Cmd-V); the first read of a transient text tells its writer.
-    @discardableResult
-    func appReads() -> String? {
-        onRead?()
-        onRead = nil
-        return text
-    }
-
-    func write(_ text: String) async -> Int {
-        await write(text, isTransient: false, onRead: nil)
-    }
-
-    /// A clipboard manager that ignores the transient marker reads each transient text as it is written.
-    private var isManagerReading = false
-
-    func readEachWriteAsAManager() {
-        isManagerReading = true
-    }
-
-    /// Runs once, at the next transient write: what the owner does between the write and the Cmd-V.
-    private var onNextTransientWrite: (@Sendable () -> Void)?
-
-    func whenWritingTransient(_ action: @escaping @Sendable () -> Void) {
-        onNextTransientWrite = action
-    }
-
-    func writeTransient(_ text: String, onRead: @escaping @Sendable () -> Void) async -> Int {
-        let written = await write(text, isTransient: true, onRead: onRead)
-        onNextTransientWrite?()
-        onNextTransientWrite = nil
-        if isManagerReading { appReads() }
-        return written
-    }
-
-    private func write(_ text: String, isTransient transient: Bool, onRead: (@Sendable () -> Void)?) async -> Int {
-        self.text = text
-        isTransient = transient
-        self.onRead = onRead
-        count += 1
-        let written = count
-        if let gate = writeReturnGate {
-            writeReturnGate = nil
-            await gate.pass()
-        }
-        return written
-    }
-
-    func restore(_ snapshot: PasteboardSnapshot, ifChangeCount changeCount: Int) async -> Bool {
-        guard count == changeCount else { return false }
-        text = snapshot.items.first?.first { $0.type == PasteboardSnapshot.plainTextType }
-            .flatMap { String(bytes: $0.data, encoding: .utf8) }
-        isTransient = false
-        onRead = nil
-        count += 1
-        return true
-    }
-
-    /// Another app copied something.
-    func userCopies(_ text: String) {
-        self.text = text
-        isTransient = false
-        onRead = nil
-        count += 1
-    }
-}
-
 /// Yields until `condition` holds, for the few steps that run in tasks the test cannot await. Runs on the caller's actor.
+/// False only after `Gate.limit` of real time: the bound on a test whose event never comes, as a gate never opened. A
+/// count of yields was no bound: on a busy machine the pipeline's task did not run during them. Never a way to show
+/// that something did not happen: a check that nothing happened waits first for the event that fixes its moment (a
+/// timer armed, `ManualClock.waitForTimer`; the due timers run, `DictationPipeline.settleTimers`; a fake's call).
 nonisolated(nonsending) func eventually(_ condition: () async -> Bool) async -> Bool {
-    for _ in 0..<10_000 {
+    let bound = ContinuousClock.now.advanced(by: Gate.limit)
+    while ContinuousClock.now < bound {
         if await condition() { return true }
         await Task.yield()
     }
-    return false
+    return await condition()
 }
 
 extension DictationPipeline {
