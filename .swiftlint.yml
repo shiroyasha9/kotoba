@@ -419,8 +419,8 @@ custom_rules:
     name: "Pages: a row with a title and a subtitle is a PageRow"
     included: ["App/.*\\.swift"]
     excluded: ["App/(?:\\w+/)?\\w*Snapshots\\.swift", "App/(?:Indicator|Pill)\\w*\\.swift", "App/Page/.*\\.swift"]
-    regex: "(?:\\blabel:|\\bLabel)\\s*\\{\\s*Text\\([^\\n]*\\n\\s*Text\\("
-    message: "A row with a title and a grey subtitle is `PageRow(title:subtitle:icon:trailing:)`: it centres an icon on both lines and puts the trailing content where System Settings does (CODING_STANDARDS.md, Pages). A `LabeledContent` or `Label` with two Texts drifts from it."
+    regex: "(?:\\blabel:|\\bLabel|\\bToggle\\([^)\\n]*\\))\\s*\\{\\s*Text\\([^\\n]*\\n\\s*Text\\("
+    message: "A row with a title and a grey subtitle is `PageRow(title:subtitle:icon:trailing:)`, and a switch with one is `PageToggle(title:subtitle:isOn:)`: they centre an icon on both lines and put the trailing content where System Settings does (CODING_STANDARDS.md, Pages). A `LabeledContent`, `Label` or `Toggle` with two Texts drifts from them."
     severity: error
   page_form:
     name: "Pages: a grouped form is a PageForm"

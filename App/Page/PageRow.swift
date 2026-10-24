@@ -129,3 +129,20 @@ extension View {
         padding(.leading, PageMetrics.rowTileSide + PageMetrics.tileTextGap)
     }
 }
+
+/// A switch with a title and at most one grey subtitle: a `PageRow` with the switch as its trailing content, so it
+/// aligns as every row does (centred while the subtitle fits on one line, on the title line once it wraps). The switch
+/// keeps the title as its VoiceOver label.
+struct PageToggle: View {
+    let title: String
+    var subtitle: String?
+    @Binding var isOn: Bool
+
+    var body: some View {
+        PageRow(title: title, subtitle: subtitle) {
+            Toggle(title, isOn: $isOn)
+                .labelsHidden()
+                .toggleStyle(.switch)
+        }
+    }
+}
