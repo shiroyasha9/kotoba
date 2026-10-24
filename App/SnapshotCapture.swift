@@ -55,13 +55,12 @@ enum SnapshotCapture {
         return (layer.sublayers ?? []).lazy.compactMap { runningAnimation(in: $0) }.first
     }
 
-    /// Why this run cannot capture, or nil. Checked before the first capture, so a run never writes a flat image instead.
+    /// Why this run cannot capture, or nil. A missing Screen Recording grant shows as the capture's own error
+    /// (`CaptureFailure.noScreenRecording`): `CGPreflightScreenCaptureAccess()` said false in 9 of 20 runs under CPU load
+    /// with the grant on (2026-10-25).
     static func problem() -> String? {
         #if DEBUG
-            CGPreflightScreenCaptureAccess()
-                ? nil
-                : "\(responsibleApp) needs Screen Recording (System Settings > Privacy & Security > Screen Recording); "
-                    + "turn it on and run again"
+            nil
         #else
             "snapshots need a Debug build (make snapshots)"
         #endif
@@ -117,9 +116,15 @@ enum SnapshotCapture {
                     return try captureOnce(window, scale: scale)
                 } catch SCStreamError.invalidParameter {
                     CFRunLoopRunInMode(.defaultMode, 0.01, true)
+                } catch SCStreamError.userDeclined {
+                    throw CaptureFailure.noScreenRecording(responsibleApp)
                 }
             }
-            return try captureOnce(window, scale: scale)
+            do {
+                return try captureOnce(window, scale: scale)
+            } catch SCStreamError.userDeclined {
+                throw CaptureFailure.noScreenRecording(responsibleApp)
+            }
         #else
             throw CaptureFailure.releaseBuild
         #endif
@@ -173,10 +178,23 @@ enum SnapshotCapture {
         }
     #endif
 
-    private enum CaptureFailure: Error {
+    private enum CaptureFailure: Error, CustomStringConvertible {
         /// The capture does not list the window: it has no window server window (a window made with `defer: true`).
         case notListed(CGWindowID)
         case timedOut
         case releaseBuild
+        /// The capture's error -3801 (the user declined): the app that runs `make` has no Screen Recording grant.
+        case noScreenRecording(String)
+
+        var description: String {
+            switch self {
+            case .notListed(let id): "window \(id) has no window server window"
+            case .timedOut: "the capture did not answer in 10 s"
+            case .releaseBuild: "snapshots need a Debug build (make snapshots)"
+            case .noScreenRecording(let app):
+                "\(app) needs Screen Recording (System Settings > Privacy & Security > Screen Recording); "
+                    + "turn it on and run again"
+            }
+        }
     }
 }
