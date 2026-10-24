@@ -87,6 +87,7 @@ Reference: the copy deck in `docs/research/ux-polish.md` (sections 4.1-4.6). A n
 12. Every new window, pane, `DictationPhase` and `DictationNotice` gets a snapshot in `App/Snapshots.swift` (light and dark).
 13. Typographic punctuation: curly apostrophe and quotes (’ “ ”) in UI text, never ' or " inside the visible words.
 14. Voice (Apple HIG Writing, Apple Style Guide): no “we”, “our” or “us” (name kotoba or the thing), no “please”, no “enable”, “disable” or “toggle” (a switch’s label names what is on: “Keep filler words”), no interjections (“oops”, “sorry”).
+15. Keys: “press” and “hold”, never “tap” (“Press ⌃⌥⌘ to start, press it again to stop.” “Hold ⌥ while you speak.”). In code, “tap” stays the name of a short chord press (Naming). Lint `status_text_press_not_tap` checks `App/StatusText.swift`; the copy pass adds the rule for the other UI text.
 
 ## Tests
 

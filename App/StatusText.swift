@@ -4,13 +4,13 @@ import KotobaProviders
 
 /// Status lines that belong to no `DictationState`, and the text helpers the menu and panes share.
 enum StatusText {
-    /// How to dictate with the owner's chords: "Tap ⌃⌥⌘ to dictate", or "Tap ⌃⌥⌘ or hold ⌥ to dictate" while push to
+    /// How to dictate with the owner's chords: "Press ⌃⌥⌘ to dictate", or "Press ⌃⌥⌘ or hold ⌥ to dictate" while push to
     /// talk has a chord of its own. Every text that names the chords reads them, so it follows a new recording.
     @MainActor static var ready: String { howToDictate(.shared) }
 
     @MainActor static func howToDictate(_ chords: HotkeyChords) -> String {
-        guard let pushToTalk = chords.separatePushToTalk else { return "Tap \(chords.handsFree.title) to dictate" }
-        return "Tap \(chords.handsFree.title) or hold \(pushToTalk.title) to dictate"
+        guard let pushToTalk = chords.separatePushToTalk else { return "Press \(chords.handsFree.title) to dictate" }
+        return "Press \(chords.handsFree.title) or hold \(pushToTalk.title) to dictate"
     }
 
     /// The dictation chords as a list: "⌃⌥⌘", or "⌃⌥⌘ and ⌥" while push to talk has a chord of its own.
@@ -138,7 +138,7 @@ enum StatusText {
     /// What a shortcut does: the line under its name.
     static func shortcutHelp(_ role: ChordRole) -> String {
         switch role {
-        case .handsFree: "Tap to start. Tap again to stop and paste."
+        case .handsFree: "Press to start. Press again to stop and paste."
         case .pushToTalk: "Hold while you speak. Let go to paste."
         case .cleanup: "Removes filler words and fixes punctuation. Takes a second or two longer."
         case .pasteLast: "Pastes your last dictation again."
@@ -151,7 +151,7 @@ enum StatusText {
     /// both, a tap already does.
     @MainActor static func pushToTalkHelp(_ chords: HotkeyChords) -> String {
         let help = shortcutHelp(.pushToTalk)
-        return chords.separatePushToTalk == nil ? help : help + " Double-tap for hands-free."
+        return chords.separatePushToTalk == nil ? help : help + " Press it twice for hands-free."
     }
 
     /// "1 Saved Dictation", "2 Saved Dictations": Foundation's grammar agreement picks the plural.

@@ -309,6 +309,13 @@ custom_rules:
     severity: error
   # The mic input's lifecycle (which mic, when to rebuild, what waits for the end of a capture) lives in
   # KotobaCore's `AudioCapture`, tested through a fake. App/ only runs the hardware through `HALCaptureHardware`.
+  status_text_press_not_tap:
+    name: "Status text: press and hold, not tap"
+    included: ["App/StatusText\\.swift", "KotobaCore/Sources/KotobaCore/ShellStatus\\.swift"]
+    regex: "(?i:\\b(?:double-)?tap(?:s|ped|ping)?\\b)"
+    match_kinds: [string]
+    message: "Say “press” or “hold” for a key, not “tap”: “Press ⌃⌥⌘ to start, press it again to stop.” (CODING_STANDARDS.md, User-facing text 15)."
+    severity: error
   live_state_in_ledger:
     name: "Live dictation state in LiveDictations"
     included: ["KotobaCore/Sources/KotobaCore/DictationPipeline\\.swift"]
