@@ -112,3 +112,37 @@ extension MainWindow {
         return snapshot
     }
 }
+
+extension MainWindow {
+    /// Each page's sidebar tile and the header tile, at the small, medium and large sidebar icon sizes (System Settings
+    /// > Appearance), to compare the symbols' weight and size.
+    static func tileSnapshots() -> [Snapshot] {
+        [Snapshot(name: "sidebar-tiles") { NSHostingView(rootView: TileSheet()) }]
+    }
+}
+
+private struct TileSheet: View {
+    var body: some View {
+        Grid(alignment: .leading) {
+            GridRow {
+                Text("Page")
+                Text("Small")
+                Text("Medium")
+                Text("Large")
+                Text("Header")
+            }
+            .foregroundStyle(.secondary)
+            ForEach(PaneID.allCases, id: \.self) { page in
+                GridRow {
+                    Text(page.title)
+                    ForEach([SidebarRowSize.small, .medium, .large], id: \.self) { size in
+                        SidebarTile(systemImage: page.systemImage, tint: page.tint)
+                            .environment(\.sidebarRowSize, size)
+                    }
+                    SymbolTile(systemImage: page.systemImage, tint: page.tint, side: PageMetrics.headerTileSide)
+                }
+            }
+        }
+        .padding()
+    }
+}
