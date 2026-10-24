@@ -148,11 +148,12 @@ struct PageHeader<Icon: View>: View {
 
 /// A row's title, its one grey subtitle and its icon, centred on both lines as in System Settings' rows. Custom:
 /// SwiftUI's `Label` centres its icon on the first line only, so a two-line row's tile sat high (owner trial,
-/// 2026-10-24), and a custom `LabelStyle` loses the form's subtitle style. The subtitle takes the form's own style
-/// (subheadline, secondary), measured equal in the snapshot.
+/// 2026-10-24), and a custom `LabelStyle` loses the form's subtitle style.
 struct TileLabel<Icon: View, Extra: View>: View {
     let title: String
     var subtitle: String?
+    /// Title and subtitle each kept on one line (`PageRow` tries this first).
+    var isOneLine = false
     @ViewBuilder let icon: Icon
     /// Under the subtitle: a header card's link.
     @ViewBuilder var extra: Extra
@@ -161,17 +162,86 @@ struct TileLabel<Icon: View, Extra: View>: View {
         RowLeading {
             icon
         } content: {
-            VStack(alignment: .leading) {
-                Text(title)
-                if let subtitle {
-                    Text(subtitle)
-                        .font(.subheadline)
-                        .foregroundStyle(.secondary)
-                }
-                extra
-            }
+            RowText(title: title, subtitle: subtitle, isOneLine: isOneLine, extra: { extra })
         }
         .accessibilityElement(children: .combine)
+    }
+}
+
+/// A row's title and its one grey subtitle in the form's own styles (body; subheadline, secondary), measured equal in
+/// the snapshot. The title marks `VerticalAlignment.titleLine`.
+struct RowText<Extra: View>: View {
+    let title: String
+    var subtitle: String?
+    var isOneLine = false
+    @ViewBuilder var extra: Extra
+
+    var body: some View {
+        VStack(alignment: .leading) {
+            Text(title)
+                .fixedSize(horizontal: isOneLine, vertical: false)
+                .alignmentGuide(.titleLine) { $0[VerticalAlignment.center] }
+            if let subtitle {
+                Text(subtitle)
+                    .font(.subheadline)
+                    .foregroundStyle(.secondary)
+                    .fixedSize(horizontal: isOneLine, vertical: false)
+            }
+            extra
+        }
+    }
+}
+
+extension RowText where Extra == EmptyView {
+    init(title: String, subtitle: String?, isOneLine: Bool = false) {
+        self.init(title: title, subtitle: subtitle, isOneLine: isOneLine) { EmptyView() }
+    }
+}
+
+extension VerticalAlignment {
+    private enum TitleLine: AlignmentID {
+        static func defaultValue(in dimensions: ViewDimensions) -> CGFloat { dimensions[VerticalAlignment.center] }
+    }
+
+    /// The middle of a row's title line (`RowText`).
+    static let titleLine = VerticalAlignment(TitleLine.self)
+}
+
+/// A row with a title, a grey subtitle, an optional icon and trailing content (a value, keycaps, a button). As in
+/// System Settings, the trailing content is centred on the row while the subtitle fits on one line (Notifications'
+/// app rows) and sits on the title line once the text wraps (Keyboard's "Keyboard navigation"). `ViewThatFits` tries
+/// the one-line layout first, so the rule needs no measured offset.
+struct PageRow<Icon: View, Trailing: View>: View {
+    let title: String
+    var subtitle: String?
+    @ViewBuilder let icon: Icon
+    @ViewBuilder let trailing: Trailing
+
+    var body: some View {
+        ViewThatFits(in: .horizontal) {
+            line(isOneLine: true)
+            line(isOneLine: false)
+        }
+        .accessibilityElement(children: .combine)
+    }
+
+    private func line(isOneLine: Bool) -> some View {
+        HStack(alignment: isOneLine ? .center : .titleLine) {
+            if Icon.self == EmptyView.self {
+                RowText(title: title, subtitle: subtitle, isOneLine: isOneLine)
+            } else {
+                TileLabel(title: title, subtitle: subtitle, isOneLine: isOneLine) { icon }
+            }
+            Spacer()
+            trailing
+                .alignmentGuide(.titleLine) { $0[VerticalAlignment.center] }
+        }
+    }
+}
+
+extension PageRow where Icon == EmptyView {
+    init(title: String, subtitle: String?, @ViewBuilder trailing: () -> Trailing) {
+        self.init(title: title, subtitle: subtitle, icon: { EmptyView() }, trailing: trailing)
     }
 }
 
@@ -218,8 +288,8 @@ struct ChartHeadline: View {
 }
 
 extension TileLabel where Extra == EmptyView {
-    init(title: String, subtitle: String?, @ViewBuilder icon: () -> Icon) {
-        self.init(title: title, subtitle: subtitle, icon: icon) { EmptyView() }
+    init(title: String, subtitle: String?, isOneLine: Bool = false, @ViewBuilder icon: () -> Icon) {
+        self.init(title: title, subtitle: subtitle, isOneLine: isOneLine, icon: icon) { EmptyView() }
     }
 }
 

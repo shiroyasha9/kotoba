@@ -66,11 +66,11 @@ struct HomePrototype: View {
             } else {
                 // One row in the form's own type, not a pane-sized empty view in a card (review-window.md, 8).
                 Section {
-                    LabeledContent {
+                    PageRow(
+                        title: "No dictations yet",
+                        subtitle: "Press \(data.chords.handsFree.title) to start, press it again to stop."
+                    ) {
                         Button("Try It…") {}
-                    } label: {
-                        Text("No dictations yet")
-                        Text("Press \(data.chords.handsFree.title) to start, press it again to stop.")
                     }
                 }
             }
@@ -79,13 +79,11 @@ struct HomePrototype: View {
 
     /// Setup is not complete: the problem and the button that fixes it take the today card's place.
     private func problem(_ missing: Readiness.Missing) -> some View {
-        LabeledContent {
+        PageRow(title: "Not ready to dictate", subtitle: missing.problemText) {
+            SymbolTile(systemImage: "exclamationmark.triangle", tint: .orange, side: PageMetrics.headerTileSide)
+        } trailing: {
             Button(Self.fixTitle(missing)) {}
                 .buttonStyle(.borderedProminent)
-        } label: {
-            PageHeader(title: "Not ready to dictate", summary: missing.problemText) {
-                SymbolTile(systemImage: "exclamationmark.triangle", tint: .orange, side: PageMetrics.headerTileSide)
-            }
         }
     }
 
@@ -128,11 +126,10 @@ struct HomePrototype: View {
     }
 
     private func shortcut(_ title: String, help: String, keys: [String]) -> some View {
-        LabeledContent {
+        PageRow(title: title, subtitle: help) {
+            // Grey legends, as a form row's value; their colour is the owner's open question.
             Keycaps(keys: keys)
-        } label: {
-            Text(title)
-            Text(help)
+                .foregroundStyle(.secondary)
         }
     }
 
@@ -140,16 +137,15 @@ struct HomePrototype: View {
     private func lastDictation(_ record: DictationRecord) -> some View {
         Section("Last Dictation") {
             VStack(alignment: .leading) {
-                LabeledContent {
+                PageRow(
+                    title: record.app.flatMap(data.apps.name(of:)) ?? "Unknown app",
+                    subtitle: Self.details(of: record)
+                ) {
+                    AppIconView(icon: data.apps.icon(of: record.app), side: PageMetrics.rowTileSide)
+                } trailing: {
                     Text(record.createdAt.formatted(date: .omitted, time: .shortened))
                         .monospacedDigit()
-                } label: {
-                    TileLabel(
-                        title: record.app.flatMap(data.apps.name(of:)) ?? "Unknown app",
-                        subtitle: Self.details(of: record)
-                    ) {
-                        AppIconView(icon: data.apps.icon(of: record.app), side: PageMetrics.rowTileSide)
-                    }
+                        .foregroundStyle(.secondary)
                 }
                 // The text and its buttons start in the text column, under the app's name, as in System Settings'
                 // rows with an icon.

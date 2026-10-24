@@ -134,14 +134,14 @@ struct ActivityPrototype: View {
     private var spend: some View {
         let month = data.month
         return Section {
-            LabeledContent {
+            // The facts stay on screen in the row (copy rules), not in a footer beside the button.
+            PageRow(
+                title: "Spend",
+                subtitle: "What your speech and cleanup services billed. It stays when you delete dictations."
+                    + (month.isCostEstimated ? " Partly estimated from list prices." : "")
+            ) {
                 Text(Self.dollars(month.cost))
-            } label: {
-                Text("Spend")
-                // The facts stay on screen in the row (copy rules), not in a footer beside the button.
-                Text(
-                    "What your speech and cleanup services billed. It stays when you delete dictations."
-                        + (month.isCostEstimated ? " Partly estimated from list prices." : ""))
+                    .foregroundStyle(.secondary)
             }
             LabeledContent("Dictations", value: month.dictations.formatted())
             LabeledContent("Audio", value: Self.duration(month.audio))
@@ -158,12 +158,12 @@ struct ActivityPrototype: View {
 
     /// A highlight: a tile, a title with one line under it, and the figure.
     private func row(_ title: String, _ symbol: String, _ tint: Color, value: String, detail: String) -> some View {
-        LabeledContent {
-            Text(value).monospacedDigit()
-        } label: {
-            TileLabel(title: title, subtitle: detail) {
-                SymbolTile(systemImage: symbol, tint: tint, side: PageMetrics.rowTileSide)
-            }
+        PageRow(title: title, subtitle: detail) {
+            SymbolTile(systemImage: symbol, tint: tint, side: PageMetrics.rowTileSide)
+        } trailing: {
+            Text(value)
+                .monospacedDigit()
+                .foregroundStyle(.secondary)
         }
     }
 
