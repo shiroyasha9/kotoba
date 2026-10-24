@@ -40,7 +40,7 @@ public actor HistoryStore: Store {
         try Self.prepare(database)
         try database.execute("PRAGMA foreign_keys = ON;")
         // Statistics for the planner (SQLite's advice for each open; a no-op when they are current). The partial
-        // indexes give each read its plan without them too (`readIndexes`), as on a new install.
+        // indexes give each read its plan without them too (`indexes`), as on a new install.
         try database.execute("PRAGMA optimize = 0x10002;")
         hadDictationsAtOpen =
             try database.query("SELECT EXISTS (SELECT 1 FROM dictations);").first?.first

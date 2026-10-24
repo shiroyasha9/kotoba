@@ -4,14 +4,15 @@ import Testing
 
 @testable import KotobaStorage
 
-/// The read indexes after 0.4.6 (`HistoryStore.readIndexes`, `keptSizeIndexes`), added to the shape 0.4.6 shipped (AGENTS.md
+/// The read indexes after 0.4.6 (`HistoryStore.readIndexes`, `audioIndexes`), added to the shape 0.4.6 shipped (AGENTS.md
 /// "Migrations"). The shape is the schema SQL of v0.4.6, as written there, after its ledger fill.
 struct IndexMigrationTests {
     let folder = TemporaryFolder()
     var url: URL { folder.url.appending(path: "kotoba.sqlite") }
     var audio: URL { folder.url }
 
-    /// `HistoryStore.schema` with `ledgerSchema`, `discardedSchema` and `keptAudioIndex` at v0.4.6.
+    /// `HistoryStore.schema` with `ledgerSchema`, `discardedSchema` and `keptAudioIndex` at v0.4.6 (the kept-audio
+    /// index on one line there; the `\` joins the two lines here).
     static let v046 = """
         PRAGMA journal_mode = WAL;
         PRAGMA synchronous = NORMAL;
@@ -63,8 +64,8 @@ struct IndexMigrationTests {
         CREATE INDEX IF NOT EXISTS usage_ledger_time ON usage_ledger (time);
         CREATE TABLE IF NOT EXISTS discarded_audio (id TEXT PRIMARY KEY) WITHOUT ROWID;
         DROP INDEX IF EXISTS dictations_kept_audio;
-        CREATE INDEX IF NOT EXISTS dictations_kept_audio_2 ON dictations (coalesce(recovered_at, created_at), id)
-            WHERE audio_deleted = 0 AND status IN ('pasted', 'copied', 'notPasted', 'recovered');
+        CREATE INDEX IF NOT EXISTS dictations_kept_audio_2 ON dictations (coalesce(recovered_at, created_at), id) \
+        WHERE audio_deleted = 0 AND status IN ('pasted', 'copied', 'notPasted', 'recovered');
         PRAGMA user_version = 1;
         """
 

@@ -29,24 +29,22 @@ extension HistoryStore {
     private static let keptAudio = "audio_deleted = 0 AND status IN \(transcribed)"
     private static let transcribedAt = "coalesce(recovered_at, created_at)"
 
-    /// A partial index that holds only the audio still kept (about one period of dictations), in batch order. A change
-    /// to `keptAudio` or its columns needs a new index name and the old one dropped here: `IF NOT EXISTS` keeps an
-    /// index of the same name as it was. `dictations_kept_audio` (0.3.x) left out `notPasted`.
-    static let keptAudioIndex = """
-        DROP INDEX IF EXISTS dictations_kept_audio;
-        CREATE INDEX IF NOT EXISTS dictations_kept_audio_2 ON dictations (\(transcribedAt), id) WHERE \(keptAudio);
-        """
-
-    /// The kept audio's sizes, for Settings (`keptAudioSize`). The rows with no size yet have an index of their own,
+    /// Retention's and the kept audio size's indexes (`HistoryStore.indexes`).
+    ///
+    /// `dictations_kept_audio_2` holds only the audio still kept (about one period of dictations), in batch order.
+    /// (`dictations_kept_audio`, 0.3.x, left out `notPasted`.)
+    ///
+    /// The kept audio's sizes, for Settings (`keptAudioSize`): the rows with no size yet have an index of their own,
     /// empty once measured. It holds every column their read names, so the planner takes it over the table whatever
     /// its statistics say (they still count the rows from before the sizes were filled): the read is one probe. The sum
     /// reads only the kept audio's index, never the table, nor the rows whose audio is gone. `audio_bytes` comes first:
     /// an index that starts with `status`, with no statistics, makes the planner read retention's batches through it
     /// and sort them, as `dictations_status` did (`HistoryStore.readIndexes`).
-    static let keptSizeIndexes = """
-        CREATE INDEX IF NOT EXISTS dictations_unsized ON dictations (audio_bytes, id, audio_path) WHERE \(unsized);
-        CREATE INDEX IF NOT EXISTS dictations_kept_size ON dictations (audio_bytes, status) WHERE audio_deleted = 0;
-        """
+    static let audioIndexes = [
+        HistoryIndex("dictations_kept_audio_2", "ON dictations (\(transcribedAt), id) WHERE \(keptAudio)"),
+        HistoryIndex("dictations_unsized", "ON dictations (audio_bytes, id, audio_path) WHERE \(unsized)"),
+        HistoryIndex("dictations_kept_size", "ON dictations (audio_bytes, status) WHERE audio_deleted = 0"),
+    ]
     private static let unsized = "audio_deleted = 0 AND audio_bytes IS NULL"
 
     /// One batch, oldest text first; `after` adds the cursor's condition as ?3 and ?4.
