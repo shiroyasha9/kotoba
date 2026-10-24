@@ -2,9 +2,9 @@ import KotobaCore
 import KotobaProviders
 import KotobaStorage
 
-/// The History pane (story 30): past dictations with Copy, Paste Again, Retry, Transcribe Again, Play and Delete. Its
-/// model is built with the main window and released when the window closes; while the window is closed, history
-/// writes cost it nothing.
+/// The History page (story 30): past dictations with Copy, Paste Again, Retry, Transcribe Again, Play and Delete, and
+/// how long their audio stays (story 31). Its models are built with the main window and released when the window closes;
+/// while the window is closed, history writes cost it nothing.
 @MainActor
 final class HistoryController {
     private let store: HistoryStore
@@ -14,6 +14,8 @@ final class HistoryController {
     /// The speech model choice and the saved keys, for "Transcribe Again With".
     private let routes: TranscriptionSettings
     private let keys: KeyVault
+    /// The Audio section's choices, to the pipeline's one consumer (`AudioRequest.send`).
+    private let audioRequests: AsyncStream<AudioRequest>.Continuation
     private var model: HistoryModel?
     /// The pipeline's newest activity, kept while the window is closed so it opens with it.
     private var activity = PipelineActivity(isQuiet: true, inFlight: [])
@@ -24,9 +26,10 @@ final class HistoryController {
 
     init(
         store: HistoryStore, pipeline: DictationPipeline, routes: TranscriptionSettings, keys: KeyVault,
-        fix: @escaping @MainActor (DictationRecord) -> Void
+        audioRequests: AsyncStream<AudioRequest>.Continuation, fix: @escaping @MainActor (DictationRecord) -> Void
     ) {
         self.store = store
+        self.audioRequests = audioRequests
         self.pipeline = pipeline
         self.routes = routes
         self.keys = keys
@@ -41,9 +44,9 @@ final class HistoryController {
         }.map { MenuChoice(title: $0.menuTitle, value: $0.rawValue) }
     }
 
-    /// The pane, with a new model that follows history writes until `windowClosed()`.
+    /// The page, with a new model that follows history writes until `windowClosed()`.
     func pane() -> Pane {
-        let model = HistoryModel(source: source)
+        let model = HistoryModel(source: source, audio: .live(requests: audioRequests, store: store))
         model.activity = activity
         self.model = model
         let (stream, continuation) = AsyncStream.makeStream(of: HistoryChange.self)
@@ -66,9 +69,13 @@ final class HistoryController {
         model = nil
     }
 
-    /// A history write (from `DictationPipeline.historyChanges`): an open window reads the row it names.
+    /// A history write (from `DictationPipeline.historyChanges`): an open window reads the row it names, and the Audio
+    /// section measures the kept audio again when the write changed it.
     func historyChanged(_ change: HistoryChange) {
         changes?.yield(change)
+        if change.isKeptAudioChanged {
+            model?.audio?.keptAudioChanged()
+        }
     }
 
     /// From `DictationPipeline.activity`: which dictations are being sent, and whether Paste Again can paste.

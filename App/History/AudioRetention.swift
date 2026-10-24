@@ -4,8 +4,8 @@ import KotobaStorage
 import Observation
 import SwiftUI
 
-/// Story 31 in Settings > General: how long a transcribed dictation keeps its audio, the disk space the saved audio
-/// takes, and "Delete Audio Now…". The pipeline decides what goes (`AudioRetention`); this model only passes the
+/// Story 31 on the History page: how long a transcribed dictation keeps its audio, the disk space the saved audio
+/// takes, and "Delete Audio Now…" (docs/research/ui-redesign.md, "Page map": next to the dictations it governs). The pipeline decides what goes (`AudioRetention`); this model only passes the
 /// owner's choices on as `AudioRequest`s. It measures the kept audio when the pane appears and after each history
 /// write that changes it while it is shown, so nothing runs at idle.
 @MainActor
@@ -180,24 +180,28 @@ extension AudioRetention {
     }
 }
 
-/// The General pane's History section.
+/// The History page's Audio section: the period, and the saved audio's size with "Delete Audio Now…".
 struct AudioSection: View {
     @Bindable var model: AudioRetentionModel
 
     var body: some View {
         Section {
-            Picker("Keep audio", selection: Binding(get: { model.retention }, set: model.choose)) {
-                ForEach(AudioRetention.allCases, id: \.self) { Text($0.title).tag($0) }
+            PageRow(title: "Keep audio", subtitle: "For Retry, Transcribe Again and Play. The text always stays.") {
+                Picker("Keep audio", selection: Binding(get: { model.retention }, set: model.choose)) {
+                    ForEach(AudioRetention.allCases, id: \.self) { Text($0.title).tag($0) }
+                }
+                .labelsHidden()
+                .fixedSize()
+                .confirmationDialog(
+                    "Delete Audio Older Than \(model.pendingRetention?.retention.title ?? "")?",
+                    isPresented: isAskingToShorten, presenting: model.pendingRetention
+                ) { shorter in
+                    Button("Delete Audio", role: .destructive) { model.confirm(shorter.retention) }
+                } message: { shorter in
+                    Text(Self.deleteMessage(bytes: shorter.bytes))
+                }
             }
-            .confirmationDialog(
-                "Delete Audio Older Than \(model.pendingRetention?.retention.title ?? "")?",
-                isPresented: isAskingToShorten, presenting: model.pendingRetention
-            ) { shorter in
-                Button("Delete Audio", role: .destructive) { model.confirm(shorter.retention) }
-            } message: { shorter in
-                Text(Self.deleteMessage(bytes: shorter.bytes))
-            }
-            LabeledContent {
+            PageRow(title: "Saved audio", subtitle: sizeText) {
                 Button("Delete Audio Now…") { model.isAskingToDelete = true }
                     .disabled(!model.hasDeletableAudio)
                     .confirmationDialog("Delete Saved Audio?", isPresented: $model.isAskingToDelete) {
@@ -205,25 +209,20 @@ struct AudioSection: View {
                     } message: {
                         Text(Self.deleteMessage(bytes: model.size?.deletable))
                     }
-            } label: {
-                Text("Saved audio")
-                if let size = model.size {
-                    Text(size.deletable.formatted(.byteCount(style: .file)))
-                }
             }
         } header: {
-            Text("History")
-        } footer: {
-            if let waiting = model.size?.waiting, waiting > 0 {
-                Text(
-                    "History keeps the text of every dictation. Audio not yet transcribed "
-                        + "(\(waiting.formatted(.byteCount(style: .file)))) stays until you retry or delete it.")
-            } else {
-                Text("History keeps the text of every dictation.")
-            }
+            Text("Audio")
         }
         .onAppear(perform: model.show)
         .onDisappear(perform: model.hide)
+    }
+
+    /// "48.2 MB", and the audio not yet transcribed, which stays until a retry or a delete; nil until measured.
+    private var sizeText: String? {
+        guard let size = model.size else { return nil }
+        let deletable = size.deletable.formatted(.byteCount(style: .file))
+        guard size.waiting > 0 else { return deletable }
+        return "\(deletable) · \(size.waiting.formatted(.byteCount(style: .file))) not yet transcribed, kept for Retry"
     }
 
     /// Both questions: the size when it is known, then what stays.

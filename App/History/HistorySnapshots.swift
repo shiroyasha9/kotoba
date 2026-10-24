@@ -1,5 +1,6 @@
 import AppKit
 import KotobaCore
+import SwiftUI
 
 @MainActor
 extension Pane {
@@ -19,6 +20,13 @@ extension Pane {
         ].map { name, model in
             MainWindow.snapshot(of: .history(model), named: name)
         } + ChangesView.snapshots()
+    }
+
+    /// A page sheet at its own size, as tall as its sections (`PageSheet`).
+    static func sheet(named name: String, _ content: @escaping @MainActor () -> some View) -> Snapshot {
+        var sheet = Snapshot(name: name) { NSHostingView(rootView: content()) }
+        sheet.settlesInWindow = true
+        return sheet
     }
 }
 

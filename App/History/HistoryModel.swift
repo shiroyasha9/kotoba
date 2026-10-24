@@ -85,6 +85,8 @@ final class HistoryModel {
     var isTranscribeFailureShown = false
     /// The row whose View Changes sheet is open.
     var changesShown: DictationRecord?
+    /// The Audio section (story 31); nil in snapshots of the list alone.
+    @ObservationIgnored let audio: AudioRetentionModel?
 
     @ObservationIgnored private let source: Source?
     /// Each read takes the next number; a result that comes back after a newer read started is dropped.
@@ -96,8 +98,9 @@ final class HistoryModel {
     /// The day titles' "Today" and "Yesterday" count from it.
     @ObservationIgnored private let now: @MainActor () -> Date
 
-    init(source: Source?) {
+    init(source: Source?, audio: AudioRetentionModel?) {
         self.source = source
+        self.audio = audio
         playback = AudioPlayback()
         now = { .now }
     }
@@ -105,9 +108,11 @@ final class HistoryModel {
     /// For snapshots: fixed rows and no store, at `Snapshots.sampleNow`; `transcribing` rows show as being transcribed
     /// again, and `playing`'s audio as playing.
     init(
-        rows: [DictationRecord], search: String = "", transcribing: Set<DictationID> = [], playing: DictationID? = nil
+        rows: [DictationRecord], search: String = "", transcribing: Set<DictationID> = [], playing: DictationID? = nil,
+        audio: AudioRetentionModel? = .sample()
     ) {
         source = nil
+        self.audio = audio
         playback = AudioPlayback(playing: playing)
         now = { Snapshots.sampleNow }
         self.search = search
