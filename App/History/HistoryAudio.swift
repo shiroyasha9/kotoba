@@ -3,7 +3,7 @@ import AppKit
 import KotobaCore
 import Observation
 
-/// Plays one dictation's saved audio for the History pane. The player is made at Play and dropped when the audio ends
+/// Plays one dictation's saved audio for the History page. The player is made at Play and dropped when the audio ends
 /// or stops, so nothing is held between plays. Capture loads AVFAudio at launch, so playback loads no framework.
 @MainActor
 @Observable

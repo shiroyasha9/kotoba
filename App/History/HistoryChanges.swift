@@ -156,7 +156,7 @@ extension ChangesView {
         let samples = [("history-changes-rewritten", polished), ("history-changes-cleaned", rows[1])]
         return samples.compactMap { name, record in
             ChangesView(record: record).map { view in
-                Pane.sheet(named: name) { view }
+                MainWindow.sheetSnapshot(named: name) { view }
             }
         }
     }

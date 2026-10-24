@@ -26,26 +26,6 @@ extension EmptyState where Actions == EmptyView {
     init(_ title: String, systemImage: String, description: String) {
         self.init(title: title, systemImage: systemImage, description: description) { EmptyView() }
     }
-
-    /// History, and Home's newest dictations, before the first dictation.
-    @MainActor
-    static func noDictations(chords: HotkeyChords) -> Self {
-        EmptyState(
-            "No Dictations Yet", systemImage: "waveform",
-            description: "\(StatusText.howToDictate(chords)). Each dictation appears here.")
-    }
-}
-
-extension EmptyState where Actions == Button<Text> {
-    /// A pane whose read failed, with the button that reads again.
-    static func loadFailed(retry: @escaping @MainActor () -> Void) -> Self {
-        EmptyState(
-            title: StatusText.historyReadFailedTitle, systemImage: "exclamationmark.triangle",
-            description: StatusText.historyReadFailedMessage
-        ) {
-            Button("Try Again", action: retry)
-        }
-    }
 }
 
 /// A search with no results, centred like `EmptyState`.

@@ -1,7 +1,7 @@
 import Foundation
 import KotobaCore
 
-/// The History pane's sections: one per calendar day, in the rows' order.
+/// The History page's sections: one per calendar day, in the rows' order.
 extension HistoryModel {
     /// `now` decides which day is "Today".
     static func days(of rows: [DictationRecord], now: Date) -> [Day] {

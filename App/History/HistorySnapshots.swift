@@ -1,13 +1,12 @@
 import AppKit
 import KotobaCore
-import SwiftUI
 
 @MainActor
 extension Pane {
-    /// The pane at the window's detail size: rows of each status over two days (yesterday's audio deleted), the first
-    /// row being transcribed again, the empty history, a search with no results, and a read that failed. Synthetic
-    /// text only. The toolbar and search field
-    /// belong to the real window; `windowSnapshots()` in App/Settings/SettingsSnapshots.swift draws them.
+    /// The page at the window's detail size: rows of each status over two days (yesterday's audio deleted), the first
+    /// row being transcribed again, the empty history, a search with no results, a read that failed, and a rewritten
+    /// row; then View Changes. Synthetic text only. `windowSnapshots()` in
+    /// App/Settings/SettingsSnapshots.swift draws the page in the whole window.
     static func historySnapshots() -> [Snapshot] {
         let rows = HistoryController.sampleRows()
         return [
@@ -16,22 +15,15 @@ extension Pane {
             ("history-empty", HistoryModel(rows: [])),
             ("history-no-results", HistoryModel(rows: [], search: "invoice")),
             ("history-load-failed", HistoryModel.loadFailed),
-            ("history-polished", HistoryModel(rows: [HistoryController.samplePolished()] + rows)),
+            ("history-rewritten", HistoryModel(rows: [HistoryController.samplePolished()] + rows)),
         ].map { name, model in
-            MainWindow.snapshot(of: .history(model), named: name)
+            MainWindow.snapshot(of: .history(model), named: name, height: 1_200)
         } + ChangesView.snapshots()
-    }
-
-    /// A page sheet at its own size, as tall as its sections (`PageSheet`).
-    static func sheet(named name: String, _ content: @escaping @MainActor () -> some View) -> Snapshot {
-        var sheet = Snapshot(name: name) { NSHostingView(rootView: content()) }
-        sheet.settlesInWindow = true
-        return sheet
     }
 }
 
 extension HistoryController {
-    /// A cleaned dictation that Polish rewrote, for History's polished row and View Changes.
+    /// A cleaned dictation that Rewrite rewrote, for History's rewritten row and View Changes.
     static func samplePolished() -> DictationRecord {
         var record = DictationRecord(
             id: DictationID(), createdAt: Snapshots.sampleNow - 60,
