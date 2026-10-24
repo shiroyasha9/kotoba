@@ -64,7 +64,8 @@ Cause (research): the code, not a missing library. No MIT or Apache-2.0 library 
 ### Microphone
 - The ranked list stays the main control (owner: when an external mic is unplugged, Wispr Flow moves to the AirPods, and kotoba must not).
 - A header line explains the rule: kotoba uses the first connected mic in the list; when one is unplugged, it moves to the next.
-- New switch, on by default: Bluetooth mics are used only when they are in the list.
+- New switch, on by default: Bluetooth mics are used only when they are in the list. A Bluetooth default then gives way to the built-in mic, else to another real mic (USB, Thunderbolt, FireWire, PCI; never a virtual or aggregate device); with none, the press says "Not in mic list: <name>" with Choose Mic….
+- Upgrades (chief of staff, 2026-10-25, review-upgrade): 0.4.6 kept a Bluetooth default on a Mac with no built-in mic, which is the switch off. So an update to such a Mac stores the switch off once and leaves the order alone, whatever is connected at that launch; a new install lists its connected Bluetooth default. Macs with a built-in mic change nothing.
 - A mic picked in the status menu moves to the top of the list.
 - Each row shows a live status ("In use", "Not connected", "Bluetooth: lower quality"). Test Microphone and the level gauge stay under the list.
 

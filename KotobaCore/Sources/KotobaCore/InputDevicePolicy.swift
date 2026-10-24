@@ -99,19 +99,6 @@ public enum InputDevicePolicy {
         return followed
     }
 
-    /// The order for an update from 0.4, run once: 0.4 recorded from a Bluetooth default on a Mac with no built-in mic,
-    /// and the switch (on after the update) would keep it out, so an empty order gets that mic and dictation goes on
-    /// as before. Any other order stays as it is.
-    public static func orderAfterUpdate(_ order: [String], defaultInput: AudioDevice?, devices: [AudioDevice])
-        -> [String]
-    {
-        let inputs = devices.filter(\.hasInput)
-        guard order.isEmpty, !inputs.contains(where: { $0.transport == .builtIn }),
-            let followed = inputs.first(where: { $0.uid == defaultInput?.uid }), followed.transport == .bluetooth
-        else { return order }
-        return [followed.uid]
-    }
-
     /// The order after the owner picks `uid` in the menu: it moves to the top, the rest keep their order.
     public static func order(_ order: [String], choosing uid: String) -> [String] {
         [uid] + order.filter { $0 != uid }
