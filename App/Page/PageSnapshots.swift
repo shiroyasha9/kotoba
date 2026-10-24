@@ -7,7 +7,17 @@ extension MainWindow {
     /// The page system's parts that no page shows yet in its own snapshots: the search field (empty and with a
     /// search) and a switch row, beside a native form switch with a subtitle, so the two can be compared.
     static func pageSystemSnapshots() -> [Snapshot] {
-        [snapshot(of: Pane(id: .general) { AnyView(SystemSheet()) }, named: "page-system")]
+        [
+            snapshot(of: Pane(id: .general) { AnyView(SystemSheet()) }, named: "page-system"),
+            // A sheet longer than the smallest window stops at its height and scrolls.
+            sheetSnapshot(named: "page-sheet-long") {
+                PageSheet(title: "Long") {
+                    Section {
+                        ForEach(1...30, id: \.self) { PageRow(title: "Row \($0)", subtitle: nil) {} }
+                    }
+                }
+            },
+        ]
     }
 }
 
@@ -42,6 +52,21 @@ private struct SystemSheet: View {
                     Text("For comparison only.")
                 }
             }
+        }
+    }
+}
+
+@MainActor
+extension MainWindow {
+    /// A `PageSheet` at the height it takes in the app: a window that fits its content each round until it holds still
+    /// (`Snapshots.fittedWindow`), since the sheet measures its form a run loop turn after its first layout. The sheet's
+    /// content only, with no title bar: a sheet's Cancel and Done draw at its foot, which only a real sheet shows.
+    static func sheetSnapshot(named name: String, _ sheet: @escaping @MainActor () -> some View) -> Snapshot {
+        Snapshots.fittedWindow(named: name) {
+            let window = NSWindow(contentViewController: NSHostingController(rootView: sheet()))
+            window.styleMask = [.borderless]
+            window.isReleasedWhenClosed = false
+            return window
         }
     }
 }

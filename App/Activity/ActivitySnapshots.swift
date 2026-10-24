@@ -15,14 +15,7 @@ extension Pane {
             MainWindow.snapshot(of: .activity(.sample(period: .month)), named: "activity-month", height: 1_500),
             MainWindow.snapshot(of: .activity(.sampleStarted), named: "activity-started", height: 1_500),
             MainWindow.snapshot(of: .activity(.empty), named: "activity-empty"),
-            {
-                // The sheet takes its content's height a run loop turn after its first layout.
-                var sheet = Snapshot(name: "activity-advanced") {
-                    NSHostingView(rootView: SpendByModel(month: ActivityModel.sampleMonth))
-                }
-                sheet.settlesInWindow = true
-                return sheet
-            }(),
+            MainWindow.sheetSnapshot(named: "activity-advanced") { SpendByModel(month: ActivityModel.sampleMonth) },
         ]
     }
 }
