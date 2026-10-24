@@ -931,3 +931,14 @@ The status menu, the five onboarding steps and the Fix Last Dictation window (do
 | 1138 | With Wispr Flow installed, go to Done; click **Import…**, then **Import** | Done has a “Wispr Flow dictionary” row; the alert lists what it adds; the row then says what it added and “Imported”. Without Wispr Flow (rename its folder in Application Support) there is no row | |
 | 1139 | Turn kotoba Dev off in Accessibility; click the pill's **Allow Pasting…**, then Home's **Allow Accessibility…** | Each opens onboarding on Allow Access | |
 | 1140 | With TextEdit in front, menu > **Fix Last Dictation…**; select a word, click **Add Selected Word** | The window opens in front of TextEdit, as wide as in 0.4; a green check line says “Added “word” to your dictionary.” | |
+
+## Shortcuts, Microphone and General on the page system (0.5.0, kotoba Dev)
+
+Shortcut recorders, the spoken commands, the Bluetooth switch and the Microphone page's live row status. Snapshots cannot press a chord, plug a mic or read VoiceOver.
+
+| # | Do this | Expect | Result |
+|---|---|---|---|
+| 1150 | On **Shortcuts**, click the Hands-free recorder, press ⌃⌥⇧⌘ (refused) then ⌥⌘; turn VoiceOver on and move through the Hands-free row | The refusal shows under the recorder and the button keeps its width while it listens; ⌥⌘ is saved and dictates; VoiceOver reads the title, the line under it and the recorder, and reaches Turn Off and Reset on a row that has them | |
+| 1151 | On **Shortcuts**, turn on “Start a new line when you say “new line””, dictate “one new line two” into TextEdit | Two lines are pasted | |
+| 1152 | Mac with a built-in mic, AirPods connected and chosen as the system input, kotoba's list empty; dictate. Then turn off “Use Bluetooth mics only from the list” on **Microphone** and dictate again | First dictation records from the built-in mic (AirPods playback stays at full quality); after the switch the AirPods record and the page shows the Bluetooth warning, with no restart | |
+| 1153 | On **Microphone** with a USB mic first in the list and in use, unplug it, then plug it back in | Its row goes from “In use” to “Not connected” and the next mic shows “In use” within about a second; plugging it back gives “In use” back to it | |
