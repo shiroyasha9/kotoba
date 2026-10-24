@@ -68,9 +68,20 @@ struct LoadFailedRow: View {
 
 /// A sheet over a page, such as a page's "Advanced…": its sections in a grouped form, and Done at the bottom, as System
 /// Settings' sheets. It is the page column's width and as tall as its sections, between `PageMetrics.sheetHeights`
-/// (the smallest window's height at most, so it fits every window); longer content scrolls.
+/// (the smallest window's height at most, so it fits every window); longer content scrolls. A sheet that asks for
+/// something ("Add Word") has Cancel and its named default button instead of Done.
 struct PageSheet<Content: View>: View {
+    /// A sheet's default button ("Add", "Save"). The sheet closes only when `action` returns true, so a failure shown in
+    /// the form keeps it open.
+    struct Confirm {
+        let title: String
+        var isDisabled = false
+        let action: @MainActor () -> Bool
+    }
+
     let title: String
+    /// Nil: Done alone.
+    var confirm: Confirm?
     @ViewBuilder let content: Content
     @Environment(\.dismiss) private var dismiss
     /// The form's content height: a form takes all the height it is offered, so the sheet asks for its content's.
@@ -90,8 +101,20 @@ struct PageSheet<Content: View>: View {
             height: min(max(contentHeight, PageMetrics.sheetHeights.lowerBound), PageMetrics.sheetHeights.upperBound)
         )
         .toolbar {
-            ToolbarItem(placement: .confirmationAction) {
-                Button("Done") { dismiss() }
+            if let confirm {
+                ToolbarItem(placement: .cancellationAction) {
+                    Button("Cancel") { dismiss() }
+                }
+                ToolbarItem(placement: .confirmationAction) {
+                    Button(confirm.title) {
+                        if confirm.action() { dismiss() }
+                    }
+                    .disabled(confirm.isDisabled)
+                }
+            } else {
+                ToolbarItem(placement: .confirmationAction) {
+                    Button("Done") { dismiss() }
+                }
             }
         }
     }
