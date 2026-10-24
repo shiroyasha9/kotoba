@@ -196,19 +196,9 @@ struct DailyWords: View {
         let average = started.isEmpty ? 0 : started.map(\.words).reduce(0, +) / started.count
         let top = Self.scaleTop(shown.map(\.words).max() ?? 0)
         VStack(alignment: .leading) {
-            Text("Daily Average")
-            Text(StatusText.counted(average, "word"))
-                .font(.largeTitle)
-                .monospacedDigit()
+            ChartHeadline(label: "Daily Average", value: StatusText.counted(average, "word"))
             Chart {
-                ForEach(shown, id: \.start) { day in
-                    BarMark(
-                        x: .value("Day", day.start, unit: .day), y: .value("Words", day.words),
-                        width: .ratio(PageMetrics.barWidthRatio)
-                    )
-                    .cornerRadius(PageMetrics.barCornerRadius)
-                    .foregroundStyle(.tint)
-                }
+                DayBars(days: shown)
                 if average > 0 {
                     RuleMark(y: .value("Daily average", average))
                         .foregroundStyle(Color.secondary)
@@ -273,5 +263,36 @@ struct DailyWords: View {
         let recent = days.suffix(period.dayCount)
         let started = recent.drop { $0.words == 0 }.count
         return Array(recent.suffix(max(started, ActivityPeriod.week.dayCount)))
+    }
+}
+
+/// The day bars of Activity's chart and of Home's today card: one bar shape for both.
+struct DayBars: ChartContent {
+    let days: [DictationInsights.Day]
+    /// Home's today card, as Screen Time's week: today in the accent colour, the other days muted, an empty day as a
+    /// stub on the base line so the week does not look broken.
+    var marksToday = false
+
+    var body: some ChartContent {
+        ForEach(days, id: \.start) { day in
+            if marksToday && day.words == 0 {
+                // A stub as tall as a bar's corner, standing on the base line.
+                RectangleMark(
+                    x: .value("Day", day.start, unit: .day), y: .value("Words", 0),
+                    width: .ratio(PageMetrics.barWidthRatio), height: .fixed(PageMetrics.barCornerRadius)
+                )
+                .offset(y: -PageMetrics.barCornerRadius / 2)
+                .cornerRadius(PageMetrics.barCornerRadius / 2)
+                .foregroundStyle(.tint.secondary)
+            } else {
+                BarMark(
+                    x: .value("Day", day.start, unit: .day), y: .value("Words", day.words),
+                    width: .ratio(PageMetrics.barWidthRatio)
+                )
+                .cornerRadius(PageMetrics.barCornerRadius)
+                .foregroundStyle(
+                    marksToday && day.start != days.last?.start ? AnyShapeStyle(.tint.secondary) : AnyShapeStyle(.tint))
+            }
+        }
     }
 }

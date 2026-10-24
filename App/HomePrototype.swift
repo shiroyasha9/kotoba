@@ -97,13 +97,10 @@ struct HomePrototype: View {
             open(.activity)
         } label: {
             HStack {
-                VStack(alignment: .leading) {
-                    Text("\(StatusText.counted(data.todayWords, "word")) today")
-                        .font(.largeTitle)
-                        .monospacedDigit()
-                    Text(Self.todaySummary(data.insights))
-                        .foregroundStyle(.secondary)
-                }
+                ChartHeadline(
+                    label: "Today", value: StatusText.counted(data.todayWords, "word"),
+                    detail: Self.todaySummary(data.insights)
+                )
                 .fixedSize()
                 WeekBars(days: DailyWords.shown(data.insights.days, period: .week))
                 Image(systemName: "chevron.forward")
@@ -145,6 +142,7 @@ struct HomePrototype: View {
             VStack(alignment: .leading) {
                 LabeledContent {
                     Text(record.createdAt.formatted(date: .omitted, time: .shortened))
+                        .monospacedDigit()
                 } label: {
                     TileLabel(
                         title: record.app.flatMap(data.apps.name(of:)) ?? "Unknown app",
@@ -153,18 +151,23 @@ struct HomePrototype: View {
                         AppIconView(icon: data.apps.icon(of: record.app), side: PageMetrics.rowTileSide)
                     }
                 }
-                if let text = record.latestText, record.hasText {
-                    Text(text)
-                        .textSelection(.enabled)
-                        .frame(maxWidth: .infinity, alignment: .leading)
+                // The text and its buttons start in the text column, under the app's name, as in System Settings'
+                // rows with an icon.
+                VStack(alignment: .leading) {
+                    if let text = record.latestText, record.hasText {
+                        Text(text)
+                            .textSelection(.enabled)
+                            .frame(maxWidth: .infinity, alignment: .leading)
+                    }
+                    HStack {
+                        Button("Fix…") {}
+                        Spacer()
+                        Button("Copy") {}
+                        Button("Paste Again") {}
+                    }
+                    .disabled(!record.hasText)
                 }
-                HStack {
-                    Button("Fix…") {}
-                    Spacer()
-                    Button("Copy") {}
-                    Button("Paste Again") {}
-                }
-                .disabled(!record.hasText)
+                .padding(.leading, RowLeading<EmptyView, EmptyView>.textInset)
             }
         }
     }
@@ -185,15 +188,17 @@ struct HomePrototype: View {
                             .monospacedDigit()
                     }
                 } label: {
-                    Label {
+                    // The page's one icon column, as the Last Dictation card above (Screen Time's one-line rows use the
+                    // same tile as its two-line rows).
+                    RowLeading {
+                        AppIconView(icon: data.apps.icon(of: record.app), side: PageMetrics.rowTileSide)
+                    } content: {
                         if record.hasText, let text = record.latestText {
                             Text(text).lineLimit(1)
                         } else {
                             // What happened ("Not transcribed", "Canceled"), as History says it.
                             Text(status?.title ?? "No text").foregroundStyle(.secondary)
                         }
-                    } icon: {
-                        AppIconView(icon: data.apps.icon(of: record.app), side: PageMetrics.lineTileSide)
                     }
                 }
             }
@@ -227,21 +232,24 @@ struct HomePrototype: View {
     }
 }
 
-/// The week's words as small bars, no axes: the today card's chart, filling the height of the text beside it.
+/// The week's words as Screen Time's week: Activity's bars (`DayBars`) with today in the accent colour, the day
+/// initials under them, no word counts; it takes the height of the headline beside it.
 private struct WeekBars: View {
     let days: [DictationInsights.Day]
 
     var body: some View {
-        Chart(days, id: \.start) { day in
-            BarMark(
-                x: .value("Day", day.start, unit: .day), y: .value("Words", day.words),
-                width: .ratio(PageMetrics.barWidthRatio)
-            )
-            .cornerRadius(PageMetrics.barCornerRadius)
-            .foregroundStyle(.tint)
+        Chart {
+            DayBars(days: days, marksToday: true)
         }
-        .chartXAxis(.hidden)
+        .chartYScale(domain: 0...DailyWords.scaleTop(days.map(\.words).max() ?? 0))
+        .chartXAxis {
+            AxisMarks(values: .stride(by: .day)) {
+                AxisValueLabel(format: .dateTime.weekday(.narrow), centered: true, anchor: .top)
+            }
+        }
         .chartYAxis(.hidden)
+        // Headroom over the tallest bar: the system's padding, so the bars stay level with the figure, not the label.
+        .padding(.top)
         // No height of its own: it takes the height of the text beside it.
         .frame(maxWidth: .infinity, minHeight: 0, idealHeight: 0, maxHeight: .infinity)
         .accessibilityLabel("Words per day this week")

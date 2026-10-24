@@ -158,8 +158,9 @@ struct TileLabel<Icon: View, Extra: View>: View {
     @ViewBuilder var extra: Extra
 
     var body: some View {
-        HStack(spacing: PageMetrics.tileTextGap) {
+        RowLeading {
             icon
+        } content: {
             VStack(alignment: .leading) {
                 Text(title)
                 if let subtitle {
@@ -168,6 +169,48 @@ struct TileLabel<Icon: View, Extra: View>: View {
                         .foregroundStyle(.secondary)
                 }
                 extra
+            }
+        }
+        .accessibilityElement(children: .combine)
+    }
+}
+
+/// A page's icon column: the icon in a column `PageMetrics.rowTileSide` wide, then the text after
+/// `PageMetrics.tileTextGap`, so the text of every row with an icon starts at one x (owner trial, 2026-10-25: Home's
+/// card and rows started their text 8 pt apart).
+struct RowLeading<Icon: View, Content: View>: View {
+    @ViewBuilder let icon: Icon
+    @ViewBuilder let content: Content
+
+    var body: some View {
+        HStack(spacing: PageMetrics.tileTextGap) {
+            icon
+                .frame(width: PageMetrics.rowTileSide)
+            content
+        }
+    }
+
+    /// Where the text column starts, from the row's leading edge: for text under a row's title, such as a dictation's
+    /// full text.
+    static var textInset: CGFloat { PageMetrics.rowTileSide + PageMetrics.tileTextGap }
+}
+
+/// A chart card's headline, as Screen Time's "Daily Average": a label, the figure in Large Title, and an optional grey
+/// line under it. Activity and Home's today card both draw it, so they cannot drift.
+struct ChartHeadline: View {
+    let label: String
+    let value: String
+    var detail: String?
+
+    var body: some View {
+        VStack(alignment: .leading) {
+            Text(label)
+            Text(value)
+                .font(.largeTitle)
+                .monospacedDigit()
+            if let detail {
+                Text(detail)
+                    .foregroundStyle(.secondary)
             }
         }
         .accessibilityElement(children: .combine)
