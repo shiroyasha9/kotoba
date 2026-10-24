@@ -31,9 +31,10 @@ enum PageMetrics {
     /// The sidebar's width, as System Settings' and CodeEdit's (`navigationSplitViewColumnWidth(215)`, research R9).
     static let sidebarWidth: CGFloat = 215
 
-    /// A page's sheet ("Advanced…"): the page column's width, and half the smallest window's height, so the window
-    /// shows around it on every size.
-    static let sheetSize = CGSize(width: columnWidth, height: minimumWindowSize.height / 2)
+    /// A page's sheet ("Advanced…"): the page column's width; as tall as its content, from half the smallest window's
+    /// height (a short sheet still reads as a sheet) to the smallest window's height, so it fits every window.
+    static let sheetWidth = columnWidth
+    static let sheetHeights = minimumWindowSize.height / 2...minimumWindowSize.height
 
     // MARK: Page
 

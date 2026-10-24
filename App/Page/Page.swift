@@ -67,19 +67,28 @@ struct LoadFailedRow: View {
 }
 
 /// A sheet over a page, such as a page's "Advanced…": its sections in a grouped form, and Done at the bottom, as System
-/// Settings' sheets, at `PageMetrics.sheetSize`; longer content scrolls.
+/// Settings' sheets. It is the page column's width and as tall as its sections, between `PageMetrics.sheetHeights`
+/// (the smallest window's height at most, so it fits every window); longer content scrolls.
 struct PageSheet<Content: View>: View {
     let title: String
     @ViewBuilder let content: Content
     @Environment(\.dismiss) private var dismiss
+    /// The form's content height: a form takes all the height it is offered, so the sheet asks for its content's.
+    @State private var contentHeight: CGFloat = 0
 
     var body: some View {
         Form {
             content
         }
         .formStyle(.grouped)
+        .onScrollGeometryChange(for: CGFloat.self, of: \.contentSize.height) { _, height in
+            contentHeight = height
+        }
         .navigationTitle(title)
-        .frame(width: PageMetrics.sheetSize.width, height: PageMetrics.sheetSize.height)
+        .frame(
+            width: PageMetrics.sheetWidth,
+            height: min(max(contentHeight, PageMetrics.sheetHeights.lowerBound), PageMetrics.sheetHeights.upperBound)
+        )
         .toolbar {
             ToolbarItem(placement: .confirmationAction) {
                 Button("Done") { dismiss() }
