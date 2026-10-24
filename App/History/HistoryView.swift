@@ -24,11 +24,7 @@ struct HistoryView: View {
             .onChange(of: findRequests) { isSearchFocused = true }
             .toolbar { toolbar(for: model.selected) }
             .task(id: model.readKey) { await model.show() }
-            .alert("Couldn’t Paste", isPresented: $model.isPasteFailureShown) {
-                Button("OK") {}
-            } message: {
-                Text("kotoba couldn’t bring back the app you were in. The text is on the clipboard: press ⌘V there.")
-            }
+            .pasteFailureAlert(isPresented: $model.isPasteFailureShown)
             .alert("Couldn’t Transcribe Again", isPresented: $model.isTranscribeFailureShown) {
                 Button("OK") {}
             } message: {

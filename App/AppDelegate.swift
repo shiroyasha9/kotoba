@@ -57,7 +57,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     lazy var mainWindow: MainWindowController = MainWindowController(
         routeSettings: routeSettings, vault: vault, router: router, microphones: microphones, audio: audio,
         readiness: readiness, finishSetup: { [weak self] in self?.setup.finishSetup() },
-        fixLast: { [weak self] in self?.fixWindow.show() },
+        tryIt: { [weak self] in self?.setup.tryIt() }, fixLast: { [weak self] in self?.fixWindow.show() },
         makeGeneral: { [routeSettings, indicator, cues, updater, weak self] in
             GeneralModel(
                 settings: routeSettings, indicator: indicator, cues: cues, updater: updater,

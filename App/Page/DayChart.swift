@@ -43,21 +43,18 @@ struct ChartDays: Equatable {
         started = slots.suffix(startedCount)
     }
 
-    /// The x scale: every slot, so blank slots keep their room.
-    var domain: ClosedRange<Date> {
-        let calendar = Calendar.current
-        guard let first = slots.first?.start, let last = slots.last?.start,
-            let end = calendar.date(byAdding: .day, value: 1, to: last)
-        else { return Date.distantPast...Date.distantPast }
-        return first...end
-    }
-
     /// The scale's top: the largest day rounded up to its leading digit (910 to 1,000, 410 to 500).
     var top: Int {
         let largest = slots.map(\.words).max() ?? 0
         guard largest > 0 else { return 1 }
         let step = Int(pow(10, floor(log10(Double(largest)))))
         return (largest + step - 1) / step * step
+    }
+
+    /// A day that gets a label: one from the first dictation on. The marks stride by day over every slot, so Charts
+    /// centres each label on its day.
+    func isLabelled(_ date: Date) -> Bool {
+        started.contains { Calendar.current.isDate($0.start, inSameDayAs: date) }
     }
 
     /// The average over the started days.
@@ -76,8 +73,12 @@ struct DayBars: ChartContent {
     var marksToday = false
 
     var body: some ChartContent {
-        ForEach(days.started, id: \.start) { day in
-            if marksToday && day.words == 0 {
+        ForEach(days.slots, id: \.start) { day in
+            if !days.started.contains(day) {
+                // A blank slot before the first dictation: a bar of no height, so the slot keeps its room.
+                BarMark(x: .value("Day", day.start, unit: .day), y: .value("Words", 0))
+                    .opacity(0)
+            } else if marksToday && day.words == 0 {
                 // A stub as tall as a bar's corner, standing on the base line.
                 RectangleMark(
                     x: .value("Day", day.start, unit: .day), y: .value("Words", 0),

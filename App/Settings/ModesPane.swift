@@ -205,8 +205,9 @@ extension ModesModel.Source {
             recentApps: {
                 guard let history else { return [] }
                 do {
-                    return try await history.recentApps(
-                        since: UsageModel.Period.last30Days.start(at: .now), limit: 20)
+                    // The apps of the last 30 days.
+                    let since = Calendar.current.date(byAdding: .day, value: -30, to: .now) ?? .now
+                    return try await history.recentApps(since: since, limit: 20)
                 } catch {
                     Log.app.error("Cannot read the recent apps: \(error)")
                     return []

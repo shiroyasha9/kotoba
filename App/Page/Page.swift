@@ -51,3 +51,49 @@ struct PageHeader: View {
             })
     }
 }
+
+/// A page's read failed: one row in the form's own type, with the button that reads again, in place of what the page
+/// shows (review-window.md 8: a pane-sized empty view in a card looked out of place).
+struct LoadFailedRow: View {
+    let retry: @MainActor () -> Void
+
+    var body: some View {
+        PageRow(title: StatusText.historyReadFailedTitle, subtitle: StatusText.historyReadFailedMessage) {
+            SymbolTile(systemImage: "exclamationmark.triangle", tint: .orange, side: PageMetrics.rowTileSide)
+        } trailing: {
+            Button("Try Again", action: retry)
+        }
+    }
+}
+
+/// A sheet over a page, such as a page's "Advanced…": its sections in a grouped form, and Done at the bottom, as System
+/// Settings' sheets, at `PageMetrics.sheetSize`; longer content scrolls.
+struct PageSheet<Content: View>: View {
+    let title: String
+    @ViewBuilder let content: Content
+    @Environment(\.dismiss) private var dismiss
+
+    var body: some View {
+        Form {
+            content
+        }
+        .formStyle(.grouped)
+        .navigationTitle(title)
+        .frame(width: PageMetrics.sheetSize.width, height: PageMetrics.sheetSize.height)
+        .toolbar {
+            ToolbarItem(placement: .confirmationAction) {
+                Button("Done") { dismiss() }
+            }
+        }
+    }
+}
+
+extension Duration {
+    /// A duration as Screen Time writes it, in the system formatter's narrow units: "14h 20m", and "42s" under a minute
+    /// (review-window.md T8).
+    var pageText: String {
+        self < .seconds(60)
+            ? formatted(.units(allowed: [.seconds], width: .narrow))
+            : formatted(.units(allowed: [.hours, .minutes], width: .narrow))
+    }
+}

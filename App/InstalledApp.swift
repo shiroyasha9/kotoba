@@ -1,7 +1,6 @@
 import AppKit
 import KotobaCore
 import KotobaStorage
-import SwiftUI
 
 /// An installed app found by its bundle id, for rows that name the app a dictation or a correction came from.
 enum InstalledApp {
@@ -43,27 +42,5 @@ final class InstalledApps {
         let icon = InstalledApp.icon(of: app.bundleID)
         icons[app.bundleID] = icon
         return icon
-    }
-}
-
-/// A top app with its word count, in Insights and Usage.
-struct AppWordsRow: View {
-    let row: UsageSummary.AppWords
-    let apps: InstalledApps
-
-    var body: some View {
-        LabeledContent {
-            Text(StatusText.counted(row.words, "word"))
-        } label: {
-            Label {
-                Text(apps.name(of: row.app) ?? "Unknown app")
-            } icon: {
-                if let icon = apps.icon(of: row.app) {
-                    Image(nsImage: icon).resizable().frame(width: 20, height: 20)
-                } else {
-                    Image(systemName: "app.dashed")
-                }
-            }
-        }
     }
 }

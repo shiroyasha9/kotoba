@@ -8,18 +8,19 @@ import KotobaStorage
 extension Pane {
     /// The whole main window: Home, History, and each settings pane, the Dictionary pane also with suggestions. History
     /// also in the framed window, for its toolbar with a selected row: one with text (Copy, Paste Again and Delete on),
-    /// a failed one (Retry and Delete on) and one with no audio (Delete on only). Usage framed for its period switch in
-    /// the toolbar.
+    /// a failed one (Retry and Delete on) and one with no audio (Delete on only). Home and Activity framed too: the
+    /// title bar keeps one height on every page.
     static func windowSnapshots() -> [Snapshot] {
         [
             windowSnapshot(selecting: .home, named: "window-home"),
+            windowSnapshot(selecting: .home, named: "window-home-framed", isFramed: true),
             windowSnapshot(selecting: .history, named: "window-history"),
             windowSnapshot(selecting: .history, named: "window-history-toolbar", isFramed: true),
             windowSnapshot(selecting: .history, history: 2, named: "window-history-failed", isFramed: true),
             windowSnapshot(selecting: .history, history: 5, named: "window-history-no-audio", isFramed: true),
             windowSnapshot(selecting: .history, isPlaying: true, named: "window-history-playing", isFramed: true),
-            windowSnapshot(selecting: .insights, named: "window-insights"),
-            windowSnapshot(selecting: .usage, named: "window-usage", isFramed: true),
+            windowSnapshot(selecting: .activity, named: "window-activity"),
+            windowSnapshot(selecting: .activity, named: "window-activity-framed", isFramed: true),
             windowSnapshot(selecting: .general, named: "window-general"),
             windowSnapshot(selecting: .speech, named: "window-speech"),
             windowSnapshot(selecting: .dictionary, named: "window-dictionary"),
@@ -112,7 +113,7 @@ extension Pane {
     /// bar.
     static func readmeSnapshots() -> [Snapshot] {
         let panes = samplePanes(home: .readme)
-        let ids: [PaneID] = [.home, .history, .insights, .usage, .modes, .general]
+        let ids: [PaneID] = [.home, .history, .activity, .modes, .general]
         return ids.map { id in
             MainWindow.readmeSnapshot(
                 of: panes, selecting: id, named: "readme-\(id.rawValue)", isScrolledToEnd: id == .general)
@@ -135,18 +136,17 @@ extension Pane {
             .modes(ModesModel(source: .sample())),
             .microphones(MicrophoneModel(source: .sample()) {}),
             .speech(.sample(route: .openRouterMAI, azureEndpoint: "")),
-            .usage(.sample),
-            .insights(.sample),
+            .activity(.sample()),
         ]
     }
 
     /// Each pane with an empty state, on a new install, at the default size and wide: the state sits in the centre of
     /// the space it gets.
     static func emptyWindowSnapshots() -> [Snapshot] {
-        let wide = NSSize(width: 1_440, height: 900)
-        let ids: [PaneID] = [.home, .history, .insights, .usage, .dictionary]
+        let wide = NSSize(width: PageMetrics.maximumWindowWidth, height: 900)
+        let ids: [PaneID] = [.home, .history, .activity, .dictionary]
         return ids.flatMap { id in
-            [("", MainWindow.defaultSize), ("-wide", wide)].map { suffix, size in
+            [("", PageMetrics.defaultWindowSize), ("-wide", wide)].map { suffix, size in
                 MainWindow.windowSnapshot(
                     of: emptyPanes(), selecting: id, named: "window-empty-\(id.rawValue)\(suffix)", size: size)
             }
@@ -163,15 +163,19 @@ extension Pane {
             .modes(ModesModel(source: .sample())),
             .microphones(MicrophoneModel(source: .sample()) {}),
             .speech(.sample(route: .openRouterMAI, azureEndpoint: "")),
-            .usage(.empty),
-            .insights(.empty),
+            .activity(.empty),
         ]
     }
 
-    /// One window switched Home, History, General, Insights, Usage in turn, drawn at each step: the toolbar, traffic lights
-    /// and window frame stay where they were on Home.
+    /// The pages that still have a toolbar (History and Dictionary: search and row actions). A page has no toolbar
+    /// (docs/research/ui-redesign.md, "Window"), so the title bar keeps one height; their rollout moves these into the
+    /// page and empties this list. `scripts/ratchet-done.sh` fails the release while it has a page.
+    static let pagesWithToolbar: [PaneID] = [.history, .dictionary]
+
+    /// One window switched through every page without a toolbar in turn, drawn at each step: the title bar, traffic
+    /// lights and window frame stay where they were on Home.
     static func switchSnapshots() -> [Snapshot] {
-        let path: [PaneID] = [.home, .history, .general, .insights, .usage]
+        let path = PaneID.allCases.filter { !pagesWithToolbar.contains($0) }
         return path.indices.map { end in
             MainWindow.switchSnapshot(
                 of: samplePanes(), through: Array(path[...end]), named: "window-switch-\(path[end].rawValue)")
@@ -194,7 +198,7 @@ extension Pane {
                 let panes = samplePanes()
                 let selection = Selection(panes: panes, showing: .home)
                 let window = MainWindow.window(showing: MainView(panes: panes, selection: selection))
-                window.setContentSize(MainWindow.defaultSize)
+                window.setContentSize(PageMetrics.defaultWindowSize)
                 for id in PaneID.allCases {
                     selection.id = id
                     Snapshots.settle()

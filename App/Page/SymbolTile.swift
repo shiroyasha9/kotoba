@@ -36,11 +36,15 @@ struct SymbolTile: View {
             // White on the tile's colour in light and dark, as System Settings' tiles.
             .foregroundStyle(.white)
             .frame(width: side, height: side)
-            .background(tint.gradient, in: shape)
-            // The rim and soft ring of Apple's tiles (review-window.md T1), so a tile reads as an icon, not a flat
-            // swatch: a lighter hairline at the edge, and the system shadow under it.
-            .overlay(shape.strokeBorder(.white.opacity(PageMetrics.tileRimOpacity), lineWidth: 1 / displayScale))
-            .shadow(radius: side * PageMetrics.tileShadowRadiusRatio, y: side * PageMetrics.tileShadowDropRatio)
+            .background {
+                // The rim and soft ring of Apple's tiles (review-window.md T1), so a tile reads as an icon, not a flat
+                // swatch: a lighter hairline at the edge, and the system shadow under the tile (not under the glyph).
+                shape.fill(tint.gradient)
+                    .overlay(
+                        shape.strokeBorder(.white.opacity(PageMetrics.tileRimOpacity), lineWidth: 1 / displayScale)
+                    )
+                    .shadow(radius: side * PageMetrics.tileShadowRadiusRatio, y: side * PageMetrics.tileShadowDropRatio)
+            }
             .accessibilityHidden(true)
     }
 }

@@ -1,19 +1,21 @@
 import AppKit
 import KotobaCore
 import KotobaStorage
+import Observation
 
-/// What Home shows: whether kotoba is ready, the chords, a few Insights figures and the newest dictations. Built with
-/// each main window; it reads the history while Home is shown (`PaneReader`), so nothing runs at idle or while another
+/// What Home shows: whether kotoba is ready, today's words and the week's bars, the chords and the newest dictations.
+/// Built with each main window; it reads the history while Home is shown (`PaneReader`), so nothing runs at idle or while another
 /// pane is shown.
 @MainActor
+@Observable
 final class HomeModel {
     struct Figures: Equatable {
-        /// The Insights pane's figures; Home shows today, this week and the streak.
+        /// Activity's figures; Home shows today's words, the time they saved, the streak and the week's bars.
         var insights: DictationInsights
         /// Newest first, at most `recentCount`, as History reads them.
         var recent: [DictationRecord]
-        /// A dictation reached the owner, so "Fix Last Dictation…" has something to fix (`LastDictation`).
-        var hasLastDictation: Bool
+        /// The newest dictation that reached the owner, which "Fix…" fixes (`LastDictation`); nil before the first.
+        var lastDelivered: DictationID?
         /// The rows of `recent` whose audio waits for a retry, as History marks them (`HistoryModel.kept`).
         var retryable: Set<DictationID> = []
     }
@@ -22,38 +24,25 @@ final class HomeModel {
     struct Source {
         /// The Insights figures at `now`: a scan of the whole ledger (20 ms at 10,000 dictations).
         var readInsights: @MainActor (_ now: Date) async throws -> DictationInsights
-        /// The newest dictations, at most `recentCount`, and whether one reached the owner.
-        var readRows: @MainActor () async throws -> (recent: [DictationRecord], hasLastDictation: Bool)
+        /// The newest dictations, at most `recentCount`, and the newest one that reached the owner.
+        var readRows: @MainActor () async throws -> (recent: [DictationRecord], lastDelivered: DictationID?)
         var copy: @MainActor (String) async -> Void
+        /// Paste Again (`PasteAgain`): false when nothing was pasted and the text is on the clipboard.
+        var paste: @MainActor (String, DictationID) async -> Bool
         /// Opens the Fix window on the last dictation.
         var fixLast: @MainActor () -> Void
         /// "Finish Setting Up kotoba…": onboarding on the first missing step, or the Speech pane.
         var finishSetup: @MainActor () -> Void
+        /// "Try It…" before the first dictation: onboarding's Try It step.
+        var tryIt: @MainActor () -> Void
     }
 
-    /// The name and icon at the top of Home.
-    struct Identity {
-        var name: String
-        var icon: NSImage
-
-        /// This install's: "kotoba Dev" and the DEV icon in a development build.
-        @MainActor static var running: Self {
-            Self(name: Install.displayName, icon: NSApplication.shared.applicationIconImage)
-        }
-
-        /// The release's, for the README images: a development build carries the release icon too (`AppIcon`).
-        @MainActor static var release: Self {
-            guard let icon = NSImage(named: "AppIcon") else { preconditionFailure("The build has no release icon") }
-            return Self(name: Install.releaseDisplayName, icon: icon)
-        }
-    }
-
+    /// The last dictation and the 4 before it (docs/research/ui-redesign.md, "Page map").
     static let recentCount = 5
 
     /// Observed: a grant or a saved key changes the status line at once.
     let readiness: Readiness
     let chords: HotkeyChords
-    let identity: Identity
     let reader: PaneReader<Figures>
     let apps = InstalledApps()
     private let source: Source?
@@ -61,13 +50,17 @@ final class HomeModel {
     private let reads: Reads?
     /// Which chart day is today.
     private let now: @MainActor () -> Date
-    /// The last Copy, which a pasteboard write ends at once; the next Copy replaces it.
-    private var copying: Task<Void, Never>?
+    /// The last Copy or Paste Again, which ends at once or within `PasteAgain`'s bound; the next one replaces it.
+    @ObservationIgnored private var sending: Task<Void, Never>?
+    /// Paste Again could not bring back the app the owner was in.
+    var isPasteFailureShown = false
+    /// Which dictations are being sent, and whether Paste Again can paste (`DictationPipeline.activity`).
+    var activity = PipelineActivity(isQuiet: true, inFlight: [])
 
-    init(readiness: Readiness, chords: HotkeyChords, source: Source) {
+    init(readiness: Readiness, chords: HotkeyChords, source: Source, activity: PipelineActivity) {
         self.readiness = readiness
+        self.activity = activity
         self.chords = chords
-        identity = .running
         self.source = source
         now = { .now }
         let reads = Reads(source: source)
@@ -76,24 +69,20 @@ final class HomeModel {
     }
 
     /// For snapshots: fixed figures, no store, at `Snapshots.sampleNow`.
-    init(readiness: Readiness, chords: HotkeyChords, figures: Figures, identity: Identity = .running) {
+    init(readiness: Readiness, chords: HotkeyChords, figures: Figures) {
         self.readiness = readiness
         self.chords = chords
-        self.identity = identity
         source = nil
         reads = nil
         now = { Snapshots.sampleNow }
         reader = PaneReader(value: figures)
     }
 
-    /// "0.3.0" from the bundle.
-    var version: String {
-        Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String ?? ""
-    }
-
-    /// Words and dictations today: the last chart day when it is today.
-    var today: DictationInsights.Day? {
-        reader.value?.insights.days.last.flatMap { Calendar.current.isDate($0.start, inSameDayAs: now()) ? $0 : nil }
+    /// Words today: the last chart day's when it is today.
+    var todayWords: Int {
+        reader.value?.insights.days.last.flatMap {
+            Calendar.current.isDate($0.start, inSameDayAs: now()) ? $0.words : nil
+        } ?? 0
     }
 
     /// The history was written: a shown Home reads again, the rows alone when the write left the figures as they were
@@ -105,7 +94,21 @@ final class HomeModel {
 
     func copy(_ record: DictationRecord) {
         guard let source, let text = record.latestText else { return }
-        copying = Task { await source.copy(text) }
+        sending = Task { await source.copy(text) }
+    }
+
+    /// While a dictation records or is sent, Paste Again would race its paste.
+    func canPasteAgain(_ record: DictationRecord) -> Bool {
+        activity.isQuiet && record.hasText
+    }
+
+    func pasteAgain(_ record: DictationRecord) {
+        guard let source, canPasteAgain(record), let text = record.latestText else { return }
+        sending = Task {
+            if await !source.paste(text, record.id) {
+                isPasteFailureShown = true
+            }
+        }
     }
 
     func fixLast() {
@@ -115,6 +118,10 @@ final class HomeModel {
     func finishSetup() {
         source?.finishSetup()
     }
+
+    func tryIt() {
+        source?.tryIt()
+    }
 }
 
 extension HomeModel {
@@ -123,7 +130,7 @@ extension HomeModel {
     @MainActor
     private final class Reads {
         private let readInsights: @MainActor (_ now: Date) async throws -> DictationInsights
-        private let readRows: @MainActor () async throws -> (recent: [DictationRecord], hasLastDictation: Bool)
+        private let readRows: @MainActor () async throws -> (recent: [DictationRecord], lastDelivered: DictationID?)
         private var isInsightsDue = true
         private var insights: (value: DictationInsights, day: Date)?
 
@@ -152,10 +159,9 @@ extension HomeModel {
                 }
                 insights = (current, now)
             }
-            let (recent, hasLastDictation) = try await rows
+            let (recent, lastDelivered) = try await rows
             return Figures(
-                insights: current, recent: recent, hasLastDictation: hasLastDictation,
-                retryable: HistoryModel.kept(recent))
+                insights: current, recent: recent, lastDelivered: lastDelivered, retryable: HistoryModel.kept(recent))
         }
     }
 }

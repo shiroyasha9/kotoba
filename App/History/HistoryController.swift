@@ -1,4 +1,3 @@
-import AppKit
 import KotobaCore
 import KotobaProviders
 import KotobaStorage
@@ -8,9 +7,6 @@ import KotobaStorage
 /// writes cost it nothing.
 @MainActor
 final class HistoryController {
-    /// The longest Paste Again waits for the app the owner was in to come back to the front.
-    private static let focusWait = Duration.milliseconds(500)
-
     private let store: HistoryStore
     private let pipeline: DictationPipeline
     /// Opens the Fix window with a row's text.
@@ -89,51 +85,11 @@ final class HistoryController {
             record: { try await store.record($0, matching: $1) },
             delete: { await pipeline.delete($0) },
             retry: { await pipeline.retry($0) },
-            paste: { text, id in
-                guard await pipeline.isQuiet else { return true }
-                guard await Self.returnFocus() else {
-                    // The paste would land in kotoba: the text waits on the clipboard instead.
-                    await pipeline.copyAgain(text)
-                    return false
-                }
-                await pipeline.pasteAgain(text, of: id)
-                return true
-            },
+            paste: { await PasteAgain(pipeline: pipeline)($0, of: $1) },
             copy: { await pipeline.copyAgain($0) },
             transcribeAgain: { await pipeline.transcribeAgain($0, model: $1) },
             otherSpeechModels: { [weak self] in self?.otherSpeechModels ?? [] },
             fix: fix
         )
-    }
-
-    /// kotoba is the active app while its window is key, so a Cmd-V would land in it. The last app the owner was in
-    /// comes back to the front (kotoba's windows stay as they are), and the paste waits for its activation, at most
-    /// `focusWait`. False when there is no such app or it did not come to the front in time: the paste would land in
-    /// kotoba.
-    private static func returnFocus() async -> Bool {
-        guard NSApp.isActive else { return true }
-        guard let id = FrontAppObserver.lastOtherProcessID, let app = NSRunningApplication(processIdentifier: id),
-            !app.isTerminated
-        else { return false }
-        // The sequence observes from its creation, so the activation is not missed.
-        let activations = NSWorkspace.shared.notificationCenter.notifications(
-            named: NSWorkspace.didActivateApplicationNotification)
-        NSApp.yieldActivation(to: app)
-        _ = app.activate(from: .current, options: [])
-        let wait = Task {
-            for await note in activations
-            where (note.userInfo?[NSWorkspace.applicationUserInfoKey] as? NSRunningApplication)?.processIdentifier == id
-            {
-                return true
-            }
-            return false
-        }
-        let bound = Task {
-            try? await Task.sleep(for: focusWait)  // Cancelled once the switch came: nothing to do.
-            wait.cancel()
-        }
-        let isActivated = await wait.value
-        bound.cancel()
-        return isActivated
     }
 }

@@ -187,6 +187,11 @@ final class SetupFlow {
         }
     }
 
+    /// Home's "Try It…" before the first dictation: onboarding's Try It step.
+    func tryIt() {
+        onboarding.show(step: .tryIt)
+    }
+
     /// The pill's "Allow Pasting…".
     func allowPasting() {
         onboarding.show(step: .accessibility)

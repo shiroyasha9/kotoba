@@ -24,7 +24,8 @@ extension MainWindow {
     /// sidebar rows above its top and the footer below its bottom, so the window looked empty. `isFramed` draws the
     /// real window instead, title bar and toolbar included (a pane's toolbar buttons and search field).
     static func windowSnapshot(
-        of panes: [Pane], selecting id: Pane.ID, named name: String, size: NSSize = defaultSize, isFramed: Bool = false
+        of panes: [Pane], selecting id: Pane.ID, named name: String, size: NSSize = PageMetrics.defaultWindowSize,
+        isFramed: Bool = false
     ) -> Snapshot {
         let selection = { Selection(panes: panes, showing: id) }
         guard isFramed else {
@@ -50,7 +51,7 @@ extension MainWindow {
         of panes: [Pane], selecting id: Pane.ID, named name: String, isScrolledToEnd: Bool = false
     ) -> Snapshot {
         var snapshot = Snapshots.fixedWindow(named: name, size: NSSize(width: 960, height: 610), check: overflow) {
-            MainView(panes: panes, selection: Selection(panes: panes, showing: id))
+            MainView(panes: panes, selection: Selection(panes: panes, showing: id), identity: .release)
                 .defaultScrollAnchor(isScrolledToEnd ? .bottom : nil)
                 .scrollIndicators(.hidden)
         }
@@ -88,10 +89,10 @@ extension MainWindow {
     /// 2026-10-16: History's tall toolbar moved the sidebar 17 pt below Home's).
     static func switchSnapshot(of panes: [Pane], through path: [PaneID], named name: String) -> Snapshot {
         var chromes: [(PaneID, Chrome)] = []
-        var snapshot = Snapshots.window(named: name, contentSize: defaultSize) {
+        var snapshot = Snapshots.window(named: name, contentSize: PageMetrics.defaultWindowSize) {
             let selection = Selection(panes: panes, showing: path.first)
             let window = window(showing: MainView(panes: panes, selection: selection))
-            window.setContentSize(defaultSize)
+            window.setContentSize(PageMetrics.defaultWindowSize)
             for id in path {
                 selection.id = id
                 window.title = id.title

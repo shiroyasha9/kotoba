@@ -31,6 +31,10 @@ enum PageMetrics {
     /// The sidebar's width, as System Settings' and CodeEdit's (`navigationSplitViewColumnWidth(215)`, research R9).
     static let sidebarWidth: CGFloat = 215
 
+    /// A page's sheet ("Advanced…"): the page column's width, and half the smallest window's height, so the window
+    /// shows around it on every size.
+    static let sheetSize = CGSize(width: columnWidth, height: minimumWindowSize.height / 2)
+
     // MARK: Page
 
     /// The widest the content column gets; a wider window adds margin on both sides. The form keeps its own inset
@@ -73,9 +77,10 @@ enum PageMetrics {
 
     /// A tile's soft ring, as a share of its side: Apple's sidebar tiles sit in a shadow that fades over 2 px above the
     /// tile and 4 px under it, darkest (#cdcccc on #eeedec) at the tile's edge, in the 2x capture
-    /// (refs/apple/system-settings-general-sidebar-rows, a 40 px tile). The system shadow's blur radius and its drop.
+    /// (refs/apple/system-settings-general-sidebar-rows, a 40 px tile). The system shadow's blur radius and its drop;
+    /// measured in the sidebar snapshot: 3 px above, 4 px under, #cdcdcd at the side as Apple's.
     static let tileShadowRadiusRatio: CGFloat = 0.05
-    static let tileShadowDropRatio: CGFloat = 0.025
+    static let tileShadowDropRatio: CGFloat = 0.0125
 
     /// A tile's top and bottom rim: one device pixel about 8 % lighter than the fill (#139aff over #0190ff in the same
     /// capture), the highlight of an app icon's edge.
