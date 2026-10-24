@@ -323,7 +323,7 @@ extension Pane {
             Snapshot(name: "settings-dictionary-editor") {
                 let rule = ReplacementRule(find: "cloud code", replacement: "Claude Code")
                 let editor = EntryEditor(draft: EntryDraft(rule: rule), isNew: false) { _ throws(DictionaryError) in }
-                return Snapshots.hostingView(editor)
+                return NSHostingView(rootView: editor)
             },
         ]
     }

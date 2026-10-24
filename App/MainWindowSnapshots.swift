@@ -5,13 +5,12 @@ import SwiftUI
 
 extension MainWindow {
     /// One pane at the size of the window's detail column, for `make snapshots`. Each pane's file registers its own
-    /// snapshots with this. The sidebar and the toolbar (title, search field) need the real window: the sidebar's
-    /// selection and vibrancy do not render offscreen, so they are not in the image.
+    /// snapshots with this. The sidebar and the toolbar (title, search field) are in `windowSnapshot`.
     /// 760 x 600 is about the detail column at the default window size; a taller `height` shows a pane that scrolls in
     /// the window in full.
     static func snapshot(of pane: Pane, named name: String, height: CGFloat = 600) -> Snapshot {
         var snapshot = Snapshot(name: name) {
-            let view = Snapshots.hostingView(pane.content().frame(width: 760, height: height))
+            let view = NSHostingView(rootView: pane.content().frame(width: 760, height: height))
             view.setFrameSize(NSSize(width: 760, height: height))
             return view
         }
@@ -22,10 +21,8 @@ extension MainWindow {
 
     /// The whole window content (sidebar and pane) at the default size, for `make snapshots`. It stops the run when
     /// the content is taller or wider than the window: on 2026-10-15 a pane that grew past the window pushed the
-    /// sidebar rows above its top and the footer below its bottom, so the window looked empty. The sidebar's
-    /// selection and vibrancy do not render offscreen (the selected row is a dark block); the layout check does not
-    /// depend on them. `isFramed` draws the real window instead, title bar and toolbar included (a pane's toolbar
-    /// buttons and search field); its macOS 26 glass sidebar draws blank offscreen.
+    /// sidebar rows above its top and the footer below its bottom, so the window looked empty. `isFramed` draws the
+    /// real window instead, title bar and toolbar included (a pane's toolbar buttons and search field).
     static func windowSnapshot(
         of panes: [Pane], selecting id: Pane.ID, named name: String, size: NSSize = defaultSize, isFramed: Bool = false
     ) -> Snapshot {
@@ -46,17 +43,16 @@ extension MainWindow {
     }
 
     /// The README images (`Pane.readmeSnapshots`, `make readme-images`): the whole window content at one size, as
-    /// `windowSnapshot` draws it, with the sidebar's selected row and labels in explicit colors (`drawsSidebarColors`)
-    /// and "on" switches in the accent color (`ActiveSwitchStyle`).
-    /// `isScrolledToEnd` shows the end of a pane that scrolls; 610 pt high, General's end then starts at a section.
+    /// `windowSnapshot` draws it.
+    /// `isScrolledToEnd` shows the end of a pane that scrolls; 610 pt high, General's end then starts at a section. The
+    /// pane's scroll bar, which shows for a moment after a scroll, is not in the image.
     static func readmeSnapshot(
         of panes: [Pane], selecting id: Pane.ID, named name: String, isScrolledToEnd: Bool = false
     ) -> Snapshot {
         var snapshot = Snapshots.fixedWindow(named: name, size: NSSize(width: 960, height: 610), check: overflow) {
             MainView(panes: panes, selection: Selection(panes: panes, showing: id))
-                .environment(\.drawsSidebarColors, true)
                 .defaultScrollAnchor(isScrolledToEnd ? .bottom : nil)
-                .toggleStyle(ActiveSwitchStyle())
+                .scrollIndicators(.hidden)
         }
         snapshot.scale = 2
         return snapshot
@@ -109,28 +105,6 @@ extension MainWindow {
             return chromes.first { $0.1 != expected }.map { id, chrome in
                 "\(id.title) has \(chrome); \(first.title) has \(expected)"
             }
-        }
-    }
-}
-
-/// The README images' switches: "on" in the accent color, as in the active app. Offscreen AppKit draws an on switch's
-/// track grey, because a snapshot run is never the active app; an off switch draws right, so it stays native. Custom:
-/// a stand-in for the macOS 26 switch (36 x 16 pt, a white capsule knob), as `PillStandIn` stands in for glass.
-private struct ActiveSwitchStyle: ToggleStyle {
-    func makeBody(configuration: Configuration) -> some View {
-        if configuration.isOn {
-            LabeledContent {
-                Capsule()
-                    .fill(Color(nsColor: .controlAccentColor))
-                    .overlay(alignment: .trailing) {
-                        Capsule().fill(.white).frame(width: 22, height: 13).padding(.horizontal, 1.5)
-                    }
-                    .frame(width: 36, height: 16)
-            } label: {
-                configuration.label
-            }
-        } else {
-            Toggle(configuration).toggleStyle(.switch)
         }
     }
 }

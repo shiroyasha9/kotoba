@@ -40,7 +40,7 @@ extension ChordRecorder {
         }
         .formStyle(.grouped)
         .frame(width: 520)
-        return [Snapshot(name: "chord-recorder") { Snapshots.hostingView(form) }]
+        return [Snapshot(name: "chord-recorder") { NSHostingView(rootView: form) }]
     }
 
     /// Push to talk on the hands-free chord (no hint of its own), on ⌥ alone with its hint, and refused.

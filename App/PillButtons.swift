@@ -9,20 +9,12 @@ import SwiftUI
 struct PillButton: View {
     var title = ""
     var onClick: () -> Void = {}
-    @Environment(\.colorScheme) private var colorScheme
 
     var body: some View {
-        let button = Button(title, action: onClick)
+        Button(title, action: onClick)
             .buttonStyle(.glass)
             .controlSize(.small)
             .environment(\.controlActiveState, .key)
-        // Offscreen the window server's glass treatment is missing, so in dark the title draws near black; on
-        // screen it draws in the label color, which the dark snapshot takes instead. Light draws right as is.
-        if Snapshots.isRunning, colorScheme == .dark {
-            button.foregroundStyle(Color(nsColor: .labelColor))
-        } else {
-            button
-        }
     }
 }
 

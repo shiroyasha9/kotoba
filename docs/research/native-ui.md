@@ -36,13 +36,15 @@ Owner ask, 2026-10-16: "make sure everything uses native apple components (and c
 | Status menu | `App/StatusMenu.swift` | `NSMenu` with titles, subtitles, states, submenus | Native | No change |
 | Indicator pill | `App/IndicatorPillView.swift` (indicator-26) | `NSGlassEffectView`, `NSStackView`, `NSProgressIndicator`, glass `NSButton`; state dot is a layer-drawn circle | Glass is right here (a floating control, HIG Materials). Replace the dot with the SF Symbol `circle.fill` tinted by the state colour | Sent to indicator-26 |
 | Pill level meter and countdown bar | `App/IndicatorBars.swift` (indicator-26) | CALayer bars | No fitting native control: `NSLevelIndicator` draws a bezel that does not fit glass; `NSProgressIndicator` needs a value update per frame, while one Core Animation run drains the bar with no idle work. Needs gap comments | Sent to indicator-26 |
-| Pill glass stand-in | `App/IndicatorSnapshots.swift` | `NSBezierPath` capsule | Snapshot only (glass does not render offscreen) | No change |
+| Pill glass stand-in | `App/IndicatorSnapshots.swift` | `NSBezierPath` capsule | Snapshot only (glass did not render offscreen) | Removed 2026-10-24: snapshots capture real glass |
 
 ## Why the "Learn from my edits" row is not a Form row
 
 Review 2026-10-16 (quality #6) asked for a short grouped `Form` with the header and the switch above the word list. Spike (macOS 26 SDK, the Settings split view at 720 x 480): a `Form` with `.fixedSize(horizontal: false, vertical: true)`, or with a height measured by `onScrollGeometryChange`, above a `GroupBox` with the word `List` makes the hosting view's fitting height 1963-2174 pt (the list at its full height); the hosting view then grows to that height, and `windowSnapshot` fails. In the real window the same ideal size would push the Settings window past the screen. So the row stays a plain composition (`HStack`: title and subtitle, `Spacer`, a `.switch` toggle) with a comment that names the gap. The Microphone list has no such problem: it sits inside a scrolling form, so its height is measured with `onScrollGeometryChange` (no fixed row height).
 
 ## Offscreen limit: text on glass draws black in dark snapshots
+
+Closed 2026-10-24: snapshots now capture each window through ScreenCaptureKit (`App/SnapshotCapture.swift`), so the window server's glass treatment is in the image and this text draws light. The snapshot-only `labelColor` on `PillButton` is gone. The record below is the 2026-10-16 finding for the old `cacheDisplay` path.
 
 Lead report 2026-10-16: in dark snapshots the sidebar labels and the pill's glass button titles (Undo, Retry) draw near black. Spikes (macOS 26 SDK, a dark offscreen window, `cacheDisplay`, the harness's path):
 - The window has the dark appearance (`render` sets `NSWindow.appearance`); the sidebar's views report `NSAppearanceNameVibrantDark` and sit inside an `NSGlassEffectView` (the macOS 26 floating sidebar).

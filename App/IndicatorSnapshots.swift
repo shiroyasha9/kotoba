@@ -45,11 +45,11 @@ extension IndicatorPanel {
             .clipboardNotKept(id), .polished(id, isReplaced: true), .polishFailed(.failed),
         ]
         var snapshots = [
-            Snapshot(name: "indicator-drag") { PillStandIn(content: .init(), anchor: nil) },
+            Snapshot(name: "indicator-drag") { pill(showing: .init(), anchor: nil) },
             Snapshot(name: "indicator-idle-bottomCenter") {
-                PillStandIn(content: .idle(click: .startsDictation), anchor: .bottomCenter)
+                pill(showing: .idle(click: .startsDictation), anchor: .bottomCenter)
             } check: { view in
-                (view as? PillStandIn).flatMap { accessibilityProblem(of: $0.pill, content: $0.pill.content) }
+                (view as? IndicatorPillView).flatMap { accessibilityProblem(of: $0, content: $0.content) }
             },
         ]
         var contents = (phases.flatMap(rows(for:)) + notices.flatMap(rows(for:))).compactMap { row in
@@ -64,15 +64,20 @@ extension IndicatorPanel {
             for anchor in anchors {
                 snapshots.append(
                     Snapshot(name: "indicator-\(name)-\(anchor.rawValue)") {
-                        PillStandIn(content: content, anchor: anchor, level: level)
+                        pill(showing: content, anchor: anchor, level: level)
                     } check: { view in
-                        guard let pill = (view as? PillStandIn)?.pill else { return nil }
+                        guard let pill = view as? IndicatorPillView else { return nil }
                         if pill.isTextTruncated { return "the pill text \"\(content.text)\" is cut off" }
                         return accessibilityProblem(of: pill, content: content)
                     })
             }
         }
-        return snapshots
+        // The pill floats over other apps, so its glass shows over the fixed desktop.
+        return snapshots.map {
+            var snapshot = $0
+            snapshot.floatsOverDesktop = true
+            return snapshot
+        }
     }
 
     /// What VoiceOver gets from the pill, or nil when it is right: the pill's click as one button with its label, and
@@ -221,15 +226,13 @@ extension IndicatorPanel {
         case .failed: "failed"
         }
     }
-}
 
-/// The pill over a capsule in the window color, since its glass does not render offscreen. A pill with a timer
-/// shows its bar held at 60 %.
-private final class PillStandIn: NSView {
-    let pill = IndicatorPillView(frame: .zero)
-
-    /// A nil anchor shows the dragged pill.
-    init(content: IndicatorPillView.Content, anchor: IndicatorAnchor?, level: Double = 0.6) {
+    /// The pill at its size for `content` at `anchor`; a nil anchor shows the dragged pill. A pill with a timer shows
+    /// its bar held at 60 %.
+    private static func pill(
+        showing content: IndicatorPillView.Content, anchor: IndicatorAnchor?, level: Double = 0.6
+    ) -> IndicatorPillView {
+        let pill = IndicatorPillView(frame: .zero)
         pill.content = content
         pill.level = level
         if let timer = content.timer {
@@ -253,22 +256,7 @@ private final class PillStandIn: NSView {
             pill.layout = .round
             frame = IndicatorPlacement.dragFrame(centeredAt: ScreenPoint(x: 0, y: 0))
         }
-        super.init(frame: NSRect(x: 0, y: 0, width: frame.width, height: frame.height))
-        pill.frame = bounds
-        addSubview(pill)
-    }
-
-    @available(*, unavailable)
-    required init?(coder: NSCoder) {
-        fatalError("PillStandIn is built in code")
-    }
-
-    override func draw(_ dirtyRect: NSRect) {
-        let radius = IndicatorPlacement.cornerRadius
-        let capsule = NSBezierPath(roundedRect: bounds.insetBy(dx: 0.5, dy: 0.5), xRadius: radius, yRadius: radius)
-        NSColor.controlBackgroundColor.setFill()
-        capsule.fill()
-        NSColor.separatorColor.setStroke()
-        capsule.stroke()
+        pill.setFrameSize(NSSize(width: frame.width, height: frame.height))
+        return pill
     }
 }

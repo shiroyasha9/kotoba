@@ -70,7 +70,8 @@ check: privacy format-lint lint build-check view-checks test
 view-checks: build-check
 	$(call DEBUG_APP,$(CHECK_DERIVED))/Contents/MacOS/kotoba --snapshot-checks
 
-# Renders the registered views (App/Snapshots.swift) to PNGs, light and dark, offscreen: no screen capture, no TCC.
+# Renders the registered views (App/Snapshots.swift) to PNGs, light and dark, from windows never shown on screen, with
+# real glass (ScreenCaptureKit): needs Screen Recording for the terminal app that runs make.
 SNAPSHOTS := build/snapshots$(if $(AGENT),-$(AGENT))
 snapshots: build-check
 	$(call DEBUG_APP,$(CHECK_DERIVED))/Contents/MacOS/kotoba --snapshots $(SNAPSHOTS)

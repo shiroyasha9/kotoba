@@ -564,13 +564,9 @@ macOS can refuse kotoba's request to become the active app. kotoba then still sh
 | 436 | Delete a starred word and add it again | It has no star | |
 | 437 | Point at a “Not sent” label, then at a star | Help tags: “Not sent with the last dictation: the list is over 100 words. Star it to always send it.” and “Star to always send it to the speech model.” | |
 
-## Known offscreen-only doubts
+## Offscreen-only doubts (closed 2026-10-24)
 
-The offscreen snapshots (`make snapshots`) show two things that may not happen in the real app. Check them on screen:
-- Row 54: the "Undo" title on the dark Canceled pill renders black on dark offscreen.
-- Row 74: the empty Azure endpoint's example URL renders as bright as typed text offscreen.
-- History (`window-history-toolbar`): the search field's “Search” placeholder renders as dark as typed text, and the selected row grey. On screen the placeholder must be grey and the selection blue.
-- Dark mode: the Settings sidebar labels and the pill's glass button titles (Undo, Retry) render near black offscreen (text on glass, docs/research/native-ui.md). On screen they must be light.
+Since 2026-10-24 `make snapshots` captures each window as the window server draws it (`App/SnapshotCapture.swift`), as the active app's key window. The doubts listed here before draw as on screen in the snapshots: the "Undo" title on the dark Canceled pill (row 54) and the pill's Retry title are light, the empty Azure endpoint's example URL (row 74) and History's “Search” placeholder are grey, and the dark sidebar labels are light. History's selected row stays grey while the sidebar has the focus, as on screen.
 
 ## Gates (after a day of use; each needs the owner's go because it reads the app database)
 

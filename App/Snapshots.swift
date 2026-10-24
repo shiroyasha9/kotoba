@@ -15,17 +15,17 @@ struct Snapshot {
     /// Pixels per point; nil draws at the main screen's scale. The README images are always 2x, whatever screen the
     /// run has.
     var scale: CGFloat?
+    /// On for a view that floats over other apps (the pill): it sits on the fixed desktop, which its glass refracts.
+    /// Off, it sits on the window background, as a pane in its window.
+    var floatsOverDesktop = false
 }
 
-/// `make snapshots` launches the app binary with `--snapshots <folder>`. Before the app starts,
-/// this renders every registered view offscreen with `cacheDisplay`, writes
-/// `<name>-light.png` and `<name>-dark.png` and the sample menus as `menu-<name>.txt`, and exits:
-/// no screen capture, no TCC grant.
-/// Glass and other backdrop effects do not render offscreen, so a view that relies on them draws
-/// a stand-in shape in its snapshot. Text that SwiftUI or AppKit draws on glass with a system style
-/// (`.primary`, `.secondary`, a `.glass` button title, the macOS 26 sidebar labels) draws near
-/// black in the dark images: the window server applies its glass tint, `cacheDisplay` does not.
-/// An explicit color or an AppKit label on the same glass draws right (docs/research/native-ui.md).
+/// `make snapshots` launches the app binary with `--snapshots <folder>`. Once the app has started, this lays out every
+/// registered view in a window that is never ordered on screen, captures the window as the window server composites
+/// it (ScreenCaptureKit), writes `<name>-light.png` and `<name>-dark.png` and the sample menus as `menu-<name>.txt`,
+/// and exits. Glass, vibrancy and text on glass draw as on screen, and every window draws as the active app's key
+/// window; nothing shows on screen. The capture needs Screen Recording for the app that runs `make` (the terminal):
+/// without it the run stops and names that app.
 @MainActor
 enum Snapshots {
     /// The time every sample shows as now (2027-01-15 08:00 UTC): images change only when the UI changes, and the
@@ -58,13 +58,6 @@ enum Snapshots {
 
     private static let padding: CGFloat = 16
 
-    /// The hosting view for a SwiftUI snapshot. Offscreen no window is key, so prominent and default buttons
-    /// and toggles would draw grey as in a background window; this draws them as in the key window. A list
-    /// selection still draws grey (it also needs the first responder).
-    static func hostingView(_ root: some View) -> NSHostingView<some View> {
-        NSHostingView(rootView: root.environment(\.controlActiveState, .key))
-    }
-
     /// A fixed-size window's content at the window's size. The real window does not resize, so the run fails when
     /// the content needs more room than `size`, or when `check` reports a problem after layout.
     static func fixedWindow<Content: View>(
@@ -72,7 +65,7 @@ enum Snapshots {
         _ content: @escaping @MainActor () -> Content
     ) -> Snapshot {
         Snapshot(name: name) {
-            let view = hostingView(content())
+            let view = NSHostingView(rootView: content())
             view.setFrameSize(size)
             return view
         } check: { view in
@@ -87,9 +80,9 @@ enum Snapshots {
         check: (@MainActor (NSView) -> String?)? = nil
     ) -> Snapshot {
         Snapshot(name: name) {
-            WindowImage(window: make(), contentSize: contentSize)
+            WindowCarrier(window: make(), contentSize: contentSize)
         } check: { view in
-            guard let content = (view as? WindowImage)?.shown.contentView else { return nil }
+            guard let content = (view as? WindowCarrier)?.shown.contentView else { return nil }
             content.layoutSubtreeIfNeeded()
             return fitProblem(of: content, in: contentSize) ?? check?(content)
         }
@@ -110,15 +103,15 @@ enum Snapshots {
                 window.layoutIfNeeded()
                 isSettled = window.contentLayoutRect.size == size
             }
-            return WindowImage(window: window, contentSize: window.contentLayoutRect.size)
+            return WindowCarrier(window: window, contentSize: window.contentLayoutRect.size)
         } check: { _ in
             isSettled ? nil : "the window's size kept changing"
         }
     }
 
     /// Runs the main run loop until it has no more work, without waiting: SwiftUI applies a new pane's toolbar, or a
-    /// measured height, in later turns. The snapshot run happens before the app's run loop starts. The bound stops a
-    /// view that keeps scheduling work.
+    /// measured height, in later turns. The snapshot pass is one run loop block (`writeSnapshots`), so these nested
+    /// turns also run the main queue's work. The bound stops a view that keeps scheduling work.
     static func settle() {
         for _ in 0..<1_000 where CFRunLoopRunInMode(.defaultMode, 0, true) != .handledSource {
             return
@@ -149,6 +142,24 @@ enum Snapshots {
         isRunning = true
         let folder = URL(filePath: arguments[flag + 1], directoryHint: .isDirectory)
         NSApplication.shared.setActivationPolicy(.prohibited)
+        // A run loop block, not a main queue task: `settle()` and the capture turn the run loop inside the pass, and a
+        // nested turn runs the main queue's work only outside a main queue task.
+        CFRunLoopPerformBlock(CFRunLoopGetMain(), CFRunLoopMode.defaultMode.rawValue) {
+            MainActor.assumeIsolated { writeSnapshots(to: folder) }
+        }
+        // The capture asks the window server, so the pass runs once the app has started. It exits when done.
+        NSApplication.shared.run()
+    }
+
+    private static func writeSnapshots(to folder: URL) -> Never {
+        if let problem = SnapshotCapture.problem() {
+            FileHandle.standardError.write(Data("Snapshots failed: \(problem)\n".utf8))
+            exit(1)
+        }
+        if let problem = SnapshotCapture.drawWindowsAsActive() {
+            FileHandle.standardError.write(Data("Snapshots failed: \(problem)\n".utf8))
+            exit(1)
+        }
         var written = 0
         do {
             let files = FileManager.default
@@ -162,7 +173,8 @@ enum Snapshots {
                 for (suffix, name) in [("light", NSAppearance.Name.aqua), ("dark", .darkAqua)] {
                     guard let appearance = NSAppearance(named: name) else { continue }
                     let file = folder.appending(path: "\(snapshot.name)-\(suffix).png")
-                    try render(snapshot, in: appearance).write(to: file)
+                    // The pass is one run loop block, so without a pool each image's window and data live to the end.
+                    try autoreleasepool { try render(snapshot, in: appearance).write(to: file) }
                     written += 1
                 }
             }
@@ -193,14 +205,15 @@ enum Snapshots {
 
     /// `make check` launches the app binary with `--snapshot-checks`: every registered view's checks (window fit, cut-off
     /// pill text, the pills' VoiceOver buttons) in light, with no image written, in about 6 s instead of a full snapshot
-    /// run (about 18 s). A window-fit bug reached the owner on 2026-10-15.
+    /// run (about 30 s). A window-fit bug reached the owner on 2026-10-15.
     private static func runChecks() {
         isRunning = true
         NSApplication.shared.setActivationPolicy(.prohibited)
         let snapshots = registry.flatMap { $0() }
         do {
             for snapshot in snapshots {
-                _ = try layOut(snapshot, in: NSAppearance(named: .aqua) ?? NSAppearance.currentDrawing())
+                _ = try layOut(
+                    snapshot, in: NSAppearance(named: .aqua) ?? NSAppearance.currentDrawing(), isCaptured: false)
             }
         } catch {
             FileHandle.standardError.write(Data("Snapshot checks failed: \(error)\n".utf8))
@@ -210,55 +223,49 @@ enum Snapshots {
         exit(0)
     }
 
-    /// Lays the view out in a borderless window that is never ordered on screen, over the window
-    /// background, and returns PNG data.
+    /// Lays the snapshot out in a window that is never ordered on screen, captures the window and returns PNG data.
     private static func render(_ snapshot: Snapshot, in appearance: NSAppearance) throws -> Data {
-        // The window holds the backdrop's appearance while it draws, so it lives until the image is made.
-        let window = try layOut(snapshot, in: appearance)
-        guard let backdrop = window.contentView,
-            let bitmap = snapshot.scale.map({ bitmap(of: backdrop, scale: $0) })
-                ?? backdrop.bitmapImageRepForCachingDisplay(in: backdrop.bounds)
-        else {
-            throw SnapshotError.noBitmap(snapshot.name)
+        let window = try layOut(snapshot, in: appearance, isCaptured: true)
+        SnapshotCapture.focusSidebar(in: window)
+        let image: CGImage
+        do {
+            image = try SnapshotCapture.image(of: window, scale: snapshot.scale ?? window.backingScaleFactor)
+        } catch {
+            throw SnapshotError.capture(snapshot.name, "\(error)")
         }
-        backdrop.cacheDisplay(in: backdrop.bounds, to: bitmap)
-        guard let png = bitmap.representation(using: .png, properties: [:]) else {
+        guard let png = NSBitmapImageRep(cgImage: image).representation(using: .png, properties: [:]) else {
             throw SnapshotError.noBitmap(snapshot.name)
         }
         return png
     }
 
-    /// A bitmap of `view`'s bounds at `scale` pixels per point, in sRGB as the screen's bitmaps are.
-    private static func bitmap(of view: NSView, scale: CGFloat) -> NSBitmapImageRep? {
-        let size = view.bounds.size
-        let bitmap = NSBitmapImageRep(
-            bitmapDataPlanes: nil, pixelsWide: Int(size.width * scale), pixelsHigh: Int(size.height * scale),
-            bitsPerSample: 8, samplesPerPixel: 4, hasAlpha: true, isPlanar: false, colorSpaceName: .deviceRGB,
-            bytesPerRow: 0, bitsPerPixel: 0)?.retagging(with: .sRGB)
-        bitmap?.size = size
-        return bitmap
-    }
-
-    /// Builds the snapshot's view and lays it out in a borderless window that is never ordered on screen, over the window
-    /// background, then runs its check. Returns the window; its content view is the backdrop.
-    private static func layOut(_ snapshot: Snapshot, in appearance: NSAppearance) throws -> NSWindow {
+    /// Builds the snapshot's view and lays it out in a borderless window that is never ordered on screen, on its
+    /// backdrop, then runs its check. A real window (`window`, `fittedWindow`) is laid out as it is. Returns the window
+    /// to capture; a captured window gets its window server window at once (`defer: false`).
+    private static func layOut(_ snapshot: Snapshot, in appearance: NSAppearance, isCaptured: Bool) throws -> NSWindow {
         let view = snapshot.make()
-        if view.frame.size == .zero {
-            view.setFrameSize(view.fittingSize)
+        let window: NSWindow
+        if let carrier = view as? WindowCarrier {
+            window = carrier.shown
+        } else {
+            if view.frame.size == .zero {
+                view.setFrameSize(view.fittingSize)
+            }
+            let size = NSSize(width: view.frame.width + 2 * padding, height: view.frame.height + 2 * padding)
+            window = NSWindow(
+                contentRect: NSRect(origin: .zero, size: size), styleMask: .borderless, backing: .buffered,
+                defer: !isCaptured)
+            window.isReleasedWhenClosed = false
+            let backdrop = Backdrop(frame: NSRect(origin: .zero, size: size), isDesktop: snapshot.floatsOverDesktop)
+            window.contentView = backdrop
+            view.setFrameOrigin(NSPoint(x: padding, y: padding))
+            backdrop.addSubview(view)
         }
-        let size = NSSize(width: view.frame.width + 2 * padding, height: view.frame.height + 2 * padding)
-        let window = NSWindow(
-            contentRect: NSRect(origin: .zero, size: size), styleMask: .borderless, backing: .buffered, defer: true)
-        window.isReleasedWhenClosed = false
         window.appearance = appearance
-        let backdrop = Backdrop(frame: NSRect(origin: .zero, size: size))
-        window.contentView = backdrop
-        view.setFrameOrigin(NSPoint(x: padding, y: padding))
-        backdrop.addSubview(view)
-        backdrop.layoutSubtreeIfNeeded()
+        window.layoutIfNeeded()
         if snapshot.settlesInWindow {
             settle()
-            backdrop.layoutSubtreeIfNeeded()
+            window.layoutIfNeeded()
         }
         if let problem = snapshot.check?(view) {
             throw SnapshotError.layout(snapshot.name, problem)
@@ -269,19 +276,49 @@ enum Snapshots {
     enum SnapshotError: Error {
         case noBitmap(String)
         case layout(String, String)
+        case capture(String, String)
     }
 
+    /// What a view sits on: the window background, or for a view that floats over other apps a fixed desktop, the same
+    /// in light, in dark and in every run, never the owner's wallpaper. Its grey ramp, light at the left and dark at the
+    /// right, shows the view over bright and dark content in one image; its thin black and white stripes give the
+    /// glass edges to bend. Neutral greys keep the glass's own tint visible. Fixed sRGB values, not theme colors, so
+    /// the desktop does not change with the appearance.
     private final class Backdrop: NSView {
+        private let isDesktop: Bool
+
+        init(frame: NSRect, isDesktop: Bool) {
+            self.isDesktop = isDesktop
+            super.init(frame: frame)
+        }
+
+        @available(*, unavailable)
+        required init?(coder: NSCoder) {
+            fatalError("Backdrop is built in code")
+        }
+
         override func draw(_ dirtyRect: NSRect) {
-            NSColor.windowBackgroundColor.setFill()
-            dirtyRect.fill()
+            guard isDesktop else {
+                NSColor.windowBackgroundColor.setFill()
+                dirtyRect.fill()
+                return
+            }
+            let light = NSColor(srgbRed: 0.93, green: 0.93, blue: 0.92, alpha: 1)
+            let dark = NSColor(srgbRed: 0.16, green: 0.17, blue: 0.2, alpha: 1)
+            NSGradient(starting: light, ending: dark)?.draw(in: bounds, angle: 0)
+            for (offset, white) in [(0.0, 0.0), (8.0, 1.0)] {
+                NSColor(srgbRed: white, green: white, blue: white, alpha: 0.3).setFill()
+                for x in stride(from: offset, to: bounds.width, by: 16) {
+                    NSRect(x: x, y: 0, width: 2, height: bounds.height).fill(using: .sourceOver)
+                }
+            }
         }
     }
 }
 
-/// Draws a real window, frame and toolbar included, which `Snapshots` cannot host as a subview. The window is never
-/// ordered on screen; it takes the snapshot's appearance when drawn. Custom: AppKit has no offscreen window image.
-private final class WindowImage: NSView {
+/// Carries a real window, frame and toolbar included, which `Snapshots` captures on its own instead of hosting it as a
+/// subview. The window is never ordered on screen.
+private final class WindowCarrier: NSView {
     let shown: NSWindow
 
     init(window: NSWindow, contentSize: NSSize) {
@@ -293,14 +330,5 @@ private final class WindowImage: NSView {
     @available(*, unavailable)
     required init?(coder: NSCoder) {
         fatalError("not used")
-    }
-
-    override func draw(_ dirtyRect: NSRect) {
-        shown.appearance = effectiveAppearance
-        guard let frameView = shown.contentView?.superview else { return }
-        frameView.layoutSubtreeIfNeeded()
-        guard let bitmap = frameView.bitmapImageRepForCachingDisplay(in: frameView.bounds) else { return }
-        frameView.cacheDisplay(in: frameView.bounds, to: bitmap)
-        bitmap.draw(in: bounds)
     }
 }
