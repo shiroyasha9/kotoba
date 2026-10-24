@@ -103,6 +103,17 @@ struct InputDevicePolicyTests {
         #expect(builtInLeftOut == usbMic)
     }
 
+    /// A virtual or aggregate device records silence or the wrong audio, so it never takes a Bluetooth default's place;
+    /// an audio interface on Thunderbolt does.
+    @Test func onlyARealMicReplacesABluetoothDefault() {
+        let blackHole = AudioDevice(id: 6, uid: "BlackHole", name: "BlackHole 2ch", transport: .other, hasInput: true)
+        let interface = AudioDevice(id: 7, uid: "Apollo", name: "Apollo Twin", transport: .wired, hasInput: true)
+        #expect(InputDevicePolicy.micInUse(defaultInput: airPods, devices: [blackHole, airPods]) == nil)
+        #expect(InputDevicePolicy.bluetoothKeptOut(defaultInput: airPods, devices: [blackHole, airPods]) == airPods)
+        #expect(
+            InputDevicePolicy.micInUse(defaultInput: airPods, devices: [blackHole, interface, airPods]) == interface)
+    }
+
     @Test func aListedBluetoothMicIsUsedWithTheSwitchOn() {
         let devices = [builtInSpeakers, airPods]
         #expect(InputDevicePolicy.micInUse(defaultInput: airPods, devices: devices, order: ["AirPods"]) == airPods)

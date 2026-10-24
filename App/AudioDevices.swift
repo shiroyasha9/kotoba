@@ -133,6 +133,8 @@ enum AudioDevices {
         case kAudioDeviceTransportTypeBuiltIn: .builtIn
         case kAudioDeviceTransportTypeBluetooth, kAudioDeviceTransportTypeBluetoothLE: .bluetooth
         case kAudioDeviceTransportTypeUSB: .usb
+        case kAudioDeviceTransportTypeThunderbolt, kAudioDeviceTransportTypeFireWire, kAudioDeviceTransportTypePCI:
+            .wired
         default: .other
         }
     }

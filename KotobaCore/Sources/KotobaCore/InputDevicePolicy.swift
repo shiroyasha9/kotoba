@@ -5,7 +5,19 @@ public struct AudioDevice: Sendable, Equatable, Identifiable {
         /// Classic Bluetooth or Bluetooth LE. Its mic runs in the HFP call profile.
         case bluetooth
         case usb
+        /// Thunderbolt, FireWire or PCI: an audio interface on a cable.
+        case wired
+        /// A virtual or aggregate device (BlackHole, Zoom's audio device, a loopback tool), AirPlay, or a type kotoba
+        /// does not know.
         case other
+
+        /// A mic on a real device: built in, or on a cable. Only these take a Bluetooth default's place.
+        public var isReal: Bool {
+            switch self {
+            case .builtIn, .usb, .wired: true
+            case .bluetooth, .other: false
+            }
+        }
     }
 
     public var id: UInt32
@@ -38,8 +50,9 @@ public enum MicrophoneWarning: Sendable, Equatable {
 /// The owner's preference order comes first: the first connected input in it is used, Bluetooth
 /// included. With none of them connected, kotoba follows the system default. While
 /// `bluetoothOnlyWhenListed` is on (the Microphone page's switch, on by default), a Bluetooth
-/// default is replaced by the first connected mic that is not Bluetooth, the built-in mic first (a
-/// USB mic on a Mac mini), and with only Bluetooth mics there is no mic: a Bluetooth
+/// default is replaced by the first connected real mic, the built-in mic first (a USB mic on a
+/// Mac mini; never a virtual or aggregate device, which records silence or the wrong audio), and
+/// with no real mic there is no mic: a Bluetooth
 /// mic runs in the HFP call profile, with low quality and a slow start that clips the first words,
 /// and opening it drops the headset's playback to call quality. Off, the Bluetooth default is used.
 public enum InputDevicePolicy {
@@ -63,7 +76,7 @@ public enum InputDevicePolicy {
         guard let followed = inputs.first(where: { $0.uid == defaultInput?.uid }) else { return nil }
         let chosen =
             followed.transport == .bluetooth && bluetoothOnlyWhenListed
-            ? open.first { $0.transport == .builtIn } ?? open.first { $0.transport != .bluetooth } : followed
+            ? open.first { $0.transport == .builtIn } ?? open.first(where: \.transport.isReal) : followed
         return chosen.flatMap { leftOut.contains($0.uid) ? nil : $0 }
     }
 
