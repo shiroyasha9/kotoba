@@ -23,7 +23,7 @@ struct Keycaps: View {
     /// A modifier as its SF Symbol, which centres in the key; the font draws ⌃ at cap height, 3 pt above ⌥ and ⌘
     /// (review-window.md, 5). Any other key as text.
     @ViewBuilder private static func legend(_ key: String) -> some View {
-        if let symbol = modifierSymbols[key] {
+        if let symbol = modifiers[key]?.symbol {
             Image(systemName: symbol)
         } else {
             Text(key)
@@ -31,15 +31,30 @@ struct Keycaps: View {
         }
     }
 
-    /// The names Apple's keyboards print on the modifier keys. VoiceOver reads them for the symbols ("control option
-    /// command"); a letter or a word key ("Esc") names itself.
-    static let names = ["⌃": "control", "⌥": "option", "⌘": "command", "⇧": "shift", "fn": "fn"]
+    /// A modifier key: the SF Symbol its keycap draws (nil: its legend is text, as fn) and the name Apple's keyboards
+    /// print on it.
+    private struct Modifier {
+        var symbol: String?
+        let name: String
+    }
+
+    /// The modifier keys, by the legend a chord's title uses: one table for what a keycap draws and what VoiceOver
+    /// reads.
+    private static let modifiers: [String: Modifier] = [
+        "⌃": Modifier(symbol: "control", name: "control"),
+        "⌥": Modifier(symbol: "option", name: "option"),
+        "⌘": Modifier(symbol: "command", name: "command"),
+        "⇧": Modifier(symbol: "shift", name: "shift"),
+        "fn": Modifier(name: "fn"),
+    ]
+
+    /// The names VoiceOver reads for the modifier legends ("control option command"); a letter or a word key ("Esc")
+    /// names itself. Onboarding prints them under its keycaps.
+    static let names = modifiers.mapValues(\.name)
 
     static func spoken(_ keys: [String]) -> String {
         keys.map { names[$0] ?? $0 }.joined(separator: " ")
     }
-
-    private static let modifierSymbols = ["⌃": "control", "⌥": "option", "⌘": "command", "⇧": "shift"]
 
     private static let shape = RoundedRectangle(
         cornerRadius: PageMetrics.keycapSide * PageMetrics.tileCornerRatio, style: .continuous)
