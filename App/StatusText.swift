@@ -281,11 +281,10 @@ extension DictationNotice {
         }
     }
 
-    /// A press with no mic: System Settings when access is off; for a Bluetooth mic kept out of the list, the Microphone
-    /// page, where Add puts it in the list (the menu's mic pick does too).
-    private func micFix(_ context: StatusContext) -> PillAction? {
-        if context.isMicrophoneOff { return .openMicrophoneSettings }
-        return self == .captureFailed ? nil : .chooseMicrophone
+    /// A press with no mic: System Settings when access is off, else the Microphone page, where Add puts a connected mic
+    /// in the list (a Bluetooth mic kept out of it, or any other; the menu's mic pick does too).
+    private func micFix(_ context: StatusContext) -> PillAction {
+        context.isMicrophoneOff ? .openMicrophoneSettings : .chooseMicrophone
     }
 
     func pillAction(_ context: StatusContext) -> PillAction? {

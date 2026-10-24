@@ -15,7 +15,7 @@ enum PillAction: Sendable, Equatable {
     case copy(DictationID)
     case allowPasting
     case openMicrophoneSettings
-    /// Opens Settings > Microphone, from the no-sound warning.
+    /// Opens the Microphone page, from the no-sound warning and a press that found no mic.
     case chooseMicrophone
     /// Removes the words that auto-learn just added to the dictionary, found by the learn's id.
     case undoLearned(UUID)
