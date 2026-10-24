@@ -9,7 +9,7 @@ public enum IndicatorLook: Sendable, Equatable {
     case recording(IndicatorRecording)
     /// Text is on its way (transcription, cleanup, rewrite): the bars sweep.
     case processing
-    /// The dictation was pasted: a check, then idle.
+    /// The dictation was pasted and nothing else is on its way: a check, then idle.
     case done
     /// Words with an optional button: a notice, or Undo after Esc.
     case message
@@ -38,15 +38,6 @@ public enum IndicatorLook: Sendable, Equatable {
             case .undoable: .message
             }
     }
-
-    /// A look with no words stands vertical at a side edge; words keep the pill horizontal at every anchor.
-    public var canStandVertical: Bool {
-        switch self {
-        case .idle, .processing, .done: true
-        case .recording(let recording): !recording.hasWords
-        case .hidden, .message: false
-        }
-    }
 }
 
 /// The recording pill's facts.
@@ -72,7 +63,4 @@ public struct IndicatorRecording: Sendable, Equatable {
         self.isLong = isLong
         self.isSecureInputOn = isSecureInputOn
     }
-
-    /// Words or the time show beside the bars.
-    var hasWords: Bool { isSilent || isLong || isSecureInputOn }
 }

@@ -18,7 +18,7 @@ extension PillView {
 
     /// Read when VoiceOver asks, so the recording's time is the time now.
     override func accessibilityLabel() -> String? {
-        look.accessibilityLabel(at: .now)
+        look.accessibilityLabel(at: .now, isClickable: isClickable)
     }
 
     override func accessibilityChildren() -> [Any]? {
@@ -140,6 +140,11 @@ extension PillView {
 extension PillLook {
     var isHover: Bool {
         if case .hover = self { return true }
+        return false
+    }
+
+    var isProcessing: Bool {
+        if case .processing = self { return true }
         return false
     }
 }

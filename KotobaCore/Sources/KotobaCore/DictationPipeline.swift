@@ -243,7 +243,7 @@ extension DictationPipeline {
 
     /// The dictation ended: a recording in progress keeps the indicator on recording; other dictations in flight keep
     /// it on their step, under `notice` when there is one. `isPasted` with no notice: the pill's check shows first
-    /// (`DictationState.isPasted`).
+    /// (`DictationState.isPasted`), only when nothing else is on its way, so it never breaks a sweep that goes on.
     func finishDictation(_ id: DictationID, showing notice: DictationNotice?, isPasted: Bool = false) {
         dropSegments(of: id)
         live.end(id)
@@ -253,8 +253,8 @@ extension DictationPipeline {
             show(notice)
             return
         }
-        if isPasted {
-            publish(DictationState(inFlightPhase, isPasted: true))
+        if isPasted, inFlightPhase == .idle {
+            publish(DictationState(.idle, isPasted: true))
         }
         emit(inFlightPhase)
     }

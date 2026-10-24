@@ -5,9 +5,9 @@ public struct DictationState: Sendable, Equatable {
     /// The outcome of what ended last (a dictation, a retry, Polish, Paste Last). It shows in place of the phase until
     /// the next phase change; nil shows the phase.
     public var notice: DictationNotice?
-    /// This change pasted the dictation that ended, with no notice to say: the pill draws its check. The pipeline
-    /// publishes it once and the same state without it at once after, so `state` never rests on it and nothing waits
-    /// on it.
+    /// This change pasted the dictation that ended, with no notice to say and nothing else on its way: the pill draws
+    /// its check. The pipeline publishes it once with the idle phase and plain idle at once after, so `state` never
+    /// rests on it and nothing waits on it.
     public var isPasted: Bool
 
     public static let idle = Self(.idle)

@@ -133,7 +133,7 @@ final class PillView: NSView {
         return view
     }
 
-    var isVertical: Bool { anchor != .bottomCenter && look.canStandVertical }
+    var isVertical: Bool { IndicatorPlacement.isVertical(at: anchor, hasWords: look.hasWords) }
 
     private lazy var stackWidth = stack.widthAnchor.constraint(equalToConstant: 0)
     private lazy var stackHeight = stack.heightAnchor.constraint(equalToConstant: 0)
@@ -164,14 +164,13 @@ final class PillView: NSView {
                 in: ScreenRect(bounds)))
     }
 
+    /// The glass frame's one owner: the look's capsule in the view's bounds now. A new room (an anchor change, a drop,
+    /// a screen change) lays the view out again, so the capsule is in the right place mid-morph too; a look change runs
+    /// it inside the morph's animation (`morph`).
     override func layout() {
         super.layout()
-        if !isMorphing {
-            placeGlass()
-        }
+        placeGlass()
     }
-
-    private var isMorphing = false
 
     private func placeGlass() {
         let frame = capsuleFrame
@@ -183,7 +182,7 @@ final class PillView: NSView {
     /// offscreen and for the first look.
     private func apply(from old: PillLook) {
         bars.isVertical = isVertical
-        bars.isSweeping = look == .processing
+        bars.isSweeping = look.isProcessing
         let views = views(for: look)
         let isNewContent = views != stack.arrangedSubviews
         stack.orientation = isVertical ? .vertical : .horizontal
@@ -220,8 +219,8 @@ final class PillView: NSView {
             needsLayout = true
             return
         }
+        // The new content takes its place first, so only the glass animates.
         layoutSubtreeIfNeeded()
-        isMorphing = true
         if fadesContentIn {
             stack.alphaValue = 0
         }
@@ -232,7 +231,6 @@ final class PillView: NSView {
             placeGlass()
         } completionHandler: { [weak self] in
             MainActor.assumeIsolated {
-                self?.isMorphing = false
                 guard let stack = self?.stack, stack.alphaValue < 1 else { return }
                 NSAnimationContext.runAnimationGroup { context in
                     context.duration = 0.15

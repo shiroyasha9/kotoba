@@ -75,7 +75,13 @@ enum StatusText {
         return parts.joined(separator: ", ")
     }
     /// What VoiceOver reads for the pill while text is on its way, and once it is pasted.
-    static let processingLabel = "Transcribing"
+    static func processingLabel(_ step: PillStep) -> String {
+        switch step {
+        case .transcribing: "Transcribing"
+        case .cleaningUp: "Cleaning up"
+        case .rewriting: "Rewriting"
+        }
+    }
     static let pastedLabel = "Pasted"
     /// The hands-free pill's buttons, as VoiceOver reads them.
     static let cancelLabel = "Cancel"

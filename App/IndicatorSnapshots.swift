@@ -34,7 +34,7 @@ extension IndicatorPanel {
     static func snapshots() -> [Snapshot] {
         samples.flatMap { sample in
             let anchors: [IndicatorAnchor] =
-                sample.content.look.canStandVertical ? [.bottomCenter, .left] : [.bottomCenter]
+                sample.content.look.hasWords ? [.bottomCenter] : [.bottomCenter, .left]
             return anchors.map { anchor in
                 var snapshot = Snapshot(name: "pill-\(sample.name)-\(anchor.rawValue)") {
                     pill(showing: sample, at: anchor)
@@ -58,6 +58,10 @@ extension IndicatorPanel {
         let secure = StatusContext(provider: .azure, isSecureInputOn: true)
         let states: [Sample?] = [
             sample("idle", .idle, visibility: .always),
+            // A development build beside the release app: the bar starts nothing, and VoiceOver says why.
+            sample(
+                "idle-yielding", .idle, context: StatusContext(provider: .azure, isYielding: true),
+                visibility: .always),
             sample("hands-free", .init(.recording(isLong: false))),
             sample("hands-free-cleanup", .init(.recording(isLong: false, isCleaned: true))),
             sample("push-to-talk", .init(.recording(isLong: false, isPushToTalk: true))),
@@ -82,6 +86,8 @@ extension IndicatorPanel {
             + [
                 Sample(
                     name: "hover", content: PillContent(look: .hover(keys: ["⌃", "⌥", "⌘"]), click: .startsDictation)),
+                // Under the pointer during a drag: VoiceOver still reads the look under it.
+                Sample(name: "dragged", content: PillContent(look: .dragged(.recording(.init(isHandsFree: true))))),
                 // Auto-learn's notice; the longest word that fits.
                 Sample(name: "learned", content: PillContent(.learned("Kubernetes", id: UUID()))),
                 // A development build beside the release app.
@@ -179,7 +185,7 @@ extension IndicatorPanel {
         pill.isClickable = sample.content.click != nil
         pill.toolTip = sample.content.toolTip
         pill.look = timedNow(sample.content.look)
-        for level in [0.3, 0.9, 0.5, 0.8] where sample.content.look != .processing {
+        for level in [0.3, 0.9, 0.5, 0.8] where !sample.content.look.isProcessing {
             pill.level = sample.isSilent ? 0 : level
         }
         let size = pill.shapeSize
@@ -238,7 +244,7 @@ extension IndicatorPanel {
     private static func idleCostProblem() -> String? {
         let pill = PillView(frame: .zero)
         if !pill.animatedLayers.isEmpty { return "the idle pill animates \(pill.animatedLayers.count) layers" }
-        pill.look = .processing
+        pill.look = .processing(.transcribing)
         guard pill.animatedLayers.count == PillBars.count else {
             return "the sweep animates \(pill.animatedLayers.count) layers, not \(PillBars.count)"
         }

@@ -10,6 +10,33 @@ struct PillContent: Equatable {
     var toolTip: String?
 }
 
+/// Which pill wins when another wants its place: the one rule for the check, the App's notices and a dictation's
+/// own looks. A weaker pill waits until a held one's time ends; an equal or stronger one replaces it.
+enum PillRank: Comparable {
+    /// Hidden, or the idle bar.
+    case quiet
+    /// The check after a paste, for its short time.
+    case check
+    /// The App's own message (an added word and its Undo, a development build that gives way), for its time or
+    /// until a click.
+    case notice
+    /// A dictation's looks: recording, the sweep, its messages and Undo.
+    case dictation
+
+    /// The rank of a dictation state's pill; the panel ranks the App's notices itself.
+    init(_ content: PillContent?) {
+        self =
+            switch content?.look {
+            case nil, .idle, .hover: .quiet
+            case .done: .check
+            case .recording, .processing, .message, .dragged: .dictation
+            }
+    }
+
+    /// The pill stays over a weaker one.
+    var isHeld: Bool { self == .check || self == .notice }
+}
+
 /// The pill's own timer: a pill with a message goes when it runs out; hover holds it.
 struct PillTimer: Equatable {
     enum Kind {
@@ -91,7 +118,7 @@ extension IndicatorPanel {
                 look: .recording(look), click: click,
                 toolTip: recordingHelp(recording, context: context))
         case .processing:
-            return PillContent(look: .processing)
+            return PillContent(look: .processing(step(of: state.phase)))
         case .done:
             return PillContent(look: .done, timer: .done)
         case .message:
@@ -103,6 +130,15 @@ extension IndicatorPanel {
                 ? PillTimer(duration: context.undoWindow, kind: .followsUndoWindow)
                 : PillTimer(duration: PillNotice(text: message.text, action: message.action).duration)
             return PillContent(look: .message(message), timer: timer)
+        }
+    }
+
+    /// What the sweep waits on.
+    private static func step(of phase: DictationPhase) -> PillStep {
+        switch phase {
+        case .cleaning: .cleaningUp
+        case .polishing: .rewriting
+        case .idle, .recording, .transcribing, .undoable: .transcribing
         }
     }
 

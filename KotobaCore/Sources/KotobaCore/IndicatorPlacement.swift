@@ -73,10 +73,10 @@ public enum IndicatorPlacement {
     /// A press that moves less than this is a click, not a drag.
     static let dragThreshold = 4.0
 
-    /// `canStandVertical`: the pill shows no words (`IndicatorLook.canStandVertical`), so at a side edge it stands
-    /// vertical. A pill with words stays horizontal at every anchor.
-    public static func isVertical(at anchor: IndicatorAnchor, canStandVertical: Bool) -> Bool {
-        canStandVertical && anchor != .bottomCenter
+    /// A pill with no words (bars, the sweep, the check, the idle bar) stands vertical at a side edge. Words, keys or the
+    /// time keep it horizontal at every anchor, so they read left to right.
+    public static func isVertical(at anchor: IndicatorAnchor, hasWords: Bool) -> Bool {
+        !hasWords && anchor != .bottomCenter
     }
 
     /// The room the pill's window covers at `anchor`: every capsule the pill takes there fits, so the capsule changes

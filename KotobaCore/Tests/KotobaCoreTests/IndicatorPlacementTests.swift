@@ -52,10 +52,11 @@ struct IndicatorPlacementTests {
     }
 
     @Test func onlyAPillWithoutWordsStandsVerticalAndOnlyAtASideEdge() {
-        #expect(IndicatorPlacement.isVertical(at: .left, canStandVertical: true))
-        #expect(IndicatorPlacement.isVertical(at: .right, canStandVertical: true))
-        #expect(!IndicatorPlacement.isVertical(at: .bottomCenter, canStandVertical: true))
-        #expect(!IndicatorPlacement.isVertical(at: .left, canStandVertical: false))
+        #expect(IndicatorPlacement.isVertical(at: .left, hasWords: false))
+        #expect(IndicatorPlacement.isVertical(at: .right, hasWords: false))
+        #expect(!IndicatorPlacement.isVertical(at: .bottomCenter, hasWords: false))
+        #expect(!IndicatorPlacement.isVertical(at: .left, hasWords: true))
+        #expect(!IndicatorPlacement.isVertical(at: .right, hasWords: true))
     }
 
     @Test func theDraggedPillIsACircleUnderThePointer() {

@@ -88,9 +88,9 @@ final class IndicatorPanel {
             return
         }
         countTime(of: state, context: context)
-        // The check and a notice of the App's own stay over the idle that follows them, until their time ends.
-        let isHeld = notice != nil || content?.look == .done
-        if isHeld, state.phase == .idle, state.notice == nil, !state.isPasted {
+        let next = Self.content(for: state, context: context, visibility: visibility, timedFrom: timedFrom)
+        // A held pill (the check, the App's notice) stays over a weaker one until its time ends.
+        if PillRank(next) < rank, rank.isHeld {
             return
         }
         notice = nil
@@ -101,9 +101,12 @@ final class IndicatorPanel {
         if state != .idle {
             isTapPending = false
         }
-        present(
-            Self.content(for: state, context: context, visibility: visibility, timedFrom: timedFrom),
-            followsFocus: followsFocus)
+        present(next, followsFocus: followsFocus)
+    }
+
+    /// The rank of the pill up now.
+    private var rank: PillRank {
+        notice == nil ? PillRank(content) : .notice
     }
 
     /// The time shows from the 10-minute mark: the pipeline says when it passes, and the count starts there.
@@ -126,10 +129,10 @@ final class IndicatorPanel {
         present(PillContent(notice), followsFocus: false)
     }
 
-    /// Shows `notice` only while the pill is quiet (hidden, or the idle bar), so it never covers a dictation or another
-    /// notice.
+    /// Shows `notice` only over a weaker pill (hidden, the idle bar or the check), so it never covers a dictation or
+    /// another notice.
     func showWhenQuiet(_ notice: PillNotice) {
-        if isQuiet {
+        if rank < .notice {
             show(notice)
         }
     }
@@ -145,14 +148,9 @@ final class IndicatorPanel {
     /// pill redraws now; a dictation's or a notice's pill keeps its words and timer, and the next pill reads it.
     func contextChanged(_ context: StatusContext) {
         shown = (shown?.state ?? .idle, context)
-        if notice == nil, isQuiet {
+        if rank == .quiet {
             showQuiet()
         }
-    }
-
-    /// Hidden, or the idle bar: no dictation and no notice is on screen.
-    private var isQuiet: Bool {
-        content.map { $0.look == .idle } ?? true
     }
 
     func showLevel(_ level: Float) {
@@ -362,16 +360,5 @@ extension IndicatorPanel {
             self.screen = NSScreen.focused
         }
         place(animated: false)
-    }
-}
-
-extension PillLook {
-    /// The button's action: a message's fix or Undo, or a silent mic's fix.
-    var action: PillAction? {
-        switch self {
-        case .message(let message): message.action
-        case .recording(let recording): recording.words?.action
-        case .idle, .hover, .processing, .done, .dragged: nil
-        }
     }
 }

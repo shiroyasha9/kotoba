@@ -97,6 +97,22 @@ struct IndicatorLookTests {
         #expect(await pipeline.state.phase == .recording(isLong: false))
     }
 
+    /// A release handled after the threshold announced the press as push to talk, with the release's own time under
+    /// the threshold: a tap. The pill shows the recording hands-free again.
+    @Test func aLateReleaseOfATapShowsTheRecordingHandsFree() async {
+        let world = FakeWorld(transcript: "late")
+        let pipeline = world.makePipeline()
+        let pressedAt = world.clock.now
+
+        await pipeline.handle(.chordDown(.tapOrHold), at: pressedAt)
+        world.clock.advance(by: .milliseconds(400))
+        await pipeline.settle()
+        await pipeline.handle(.chordUp, at: pressedAt + .milliseconds(100))
+
+        let published = await Self.published(by: pipeline, count: 2) ?? []
+        #expect(published.map(\.phase) == [.recording(isLong: false, isPushToTalk: true), .recording(isLong: false)])
+    }
+
     // MARK: The check
 
     @Test func aPasteShowsTheCheckOnceThenIdle() async {
@@ -111,6 +127,35 @@ struct IndicatorLookTests {
         #expect(Self.looks(of: published) == [.recording(.init(isHandsFree: true)), .processing, .done, .hidden])
         // The state rests on idle: nothing waits on the check.
         #expect(await pipeline.state == .idle)
+    }
+
+    /// A paste while the next dictation is on its way shows no check: the sweep goes on, and the check comes when the
+    /// last one pastes.
+    @Test func aPasteWithAnotherDictationInFlightShowsNoCheck() async throws {
+        let world = FakeWorld(transcript: "text")
+        let pipeline = world.makePipeline()
+        await pipeline.tap(world)
+        let first = try #require(await world.audio.files.last)
+        let firstGate = Gate()
+        await world.provider.hold(at: firstGate, onlyFor: first)
+        await pipeline.tap(world)
+        #expect(await eventually { await firstGate.hasWaiters })
+        await pipeline.tap(world)
+        let second = try #require(await world.audio.files.last)
+        let secondGate = Gate()
+        await world.provider.hold(at: secondGate, onlyFor: second)
+        await pipeline.tap(world)
+        #expect(await eventually { await secondGate.hasWaiters })
+
+        await firstGate.open()
+        #expect(await eventually { await world.paster.pasteCount == 1 })
+        await secondGate.open()
+        await pipeline.settle()
+
+        let published = await Self.published(by: pipeline, count: 6) ?? []
+        let checks = published.filter(\.isPasted)
+        #expect(checks == [DictationState(.idle, isPasted: true)])
+        #expect(await world.paster.pasteCount == 2)
     }
 
     /// An accidental double tap is dropped with no word: no check, as nothing was pasted.
@@ -145,7 +190,6 @@ struct IndicatorLookTests {
         var showsIdleBar = false
         var isSecureInputOn = false
         let look: IndicatorLook
-        var canStandVertical = false
 
         var testDescription: String { name }
     }
@@ -154,14 +198,14 @@ struct IndicatorLookTests {
 
     static let rows: [Row] = [
         Row(name: "idle, while dictating", state: .idle, look: .hidden),
-        Row(name: "idle, always", state: .idle, showsIdleBar: true, look: .idle, canStandVertical: true),
+        Row(name: "idle, always", state: .idle, showsIdleBar: true, look: .idle),
         Row(
             name: "hands-free", state: .init(.recording(isLong: false)),
-            look: .recording(.init(isHandsFree: true)), canStandVertical: true),
+            look: .recording(.init(isHandsFree: true))),
         Row(
             name: "push to talk with cleanup",
             state: .init(.recording(isLong: false, isCleaned: true, isPushToTalk: true)),
-            look: .recording(.init(isHandsFree: false, isCleaned: true)), canStandVertical: true),
+            look: .recording(.init(isHandsFree: false, isCleaned: true))),
         Row(
             name: "silent", state: .init(.recording(isLong: false, isSilent: true)),
             look: .recording(.init(isHandsFree: true, isSilent: true))),
@@ -171,23 +215,20 @@ struct IndicatorLookTests {
         Row(
             name: "Secure Input", state: .init(.recording(isLong: false)), isSecureInputOn: true,
             look: .recording(.init(isHandsFree: true, isSecureInputOn: true))),
-        Row(name: "transcribing", state: .init(.transcribing), look: .processing, canStandVertical: true),
-        Row(name: "cleaning", state: .init(.cleaning), look: .processing, canStandVertical: true),
-        Row(name: "rewriting", state: .init(.polishing), look: .processing, canStandVertical: true),
-        Row(name: "pasted", state: .init(.idle, isPasted: true), look: .done, canStandVertical: true),
+        Row(name: "transcribing", state: .init(.transcribing), look: .processing),
+        Row(name: "cleaning", state: .init(.cleaning), look: .processing),
+        Row(name: "rewriting", state: .init(.polishing), look: .processing),
+        Row(name: "pasted", state: .init(.idle, isPasted: true), look: .done),
         Row(
-            name: "pasted, the bar after it", state: .init(.idle, isPasted: true), showsIdleBar: true, look: .done,
-            canStandVertical: true),
+            name: "pasted, the bar after it", state: .init(.idle, isPasted: true), showsIdleBar: true, look: .done),
         Row(name: "Undo", state: .init(.undoable), look: .message),
         Row(name: "a notice", state: .init(.idle, notice: .failed(id)), showsIdleBar: true, look: .message),
         Row(name: "a notice over a send", state: .init(.transcribing, notice: .copied(id)), look: .message),
     ]
 
-    /// A shape with no words stands vertical at a side edge; words keep the pill horizontal.
     @Test(arguments: rows)
     func eachStateHasItsLook(_ row: Row) {
         let look = IndicatorLook(row.state, showsIdleBar: row.showsIdleBar, isSecureInputOn: row.isSecureInputOn)
         #expect(look == row.look)
-        #expect(look.canStandVertical == row.canStandVertical)
     }
 }

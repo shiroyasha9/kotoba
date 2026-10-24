@@ -2,7 +2,7 @@ import Foundation
 import KotobaCore
 
 /// What the pill draws (docs/research/ui-redesign.md, "Pill"): `IndicatorLook`'s shape with its words and buttons.
-enum PillLook: Equatable {
+indirect enum PillLook: Equatable {
     /// "Show indicator: Always" at idle: a still bar.
     case idle
     /// The pointer is on the idle bar: "Dictate" and the hands-free chord's keys ("⌃", "⌥", "⌘"); words, so horizontal
@@ -10,32 +10,34 @@ enum PillLook: Equatable {
     case hover(keys: [String])
     case recording(PillRecording)
     /// Text is on its way: the bars sweep.
-    case processing
+    case processing(PillStep)
     /// The text is pasted: a check, then idle.
     case done
     /// Words with an optional fix button: a notice, Undo, an added word.
     case message(PillMessage)
-    /// Under the pointer while the owner drags the pill to another anchor: an empty circle.
-    case dragged
+    /// Under the pointer while the owner drags the pill to another anchor: an empty circle, for the look under it.
+    case dragged(Self)
 
-    /// A look with no words stands vertical at a side edge; words keep the pill horizontal at every anchor.
-    var canStandVertical: Bool {
+    /// Words, keys or the time show, so the pill stays horizontal at every anchor (`IndicatorPlacement.isVertical`).
+    var hasWords: Bool {
         switch self {
-        case .idle, .processing, .done, .dragged: true
-        case .hover, .message: false
-        case .recording(let recording): recording.words == nil && recording.timedFrom == nil
+        case .idle, .processing, .done, .dragged: false
+        case .hover, .message: true
+        case .recording(let recording): recording.words != nil || recording.timedFrom != nil
         }
     }
 
-    /// What VoiceOver reads for the pill; the elapsed time as of `now`.
-    func accessibilityLabel(at now: ContinuousClock.Instant) -> String {
+    /// What VoiceOver reads for the pill; the elapsed time as of `now`. `isClickable`: a click on the idle bar starts a
+    /// dictation; without it a development build gives way to the release app, and the label says so.
+    func accessibilityLabel(at now: ContinuousClock.Instant, isClickable: Bool) -> String {
         switch self {
-        case .idle, .hover, .dragged: StatusText.pillClickLabel(.startsDictation)
+        case .idle, .hover: isClickable ? StatusText.pillClickLabel(.startsDictation) : StatusText.yieldsToRelease
+        case .dragged(let look): look.accessibilityLabel(at: now, isClickable: isClickable)
         case .recording(let recording):
             StatusText.recordingLabel(
                 isHandsFree: recording.isHandsFree, isCleaned: recording.isCleaned,
                 elapsed: recording.timedFrom.map { now - $0 }, words: recording.words?.text)
-        case .processing: StatusText.processingLabel
+        case .processing(let step): StatusText.processingLabel(step)
         case .done: StatusText.pastedLabel
         case .message(let message): message.text
         }
@@ -52,6 +54,13 @@ enum PillLook: Equatable {
         case .message(let message): message.action.map { [$0.title] } ?? []
         }
     }
+}
+
+/// What the sweep waits on, for VoiceOver.
+enum PillStep: Equatable {
+    case transcribing
+    case cleaningUp
+    case rewriting
 }
 
 struct PillRecording: Equatable {
@@ -79,4 +88,15 @@ struct PillMessage: Equatable {
     var isProblem = false
     /// The fix or Undo button.
     var action: PillAction?
+}
+
+extension PillLook {
+    /// The button's action: a message's fix or Undo, or a silent mic's fix.
+    var action: PillAction? {
+        switch self {
+        case .message(let message): message.action
+        case .recording(let recording): recording.words?.action
+        case .idle, .hover, .processing, .done, .dragged: nil
+        }
+    }
 }

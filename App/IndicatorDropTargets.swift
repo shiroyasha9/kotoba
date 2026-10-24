@@ -121,7 +121,7 @@ extension IndicatorPanel {
         dropTargets = DropTargets(in: screen.visibleFrame, below: panel)
         // The window goes under the pointer first, so the circle takes its shape in its new room.
         moveDrag(to: NSEvent.mouseLocation)
-        pill.look = .dragged
+        pill.look = .dragged(pill.look)
     }
 
     func moveDrag(to point: NSPoint) {
