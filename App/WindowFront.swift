@@ -34,6 +34,9 @@ enum WindowFront {
     /// Shows `window` in front of every app as kotoba's key window. `activate()` must come first.
     static func show(_ window: NSWindow) {
         DockAndMenuBar.shared.opened(window)
+        // Each kotoba window stands alone: with "Prefer tabs: Always" (System Settings > Desktop & Dock) macOS would
+        // join it to an open kotoba window as a tab (owner trial, 2026-10-24: the prototype and the pill gallery).
+        window.tabbingMode = .disallowed
         window.makeKeyAndOrderFront(nil)
         window.orderFrontRegardless()
     }
