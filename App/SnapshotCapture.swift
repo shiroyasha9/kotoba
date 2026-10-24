@@ -25,6 +25,24 @@ enum SnapshotCapture {
         return view.subviews.lazy.compactMap { sidebarList(in: $0) }.first
     }
 
+    /// A Core Animation animation that has not ended in the window's layers, or nil: the window server would draw it at
+    /// its current frame. A repeating one (a spinner) never ends and is left out. SwiftUI animates in process, one
+    /// update per frame, so its animations are not listed here.
+    static func runningAnimation(in window: NSWindow) -> String? {
+        guard let root = window.contentView?.superview?.layer else { return nil }
+        return runningAnimation(in: root)
+    }
+
+    private static func runningAnimation(in layer: CALayer) -> String? {
+        for key in layer.animationKeys() ?? [] {
+            guard let animation = layer.animation(forKey: key), animation.repeatCount.isFinite,
+                animation.repeatDuration.isFinite
+            else { continue }
+            return "\(layer.delegate.map { "\(type(of: $0))" } ?? "\(type(of: layer))") \(key)"
+        }
+        return (layer.sublayers ?? []).lazy.compactMap { runningAnimation(in: $0) }.first
+    }
+
     /// Why this run cannot capture, or nil. Checked before the first capture, so a run never writes a flat image instead.
     static func problem() -> String? {
         #if DEBUG

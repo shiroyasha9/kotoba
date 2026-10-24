@@ -178,6 +178,9 @@ enum Snapshots {
                 }
                 for (suffix, name) in [("light", NSAppearance.Name.aqua), ("dark", .darkAqua)] {
                     guard let appearance = NSAppearance(named: name) else { continue }
+                    // Before the view is built: a window that takes its appearance after its first layout animates the
+                    // change (a chart's axis labels fade from one color to the other), and the capture catches it.
+                    NSApp.appearance = appearance
                     let file = folder.appending(path: "\(snapshot.name)-\(suffix).png")
                     // The pass is one run loop block, so without a pool each image's window and data live to the end.
                     try autoreleasepool { try render(snapshot, in: appearance).write(to: file) }
@@ -233,6 +236,9 @@ enum Snapshots {
     private static func render(_ snapshot: Snapshot, in appearance: NSAppearance) throws -> Data {
         let window = try layOut(snapshot, in: appearance, isCaptured: true)
         SnapshotCapture.focusSidebar(in: window)
+        if let animation = SnapshotCapture.runningAnimation(in: window) {
+            throw SnapshotError.layout(snapshot.name, "an animation still runs at the capture (\(animation))")
+        }
         let image: CGImage
         do {
             image = try SnapshotCapture.image(of: window, scale: snapshot.scale ?? window.backingScaleFactor)
