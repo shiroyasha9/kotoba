@@ -4,6 +4,8 @@ import SwiftUI
 /// the one way to write a titled row on a page. As in System Settings, the trailing content is centred on the row while
 /// the subtitle fits on one line (Notifications' app rows) and sits on the title line once the text wraps (Keyboard's
 /// "Keyboard navigation"). `ViewThatFits` tries the one-line layout first, so the rule needs no measured offset.
+/// VoiceOver reads the title, subtitle and icon as one element and the trailing content as its own elements, as System
+/// Settings' rows read "title, subtitle", then the control: a row's buttons stay buttons.
 struct PageRow<Icon: View, Trailing: View>: View {
     let title: String
     var subtitle: String?
@@ -15,13 +17,13 @@ struct PageRow<Icon: View, Trailing: View>: View {
             line(isOneLine: true)
             line(isOneLine: false)
         }
-        .accessibilityElement(children: .combine)
     }
 
     private func line(isOneLine: Bool) -> some View {
         HStack(alignment: isOneLine ? .center : .titleLine) {
             if Icon.self == EmptyView.self {
                 RowText(title: title, subtitle: subtitle, isOneLine: isOneLine)
+                    .accessibilityElement(children: .combine)
             } else {
                 TileLabel(title: title, subtitle: subtitle, isOneLine: isOneLine) { icon }
             }
