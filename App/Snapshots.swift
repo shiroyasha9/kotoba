@@ -18,6 +18,8 @@ struct Snapshot {
     /// On for a view that floats over other apps (the pill): it sits on the fixed desktop, which its glass refracts.
     /// Off, it sits on the window background, as a pane in its window.
     var floatsOverDesktop = false
+    /// Off for a view whose image cannot be trusted: the run lays it out and runs its check, and writes no PNG.
+    var hasImage = true
 }
 
 /// `make snapshots` launches the app binary with `--snapshots <folder>`. Once the app has started, this lays out every
@@ -170,6 +172,10 @@ enum Snapshots {
                 try files.removeItem(at: old)
             }
             for snapshot in registry.flatMap({ $0() }) {
+                guard snapshot.hasImage else {
+                    _ = try layOut(snapshot, in: NSAppearance(named: .aqua) ?? .currentDrawing(), isCaptured: false)
+                    continue
+                }
                 for (suffix, name) in [("light", NSAppearance.Name.aqua), ("dark", .darkAqua)] {
                     guard let appearance = NSAppearance(named: name) else { continue }
                     let file = folder.appending(path: "\(snapshot.name)-\(suffix).png")

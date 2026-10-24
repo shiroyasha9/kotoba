@@ -57,18 +57,23 @@ enum SnapshotCapture {
     /// Every window draws as the active app's key window (colored traffic lights, "on" switches, default buttons and
     /// sidebar labels as in use), not as AppKit draws a window that never became key. Custom: AppKit has no public API
     /// for it; these are AppKit's own two getters (not in its headers), replaced for the snapshot run only. Returns a
-    /// problem when AppKit no longer has one, so the images never go back to inactive unnoticed.
+    /// problem when AppKit no longer has one, so the images never go back to inactive unnoticed. Debug builds only, as
+    /// the capture; `Snapshots` calls it only in a `--snapshots` run.
     static func drawWindowsAsActive() -> String? {
-        let isActive: @convention(block) (NSWindow) -> Bool = { _ in true }
-        for name in ["hasKeyAppearance", "_hasActiveAppearanceIgnoringKeyFocus"] {
-            guard let method = class_getInstanceMethod(NSWindow.self, NSSelectorFromString(name)),
-                let types = method_getTypeEncoding(method), String(cString: types).hasPrefix("B")
-            else {
-                return "AppKit has no Bool -[NSWindow \(name)], so windows cannot draw as active"
+        #if DEBUG
+            let isActive: @convention(block) (NSWindow) -> Bool = { _ in true }
+            for name in ["hasKeyAppearance", "_hasActiveAppearanceIgnoringKeyFocus"] {
+                guard let method = class_getInstanceMethod(NSWindow.self, NSSelectorFromString(name)),
+                    let types = method_getTypeEncoding(method), String(cString: types).hasPrefix("B")
+                else {
+                    return "AppKit has no Bool -[NSWindow \(name)], so windows cannot draw as active"
+                }
+                method_setImplementation(method, imp_implementationWithBlock(isActive))
             }
-            method_setImplementation(method, imp_implementationWithBlock(isActive))
-        }
-        return nil
+            return nil
+        #else
+            "snapshots need a Debug build (make snapshots)"
+        #endif
     }
 
     /// The window as the window server composites it. A window that is never ordered in is captured on its own

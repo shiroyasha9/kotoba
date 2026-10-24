@@ -88,7 +88,7 @@ extension MainWindow {
     /// 2026-10-16: History's tall toolbar moved the sidebar 17 pt below Home's).
     static func switchSnapshot(of panes: [Pane], through path: [PaneID], named name: String) -> Snapshot {
         var chromes: [(PaneID, Chrome)] = []
-        return Snapshots.window(named: name, contentSize: defaultSize) {
+        var snapshot = Snapshots.window(named: name, contentSize: defaultSize) {
             let selection = Selection(panes: panes, showing: path.first)
             let window = window(showing: MainView(panes: panes, selection: selection))
             window.setContentSize(defaultSize)
@@ -106,5 +106,8 @@ extension MainWindow {
                 "\(id.title) has \(chrome); \(first.title) has \(expected)"
             }
         }
+        // The toolbar's glass animates in after the last switch in the window server, so a capture can catch it midway.
+        snapshot.hasImage = false
+        return snapshot
     }
 }
