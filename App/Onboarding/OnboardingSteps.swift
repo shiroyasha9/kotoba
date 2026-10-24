@@ -72,15 +72,21 @@ struct NamedKeycaps: View {
     let keys: [String]
 
     var body: some View {
+        // Every column as wide as the widest name (“command”), each centred on its key, so the keys sit evenly as on a
+        // keyboard: under each key, the chord's names lie hidden in one stack, which takes the widest one's width.
+        let names = keys.compactMap { Keycaps.names[$0] }
         HStack(alignment: .top) {
             ForEach(Array(keys.enumerated()), id: \.offset) { _, key in
                 VStack {
                     Keycaps(keys: [key])
-                    if let name = Keycaps.names[key] {
-                        Text(name)
-                            .font(.caption)
-                            .foregroundStyle(.secondary)
+                    ZStack {
+                        ForEach(names, id: \.self) { Text($0).hidden() }
+                        if let name = Keycaps.names[key] {
+                            Text(name)
+                        }
                     }
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
                 }
             }
         }
