@@ -31,6 +31,7 @@ Cause (research): the code, not a missing library. No MIT or Apache-2.0 library 
 - Resizable. The content column has a maximum width and is centred, so lines do not stretch.
 - No sidebar search and no back/forward buttons (about 9 pages, no drill-downs). Look again if the page map grows.
 - Sidebar (owner, 2026-10-24 prototype review): the floating inset glass sidebar of Finder and Notes, not the edge-to-edge sidebar of System Settings, if SwiftUI or AppKit gives it natively; if not, keep the edge-to-edge one. Result (spike, 2026-10-24, `<runbooks>/2026-10-24-kotoba-ui-redesign/sidebar-spike/`): macOS 27 draws every sidebar edge to edge, Apple's apps too, and the floating look exists only behind private switches that do nothing. So the sidebar stays edge to edge. Keep the coloured tiles (System Settings look). Draw each symbol at its real weight and optical size, centred in a tile that follows `sidebarRowSize`. Do not use `.resizable()` on symbols.
+- Branding (owner, 2026-10-25 prototype review: the window looked like another System Settings pane): the top of the sidebar shows the app icon and "kotoba" on every page. One brand colour, the icon's coral caret, is a colour asset (`Brand`). It is the app's accent colour (`NSAccentColorName`), which macOS uses only when the user's accent is Multicolor. The charts (Home, Activity) and the pill bars are always in the brand colour, as Screen Time's charts use fixed colours. Selection, buttons and switches follow the user's accent. Home gets no header card: the sidebar name and the today card do that job.
 - Content symbols match the weight and scale of their text (for example "Words per minute").
 - No hard-coded spacing, row heights or radii: system styles, `containerShape` and concentric corners. Text colours come from the system label colours. Few dividers: grouped sections separate the content.
 
@@ -73,7 +74,7 @@ Pattern: one small glass capsule that changes shape; no status words (Hex, Wispr
 - Words show only when the user must know something or can act: errors with a fix button (Retry, Add Key…, Choose Mic…), a silent mic (orange bars and "No sound from the mic"), Undo after Esc or a rewrite, "Added ‘word’", the 10-minute timer. The capsule widens for them and stays one glass shape.
 - VoiceOver reads a label for each state ("Recording", "Recording, hands-free", …). Undo and Retry stay real buttons.
 - No work at idle: no timer, display link or animation while idle.
-- Owner, 2026-10-24 prototype review: the bars use the accent colour, made brighter on light glass so they read over warm backdrops. Hover shows only the Hands-free chord. No Undo countdown bar: Undo goes away by itself and the capsule keeps one height. Secure Input keeps a short message ("Secure Input is on"), because it explains why a paste can fail. With a silent mic in hands-free, Cancel goes (Esc cancels). The capsule height comes from the measured button height, passed to the placement code. Buttons keep their full width, and the snapshot run fails on content longer than the pill.
+- Owner, 2026-10-24 prototype review: the bars use the accent colour, made brighter on light glass so they read over warm backdrops (2026-10-25: the brand colour instead, see Window). Hover shows only the Hands-free chord, after the word "Dictate" (2026-10-25). No Undo countdown bar: Undo goes away by itself and the capsule keeps one height. Secure Input keeps a short message ("Secure Input is on"), because it explains why a paste can fail. With a silent mic in hands-free, Cancel goes (Esc cancels). The capsule height comes from the measured button height, passed to the placement code. Buttons keep their full width, and the snapshot run fails on content longer than the pill.
 
 ### Copy
 - Each row: a short title and at most one grey subtitle. A page's header line says what the page does. An ⓘ popover holds only the optional "why"; costs, privacy facts, warnings and steps the user must do stay on screen.
@@ -81,6 +82,7 @@ Pattern: one small glass capsule that changes shape; no status words (Hex, Wispr
 - Names: Cleanup (fixes filler words and punctuation as you dictate), Rewrite (was Polish), App styles (was Modes).
 - Model names stay visible (until pricing and plans exist): the model name is the row title, a plain description is the subtitle.
 - Keys: symbols only (⌃⌥⌘); onboarding draws them as keycaps with the key name under each.
+- A chord never shows alone: it always comes with the action it starts ("Dictate ⌃⌥⌘", a row title, a menu item's name) (owner, 2026-10-25, from Wispr Flow's hover label).
 - Durations: the system duration formatter.
 - Verbs: "press" and "hold", not "tap" ("Press ⌃⌥⌘ to start, press it again to stop." "Hold ⌥ while you speak.").
 - New lint words for UI text: "we", "please", "enable", "disable", "toggle", interjections ("oops").
