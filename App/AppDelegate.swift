@@ -16,7 +16,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     lazy var audio = AudioCapture(preferences: microphones)
     /// Read by the provider on every request, so a menu change applies to the next dictation.
     let routeSettings = TranscriptionSettings()
-    private let vault = KeyVault()
+    /// Also read by the menu: Rewrite shows once an OpenRouter key is saved.
+    let vault = KeyVault()
     lazy var readiness = Readiness(settings: routeSettings, vault: vault)
     /// The provider; onboarding uses it to check a key.
     private lazy var router = TranscriptionRouter(settings: routeSettings, keys: vault.source(for:))

@@ -21,6 +21,8 @@ extension AppDelegate: StatusMenuActions {
             microphoneWarning: InputDevicePolicy.warning(
                 input: input, outputTransport: AudioDevices.defaultOutputTransport()),
             hasLastDictation: shell.queues.hasLastDictation,
+            hasRawLastDictation: shell.queues.hasRawLastDictation,
+            canRewrite: vault.hasKey(for: .openRouter),
             updates: updates
         )
     }
@@ -62,8 +64,16 @@ extension AppDelegate: StatusMenuActions {
         lastDictation?.perform(.paste)
     }
 
+    func pasteLastWithoutCleanup() {
+        lastDictation?.perform(.pasteWithoutCleanup)
+    }
+
     func copyLastDictation() {
         lastDictation?.perform(.copy)
+    }
+
+    func rewriteLastDictation() {
+        lastDictation?.perform(.polish)
     }
 
     func pasteSettingChanged(_ change: PasteSetting) {

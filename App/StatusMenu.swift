@@ -12,7 +12,9 @@ import KotobaProviders
     func chooseMicrophone(_ sender: NSMenuItem)
     func fixLastDictation()
     func pasteLastDictation()
+    func pasteLastWithoutCleanup()
     func copyLastDictation()
+    func rewriteLastDictation()
     func openKotoba()
     func openSettings()
     func showAbout()
@@ -42,6 +44,11 @@ struct MenuModel {
     var microphoneWarning: MicrophoneWarning?
     /// A dictation was pasted or copied; the Last Dictation items hide until then.
     var hasLastDictation = false
+    /// The last dictation was cleaned up: "Paste Last Without Cleanup" is Paste's ⌥ alternate.
+    var hasRawLastDictation = false
+    /// Rewrite is set up (it runs on OpenRouter, so an OpenRouter key is saved); "Rewrite Last Dictation" hides
+    /// otherwise.
+    var canRewrite = false
     /// The update item's state; nil in a Debug build, which has no updater, so the item hides.
     var updates: Updates?
 
@@ -107,13 +114,35 @@ struct MenuModel {
                     action: #selector(StatusMenuActions.copyRecovered(_:))))
         }
         if hasLastDictation {
-            items += [
-                .action(
-                    "Paste Last Dictation", target: target, action: #selector(StatusMenuActions.pasteLastDictation)),
-                .action("Copy Last Dictation", target: target, action: #selector(StatusMenuActions.copyLastDictation)),
-                .action("Fix Last Dictation…", target: target, action: #selector(StatusMenuActions.fixLastDictation)),
-            ]
+            items += lastDictationItems(target: target)
         }
+        return items
+    }
+
+    /// Paste, copy, rewrite or fix the last dictation. Paste without cleanup stays one item: the ⌥ alternate of Paste,
+    /// as Finder's Close and Close All, so the menu keeps the plan's few items and the feature keeps its one way in.
+    private func lastDictationItems(target: StatusMenuActions?) -> [NSMenuItem] {
+        var items: [NSMenuItem] = [
+            .action("Paste Last Dictation", target: target, action: #selector(StatusMenuActions.pasteLastDictation))
+        ]
+        if hasRawLastDictation {
+            let raw = NSMenuItem.action(
+                "Paste Last Without Cleanup", target: target,
+                action: #selector(StatusMenuActions.pasteLastWithoutCleanup))
+            raw.keyEquivalentModifierMask = .option
+            raw.isAlternate = true
+            items.append(raw)
+        }
+        items.append(
+            .action("Copy Last Dictation", target: target, action: #selector(StatusMenuActions.copyLastDictation)))
+        if canRewrite {
+            items.append(
+                .action(
+                    "Rewrite Last Dictation", target: target,
+                    action: #selector(StatusMenuActions.rewriteLastDictation)))
+        }
+        items.append(
+            .action("Fix Last Dictation…", target: target, action: #selector(StatusMenuActions.fixLastDictation)))
         return items
     }
 
@@ -147,7 +176,8 @@ struct MenuModel {
         return item
     }
 
-    /// Menus for the snapshot run's `menu-<name>.txt`: ready, setup not complete (a Debug build: no update item),
+    /// Menus for the snapshot run's `menu-<name>.txt`: ready (a cleaned-up last dictation, Rewrite set up), setup not
+    /// complete (a Debug build: no update item),
     /// recording (with Sparkle busy), failed with a retry and an update waiting, a Bluetooth mic, and kotoba Dev while
     /// the release app runs.
     static func samples() -> [(name: String, model: Self)] {
@@ -170,6 +200,8 @@ struct MenuModel {
         listening.updates?.canCheck = false
         ready.recovered = [MenuChoice(title: "Send the draft to the team by Friday", value: "1")]
         ready.hasLastDictation = true
+        ready.hasRawLastDictation = true
+        ready.canRewrite = true
         var yielding = ready
         yielding.status = status(.idle, .init(isYielding: true))
         var failed = ready
@@ -196,7 +228,8 @@ struct MenuModel {
 }
 
 extension NSMenu {
-    /// One item per line (submenu items indented, subtitles after "·", then the key equivalent), for snapshot runs.
+    /// One item per line (submenu items indented, subtitles after "·", then the key equivalent; an alternate names the
+    /// modifier that shows it), for snapshot runs.
     func outline() -> String {
         Self.lines(of: self, depth: 0).joined(separator: "\n") + "\n"
     }
@@ -208,6 +241,7 @@ extension NSMenu {
             var line = indent + item.title
             if let subtitle = item.subtitle { line += " · " + subtitle }
             if !item.keyEquivalent.isEmpty { line += " " + shortcut(of: item) }
+            if item.isAlternate { line += " (alternate with " + shortcut(of: item) + ")" }
             if item.state == .on { line += " [on]" }
             if !item.isEnabled { line += " (disabled)" }
             if let submenu = item.submenu { return [line + " ▸"] + lines(of: submenu, depth: depth + 1) }
