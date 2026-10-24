@@ -106,8 +106,9 @@ enum StatusText {
     static let bluetoothMicNote = "Bluetooth: lower quality"
 
     /// The pill and menu when the Microphone page's switch kept out the only mic, a Bluetooth one outside the list.
+    /// The reason first, so a long name is what the pill cuts.
     static func notListed(_ mic: String) -> String {
-        "\(mic) isn’t in your mic list"
+        "Not in mic list: \(mic)"
     }
 
     /// The second line under `title(_:)`.
@@ -187,7 +188,7 @@ extension DictationState {
     /// The pill's words: only where the owner must know something or can act (a notice, Undo, a silent mic, Secure
     /// Input). Nil for a live phase, which shows its shape only; the menu's status line reads `statusText`.
     func pillText(_ context: StatusContext) -> String? {
-        if context.isMicrophoneOff, notice == .captureFailed || notice == nil && phase.isSilentRecording {
+        if context.isMicrophoneOff, notice?.isNoMic == true || notice == nil && phase.isSilentRecording {
             return StatusText.micAccessOff
         }
         if let notice { return notice.statusText(context) }
@@ -235,6 +236,14 @@ extension DictationPhase {
 }
 
 extension DictationNotice {
+    /// A press that found no mic to record from; with Microphone access off, both say so instead.
+    var isNoMic: Bool {
+        switch self {
+        case .captureFailed, .bluetoothMicNotListed: true
+        default: false
+        }
+    }
+
     func statusText(_ context: StatusContext) -> String {
         let provider = context.provider.title
         return switch self {
@@ -243,7 +252,8 @@ extension DictationNotice {
             item == .credit ? "\(provider) is out of credit. Saved." : StatusText.add(item, for: context.provider)
         case .rejected(_, let reason): reason.text(provider: provider)
         case .captureFailed: context.isMicrophoneOff ? StatusText.microphoneOff : "No microphone found"
-        case .bluetoothMicNotListed(let name): StatusText.notListed(name)
+        case .bluetoothMicNotListed(let name):
+            context.isMicrophoneOff ? StatusText.microphoneOff : StatusText.notListed(name)
         case .nothingRecorded: "Nothing was recorded. Try again."
         case .audioNotSaved(let loss):
             loss == .diskFull ? "Couldn’t save audio. Disk full?" : "Couldn’t save audio. Try again."

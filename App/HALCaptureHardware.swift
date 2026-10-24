@@ -67,6 +67,8 @@ extension AudioCapture {
     static let inputDidChange = Notification.Name("AudioCapture.inputDidChange")
 
     init(preferences: MicrophonePreferences) {
+        // Before the capture chooses its first mic.
+        preferences.keepUpdatedMacsDictating()
         self.init(hardware: HALCaptureHardware(preferences: preferences)) {
             Task { @MainActor in NotificationCenter.default.post(name: Self.inputDidChange, object: nil) }
         }

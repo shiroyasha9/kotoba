@@ -113,17 +113,18 @@ extension IndicatorPanel {
                         "copied-no-accessibility", .init(.idle, notice: notice),
                         context: StatusContext(provider: .azure, isPasteAllowed: false)),
                 ]
-            case .captureFailed:
+            // No mic, and the same press with Microphone access off.
+            case .captureFailed, .bluetoothMicNotListed:
                 [
-                    sample("captureFailed", .init(.idle, notice: notice)),
+                    sample(snapshotName(of: notice), .init(.idle, notice: notice)),
                     sample(
-                        "captureFailed-denied", .init(.idle, notice: notice),
+                        snapshotName(of: notice) + "-denied", .init(.idle, notice: notice),
                         context: StatusContext(provider: .azure, microphone: .denied)),
                 ]
             // Named after the case.
             case .failed, .timedOut, .connectionBlocked, .cleanupFailed, .cleanupTooSlow, .returnSkipped, .recovered,
-                .bluetoothMicNotListed, .nothingRecorded, .clipboardNotKept:
-                [sample(String("\(notice)".prefix { $0 != "(" }), .init(.idle, notice: notice))]
+                .nothingRecorded, .clipboardNotKept:
+                [sample(snapshotName(of: notice), .init(.idle, notice: notice))]
             case .audioNotSaved:
                 [AudioLoss.diskFull, .other].map {
                     sample("audioNotSaved-\($0)", .init(.idle, notice: .audioNotSaved($0)))
@@ -150,7 +151,7 @@ extension IndicatorPanel {
         [
             .failed(id), .timedOut(id), .connectionBlocked(id), .hostNotFound(id, host: "x"), .rejected(id, .other),
             .needsSetup(id, .key), .cleanupFailed(id), .cleanupTooSlow(id), .returnSkipped(id), .copied(id),
-            .recovered(id), .captureFailed, .bluetoothMicNotListed("AirPods Pro"), .nothingRecorded,
+            .recovered(id), .captureFailed, .bluetoothMicNotListed("Alex’s AirPods Pro"), .nothingRecorded,
             .polishFailed(.failed),
             .audioNotSaved(.diskFull), .audioCut(id, .diskFull), .clipboardNotKept(id), .polished(id, isReplaced: true),
         ]
@@ -170,6 +171,11 @@ extension IndicatorPanel {
                 "hostNotFound-unnamed",
                 .init(.idle, notice: .hostNotFound(id, host: "my-speech-resource.cognitiveservices.azure.com"))),
         ]
+    }
+
+    /// A notice named after its case: "captureFailed", "bluetoothMicNotListed".
+    private static func snapshotName(of notice: DictationNotice) -> String {
+        String("\(notice)".prefix { $0 != "(" })
     }
 
     private static func snapshotName(of failure: PolishFailure) -> String {

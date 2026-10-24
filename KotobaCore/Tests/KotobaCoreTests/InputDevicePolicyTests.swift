@@ -90,6 +90,19 @@ struct InputDevicePolicyTests {
             InputDevicePolicy.micInUse(defaultInput: airPods, devices: devices, order: ["StudioMic"]) == nil)
     }
 
+    /// A Mac mini with a USB mic and AirPods as the default: the USB mic, as the first connected mic that is not
+    /// Bluetooth; the built-in mic comes first when there is one.
+    @Test func aBluetoothDefaultGivesWayToTheFirstMicThatIsNotBluetooth() {
+        let macMini = [builtInSpeakers, airPods, usbMic]
+        #expect(InputDevicePolicy.micInUse(defaultInput: airPods, devices: macMini) == usbMic)
+        #expect(
+            InputDevicePolicy.micInUse(defaultInput: airPods, devices: [usbMic, airPods, builtInMic]) == builtInMic)
+        #expect(InputDevicePolicy.bluetoothKeptOut(defaultInput: airPods, devices: macMini) == nil)
+        let builtInLeftOut = InputDevicePolicy.micInUse(
+            defaultInput: airPods, devices: [builtInMic, airPods, usbMic], leftOut: ["BuiltInMic"])
+        #expect(builtInLeftOut == usbMic)
+    }
+
     @Test func aListedBluetoothMicIsUsedWithTheSwitchOn() {
         let devices = [builtInSpeakers, airPods]
         #expect(InputDevicePolicy.micInUse(defaultInput: airPods, devices: devices, order: ["AirPods"]) == airPods)
@@ -119,6 +132,26 @@ struct InputDevicePolicyTests {
         #expect(InputDevicePolicy.bluetoothKeptOut(defaultInput: airPods, devices: macMini, order: ["AirPods"]) == nil)
         #expect(InputDevicePolicy.bluetoothKeptOut(defaultInput: airPods, devices: [builtInMic, airPods]) == nil)
         #expect(InputDevicePolicy.bluetoothKeptOut(defaultInput: nil, devices: [builtInSpeakers]) == nil)
+    }
+
+    // MARK: The update from 0.4
+
+    /// 0.4's state on a Mac mini: no order, AirPods as the default, which 0.4 recorded from. The update keeps them.
+    @Test func anUpdateKeepsTheBluetoothDefaultOfAMacWithNoBuiltInMic() {
+        let macMini = [builtInSpeakers, airPods, usbMic]
+        let order = InputDevicePolicy.orderAfterUpdate([], defaultInput: airPods, devices: macMini)
+        #expect(order == ["AirPods"])
+        #expect(InputDevicePolicy.micInUse(defaultInput: airPods, devices: macMini, order: order) == airPods)
+    }
+
+    @Test func anUpdateLeavesEveryOtherOrderAlone() {
+        let laptop = [builtInMic, airPods]
+        #expect(InputDevicePolicy.orderAfterUpdate([], defaultInput: airPods, devices: laptop).isEmpty)
+        #expect(
+            InputDevicePolicy.orderAfterUpdate(["USBMic"], defaultInput: airPods, devices: [airPods, usbMic])
+                == ["USBMic"])
+        #expect(InputDevicePolicy.orderAfterUpdate([], defaultInput: usbMic, devices: [usbMic]).isEmpty)
+        #expect(InputDevicePolicy.orderAfterUpdate([], defaultInput: nil, devices: [airPods]).isEmpty)
     }
 
     @Test func choosingAMicMovesItToTheTopOfTheOrder() {

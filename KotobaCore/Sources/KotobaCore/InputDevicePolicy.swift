@@ -38,7 +38,8 @@ public enum MicrophoneWarning: Sendable, Equatable {
 /// The owner's preference order comes first: the first connected input in it is used, Bluetooth
 /// included. With none of them connected, kotoba follows the system default. While
 /// `bluetoothOnlyWhenListed` is on (the Microphone page's switch, on by default), a Bluetooth
-/// default is replaced by the built-in mic, and with no built-in mic there is no mic: a Bluetooth
+/// default is replaced by the first connected mic that is not Bluetooth, the built-in mic first (a
+/// USB mic on a Mac mini), and with only Bluetooth mics there is no mic: a Bluetooth
 /// mic runs in the HFP call profile, with low quality and a slow start that clips the first words,
 /// and opening it drops the headset's playback to call quality. Off, the Bluetooth default is used.
 public enum InputDevicePolicy {
@@ -62,7 +63,7 @@ public enum InputDevicePolicy {
         guard let followed = inputs.first(where: { $0.uid == defaultInput?.uid }) else { return nil }
         let chosen =
             followed.transport == .bluetooth && bluetoothOnlyWhenListed
-            ? inputs.first { $0.transport == .builtIn } : followed
+            ? open.first { $0.transport == .builtIn } ?? open.first { $0.transport != .bluetooth } : followed
         return chosen.flatMap { leftOut.contains($0.uid) ? nil : $0 }
     }
 
@@ -83,6 +84,19 @@ public enum InputDevicePolicy {
             followed.transport == .bluetooth
         else { return nil }
         return followed
+    }
+
+    /// The order for an update from 0.4, run once: 0.4 recorded from a Bluetooth default on a Mac with no built-in mic,
+    /// and the switch (on after the update) would keep it out, so an empty order gets that mic and dictation goes on
+    /// as before. Any other order stays as it is.
+    public static func orderAfterUpdate(_ order: [String], defaultInput: AudioDevice?, devices: [AudioDevice])
+        -> [String]
+    {
+        let inputs = devices.filter(\.hasInput)
+        guard order.isEmpty, !inputs.contains(where: { $0.transport == .builtIn }),
+            let followed = inputs.first(where: { $0.uid == defaultInput?.uid }), followed.transport == .bluetooth
+        else { return order }
+        return [followed.uid]
     }
 
     /// The order after the owner picks `uid` in the menu: it moves to the top, the rest keep their order.

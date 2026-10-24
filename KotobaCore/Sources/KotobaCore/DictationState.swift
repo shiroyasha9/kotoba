@@ -78,9 +78,9 @@ public enum DictationNotice: Sendable, Equatable {
     /// Its words and button depend on the microphone and Accessibility grants now, so the shell reads them again (I2).
     public var dependsOnGrants: Bool {
         switch self {
-        case .captureFailed, .copied: true
+        case .captureFailed, .bluetoothMicNotListed, .copied: true
         case .failed, .timedOut, .connectionBlocked, .hostNotFound, .rejected, .needsSetup, .cleanupFailed,
-            .cleanupTooSlow, .returnSkipped, .recovered, .bluetoothMicNotListed, .nothingRecorded, .audioNotSaved,
+            .cleanupTooSlow, .returnSkipped, .recovered, .nothingRecorded, .audioNotSaved,
             .audioCut, .clipboardNotKept, .polished, .polishFailed:
             false
         }

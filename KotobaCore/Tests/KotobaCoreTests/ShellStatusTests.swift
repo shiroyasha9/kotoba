@@ -62,6 +62,7 @@ struct ShellStatusTests {
     @Test func aFailedCaptureAndACopyReadTheGrantsAgain() {
         var shell = ShellStatus()
         #expect(shell.dictationChanged(Self.notice(.captureFailed)).readsGrants)
+        #expect(shell.dictationChanged(Self.notice(.bluetoothMicNotListed("AirPods Pro"))).readsGrants)
         #expect(shell.dictationChanged(Self.notice(.copied(DictationID()))).readsGrants)
         #expect(!shell.dictationChanged(Self.notice(.failed(DictationID()))).readsGrants)
         #expect(!shell.dictationChanged(.idle).readsGrants)
