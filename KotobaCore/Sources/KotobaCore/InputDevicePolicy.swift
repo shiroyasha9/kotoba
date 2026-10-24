@@ -66,6 +66,25 @@ public enum InputDevicePolicy {
         return chosen.flatMap { leftOut.contains($0.uid) ? nil : $0 }
     }
 
+    /// The Bluetooth default that the switch keeps out when it leaves no mic (a Mac with no built-in mic and AirPods
+    /// that are not in the order), so the failure can name it; nil when there is a mic, or another reason for none.
+    public static func bluetoothKeptOut(
+        defaultInput: AudioDevice?,
+        devices: [AudioDevice],
+        order: [String] = [],
+        bluetoothOnlyWhenListed: Bool = true
+    ) -> AudioDevice? {
+        guard
+            micInUse(
+                defaultInput: defaultInput, devices: devices, order: order,
+                bluetoothOnlyWhenListed: bluetoothOnlyWhenListed) == nil,
+            bluetoothOnlyWhenListed,
+            let followed = devices.first(where: { $0.hasInput && $0.uid == defaultInput?.uid }),
+            followed.transport == .bluetooth
+        else { return nil }
+        return followed
+    }
+
     /// The order after the owner picks `uid` in the menu: it moves to the top, the rest keep their order.
     public static func order(_ order: [String], choosing uid: String) -> [String] {
         [uid] + order.filter { $0 != uid }

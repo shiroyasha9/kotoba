@@ -70,6 +70,24 @@ struct AudioCaptureChangeTests {
         #expect(capture.inputInUse == FakeCaptureHardware.airPods)
     }
 
+    @Test func aMacWithOnlyAnUnlistedBluetoothMicFailsWithItsName() async {
+        let hardware = FakeCaptureHardware(
+            devices: [FakeCaptureHardware.airPods], defaultInput: FakeCaptureHardware.airPods)
+        let capture = AudioCapture(hardware: hardware)
+        await capture.prepare()
+
+        await #expect(throws: AudioCapture.CaptureError.bluetoothNotListed(name: "AirPods Pro")) {
+            try await capture.beginCapture(into: Self.file)
+        }
+        #expect(hardware.opened.isEmpty)
+
+        hardware.setOrder(["airpods"])
+        await capture.inputMayHaveChanged()
+        _ = try? await capture.beginCapture(into: Self.file)
+        #expect(hardware.opened == ["airpods"])
+        _ = await capture.cancelCapture()
+    }
+
     // MARK: Mic test
 
     @Test func aDictationEndsTheMicTestAndRecordsOnTheSameMic() async throws {

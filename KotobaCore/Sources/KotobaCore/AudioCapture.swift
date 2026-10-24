@@ -8,8 +8,11 @@ import os
 /// (and its orange dot) is on only while recording. The platform work goes through `CaptureHardware`; the render
 /// callback, the ring and the recorder's thread sit below that seam, so nothing here runs per buffer.
 public actor AudioCapture: AudioSource {
-    public enum CaptureError: Error {
+    public enum CaptureError: Error, Equatable {
         case noInputDevice
+        /// No mic is left because the only one is a Bluetooth mic outside the owner's list, and the Microphone page's
+        /// switch keeps those out (`InputDevicePolicy.bluetoothKeptOut`). Its name, for the pill.
+        case bluetoothNotListed(name: String)
         case notCapturing
         /// A capture is open (recording or in its Undo window): one capture at a time.
         case alreadyCapturing
@@ -179,7 +182,7 @@ public actor AudioCapture: AudioSource {
                 self.input = nil
             }
         }
-        guard let rebuilt = makeInput() else { throw CaptureError.noInputDevice }
+        guard let rebuilt = makeInput() else { throw noMicError() }
         input = rebuilt
         do {
             try rebuilt.start()
@@ -351,48 +354,13 @@ extension AudioCapture {
             defaultInput: hardware.defaultInput(), devices: devices, order: hardware.microphoneOrder(),
             leftOut: leftOut, bluetoothOnlyWhenListed: hardware.bluetoothOnlyWhenListed())
     }
-}
 
-// MARK: - Discarded recordings and upload copies
-
-extension AudioCapture {
-    /// A capture's files: `file`, and its upload copy of the same name in the copies' folder.
-    func files(for file: URL) -> CaptureFiles {
-        CaptureFiles(
-            recording: file, upload: uploads.appending(path: file.deletingPathExtension().lastPathComponent + ".ogg"))
-    }
-
-    /// Deletes an upload copy nothing sends any more; one that stays goes at the next launch.
-    nonisolated static func removeUploadCopy(_ upload: URL?) {
-        guard let upload else { return }
-        do {
-            try FileManager.default.removeItem(at: upload)
-        } catch {
-            Log.audio.error("Cannot delete an upload copy: \(error)")
-        }
-    }
-
-    private nonisolated static func removeUploadCopies(in folder: URL) {
-        let copies = (try? FileManager.default.contentsOfDirectory(at: folder, includingPropertiesForKeys: nil)) ?? []
-        for copy in copies { removeUploadCopy(copy) }
-    }
-
-    @discardableResult
-    public func discardCapture() async -> Bool {
-        guard let audio = await cancelCapture() else { return true }
-        return await discard(audio)
-    }
-
-    @discardableResult
-    public func discard(_ audio: RecordedAudio) async -> Bool {
-        // The copy goes too; the result is the recording's own, as only the FLAC can be sent again.
-        Self.removeUploadCopy(audio.upload)
-        do {
-            try FileManager.default.removeItem(at: audio.file)
-            return true
-        } catch {
-            Log.audio.error("Cannot delete discarded audio: \(error)")
-            return false
-        }
+    /// Why no mic opened: a Bluetooth mic the owner's switch keeps out, by name, else no input. Read only on a failed
+    /// press.
+    private func noMicError() -> CaptureError {
+        let keptOut = InputDevicePolicy.bluetoothKeptOut(
+            defaultInput: hardware.defaultInput(), devices: hardware.devices(), order: hardware.microphoneOrder(),
+            bluetoothOnlyWhenListed: hardware.bluetoothOnlyWhenListed())
+        return keptOut.map { .bluetoothNotListed(name: $0.name) } ?? .noInputDevice
     }
 }

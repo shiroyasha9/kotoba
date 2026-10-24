@@ -109,6 +109,18 @@ struct InputDevicePolicyTests {
         #expect(choice == builtInMic)
     }
 
+    /// A Mac mini with AirPods: the failure names the mic the switch kept out, so the owner can add it.
+    @Test func theBluetoothDefaultKeptOutIsNamedOnlyWhenItLeavesNoMic() {
+        let macMini = [builtInSpeakers, airPods]
+        #expect(InputDevicePolicy.bluetoothKeptOut(defaultInput: airPods, devices: macMini) == airPods)
+        #expect(
+            InputDevicePolicy.bluetoothKeptOut(defaultInput: airPods, devices: macMini, bluetoothOnlyWhenListed: false)
+                == nil)
+        #expect(InputDevicePolicy.bluetoothKeptOut(defaultInput: airPods, devices: macMini, order: ["AirPods"]) == nil)
+        #expect(InputDevicePolicy.bluetoothKeptOut(defaultInput: airPods, devices: [builtInMic, airPods]) == nil)
+        #expect(InputDevicePolicy.bluetoothKeptOut(defaultInput: nil, devices: [builtInSpeakers]) == nil)
+    }
+
     @Test func choosingAMicMovesItToTheTopOfTheOrder() {
         #expect(InputDevicePolicy.order(["A", "B", "C"], choosing: "C") == ["C", "A", "B"])
         #expect(InputDevicePolicy.order(["A", "B"], choosing: "New") == ["New", "A", "B"])

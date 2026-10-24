@@ -105,6 +105,11 @@ enum StatusText {
     /// phrase as `title(_:)`.
     static let bluetoothMicNote = "Bluetooth: lower quality"
 
+    /// The pill and menu when the Microphone page's switch kept out the only mic, a Bluetooth one outside the list.
+    static func notListed(_ mic: String) -> String {
+        "\(mic) isn’t in your mic list"
+    }
+
     /// The second line under `title(_:)`.
     static func detail(_ warning: MicrophoneWarning) -> String {
         switch warning {
@@ -238,6 +243,7 @@ extension DictationNotice {
             item == .credit ? "\(provider) is out of credit. Saved." : StatusText.add(item, for: context.provider)
         case .rejected(_, let reason): reason.text(provider: provider)
         case .captureFailed: context.isMicrophoneOff ? StatusText.microphoneOff : "No microphone found"
+        case .bluetoothMicNotListed(let name): StatusText.notListed(name)
         case .nothingRecorded: "Nothing was recorded. Try again."
         case .audioNotSaved(let loss):
             loss == .diskFull ? "Couldn’t save audio. Disk full?" : "Couldn’t save audio. Try again."
@@ -270,9 +276,16 @@ extension DictationNotice {
         case .polished(_, let isReplaced): isReplaced ? "Polished" : "Polished. Copied, press ⌘V"
         // `statusText` says these.
         case .failed, .timedOut, .connectionBlocked, .hostNotFound, .needsSetup, .rejected, .captureFailed,
-            .nothingRecorded, .audioNotSaved, .polishFailed:
+            .bluetoothMicNotListed, .nothingRecorded, .audioNotSaved, .polishFailed:
             ""
         }
+    }
+
+    /// A press with no mic: System Settings when access is off; for a Bluetooth mic kept out of the list, the Microphone
+    /// page, where Add puts it in the list (the menu's mic pick does too).
+    private func micFix(_ context: StatusContext) -> PillAction? {
+        if context.isMicrophoneOff { return .openMicrophoneSettings }
+        return self == .captureFailed ? nil : .chooseMicrophone
     }
 
     func pillAction(_ context: StatusContext) -> PillAction? {
@@ -281,7 +294,7 @@ extension DictationNotice {
         case .needsSetup(_, let item): item.pillAction
         case .recovered(let id): .copy(id)
         case .copied: context.isPasteAllowed ? nil : .allowPasting
-        case .captureFailed: context.isMicrophoneOff ? .openMicrophoneSettings : nil
+        case .captureFailed, .bluetoothMicNotListed: micFix(context)
         case .polished(let id, isReplaced: true): .undoPolish(id)
         case .polishFailed(.needsSetup(.credit)): .addOpenRouterCredit
         case .polishFailed(.needsSetup): .addKey

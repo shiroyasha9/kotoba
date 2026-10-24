@@ -98,13 +98,7 @@ extension IndicatorPanel {
     /// Each notice, once for each wording. The switch has no default, so a new notice does not compile until it has a
     /// sample here.
     private static func noticeSamples(_ id: DictationID) -> [Sample] {
-        let notices: [DictationNotice] = [
-            .failed(id), .timedOut(id), .connectionBlocked(id), .hostNotFound(id, host: "x"), .rejected(id, .other),
-            .needsSetup(id, .key), .cleanupFailed(id), .cleanupTooSlow(id), .returnSkipped(id), .copied(id),
-            .recovered(id), .captureFailed, .nothingRecorded, .audioNotSaved(.diskFull), .audioCut(id, .diskFull),
-            .clipboardNotKept(id), .polished(id, isReplaced: true), .polishFailed(.failed),
-        ]
-        return notices.flatMap { notice -> [Sample?] in
+        sampleNotices(id).flatMap { notice -> [Sample?] in
             switch notice {
             case .needsSetup, .hostNotFound:
                 setupSamples(id)
@@ -128,7 +122,7 @@ extension IndicatorPanel {
                 ]
             // Named after the case.
             case .failed, .timedOut, .connectionBlocked, .cleanupFailed, .cleanupTooSlow, .returnSkipped, .recovered,
-                .nothingRecorded, .clipboardNotKept:
+                .bluetoothMicNotListed, .nothingRecorded, .clipboardNotKept:
                 [sample(String("\(notice)".prefix { $0 != "(" }), .init(.idle, notice: notice))]
             case .audioNotSaved:
                 [AudioLoss.diskFull, .other].map {
@@ -149,6 +143,17 @@ extension IndicatorPanel {
             }
         }
         .compactMap(\.self)
+    }
+
+    /// One of each notice; `noticeSamples` draws each wording of it.
+    private static func sampleNotices(_ id: DictationID) -> [DictationNotice] {
+        [
+            .failed(id), .timedOut(id), .connectionBlocked(id), .hostNotFound(id, host: "x"), .rejected(id, .other),
+            .needsSetup(id, .key), .cleanupFailed(id), .cleanupTooSlow(id), .returnSkipped(id), .copied(id),
+            .recovered(id), .captureFailed, .bluetoothMicNotListed("AirPods Pro"), .nothingRecorded,
+            .polishFailed(.failed),
+            .audioNotSaved(.diskFull), .audioCut(id, .diskFull), .clipboardNotKept(id), .polished(id, isReplaced: true),
+        ]
     }
 
     /// What the route needs from the owner, and an endpoint whose host does not resolve: named by its first label when
