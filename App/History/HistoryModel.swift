@@ -2,7 +2,7 @@ import AppKit
 import KotobaCore
 import Observation
 
-/// The History pane's rows (story 30): pages read from the store newest first, the search, the selection and the
+/// The History page's rows (story 30): pages read from the store newest first, the search, the selection and the
 /// actions on it. Built when the main window opens and released when it closes, so nothing runs while it is closed.
 @MainActor
 @Observable
@@ -59,9 +59,9 @@ final class HistoryModel {
     private(set) var retryable: Set<DictationID> = []
     /// False until the first read returns, so the empty state does not flash before the rows.
     private(set) var isLoaded = false
-    /// The last read of the first page failed: the pane shows the shared failure state with Try Again.
+    /// The last read of the first page failed: the page shows the failure row with Try Again.
     private(set) var isLoadFailed = false
-    /// What the pane reads: the search, and each Try Again after a failed read. The view reads when it changes.
+    /// What the page reads: the search, and each Try Again after a failed read. The view reads when it changes.
     var readKey: ReadKey { ReadKey(search: search, attempt: attempt) }
     private var attempt = 0
     /// While a dictation records or is sent, Paste Again would race its paste; the rows being sent say so and cannot be
@@ -71,7 +71,7 @@ final class HistoryModel {
             if !activity.isQuiet { playback.stop() }
         }
     }
-    /// A row's saved audio, played from the pane (`HistoryAudio.swift`).
+    /// A row's saved audio, played from the page (`HistoryAudio.swift`).
     let playback: AudioPlayback
     /// Paste Again could not bring back the app the owner was in: the window says so.
     var isPasteFailureShown = false
@@ -85,6 +85,8 @@ final class HistoryModel {
     var isTranscribeFailureShown = false
     /// The row whose View Changes sheet is open.
     var changesShown: DictationRecord?
+    /// The Audio section (story 31); nil in snapshots of the list alone.
+    @ObservationIgnored let audio: AudioRetentionModel?
 
     @ObservationIgnored private let source: Source?
     /// Each read takes the next number; a result that comes back after a newer read started is dropped.
@@ -96,8 +98,9 @@ final class HistoryModel {
     /// The day titles' "Today" and "Yesterday" count from it.
     @ObservationIgnored private let now: @MainActor () -> Date
 
-    init(source: Source?) {
+    init(source: Source?, audio: AudioRetentionModel?) {
         self.source = source
+        self.audio = audio
         playback = AudioPlayback()
         now = { .now }
     }
@@ -105,9 +108,11 @@ final class HistoryModel {
     /// For snapshots: fixed rows and no store, at `Snapshots.sampleNow`; `transcribing` rows show as being transcribed
     /// again, and `playing`'s audio as playing.
     init(
-        rows: [DictationRecord], search: String = "", transcribing: Set<DictationID> = [], playing: DictationID? = nil
+        rows: [DictationRecord], search: String = "", transcribing: Set<DictationID> = [], playing: DictationID? = nil,
+        audio: AudioRetentionModel? = .sample()
     ) {
         source = nil
+        self.audio = audio
         playback = AudioPlayback(playing: playing)
         now = { Snapshots.sampleNow }
         self.search = search
@@ -135,14 +140,14 @@ final class HistoryModel {
 
     // MARK: Reading
 
-    /// The pane appeared, or the search changed. The model follows each history write while the window is open
-    /// (`apply`), so a pane shown again with the same search keeps its rows and pages and reads nothing.
+    /// The page appeared, or the search changed. The model follows each history write while the window is open
+    /// (`apply`), so a page shown again with the same search keeps its rows and pages and reads nothing.
     func show() async {
         guard !isLoaded || search != loadedSearch else { return }
         await reload()
     }
 
-    /// Try Again after a failed read: the pane reads the first page again.
+    /// Try Again after a failed read: the page reads the first page again.
     func tryAgain() {
         attempt += 1
     }
@@ -166,7 +171,7 @@ final class HistoryModel {
             loadedSearch = nil
             isLoadFailed = true
         }
-        // The failure state hides the rows, so the toolbar must not act on a selection the owner cannot see.
+        // The failure state hides the rows, so the actions must not act on a selection the owner cannot see.
         selection.formIntersection(isLoadFailed ? [] : rows.map(\.id))
         isLoaded = true
     }
@@ -232,8 +237,9 @@ final class HistoryModel {
 
     // MARK: Selection and actions
 
-    /// The latest text of each row (polished when Polish ran), oldest first, a blank line between: the order they were
-    /// spoken. `raw` takes the transcript before cleanup, which is the delivered text of a dictation without cleanup.
+    /// The latest text of each row (rewritten when Rewrite ran), oldest first, a blank line between: the order they
+    /// were spoken. `raw` takes the transcript before cleanup, which is the delivered text of a dictation without
+    /// cleanup.
     static func text(of records: [DictationRecord], raw: Bool = false) -> String? {
         let texts = records.reversed().compactMap { raw ? $0.transcript : $0.latestText }.filter { !$0.isEmpty }
         return texts.isEmpty ? nil : texts.joined(separator: "\n\n")
@@ -258,7 +264,7 @@ final class HistoryModel {
         source.fix(record)
     }
 
-    /// One row with a cleaned or polished text: View Changes compares it with the text before.
+    /// One row with a cleaned or rewritten text: View Changes compares it with the text before.
     func canViewChanges(_ records: [DictationRecord]) -> Bool {
         records.count == 1 && records.first.map { !ChangesView.Comparison.all(of: $0).isEmpty } == true
     }

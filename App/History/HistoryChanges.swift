@@ -1,17 +1,14 @@
-// 0.5.0 ratchet: the History page's rollout puts this file on the page system and removes the next line.
-// swiftlint:disable ui_layout_literal appkit_layout_literal
 import KotobaCore
 import SwiftUI
 
 /// History's View Changes (docs/spec.md, "Polish and View Changes"): the word-level change between two texts of one
-/// dictation, the transcript, the cleaned text and the polished text. Removed words are struck through and added words
-/// underlined, each in its color too, so the change never rests on color alone; VoiceOver reads them as “removed” and
-/// “added”.
+/// dictation, what was heard, the cleaned text and the rewritten text, in a page sheet. Removed words are struck through
+/// and added words underlined, each in its color too, so the change never rests on color alone; VoiceOver reads them as
+/// “removed” and “added”.
 struct ChangesView: View {
     let record: DictationRecord
     @State private var comparison: Comparison
     @State private var diffs = Diffs()
-    @Environment(\.dismiss) private var dismiss
 
     /// A row with no second text has nothing to show; History offers the sheet only when one comparison exists.
     init?(record: DictationRecord) {
@@ -23,36 +20,29 @@ struct ChangesView: View {
 
     var body: some View {
         let runs = diffs.runs(of: comparison, in: record)
-        VStack(alignment: .leading, spacing: 12) {
-            let comparisons = Comparison.all(of: record)
-            if comparisons.count > 1 {
-                Picker("Compare", selection: $comparison) {
-                    ForEach(comparisons, id: \.self) { Text($0.title).tag($0) }
-                }
-                .pickerStyle(.segmented)
-                .labelsHidden()
-            } else {
-                Text(comparison.title).font(.headline)
-            }
-            ScrollView {
+        PageSheet(title: "Changes") {
+            Section {
                 Text(Self.marked(runs))
                     .textSelection(.enabled)
-                    .lineSpacing(3)
                     .frame(maxWidth: .infinity, alignment: .leading)
-                    .padding(10)
                     .accessibilityLabel(Self.spoken(runs))
-            }
-            .background(.background, in: .rect(cornerRadius: 6))
-            .overlay(RoundedRectangle(cornerRadius: 6).strokeBorder(.separator))
-            HStack {
-                Text(Self.summary(runs)).foregroundStyle(.secondary)
-                Spacer()
-                Button("Done") { dismiss() }
-                    .keyboardShortcut(.defaultAction)
+            } header: {
+                let comparisons = Comparison.all(of: record)
+                if comparisons.count > 1 {
+                    // A pop-up, not a segmented control: three "Cleaned Up → Rewritten" segments are wider than the
+                    // sheet.
+                    Picker("Compare", selection: $comparison) {
+                        ForEach(comparisons, id: \.self) { Text($0.title).tag($0) }
+                    }
+                    .pickerStyle(.menu)
+                    .fixedSize()
+                } else {
+                    Text(comparison.title)
+                }
+            } footer: {
+                Text(Self.summary(runs))
             }
         }
-        .padding(20)
-        .frame(width: 560, height: 420)
     }
 
     /// One of the texts a dictation can have.
@@ -63,9 +53,9 @@ struct ChangesView: View {
 
         var title: String {
             switch self {
-            case .transcript: "Transcript"
+            case .transcript: "Original"
             case .cleaned: "Cleaned Up"
-            case .polished: "Polished"
+            case .polished: "Rewritten"
             }
         }
 
@@ -158,15 +148,15 @@ struct ChangesView: View {
 // MARK: - Snapshots
 
 extension ChangesView {
-    /// A cleaned and polished row (three comparisons, on the latest), and a row with only a cleanup.
+    /// A cleaned and rewritten row (three comparisons, on the latest), and a row with only a cleanup.
     @MainActor
     static func snapshots() -> [Snapshot] {
         let rows = HistoryController.sampleRows()
         let polished = HistoryController.samplePolished()
-        let samples = [("history-changes-polished", polished), ("history-changes-cleaned", rows[1])]
+        let samples = [("history-changes-rewritten", polished), ("history-changes-cleaned", rows[1])]
         return samples.compactMap { name, record in
             ChangesView(record: record).map { view in
-                Snapshots.fixedWindow(named: name, size: NSSize(width: 560, height: 420)) { view }
+                MainWindow.sheetSnapshot(named: name) { view }
             }
         }
     }

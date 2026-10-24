@@ -103,7 +103,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         mainWindow.pipeline = pipeline
         lastDictation = LastDictation(store: store, pipeline: pipeline)
         mainWindow.historyPane = HistoryController(
-            store: store, pipeline: pipeline, routes: routeSettings, keys: vault
+            store: store, pipeline: pipeline, routes: routeSettings, keys: vault,
+            audioRequests: audioRequests.continuation
         ) { [weak self] in self?.fixWindow.show($0) }
         observe(pipeline)
         observeReadiness()

@@ -6,18 +6,15 @@ import KotobaStorage
 /// the owner's files, Keychain or devices.
 @MainActor
 extension Pane {
-    /// The whole main window: Home, History, and each settings pane, the Dictionary pane also with suggestions. History
-    /// also in the framed window, for its toolbar with a selected row: one with text (Copy, Paste Again and Delete on),
-    /// a failed one (Retry and Delete on) and one with no audio (Delete on only). Home and Activity framed too: the
-    /// title bar keeps one height on every page.
+    /// The whole main window: Home, History, and each settings pane, the Dictionary pane also with suggestions. Home,
+    /// History and Activity framed too: the title bar keeps one height on every page. History with its first row
+    /// selected, also with its audio playing.
     static func windowSnapshots() -> [Snapshot] {
         [
             windowSnapshot(selecting: .home, named: "window-home"),
             windowSnapshot(selecting: .home, named: "window-home-framed", isFramed: true),
             windowSnapshot(selecting: .history, named: "window-history"),
-            windowSnapshot(selecting: .history, named: "window-history-toolbar", isFramed: true),
-            windowSnapshot(selecting: .history, history: 2, named: "window-history-failed", isFramed: true),
-            windowSnapshot(selecting: .history, history: 5, named: "window-history-no-audio", isFramed: true),
+            windowSnapshot(selecting: .history, named: "window-history-framed", isFramed: true),
             windowSnapshot(selecting: .history, isPlaying: true, named: "window-history-playing", isFramed: true),
             windowSnapshot(selecting: .activity, named: "window-activity"),
             windowSnapshot(selecting: .activity, named: "window-activity-framed", isFramed: true),
@@ -94,18 +91,16 @@ extension Pane {
         return model
     }
 
-    /// The whole window with every pane, showing `id`; `history` selects that History sample row, and `isPlaying`
-    /// shows its audio playing.
+    /// The whole window with every pane, showing `id`; `isPlaying` shows History's first row's audio playing.
     private static func windowSnapshot(
         suggestions: [DictionarySuggestion] = [],
         selecting id: PaneID,
-        history selected: Int = 0,
         isPlaying: Bool = false,
         named name: String,
         isFramed: Bool = false
     ) -> Snapshot {
         MainWindow.windowSnapshot(
-            of: samplePanes(suggestions: suggestions, history: selected, isPlaying: isPlaying), selecting: id,
+            of: samplePanes(suggestions: suggestions, isPlaying: isPlaying), selecting: id,
             named: name, isFramed: isFramed)
     }
 
@@ -121,14 +116,13 @@ extension Pane {
         }
     }
 
-    /// Every pane with sample data; `history` selects that History sample row, and `isPlaying` shows its audio playing.
+    /// Every pane with sample data; `isPlaying` shows History's first row's audio playing.
     private static func samplePanes(
-        suggestions: [DictionarySuggestion] = [], history selected: Int = 0, isPlaying: Bool = false,
-        home: HomeModel = .sample
+        suggestions: [DictionarySuggestion] = [], isPlaying: Bool = false, home: HomeModel = .sample
     ) -> [Pane] {
         let rows = HistoryController.sampleRows()
-        let history = HistoryModel(rows: rows, playing: isPlaying ? rows[selected].id : nil)
-        history.selection = [rows[selected].id]
+        let history = HistoryModel(rows: rows, playing: isPlaying ? rows[0].id : nil)
+        history.selection = [rows[0].id]
         return [
             .home(home),
             .history(history),
@@ -170,10 +164,10 @@ extension Pane {
         ]
     }
 
-    /// The pages that still have a toolbar (History and Dictionary: search and row actions). A page has no toolbar
-    /// (docs/research/ui-redesign.md, "Window"), so the title bar keeps one height; their rollout moves these into the
-    /// page and empties this list. `scripts/ratchet-done.sh` fails the release while it has a page.
-    static let pagesWithToolbar: [PaneID] = [.history]
+    /// The pages that still have a toolbar: none, since History and Dictionary moved their search and row actions into
+    /// the page. A page has no toolbar (docs/research/ui-redesign.md, "Window"), so the title bar keeps one height;
+    /// `scripts/ratchet-done.sh` fails the release while this list has a page.
+    static let pagesWithToolbar: [PaneID] = []
 
     /// One window switched through every page without a toolbar in turn, drawn at each step: the title bar, traffic
     /// lights and window frame stay where they were on Home.
