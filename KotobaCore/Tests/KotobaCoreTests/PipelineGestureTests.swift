@@ -80,6 +80,31 @@ struct PipelineGestureTests {
         #expect(await world.audio.isCapturing == false)
     }
 
+    /// The release's own time is under the threshold, but the pipeline handled it after the threshold had announced
+    /// the press (a busy moment): the start cue played and the pill showed, so the release ends it as push to talk,
+    /// with the stop cue and a paste. It is no dropped tap, so the next push-to-talk press makes no double tap.
+    @Test func aPushToTalkReleaseHandledAfterTheAnnouncementStopsAndPastes() async {
+        let world = FakeWorld(transcript: "announced")
+        let pipeline = world.makePipeline()
+        let pressedAt = world.clock.now
+
+        await pipeline.handle(.chordDown(.hold), at: pressedAt)
+        world.clock.advance(by: .milliseconds(400))
+        await pipeline.settle()
+        #expect(await pipeline.state.phase == .recording(isLong: false, isPushToTalk: true))
+        await pipeline.handle(.chordUp, at: pressedAt + .milliseconds(300))
+        await pipeline.settle()
+
+        #expect(await world.paster.pasted == ["announced"])
+        #expect(await world.audio.discarded.isEmpty)
+        #expect(await world.audio.isCapturing == false)
+        world.clock.advance(by: .milliseconds(50))
+        await pipeline.handle(.chordDown(.hold))
+        world.clock.advance(by: .milliseconds(400))
+        await pipeline.settle()
+        #expect(await pipeline.state.phase == .recording(isLong: false, isPushToTalk: true))
+    }
+
     @Test func aShortPushToTalkPressIsDroppedWithNoCue() async {
         let world = FakeWorld(transcript: "never")
         let pipeline = world.makePipeline()

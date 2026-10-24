@@ -54,6 +54,10 @@ extension DictationPipeline {
             break
         case (.tapOrHold, false), (.hold, false):
             stop(current, at: now)
+        case (.hold, true) where current.isAnnounced:
+            // A release handled after the threshold announced the press: the cue played and the pill showed, so the
+            // release stops it as push to talk. It is no dropped tap and starts no double tap.
+            stop(current, at: now)
         case (.hold, true):
             // Too short for push to talk: dropped as a shortcut press is, with no cue and nothing kept. A push-to-talk
             // press soon after it makes a double tap.
