@@ -5,6 +5,9 @@ import Testing
 /// The paste waits for the chord's release, but not for ever: a lost release (Secure Input took the keyboard) holds
 /// it only for `Settings.chordReleaseWait`.
 struct PipelineChordReleaseTests {
+    /// The test moves the clock only once the bound's timer is armed (`ManualClock.waitForTimer`): until then the
+    /// paste waits for it, so no paste before it is a fact, not a guess after some yields. An advance before the
+    /// timer was armed put its deadline later, and the paste missed the bound on a busy machine.
     @Test func aReleaseThatNeverComesHoldsThePasteOnlyForTheBound() async {
         let world = FakeWorld(transcript: "stuck")
         let pipeline = world.makePipeline()
@@ -12,16 +15,17 @@ struct PipelineChordReleaseTests {
         world.clock.advance(by: .seconds(1))
 
         // The stop tap's release is lost.
+        let stop = world.clock.now
         await pipeline.handle(.chordDown(.tapOrHold))
-        let pastedAtOnce = await eventually { await world.paster.pasteCount > 0 }
+        await world.clock.waitForTimer(at: stop + .seconds(2))
+        let pastedAtOnce = await world.paster.pasteCount
         world.clock.advance(by: .milliseconds(1_900))
-        let pastedBeforeTheBound = await eventually { await world.paster.pasteCount > 0 }
+        let pastedBeforeTheBound = await world.paster.pasteCount
         world.clock.advance(by: .milliseconds(100))
-        let pastedAtTheBound = await eventually { await world.paster.pasteCount > 0 }
+        await pipeline.settle()
 
-        #expect(pastedAtOnce == false)
-        #expect(pastedBeforeTheBound == false)
-        #expect(pastedAtTheBound)
+        #expect(pastedAtOnce == 0)
+        #expect(pastedBeforeTheBound == 0)
         #expect(await world.paster.pasted == ["stuck"])
     }
 

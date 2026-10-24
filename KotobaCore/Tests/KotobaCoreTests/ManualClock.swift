@@ -17,6 +17,8 @@ final class ManualClock: PipelineClock {
         var sleepers: [Sleeper] = []
         /// Sleeps cancelled before they registered.
         var cancelled: Set<UUID> = []
+        /// Tests that wait for a timer with this deadline (`waitForTimer`).
+        var timerGates: [ContinuousClock.Instant: Gate] = [:]
     }
 
     private let state = Mutex(State())
@@ -33,13 +35,16 @@ final class ManualClock: PipelineClock {
         let id = UUID()
         try await withTaskCancellationHandler {
             try await withCheckedThrowingContinuation { continuation in
-                let resumeNow = state.withLock { state in
-                    guard deadline > state.now, !state.cancelled.contains(id) else { return true }
+                let (resumeNow, gate) = state.withLock { state -> (Bool, Gate?) in
+                    guard deadline > state.now, !state.cancelled.contains(id) else { return (true, nil) }
                     state.sleepers.append(Sleeper(id: id, deadline: deadline, continuation: continuation))
-                    return false
+                    return (false, state.timerGates.removeValue(forKey: deadline))
                 }
                 if resumeNow {
                     continuation.resume()
+                }
+                if let gate {
+                    Task { await gate.open() }
                 }
             }
         } onCancel: {
@@ -53,6 +58,19 @@ final class ManualClock: PipelineClock {
             sleeper?.continuation.resume(throwing: CancellationError())
         }
         try Task.checkCancellation()
+    }
+
+    /// Returns once a timer sleeps until `deadline`: the event that the code under test armed it, so a test advances
+    /// the clock only after the timer's deadline is fixed. A timer never armed fails the test after `Gate`'s bound.
+    func waitForTimer(at deadline: ContinuousClock.Instant) async {
+        let gate = state.withLock { state -> Gate? in
+            guard !state.sleepers.contains(where: { $0.deadline == deadline }) else { return nil }
+            if let gate = state.timerGates[deadline] { return gate }
+            let gate = Gate()
+            state.timerGates[deadline] = gate
+            return gate
+        }
+        await gate?.pass()
     }
 
     /// The deadlines of the timers waiting on this clock.
