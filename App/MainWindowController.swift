@@ -169,8 +169,9 @@ final class MainWindowController {
                 let dictionary = self?.dictionaryStore
                 async let learned = dictionary?.learnedWords() ?? [:]
                 async let month = history.usage(from: ActivityModel.monthStart(at: now), to: .distantFuture)
+                // No all-time top apps: Activity shows this month's (`UsageSummary.apps`).
                 return .init(
-                    insights: try await history.insights(at: now, in: .current), learned: try await learned,
+                    insights: try await history.insights(at: now, in: .current, apps: 0), learned: try await learned,
                     month: try await month)
             }
             self.activity = activity

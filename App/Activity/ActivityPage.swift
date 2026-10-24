@@ -27,7 +27,7 @@ struct ActivityPage: View {
                 } else {
                     chart(figures.insights)
                     highlights(figures)
-                    topApps(figures.insights)
+                    topApps(figures.month)
                     month(figures.month)
                 }
             }
@@ -96,11 +96,12 @@ struct ActivityPage: View {
         }
     }
 
-    /// Every dictation's words by app, most first: the app icons in the page's one icon column, as Home's.
-    @ViewBuilder private func topApps(_ insights: DictationInsights) -> some View {
-        if !insights.apps.isEmpty {
-            Section("Top Apps") {
-                ForEach(insights.apps, id: \.app.bundleID) { row in
+    /// This month's words by app, most first, beside "This Month" (chief of staff, 2026-10-25): the app icons in the
+    /// page's one icon column, as Home's.
+    @ViewBuilder private func topApps(_ month: UsageSummary) -> some View {
+        if !month.apps.isEmpty {
+            Section("Top Apps This Month") {
+                ForEach(month.apps, id: \.app.bundleID) { row in
                     PageRow(title: model.apps.name(of: row.app) ?? "Unknown app", subtitle: nil) {
                         AppIconView(icon: model.apps.icon(of: row.app))
                     } trailing: {
@@ -117,7 +118,7 @@ struct ActivityPage: View {
         Section {
             // The facts stay on screen in the row (copy rules), not in a footer beside the button.
             PageRow(title: "Spend", subtitle: Self.spendDetail(month)) {
-                Text(DollarAmounts(month).total)
+                Text(Self.cents(month.cost))
                     .monospacedDigit()
                     .foregroundStyle(.secondary)
             }
@@ -134,6 +135,14 @@ struct ActivityPage: View {
                 }
             }
         }
+    }
+
+    /// The page's spend in cents, as a bill shows it (chief of staff, 2026-10-25); "Less than $0.01" for a spend that
+    /// rounds to nothing. The Advanced… sheet has the exact amounts.
+    private static func cents(_ amount: Decimal) -> String {
+        let cent = Decimal(sign: .plus, exponent: -2, significand: 1)
+        let format = Decimal.FormatStyle.Currency(code: "USD").precision(.fractionLength(2))
+        return amount > 0 && amount < cent ? "Less than \(cent.formatted(format))" : amount.formatted(format)
     }
 
     /// What the spend is, that it outlives deleted dictations (review-window.md T10), and what it leaves out or

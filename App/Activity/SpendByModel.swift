@@ -5,7 +5,8 @@ import KotobaStorage
 import SwiftUI
 
 /// This month's spend by model, in Activity's "Advanced…" sheet (docs/research/ui-redesign.md, "Advanced controls"):
-/// what each speech, cleanup and polish model billed, rounded so the rows add up to the page's total.
+/// what each speech, cleanup and polish model billed, to the fraction of a cent, rounded so the rows add up to the total
+/// under them (the page shows the total in cents).
 struct SpendByModel: View {
     let month: UsageSummary
 
@@ -19,6 +20,10 @@ struct SpendByModel: View {
                             .monospacedDigit()
                             .foregroundStyle(.secondary)
                     }
+                }
+                LabeledContent("Total") {
+                    Text(amounts.total)
+                        .monospacedDigit()
                 }
             } header: {
                 Text("This Month by Model")

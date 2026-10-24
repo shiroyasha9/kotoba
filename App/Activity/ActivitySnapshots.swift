@@ -85,6 +85,11 @@ extension ActivityModel {
                     .speech, model: TranscriptionRoute.xaiGrok.rawValue, cost: Decimal(1_044) / 100_000,
                     isEstimated: true),
             ],
-            apps: [])
+            apps: [
+                .init(app: DictationApp(bundleID: "com.apple.Terminal", name: "Terminal"), words: 9_120),
+                .init(app: DictationApp(bundleID: "com.apple.mail", name: "Mail"), words: 4_388),
+                .init(app: DictationApp(bundleID: "com.apple.Notes", name: "Notes"), words: 3_016),
+                .init(app: DictationApp(bundleID: "com.apple.TextEdit", name: "TextEdit"), words: 2_210),
+            ])
     }
 }
