@@ -36,22 +36,40 @@ extension PillPrototypeView {
         ("added-word", .message(.init(text: StatusText.learned("Kubernetes"), button: "Undo"))),
     ]
 
-    /// Each look at the bottom, and at a side edge where it stands vertical there. The run fails on cut-off words, on
-    /// a VoiceOver problem, and on any animation at idle.
+    /// Each look at the bottom, and at a side edge where it stands vertical there, on its glass over the fixed desktop
+    /// (the pill floats over other apps). The run fails on cut-off words, on a VoiceOver problem, and on any animation
+    /// at idle.
     static func snapshots() -> [Snapshot] {
         samples.flatMap { sample in
             let sides = sample.look.canStandVertical ? [false, true] : [false]
             return sides.map { isAtSideEdge in
-                Snapshot(name: "pill-proto-\(sample.name)-\(isAtSideEdge ? "left" : "bottomCenter")") {
-                    PillPrototypeStandIn(look: sample.look, isAtSideEdge: isAtSideEdge)
+                var snapshot = Snapshot(name: "pill-proto-\(sample.name)-\(isAtSideEdge ? "left" : "bottomCenter")") {
+                    sampled(sample.look, isAtSideEdge: isAtSideEdge)
                 } check: { view in
-                    guard let pill = (view as? PillPrototypeStandIn)?.pill else { return nil }
+                    guard let pill = view as? PillPrototypeView else { return nil }
                     if pill.isTextTruncated { return "the pill text in \(sample.name) is cut off" }
                     if pill.isOverflowing { return "the content of \(sample.name) is longer than its capsule" }
                     return accessibilityProblem(of: pill) ?? (sample.look == .idle ? idleCostProblem() : nil)
                 }
+                snapshot.floatsOverDesktop = true
+                return snapshot
             }
         }
+    }
+
+    /// The pill showing `look` at its own size, after a few level events, so the bars show the mirrored ripple, not
+    /// one flat step.
+    private static func sampled(_ look: PillLook, isAtSideEdge: Bool) -> PillPrototypeView {
+        let pill = PillPrototypeView()
+        pill.hoverKeys = sampleKeys
+        pill.isAtSideEdge = isAtSideEdge
+        pill.look = look
+        let isSilent = if case .recording(let recording) = look { recording.isSilent } else { false }
+        for level in [0.3, 0.9, 0.5, 0.8] where look != .processing {
+            pill.level = isSilent ? 0 : level
+        }
+        pill.setFrameSize(pill.shapeSize)
+        return pill
     }
 
     /// What VoiceOver gets, or nil when it is right: the pill's label, and each button the look shows as a child that a
@@ -102,43 +120,5 @@ extension PillLook {
                 + (recording.isHandsFree ? ["Stop"] : [])
         case .message(let message): message.button.map { [$0] } ?? []
         }
-    }
-}
-
-/// The prototype pill over a capsule in the window colour, since its glass does not render offscreen
-/// (as `PillStandIn`). It goes when snapshots capture real glass.
-private final class PillPrototypeStandIn: NSView {
-    let pill = PillPrototypeView(usesGlass: false)
-
-    init(look: PillLook, isAtSideEdge: Bool) {
-        pill.hoverKeys = PillPrototypeView.sampleKeys
-        pill.isAtSideEdge = isAtSideEdge
-        pill.look = look
-        // A few level events, so the bars show the mirrored ripple, not one flat step.
-        for level in [0.3, 0.9, 0.5, 0.8] where !(look == .processing) {
-            pill.level = Self.isSilent(look) ? 0 : level
-        }
-        super.init(frame: NSRect(origin: .zero, size: pill.shapeSize))
-        pill.frame = bounds
-        addSubview(pill)
-    }
-
-    @available(*, unavailable)
-    required init?(coder: NSCoder) {
-        fatalError("PillPrototypeStandIn is built in code")
-    }
-
-    private static func isSilent(_ look: PillLook) -> Bool {
-        if case .recording(let recording) = look { return recording.isSilent }
-        return false
-    }
-
-    override func draw(_ dirtyRect: NSRect) {
-        let radius = min(bounds.width, bounds.height) / 2
-        let capsule = NSBezierPath(roundedRect: bounds.insetBy(dx: 0.5, dy: 0.5), xRadius: radius, yRadius: radius)
-        NSColor.controlBackgroundColor.setFill()
-        capsule.fill()
-        NSColor.separatorColor.setStroke()
-        capsule.stroke()
     }
 }

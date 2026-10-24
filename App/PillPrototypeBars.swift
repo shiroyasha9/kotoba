@@ -117,7 +117,8 @@ final class PillBars: NSView {
         let start = CACurrentMediaTime() + 0.25
         for (index, bar) in bars.enumerated() {
             let fade = CABasicAnimation(keyPath: "opacity")
-            fade.fromValue = 0.35
+            // Dimmer between pulses, but still a clear row of dots on light and dark glass.
+            fade.fromValue = 0.6
             fade.toValue = 1
             var parts: [CAAnimation] = [fade]
             if !reducesMotion {

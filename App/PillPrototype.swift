@@ -31,10 +31,6 @@ final class PillPrototypeView: NSView {
     var onAction: ((Action) -> Void)?
 
     private let glass = NSGlassEffectView()
-    /// What the content sits in: the glass, or a plain view for a snapshot stand-in. `cacheDisplay` draws no glass and
-    /// draws a symbol button's glyph white on a white fill inside it; ScreenCaptureKit draws both right (tried
-    /// 2026-10-24).
-    private let surface: NSView
     private let stack = NSStackView()
     private let bars = PillBars()
     private let wand = PillPrototypeView.symbolView("wand.and.sparkles", color: .labelColor)
@@ -48,9 +44,7 @@ final class PillPrototypeView: NSView {
         rootView: PillFillButton(face: .symbol("stop.fill", label: "Stop"), isProminent: true))
     private let button = PillFillButtonHost(rootView: PillFillButton())
 
-    /// `usesGlass` false: the content on a plain view, for a stand-in that draws its own capsule.
-    init(frame: NSRect = .zero, usesGlass: Bool = true) {
-        surface = usesGlass ? glass : NSView()
+    override init(frame: NSRect = .zero) {
         super.init(frame: frame)
         label.font = .preferredFont(forTextStyle: .body)
         label.textColor = .labelColor
@@ -80,13 +74,8 @@ final class PillPrototypeView: NSView {
             stack.topAnchor.constraint(equalTo: container.topAnchor),
             stack.bottomAnchor.constraint(equalTo: container.bottomAnchor),
         ])
-        if usesGlass {
-            glass.contentView = container
-        } else {
-            container.autoresizingMask = [.width, .height]
-            surface.addSubview(container)
-        }
-        addSubview(surface)
+        glass.contentView = container
+        addSubview(glass)
         addTrackingArea(
             NSTrackingArea(rect: .zero, options: [.mouseEnteredAndExited, .activeAlways, .inVisibleRect], owner: self))
         apply(from: look)
@@ -141,7 +130,7 @@ final class PillPrototypeView: NSView {
 
     private func placeGlass() {
         let size = shapeSize
-        surface.frame = NSRect(
+        glass.frame = NSRect(
             x: (bounds.width - size.width) / 2, y: (bounds.height - size.height) / 2, width: size.width,
             height: size.height)
         glass.cornerRadius = min(size.width, size.height) / 2
@@ -300,7 +289,7 @@ final class PillPrototypeView: NSView {
     /// The content is longer than the capsule, so an end item sits outside it. Valid after layout.
     var isOverflowing: Bool {
         isVertical
-            ? stack.frame.height > surface.bounds.height + 0.5 : stack.frame.width > surface.bounds.width + 0.5
+            ? stack.frame.height > glass.bounds.height + 0.5 : stack.frame.width > glass.bounds.width + 0.5
     }
 
     /// The words end in "…" because the pill is at its longest. Valid after layout.
