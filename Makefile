@@ -12,7 +12,7 @@ SWIFT_SRC   := App KotobaCore/Sources KotobaCore/Tests KotobaCore/Package.swift 
                KotobaStorage/Sources KotobaStorage/Tests KotobaStorage/Package.swift
 SWIFTFORMAT := xcrun swift-format
 
-.PHONY: gen build build-check test lint lint-files format format-lint privacy check view-checks snapshots readme-images memory window-memory latency latency-log stop-probe \
+.PHONY: gen build build-check test lint lint-files format format-lint privacy check view-checks snapshots readme-images prototype memory window-memory latency latency-log stop-probe \
 	release dmg appcast
 
 gen:
@@ -82,10 +82,15 @@ readme-images: build-check
 
 # The main window's memory, offscreen, with sample data (App/Settings/SettingsSnapshots.swift `measureWindowMemory`):
 # footprint at launch, with every pane shown and after close. Run with the environment the app gets from Launch Services
-# (`LSEnvironment` in project.yml), which a binary started from the shell does not get.
+# (`LSEnvironment` in project.yml), which a binary started from the shell does not get. PROTOTYPE=1 measures the 0.5.0
+# window prototype (App/WindowPrototype.swift) instead.
 LS_ENVIRONMENT = $(shell /usr/libexec/PlistBuddy -c 'Print :LSEnvironment' App/Info.plist 2>/dev/null | awk '/=/ { print $$1 "=" $$3 }')
 window-memory: build-check
-	env $(LS_ENVIRONMENT) $(call DEBUG_APP,$(CHECK_DERIVED))/Contents/MacOS/kotoba --window-memory
+	env $(LS_ENVIRONMENT) $(call DEBUG_APP,$(CHECK_DERIVED))/Contents/MacOS/kotoba --window-memory $(if $(PROTOTYPE),--prototype)
+
+# The 0.5.0 window prototype on screen with real glass (App/WindowPrototype.swift), beside a running kotoba Dev.
+prototype: build-check
+	open -n $(call DEBUG_APP,$(CHECK_DERIVED)) --args --prototype
 
 # System checks (docs/spec.md, "Testing Decisions"): run by hand against the running app, not part of `check`.
 memory:

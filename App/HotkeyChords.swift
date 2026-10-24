@@ -185,6 +185,15 @@ extension Chord {
         }
     }
 
+    /// The chord as keycaps, one per key or button: ["⌃", "⌥", "⌘"], ["⌥", "Space"], ["right ⌥"].
+    var keycaps: [String] {
+        switch trigger {
+        case .key(let keyCode): modifierParts + [Self.keyName(keyCode)]
+        case .mouseButton(let button): modifierParts + [Self.buttonName(button)]
+        case nil: modifierParts
+        }
+    }
+
     /// As macOS counts mouse buttons, from 1: number 3 is "Mouse Button 4".
     private static func buttonName(_ button: Int) -> String {
         button == middleMouseButton ? "Middle Mouse Button" : "Mouse Button \(button + 1)"

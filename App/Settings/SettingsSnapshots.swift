@@ -188,6 +188,10 @@ extension Pane {
     /// Activity Monitor shows), so a change to the window or to the allocator reports what stays after close.
     /// Offscreen, as the snapshots: glass draws nothing, so the numbers are a floor for the window on screen.
     static func measureWindowMemory() -> Never {
+        // `make window-memory PROTOTYPE=1`.
+        if CommandLine.arguments.contains("--prototype") {
+            WindowPrototype.measureWindowMemory()
+        }
         reportFootprint(at: "launch")
         for cycle in 1...3 {
             autoreleasepool {
@@ -213,7 +217,7 @@ extension Pane {
         exit(0)
     }
 
-    private static func reportFootprint(at step: String) {
+    static func reportFootprint(at step: String) {
         var info = task_vm_info_data_t()
         var count = mach_msg_type_number_t(MemoryLayout<task_vm_info_data_t>.size / MemoryLayout<integer_t>.size)
         let status = withUnsafeMutablePointer(to: &info) {
