@@ -2,12 +2,15 @@ import Foundation
 
 /// What a click on Test Microphone started, or why it started nothing.
 public enum MicrophoneTest: Sendable {
-    public enum Problem: Sendable {
+    public enum Problem: Sendable, Equatable {
         case notAllowed
         /// A dictation records; the test would take its mic.
         case dictating
         /// No mic opened, or it did not start (logged).
         case noInput
+        /// The only mic is a Bluetooth mic outside the list, which the switch keeps out (as a press,
+        /// `AudioCapture.CaptureError.bluetoothNotListed`). Its name.
+        case bluetoothNotListed(String)
     }
 
     /// The input level 0...1, about ten times a second, until the test ends.
@@ -28,6 +31,7 @@ extension AudioCapture {
             _ = try startCapture(into: file, levels: continuation)
         } catch {
             Log.audio.error("The mic test did not start: \(error)")
+            if case CaptureError.bluetoothNotListed(let name) = error { return .blocked(.bluetoothNotListed(name)) }
             return .blocked(.noInput)
         }
         Log.audio.notice("The mic test started on \(self.currentInput?.name ?? "no mic", privacy: .public)")

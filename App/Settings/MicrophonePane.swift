@@ -35,7 +35,7 @@ private struct MicrophonePane: View {
             Section {
                 EditableList(
                     rows: model.listed,
-                    emptyText: "No mics in the list. kotoba uses the input chosen in System Settings.",
+                    emptyText: emptyText,
                     addTitle: "Add to List",
                     addHelp: model.others.isEmpty ? "No other mics are connected" : "Add a connected mic to the list",
                     isAddDisabled: model.others.isEmpty, removeTitle: "Remove from List", remove: model.remove,
@@ -103,6 +103,12 @@ private struct MicrophonePane: View {
         .onDisappear(perform: model.disappear)
     }
 
+    /// What an empty list means: the switch keeps a Bluetooth input chosen in System Settings out.
+    private var emptyText: String {
+        let rule = "No mics in the list. kotoba uses the input chosen in System Settings"
+        return model.isBluetoothOnlyWhenListed ? rule + ", or another mic when that input is Bluetooth." : rule + "."
+    }
+
     /// "In use", "Not connected" and the Bluetooth note, the ones that apply.
     private func status(of row: MicrophoneModel.Row) -> String {
         var parts: [String] = []
@@ -136,6 +142,8 @@ private struct TestProblemRow: View {
             StatusLine("A dictation is recording. Test again when it ends.", .problem)
         case .noInput:
             StatusLine("Couldn’t open the microphone. Check that it’s connected, then test again.", .problem)
+        case .bluetoothNotListed(let name):
+            StatusLine("Not in the list: \(name). Add it with +, then test again.", .problem)
         }
     }
 }
@@ -150,6 +158,9 @@ extension Pane {
             MainWindow.snapshot(
                 of: .microphones(.testing(source, problem: .notAllowed)),
                 named: "settings-microphone-test-not-allowed"),
+            MainWindow.snapshot(
+                of: .microphones(.testing(source, problem: .bluetoothNotListed("Alex’s AirPods Pro"))),
+                named: "settings-microphone-test-bluetooth-not-listed"),
             MainWindow.snapshot(
                 of: .microphones(MicrophoneModel(source: .sample(order: [])) {}), named: "settings-microphone-empty"),
             MainWindow.snapshot(

@@ -12,10 +12,16 @@ final class MicrophonePreferences: Sendable {
         var id: String { uid }
     }
 
+    /// Posted in this process after each change of the order, so an open Microphone page shows a menu pick.
+    static let didChange = Notification.Name("MicrophonePreferences.didChange")
+
     /// Empty when none is saved, or the saved order cannot be read.
     var entries: [Entry] {
         get { AppDefaults.decoded(at: .microphoneOrder, or: []) }
-        set { AppDefaults.encode(newValue, at: .microphoneOrder) }
+        set {
+            AppDefaults.encode(newValue, at: .microphoneOrder)
+            NotificationCenter.default.post(name: Self.didChange, object: nil)
+        }
     }
 
     var order: [String] { entries.map(\.uid) }

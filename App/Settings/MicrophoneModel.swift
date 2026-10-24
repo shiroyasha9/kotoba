@@ -30,8 +30,8 @@ final class MicrophoneModel {
         var current: @MainActor () -> String?
         /// What the menu also warns about the mic in use (a Bluetooth mic).
         var warning: @MainActor () -> MicrophoneWarning? = { nil }
-        /// Calls its argument on each device change and each change of the mic in use, until the returned value is
-        /// released. Nil: nothing to observe (snapshots).
+        /// Calls its argument on each device change, each change of the mic in use and each saved order (a menu pick),
+        /// until the returned value is released. Nil: nothing to observe (snapshots).
         var observe: @MainActor (@escaping @MainActor @Sendable () -> Void) -> AnyObject? = { _ in nil }
         /// Starts the mic test, or says why it did not start.
         var test: @MainActor () async -> MicrophoneTest = { .blocked(.noInput) }
@@ -54,9 +54,11 @@ final class MicrophoneModel {
                 observe: { onChange in
                     LiveObservation(
                         devices: AudioDevices.observe { _ in MainActor.assumeIsolated(onChange) },
-                        input: NotificationCenter.default.addObserver(
-                            forName: AudioCapture.inputDidChange, object: nil, queue: .main
-                        ) { _ in MainActor.assumeIsolated(onChange) })
+                        notifications: [AudioCapture.inputDidChange, MicrophonePreferences.didChange].map { name in
+                            NotificationCenter.default.addObserver(forName: name, object: nil, queue: .main) { _ in
+                                MainActor.assumeIsolated(onChange)
+                            }
+                        })
                 },
                 test: { await audio.test(for: .seconds(MicrophoneModel.testSeconds)) },
                 openPrivacy: { readiness.openSettings(.microphone) }
@@ -82,18 +84,21 @@ final class MicrophoneModel {
         }
     }
 
-    /// The device listeners and the mic-in-use observer of the open pane; both end when this is released.
+    /// The device listeners, and the observers of the mic in use and of the saved order (a menu pick), of the open
+    /// page; all end when this is released.
     private final class LiveObservation {
         let devices: AudioDeviceObservation
-        let input: any NSObjectProtocol
+        let notifications: [any NSObjectProtocol]
 
-        init(devices: AudioDeviceObservation, input: any NSObjectProtocol) {
+        init(devices: AudioDeviceObservation, notifications: [any NSObjectProtocol]) {
             self.devices = devices
-            self.input = input
+            self.notifications = notifications
         }
 
         deinit {
-            NotificationCenter.default.removeObserver(input)
+            for observer in notifications {
+                NotificationCenter.default.removeObserver(observer)
+            }
         }
     }
 

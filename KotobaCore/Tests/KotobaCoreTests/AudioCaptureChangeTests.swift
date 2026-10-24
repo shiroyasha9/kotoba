@@ -90,6 +90,18 @@ struct AudioCaptureChangeTests {
 
     // MARK: Mic test
 
+    @Test func theMicTestNamesABluetoothMicTheSwitchKeepsOut() async {
+        let hardware = FakeCaptureHardware(
+            devices: [FakeCaptureHardware.airPods], defaultInput: FakeCaptureHardware.airPods)
+        let capture = AudioCapture(hardware: hardware)
+        await capture.prepare()
+
+        guard case .blocked(.bluetoothNotListed("AirPods Pro")) = await capture.beginTest(for: .seconds(5)) else {
+            Issue.record("The mic test did not name the Bluetooth mic")
+            return
+        }
+    }
+
     @Test func aDictationEndsTheMicTestAndRecordsOnTheSameMic() async throws {
         let hardware = FakeCaptureHardware()
         let capture = AudioCapture(hardware: hardware, clock: ManualClock())

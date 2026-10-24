@@ -5,7 +5,7 @@ import SwiftUI
 
 extension ChordRecorder {
     /// The recorder at rest, off, with the fn hint, listening, after a refused chord, and for Paste Last, Copy Last and
-    /// Polish Last, in a grouped form as in General.
+    /// Rewrite Last, in a grouped form as on the Shortcuts page.
     @MainActor
     static func snapshots() -> [Snapshot] {
         let chords = HotkeyChords(defaults: nil)

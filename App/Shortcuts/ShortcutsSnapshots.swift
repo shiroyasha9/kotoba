@@ -12,7 +12,7 @@ extension Pane {
             MainWindow.snapshot(
                 of: .shortcuts(.sample(chords: HotkeyChords(defaults: nil, pushToTalk: Chord(modifiers: .option)))),
                 named: "settings-shortcuts-push-to-talk", height: 1_000),
-            // Cleanup off: the model picker is off with it.
+            // Cleanup off: its recorder says Off and offers Reset.
             MainWindow.snapshot(
                 of: .shortcuts(.sample(chords: HotkeyChords(defaults: nil, cleanup: nil))),
                 named: "settings-shortcuts-cleanup-off", height: 1_000),

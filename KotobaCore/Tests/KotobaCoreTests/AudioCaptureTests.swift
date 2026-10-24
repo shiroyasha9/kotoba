@@ -127,6 +127,41 @@ struct AudioCaptureTests {
         #expect(hardware.recorders.count == 1)
     }
 
+    /// The owner's case (plan, "Microphone"): the listed USB mic is unplugged mid-dictation and macOS moves the default
+    /// to the AirPods. The built-in mic takes over; the AirPods, not in the list, never open.
+    @Test func anUnpluggedMicNeverGivesWayToAnUnlistedBluetoothDefault() async throws {
+        let hardware = FakeCaptureHardware(
+            devices: [FakeCaptureHardware.usb, FakeCaptureHardware.airPods, FakeCaptureHardware.builtIn],
+            defaultInput: FakeCaptureHardware.usb)
+        hardware.setOrder(["usb"])
+        let capture = AudioCapture(hardware: hardware)
+        await capture.prepare()
+        _ = try await capture.beginCapture(into: Self.file)
+
+        hardware.disconnect(FakeCaptureHardware.usb)
+
+        #expect(await eventually { hardware.running?.device == FakeCaptureHardware.builtIn })
+        #expect(hardware.defaultInput() == FakeCaptureHardware.airPods)
+        #expect(!hardware.opened.contains("airpods"))
+    }
+
+    /// The same unplug with no other mic but the AirPods: the dictation hears the loss, and the AirPods never open.
+    @Test func anUnpluggedMicWithOnlyAnUnlistedBluetoothMicLeftIsALoss() async throws {
+        let hardware = FakeCaptureHardware(
+            devices: [FakeCaptureHardware.usb, FakeCaptureHardware.airPods], defaultInput: FakeCaptureHardware.usb)
+        hardware.setOrder(["usb"])
+        let capture = AudioCapture(hardware: hardware)
+        await capture.prepare()
+        let events = try await capture.beginCapture(into: Self.file)
+
+        hardware.disconnect(FakeCaptureHardware.usb)
+
+        #expect(await eventually { capture.inputInUse == nil })
+        _ = await capture.endCapture()
+        #expect(await finished(events) == [.inputLost])
+        #expect(hardware.opened == ["usb"])
+    }
+
     @Test func aMicLostWithNoOtherIsReportedOnceUntilANewMicOpens() async throws {
         let hardware = FakeCaptureHardware()
         let capture = AudioCapture(hardware: hardware)
