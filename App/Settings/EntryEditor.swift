@@ -1,18 +1,17 @@
-// 0.5.0 ratchet: the Dictionary page's rollout puts this file on the page system and removes the next line.
-// swiftlint:disable ui_layout_literal page_form
 import KotobaCore
 import SwiftUI
 
-/// The sheet that adds or edits one Dictionary entry: a word, or a word and its replacement.
+/// The sheet that adds or edits one Dictionary entry: a word, or a word and its replacement. A save that fails (an empty
+/// or duplicate word) says why in the form and keeps the sheet open.
 struct EntryEditor: View {
     @State var draft: EntryDraft
     let isNew: Bool
     let onSave: (EntryDraft) throws(DictionaryError) -> Void
     @State private var error: DictionaryError?
-    @Environment(\.dismiss) private var dismiss
 
     var body: some View {
-        Form {
+        let title = isNew ? "Add Word" : "Edit Word"
+        PageSheet(title: title, confirm: .init(title: isNew ? "Add" : "Save", action: save)) {
             Section {
                 TextField("Word", text: $draft.word, prompt: Text("PyTorch"))
                 Toggle("Replace it with", isOn: $draft.isReplacing.animation())
@@ -25,27 +24,19 @@ struct EntryEditor: View {
                     Text(message(for: error)).foregroundStyle(.red)
                 }
             } header: {
-                Text(isNew ? "Add Word" : "Edit Word").font(.headline)
-            }
-        }
-        .formStyle(.grouped)
-        .frame(width: 380)
-        .toolbar {
-            ToolbarItem(placement: .cancellationAction) {
-                Button("Cancel") { dismiss() }
-            }
-            ToolbarItem(placement: .confirmationAction) {
-                Button(isNew ? "Add" : "Save") { save() }
+                // A sheet shows no window title, so its first header names it, as Activity's "Advanced…".
+                Text(title)
             }
         }
     }
 
-    private func save() {
+    private func save() -> Bool {
         do {
             try onSave(draft)
-            dismiss()
+            return true
         } catch {
             self.error = error
+            return false
         }
     }
 

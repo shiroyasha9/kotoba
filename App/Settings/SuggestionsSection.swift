@@ -38,8 +38,8 @@ struct LearnFromEditsToggle: View {
     private var isLearningFromEdits = AppDefaults.isLearningFromEdits
 
     var body: some View {
-        SwitchRow(
-            "Learn from my edits",
+        PageToggle(
+            title: "Learn from my edits",
             subtitle: "When you fix a word after kotoba pastes it, the word goes into your dictionary.",
             isOn: $isLearningFromEdits)
     }

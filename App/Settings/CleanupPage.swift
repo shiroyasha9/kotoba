@@ -54,8 +54,8 @@ private struct CleanupPage: View {
             CleanupSample(
                 before: ("You say", sample.spoken), after: ("kotoba pastes", sample.cleaned))
             ForEach(AppMode.allCases, id: \.self) { mode in
-                SwitchRow(
-                    "Every dictation in \(mode.title.lowercased()) apps", subtitle: mode.apps,
+                PageToggle(
+                    title: "Every dictation in \(mode.title.lowercased()) apps", subtitle: mode.apps,
                     isOn: cleansEveryDictation(mode))
             }
             shortcutRow(.cleanup, subtitle: "Cleans up one dictation in any app.")
@@ -130,7 +130,7 @@ private struct CleanupPage: View {
             if let chord = model.chords.chord(role) {
                 Keycaps(keys: chord.keycaps)
             } else {
-                Button("Set Shortcut…") { openPane(.general) }
+                Button("Set Shortcut…") { openPane(.shortcuts) }
             }
         }
     }
@@ -212,10 +212,8 @@ extension Pane {
                 of: .modes(ModesModel(source: .sample(rules: ModeRules()), chords: HotkeyChords(defaults: nil))),
                 named: "settings-modes-empty", height: 1_400),
             MainWindow.snapshot(of: .modes(noKeyModel), named: "settings-modes-no-key", height: 1_600),
-            Snapshot(name: "settings-modes-advanced") {
-                NSHostingView(
-                    rootView: CleanupAdvanced(model: ModesModel(source: .sample(), chords: HotkeyChords(defaults: nil)))
-                )
+            settledSheet("settings-modes-advanced") {
+                CleanupAdvanced(model: ModesModel(source: .sample(), chords: HotkeyChords(defaults: nil)))
             },
         ]
     }

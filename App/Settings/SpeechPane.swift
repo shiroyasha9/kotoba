@@ -217,11 +217,11 @@ struct SpeechAdvanced: View {
             }
             if model.route.isGrok {
                 Section("Grok") {
-                    SwitchRow(
-                        "Format numbers and units", subtitle: "Writes “twenty dollars” as “$20”.",
+                    PageToggle(
+                        title: "Format numbers and units", subtitle: "Writes “twenty dollars” as “$20”.",
                         isOn: $model.isGrokFormatOn)
-                    SwitchRow(
-                        "Keep filler words", subtitle: "Pastes “um” and “uh” as you said them.",
+                    PageToggle(
+                        title: "Keep filler words", subtitle: "Pastes “um” and “uh” as you said them.",
                         isOn: $model.keepsGrokFillerWords)
                 }
             }
@@ -339,17 +339,15 @@ extension Pane {
                         route: .azureMAI, azureEndpoint: "", savedKeys: [.azure],
                         keyStatus: [.azure: .checked(.invalid)])),
                 named: "settings-speech-azure"),
-            Snapshot(name: "settings-speech-advanced") {
-                NSHostingView(
-                    rootView: SpeechAdvanced(
-                        model: .sample(route: .openRouterGrok, azureEndpoint: "", savedKeys: [.openRouter, .xai])))
+            settledSheet("settings-speech-advanced") {
+                SpeechAdvanced(
+                    model: .sample(route: .openRouterGrok, azureEndpoint: "", savedKeys: [.openRouter, .xai]))
             },
-            Snapshot(name: "settings-speech-advanced-azure") {
-                NSHostingView(
-                    rootView: SpeechAdvanced(
-                        model: .sample(
-                            route: .azureMAI, azureEndpoint: "https://example.cognitiveservices.azure.com/",
-                            savedKeys: [.openRouter, .azure])))
+            settledSheet("settings-speech-advanced-azure") {
+                SpeechAdvanced(
+                    model: .sample(
+                        route: .azureMAI, azureEndpoint: "https://example.cognitiveservices.azure.com/",
+                        savedKeys: [.openRouter, .azure]))
             },
             removeKeyAlert,
         ]

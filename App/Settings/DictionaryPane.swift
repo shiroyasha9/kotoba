@@ -5,9 +5,7 @@ import SwiftUI
 
 extension Pane {
     static func dictionary(_ model: DictionaryModel) -> Self {
-        Pane(id: .dictionary) {
-            AnyView(DictionaryPane(model: model))
-        }
+        Pane(id: .dictionary, badge: { model.suggestions.count }, content: { AnyView(DictionaryPane(model: model)) })
     }
 }
 
@@ -20,7 +18,6 @@ extension DictionaryModel.Row: Identifiable {
 private struct DictionaryPane: View {
     @Bindable var model: DictionaryModel
     @State private var search = ""
-    @Environment(\.findRequests) private var findRequests
     @Environment(\.addWordRequest) private var addWordRequest
     /// The sheet: nil row adds a new entry.
     @State private var editing: Editing?
@@ -65,9 +62,6 @@ private struct DictionaryPane: View {
 
     private var words: some View {
         Section {
-            if !model.rows.isEmpty {
-                PageSearchField(text: $search, prompt: "Search words", focusRequests: findRequests)
-            }
             EditableList(
                 rows: visibleRows, emptyText: emptyText, addTitle: "Add Word", addHelp: "Add a word or a replacement",
                 removeTitle: "Delete", remove: model.delete, add: add, edit: edit
@@ -84,7 +78,12 @@ private struct DictionaryPane: View {
                 }
             }
         } header: {
-            Text("Words")
+            // The field names the list ("Search words"), so the group needs no other header.
+            if model.rows.isEmpty {
+                Text("Words")
+            } else {
+                PageSearchField(text: $search, prompt: "Search words")
+            }
         } footer: {
             VStack(alignment: .leading) {
                 HStack(alignment: .firstTextBaseline) {
@@ -288,17 +287,14 @@ extension Pane {
             MainWindow.snapshot(
                 of: .dictionary(sampleModel(sample, suggestions: sampleSuggestions)),
                 named: "settings-dictionary-suggestions", height: 1_200),
-            Snapshot(name: "settings-dictionary-advanced") {
-                NSHostingView(rootView: DictionaryAdvanced(model: sampleOverCapModel))
-            },
+            settledSheet("settings-dictionary-advanced") { DictionaryAdvanced(model: sampleOverCapModel) },
             MainWindow.snapshot(
                 of: .dictionary(sampleModel(PersonalDictionary())), named: "settings-dictionary-empty"),
             importAlert(.preview(sample.importPreview(of: incoming), contents), named: "settings-dictionary-import"),
             importAlert(.notFound, named: "settings-dictionary-import-not-found"),
-            Snapshot(name: "settings-dictionary-editor") {
+            settledSheet("settings-dictionary-editor") {
                 let rule = ReplacementRule(find: "cloud code", replacement: "Claude Code")
-                let editor = EntryEditor(draft: EntryDraft(rule: rule), isNew: false) { _ throws(DictionaryError) in }
-                return NSHostingView(rootView: editor)
+                return EntryEditor(draft: EntryDraft(rule: rule), isNew: false) { _ throws(DictionaryError) in }
             },
         ]
     }
@@ -319,5 +315,12 @@ extension Pane {
             alert.layout()
             return alert.window.contentView ?? NSView()
         }
+    }
+
+    /// A sheet as it shows: it takes its content's height a run loop turn after its first layout.
+    static func settledSheet(_ name: String, _ view: @escaping @MainActor () -> some View) -> Snapshot {
+        var snapshot = Snapshot(name: name) { NSHostingView(rootView: view()) }
+        snapshot.settlesInWindow = true
+        return snapshot
     }
 }
