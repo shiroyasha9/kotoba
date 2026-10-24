@@ -56,7 +56,7 @@ struct SpendByModel: View {
         case .cleanup:
             CleanupModel(rawValue: spend.model)?.title ?? "Earlier cleanup model"
         case .speech:
-            TranscriptionRoute(rawValue: spend.model)?.menuTitle ?? "Earlier speech model"
+            TranscriptionRoute(rawValue: spend.model)?.title ?? "Earlier speech model"
         case .polish:
             PolishModel(rawValue: spend.model)?.title ?? "Earlier rewrite model"
         }

@@ -61,19 +61,15 @@ public enum TranscriptionRoute: String, CaseIterable, Sendable {
     case xaiGrok = "xai-direct/grok-stt"
     case azureMAI = "azure-direct/mai-transcribe-2"
 
-    /// The speech model's name in the menu and Settings.
+    /// The speech model's name wherever it shows (the Speech page, History's Transcribe Again With, Activity's spend).
+    /// The recommendation is the Speech page's subtitle, not part of the name.
     public var title: String {
         switch self {
-        case .openRouterMAI: "MAI-Transcribe-2 via OpenRouter (Recommended)"
+        case .openRouterMAI: "MAI-Transcribe-2 via OpenRouter"
         case .openRouterGrok: "Grok via OpenRouter"
         case .xaiGrok: "Grok via xAI"
         case .azureMAI: "MAI-Transcribe-2 via Azure"
         }
-    }
-
-    /// The title without "(Recommended)", for the menu's subtitle and other short places.
-    public var menuTitle: String {
-        self == .openRouterMAI ? "MAI-Transcribe-2 via OpenRouter" : title
     }
 
     /// The direct routes: shown under "Advanced". They are built from the docs and not yet tested live.

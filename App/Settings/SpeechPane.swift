@@ -244,7 +244,7 @@ private struct RouteRow: View {
     let route: TranscriptionRoute
 
     var body: some View {
-        ChoiceRow(title: route.menuTitle, subtitle: route.summary, isChosen: model.route == route) {
+        ChoiceRow(title: route.title, subtitle: route.summary, isChosen: model.route == route) {
             model.route = route
         }
     }

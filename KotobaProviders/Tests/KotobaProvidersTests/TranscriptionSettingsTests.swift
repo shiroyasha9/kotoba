@@ -117,14 +117,6 @@ struct TranscriptionSettingsTests {
     @Test func routeTitlesAreThePlainSpeechModelNames() {
         #expect(
             TranscriptionRoute.allCases.map(\.title) == [
-                "MAI-Transcribe-2 via OpenRouter (Recommended)", "Grok via OpenRouter", "Grok via xAI",
-                "MAI-Transcribe-2 via Azure",
-            ])
-    }
-
-    @Test func menuTitlesDropTheRecommendation() {
-        #expect(
-            TranscriptionRoute.allCases.map(\.menuTitle) == [
                 "MAI-Transcribe-2 via OpenRouter", "Grok via OpenRouter", "Grok via xAI", "MAI-Transcribe-2 via Azure",
             ])
     }

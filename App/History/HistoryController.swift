@@ -41,7 +41,7 @@ final class HistoryController {
         let current = routes.route
         return TranscriptionRoute.allCases.filter {
             $0 != current && routes.missingSetup(for: $0, hasKey: keys.hasKey(for:)) == nil
-        }.map { MenuChoice(title: $0.menuTitle, value: $0.rawValue) }
+        }.map { MenuChoice(title: $0.title, value: $0.rawValue) }
     }
 
     /// The page, with a new model that follows history writes until `windowClosed()`.
