@@ -2,10 +2,13 @@ import Foundation
 import Testing
 
 /// Suspends callers until a test opens it, or until the caller's task is cancelled (as a cancelled request ends). A
-/// gate never opened lets its callers go after 5 s and records an issue, so a wrong test fails instead of hanging the
-/// run.
+/// gate never opened lets its callers go after `limit` and records an issue, so a wrong test fails instead of hanging
+/// the run.
 actor Gate {
-    private static let limit = Duration.seconds(5)
+    /// Real time, for each wait: the bound on a test whose event never comes (here, `eventually`,
+    /// `ManualClock.waitForTimer`). Long, so a busy machine never reaches it while a test works; a few of them fit in
+    /// `make test`'s limit for a whole package (`TEST_LIMIT`, 120 s), so a broken test still reports its waits.
+    static let limit = Duration.seconds(20)
 
     private var isOpen = false
     private var waiters: [UUID: CheckedContinuation<Void, Never>] = [:]

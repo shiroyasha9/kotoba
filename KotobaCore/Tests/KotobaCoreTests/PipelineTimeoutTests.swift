@@ -18,16 +18,18 @@ struct PipelineTimeoutTests {
         await world.provider.hold(at: gate)
         let pipeline = world.makePipeline()
 
+        let sent = world.clock.now
         await pipeline.tap(world)
         await pipeline.tap(world)
         #expect(await eventually { await gate.hasWaiters })
+        await world.clock.waitForTimer(at: sent + wait)
         world.clock.advance(by: wait - .milliseconds(1))
-        let endedBefore = await eventually { await pipeline.state.phase != .transcribing }
+        let phaseBefore = await pipeline.state.phase
         world.clock.advance(by: .milliseconds(1))
         await pipeline.settle()
         await gate.open()
 
-        #expect(endedBefore == false)
+        #expect(phaseBefore == .transcribing)
         let record = try #require(await world.store.records.first)
         #expect(record.status == .failed)
         #expect(record.attempts == 1)

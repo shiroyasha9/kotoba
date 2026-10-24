@@ -81,11 +81,12 @@ struct AudioCaptureUploadCopyTests {
         let clock = ManualClock()
         let capture = AudioCapture(hardware: hardware, clock: clock, uploads: uploads)
         defer { try? FileManager.default.removeItem(at: folder) }
+        let start = clock.now
         guard case .running(let levels) = await capture.beginTest(for: .seconds(5)) else {
             Issue.record("The mic test did not start")
             return
         }
-        #expect(await eventually { !clock.deadlines.isEmpty })
+        await clock.waitForTimer(at: start + .seconds(5))
 
         clock.advance(by: .seconds(5))
 

@@ -17,7 +17,7 @@ struct PipelineChordReleaseTests {
         // The stop tap's release is lost.
         let stop = world.clock.now
         await pipeline.handle(.chordDown(.tapOrHold))
-        await world.clock.waitForTimer(at: stop + .seconds(2))
+        await world.waitForReleaseWait(pipeline, pressedAt: stop)
         let pastedAtOnce = await world.paster.pasteCount
         world.clock.advance(by: .milliseconds(1_900))
         let pastedBeforeTheBound = await world.paster.pasteCount
@@ -34,8 +34,9 @@ struct PipelineChordReleaseTests {
         let pipeline = world.makePipeline()
         await pipeline.tap(world)
         world.clock.advance(by: .seconds(1))
+        let stop = world.clock.now
         await pipeline.handle(.chordDown(.tapOrHold))
-        _ = await eventually { await world.paster.pasteCount > 0 }
+        await world.waitForReleaseWait(pipeline, pressedAt: stop)
 
         await pipeline.handle(.chordUp)
         await pipeline.settle()
@@ -61,19 +62,21 @@ struct PipelineChordReleaseTests {
         // The next dictation: a push-to-talk hold while the first one is still being transcribed.
         await pipeline.handle(.chordDown(.tapOrHold))
         await gate.open()
-        let pastedAtOnce = await eventually { await world.paster.pasteCount > 0 }
-        for _ in 0..<5 {
-            world.clock.advance(by: .seconds(1))
-            _ = await eventually { await world.paster.pasteCount > 0 }
-        }
+        #expect(await eventually { await pipeline.releaseWaiterCount == 1 })
+        let pastedAtOnce = await world.paster.pasteCount
+        // Past any bound: the due timers run, and none pastes.
+        world.clock.advance(by: .seconds(5))
+        await pipeline.settleTimers()
         let pastedWhileHeld = await world.paster.pasteCount
+        let isStillWaiting = await pipeline.releaseWaiterCount == 1
 
         await world.provider.hear("second")
         await pipeline.handle(.chordUp)
         await pipeline.settle()
 
-        #expect(pastedAtOnce == false)
+        #expect(pastedAtOnce == 0)
         #expect(pastedWhileHeld == 0)
+        #expect(isStillWaiting)
         #expect(await world.paster.pasted == ["first", "second"])
     }
 }

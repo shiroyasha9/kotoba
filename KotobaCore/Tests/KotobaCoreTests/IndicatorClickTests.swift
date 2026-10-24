@@ -69,12 +69,14 @@ struct IndicatorClickTests {
         world.clock.advance(by: .seconds(1))
 
         // The click while the chord is held.
+        let click = world.clock.now
         await pipeline.handle(.chordDown(.tapOrHold))
-        let pastedWhileHeld = await eventually { await world.paster.pasteCount > 0 }
+        await world.waitForReleaseWait(pipeline, pressedAt: click)
+        let pastedWhileHeld = await world.paster.pasteCount
         await pipeline.handle(.chordUp)
         await pipeline.settle()
 
-        #expect(pastedWhileHeld == false)
+        #expect(pastedWhileHeld == 0)
         #expect(await world.paster.pasted == ["held"])
     }
 }

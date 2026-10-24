@@ -22,11 +22,13 @@ actor FakeStore: Store {
     }
 
     func addUsage(_ entries: [UsageEntry]) async throws {
+        await Slowness.pause()
         await usageGate?.pass()
         ledger += entries.filter { entry in !ledger.contains { $0.id == entry.id } }
     }
 
     func setPolishedText(_ text: String?, of id: DictationID, usage: [UsageEntry]) async throws -> Bool {
+        await Slowness.pause()
         try await addUsage(usage)
         guard let index = records.firstIndex(where: { $0.id == id && $0.status.isTranscribed }) else { return false }
         records[index].polishedText = text
@@ -37,6 +39,7 @@ actor FakeStore: Store {
     private(set) var discarded: Set<DictationID> = []
 
     func markDiscarded(_ id: DictationID) async throws {
+        await Slowness.pause()
         discarded.insert(id)
     }
 
@@ -48,6 +51,7 @@ actor FakeStore: Store {
     }
 
     func save(_ record: DictationRecord) async throws {
+        await Slowness.pause()
         await saveGate?.pass()
         addToLedger(record)
         records.removeAll { $0.id == record.id }
@@ -56,6 +60,7 @@ actor FakeStore: Store {
     }
 
     func update(_ record: DictationRecord) async throws -> Bool {
+        await Slowness.pause()
         if let updateError { throw updateError }
         addToLedger(record)
         guard let index = records.firstIndex(where: { $0.id == record.id }) else { return false }
@@ -65,21 +70,26 @@ actor FakeStore: Store {
     }
 
     func pendingRetries() async throws -> [DictationRecord] {
-        records.filter { $0.status == .pending || $0.status == .failed }
+        await Slowness.pause()
+        return records.filter { $0.status == .pending || $0.status == .failed }
     }
 
     func recovered(since cutoff: Date) async throws -> [DictationRecord] {
-        records
+        await Slowness.pause()
+        return
+            records
             .filter { $0.status == .recovered && ($0.recoveredAt ?? .distantPast) >= cutoff }
             .sorted { ($0.recoveredAt ?? .distantPast) > ($1.recoveredAt ?? .distantPast) }
     }
 
     func lastDelivered() async throws -> DictationRecord? {
-        records.filter { [.pasted, .copied, .notPasted].contains($0.status) }.max { $0.createdAt < $1.createdAt }
+        await Slowness.pause()
+        return records.filter { [.pasted, .copied, .notPasted].contains($0.status) }.max { $0.createdAt < $1.createdAt }
     }
 
     func status(of id: DictationID) async throws -> DictationRecord.Status? {
-        records.first { $0.id == id }?.status
+        await Slowness.pause()
+        return records.first { $0.id == id }?.status
     }
 
     /// When set, each `queuedRecord` read waits for this gate.
@@ -91,6 +101,7 @@ actor FakeStore: Store {
 
     /// As the real store, which reads entries into the ledger and never back into a record.
     func queuedRecord(_ id: DictationID) async throws -> DictationRecord? {
+        await Slowness.pause()
         await queuedReadGate?.pass()
         guard var record = records.first(where: { $0.id == id }), [.pending, .failed].contains(record.status)
         else { return nil }
@@ -99,18 +110,21 @@ actor FakeStore: Store {
     }
 
     func transcribedRecord(_ id: DictationID) async throws -> DictationRecord? {
+        await Slowness.pause()
         guard var record = records.first(where: { $0.id == id }), record.status.isTranscribed else { return nil }
         record.usage = []
         return record
     }
 
     func markCopied(_ id: DictationID) async throws {
+        await Slowness.pause()
         guard let index = records.firstIndex(where: { $0.id == id }) else { return }
         records[index].status = .copied
         history[id, default: []].append(.copied)
     }
 
     func queueForRetry(_ id: DictationID) async throws -> Bool {
+        await Slowness.pause()
         guard let index = records.firstIndex(where: { $0.id == id }),
             [.cancelled, .rejected].contains(records[index].status)
         else { return false }
@@ -121,6 +135,7 @@ actor FakeStore: Store {
     }
 
     func delete(_ ids: Set<DictationID>) async throws -> Set<DictationID> {
+        await Slowness.pause()
         if let deleteError { throw deleteError }
         let kept = ids.intersection(undeletable)
         records.removeAll { ids.contains($0.id) && !kept.contains($0.id) }
@@ -159,6 +174,7 @@ actor FakeStore: Store {
 
     /// As the real store: oldest text first, after `cursor`, up to a batch.
     func deleteAudio(transcribedBefore cutoff: Date, after cursor: AudioCursor?) async throws -> AudioBatch {
+        await Slowness.pause()
         audioCutoffs.append(cutoff)
         await audioGate?.pass()
         let expired = records.filter { $0.isAudioExpired(before: cutoff) }

@@ -7,6 +7,8 @@ public actor DictationPipeline {
     typealias Instant = ContinuousClock.Instant
 
     public private(set) var state: DictationState = .idle
+    /// Test seam: the states sent to `states` so far.
+    private(set) var publishedStateCount = 0
     /// Every state change, for the indicator and sound cues.
     public nonisolated let states: AsyncStream<DictationState>
     /// What is live after each change: whether "Paste Again" can paste, and which dictations are being sent. Only
@@ -238,6 +240,7 @@ extension DictationPipeline {
     private func publish(_ newState: DictationState) {
         guard newState != state else { return }
         state = newState
+        publishedStateCount += 1
         stateContinuation.yield(newState)
     }
 
@@ -296,10 +299,18 @@ extension DictationPipeline {
         await work.settle()
     }
 
+    /// Waits for the timers that are due and nothing else (`PendingWork.settleTimers`).
+    func settleTimers() async {
+        await work.settleTimers()
+    }
+
     /// Test seam: tasks parked until `condition` holds.
     func waiterCount(_ condition: LiveDictations<Recording>.Condition) -> Int {
         live.waiterCount(condition)
     }
+
+    /// Test seam: deliveries whose paste waits for a chord's release.
+    var releaseWaiterCount: Int { releaseWaiters.count }
 
     /// Test seam: events that wait for their turn (`inTurn`).
     var turnWaiterCount: Int { turnWaiters.count }

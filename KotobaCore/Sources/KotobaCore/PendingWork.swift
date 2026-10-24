@@ -121,6 +121,18 @@ final class PendingWork: Sendable {
         }
     }
 
+    /// Waits for the timers whose deadline has passed on the clock, and for nothing else: a test that holds other
+    /// work at a gate learns that a due timer's body returned without waiting for that work. Work the body starts in a
+    /// task of its own (`bill`, `track`) may still run after it, so a test reads what the body itself decides; a body
+    /// that waits for held work (a retry behind a live send) holds this wait too.
+    func settleTimers() async {
+        while let task = state.withLock({ state in
+            state.entries.values.first { $0.deadline.map { $0 <= clock.now } ?? false }?.task
+        }) {
+            await task.value
+        }
+    }
+
     /// Waits for all work that can finish now: stopped dictations, and timers whose deadline has
     /// passed on the clock. Tests call it after each step.
     func settle() async {

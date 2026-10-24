@@ -176,7 +176,7 @@ struct PipelineQuitTests {
         #expect(await eventually { await pipeline.paste.isQuitWaiting })
         _ = await world.pasteboard.appReads()
         let restoreAt = world.clock.now + ClipboardPaste.readSettle
-        #expect(await eventually { world.clock.deadlines.contains(restoreAt) })
+        await world.clock.waitForTimer(at: restoreAt)
         world.clock.advance(by: ClipboardPaste.readSettle)
         await quit
 
