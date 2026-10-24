@@ -72,7 +72,8 @@ struct OnboardingView: View {
 /// cards' text starts.
 struct StepHeading<Icon: View>: View {
     let title: String
-    let text: String
+    /// A `Text`, so the UI-text lint sees its words wherever the formatter puts the argument (`Text(` is a builder).
+    let text: Text
     @ViewBuilder var icon: Icon
 
     var body: some View {
@@ -82,7 +83,7 @@ struct StepHeading<Icon: View>: View {
                 .font(.largeTitle)
                 .bold()
                 .foregroundStyle(.primary)
-            Text(text)
+            text
                 .font(.title3)
                 .foregroundStyle(.secondary)
                 .fixedSize(horizontal: false, vertical: true)
@@ -93,7 +94,7 @@ struct StepHeading<Icon: View>: View {
 }
 
 extension StepHeading where Icon == EmptyView {
-    init(title: String, text: String) {
+    init(title: String, text: Text) {
         self.init(title: title, text: text) { EmptyView() }
     }
 }

@@ -2,7 +2,8 @@ import Testing
 
 @testable import KotobaCore
 
-/// The onboarding step order, a step saved by an older build, and the footer's forward button on each step.
+/// The onboarding step order, a step saved by an older build, the Wispr Flow offer, and the footer's forward button on
+/// each step.
 struct OnboardingFlowTests {
     @Test func theStepsRunInOrder() {
         #expect(OnboardingFlow.steps == [.welcome, .permissions, .key, .tryIt, .done])
@@ -33,6 +34,16 @@ struct OnboardingFlowTests {
 
     @Test func anUnknownSavedStepStartsAtWelcome() {
         #expect(OnboardingStep(saved: "somethingElse") == .welcome)
+    }
+
+    @Test func doneOffersTheWisprImportWhenWisprFlowIsInstalled() {
+        #expect(OnboardingFlow.offersWisprImport(isWisprInstalled: true, isDictionaryOpen: true))
+        #expect(!OnboardingFlow.offersWisprImport(isWisprInstalled: false, isDictionaryOpen: true))
+    }
+
+    /// The dictionary is not open yet (it is read at launch), or did not open: there is nothing to import into.
+    @Test func theWisprImportNeedsAnOpenDictionary() {
+        #expect(!OnboardingFlow.offersWisprImport(isWisprInstalled: true, isDictionaryOpen: false))
     }
 
     /// kotoba cannot work without the microphone or Accessibility: no Skip, and no Continue before both grants.

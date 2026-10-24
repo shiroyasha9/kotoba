@@ -54,10 +54,9 @@ final class OnboardingModel {
     }
     /// What keeps the launch-at-login choice from taking effect, shown under its toggle.
     private(set) var loginProblem: LaunchAtLogin.Problem?
-    /// The Done step offers the Wispr Flow import: Wispr Flow is on this Mac (`checkWispr()` reads it when the window
-    /// opens) and kotoba's dictionary is open to import into (it is read at launch, maybe after the window opened).
+    /// The Done step offers the Wispr Flow import (`OnboardingFlow.offersWisprImport`).
     private(set) var offersWisprImport = false
-    /// Wispr Flow is on this Mac.
+    /// Wispr Flow is on this Mac: `checkWispr()` reads it when the window opens.
     private var isWisprInstalled = false
     /// What the Wispr Flow row imported; empty when Wispr Flow had nothing new. Nil until the owner answers.
     private(set) var wisprImported: DictionaryImport?
@@ -65,17 +64,21 @@ final class OnboardingModel {
     private var hasPromptedAccessibility = false
 
     @ObservationIgnored private let source: Source
+    /// The Speech page: Done's "Add Your Azure Endpoint…".
     @ObservationIgnored let openSpeechSettings: @MainActor () -> Void
+    /// The Speech page with its "Advanced…" sheet open: the key step's "Use xAI or Azure Instead…".
+    @ObservationIgnored let openOtherSpeechServices: @MainActor () -> Void
 
     init(
         step: OnboardingStep, readiness: Readiness, keyChecks: KeyChecks, source: Source,
-        openSpeechSettings: @escaping @MainActor () -> Void
+        openSpeechSettings: @escaping @MainActor () -> Void, openOtherSpeechServices: @escaping @MainActor () -> Void
     ) {
         self.step = step
         self.readiness = readiness
         self.keyChecks = keyChecks
         self.source = source
         self.openSpeechSettings = openSpeechSettings
+        self.openOtherSpeechServices = openOtherSpeechServices
         opensAtLogin = source.opensAtLogin()
         playsSounds = source.playsSounds()
     }
@@ -117,7 +120,8 @@ final class OnboardingModel {
 
     /// The dictionary was read at launch, after the window opened (first launch opens onboarding first).
     func dictionaryOpened() {
-        offersWisprImport = isWisprInstalled && dictionary != nil
+        offersWisprImport = OnboardingFlow.offersWisprImport(
+            isWisprInstalled: isWisprInstalled, isDictionaryOpen: dictionary != nil)
     }
 
     func goBack() {

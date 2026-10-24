@@ -69,7 +69,8 @@ struct MenuModel {
     /// Builds the whole menu into `menu`, replacing its items.
     func build(into menu: NSMenu, target: StatusMenuActions?, for place: Place = .menuBar) {
         menu.removeAllItems()
-        for item in topItems(target: target) + [.separator(), microphoneItem(target: target), .separator()] {
+        for item in topItems(target: target, for: place) + [.separator(), microphoneItem(target: target), .separator()]
+        {
             menu.addItem(item)
         }
         menu.addItem(
@@ -87,7 +88,7 @@ struct MenuModel {
             ))
     }
 
-    private func topItems(target: StatusMenuActions?) -> [NSMenuItem] {
+    private func topItems(target: StatusMenuActions?, for place: Place) -> [NSMenuItem] {
         var items: [NSMenuItem] = []
         switch status {
         case .finishSetup(let missing):
@@ -114,18 +115,19 @@ struct MenuModel {
                     action: #selector(StatusMenuActions.copyRecovered(_:))))
         }
         if hasLastDictation {
-            items += lastDictationItems(target: target)
+            items += lastDictationItems(target: target, for: place)
         }
         return items
     }
 
     /// Paste, copy, rewrite or fix the last dictation. Paste without cleanup stays one item: the ⌥ alternate of Paste,
     /// as Finder's Close and Close All, so the menu keeps the plan's few items and the feature keeps its one way in.
-    private func lastDictationItems(target: StatusMenuActions?) -> [NSMenuItem] {
+    /// The Dock's menu leaves it out: nothing shows that the Dock draws alternates, and the menu bar menu has it.
+    private func lastDictationItems(target: StatusMenuActions?, for place: Place) -> [NSMenuItem] {
         var items: [NSMenuItem] = [
             .action("Paste Last Dictation", target: target, action: #selector(StatusMenuActions.pasteLastDictation))
         ]
-        if hasRawLastDictation {
+        if hasRawLastDictation && place == .menuBar {
             let raw = NSMenuItem.action(
                 "Paste Last Without Cleanup", target: target,
                 action: #selector(StatusMenuActions.pasteLastWithoutCleanup))

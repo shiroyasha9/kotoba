@@ -27,14 +27,16 @@ final class OnboardingController: NSObject, NSWindowDelegate {
     private let router: TranscriptionRouter
     private let dictionary: @MainActor () -> DictionaryModel?
     private let openSpeechSettings: @MainActor () -> Void
+    private let openOtherSpeechServices: @MainActor () -> Void
     private var window: NSWindow?
     private var model: OnboardingModel?
 
     /// `router` checks a saved key with one free request; `dictionary` is the one the Wispr Flow step imports into;
-    /// `openSpeechSettings` opens Settings on the Speech pane.
+    /// `openSpeechSettings` opens the Speech page; `openOtherSpeechServices` opens it with its "Advanced…" sheet.
     init(
         readiness: Readiness, routeSettings: TranscriptionSettings, vault: KeyVault, router: TranscriptionRouter,
-        dictionary: @escaping @MainActor () -> DictionaryModel?, openSpeechSettings: @escaping @MainActor () -> Void
+        dictionary: @escaping @MainActor () -> DictionaryModel?, openSpeechSettings: @escaping @MainActor () -> Void,
+        openOtherSpeechServices: @escaping @MainActor () -> Void
     ) {
         self.readiness = readiness
         self.routeSettings = routeSettings
@@ -42,6 +44,7 @@ final class OnboardingController: NSObject, NSWindowDelegate {
         self.router = router
         self.dictionary = dictionary
         self.openSpeechSettings = openSpeechSettings
+        self.openOtherSpeechServices = openOtherSpeechServices
     }
 
     /// Shows the window on `step`; nil resumes where the owner closed it, or starts at Welcome.
@@ -54,7 +57,7 @@ final class OnboardingController: NSObject, NSWindowDelegate {
                 readiness: readiness,
                 keyChecks: KeyChecks(vault: vault, checkKey: router.checkKey(_:for:)),
                 source: .live(routeSettings: routeSettings, dictionary: dictionary),
-                openSpeechSettings: openSpeechSettings)
+                openSpeechSettings: openSpeechSettings, openOtherSpeechServices: openOtherSpeechServices)
         if let step {
             model.step = step
         }
@@ -149,7 +152,8 @@ extension OnboardingController {
     ) -> OnboardingModel {
         let model = OnboardingModel(
             step: step, readiness: readiness, keyChecks: .sample(keys, savedKeys: hasKey ? [.openRouter] : []),
-            source: .sample(dictionary: Pane.sampleModel(PersonalDictionary())), openSpeechSettings: {})
+            source: .sample(dictionary: Pane.sampleModel(PersonalDictionary())), openSpeechSettings: {},
+            openOtherSpeechServices: {})
         model.showsWisprInstalled()
         return model
     }

@@ -135,9 +135,10 @@ final class Readiness {
 final class SetupFlow {
     let readiness: Readiness
     private let openSpeechSettings: @MainActor () -> Void
+    private let openOtherSpeechServices: @MainActor () -> Void
     private lazy var onboarding = OnboardingController(
         readiness: readiness, routeSettings: routeSettings, vault: vault, router: router, dictionary: dictionary,
-        openSpeechSettings: openSpeechSettings)
+        openSpeechSettings: openSpeechSettings, openOtherSpeechServices: openOtherSpeechServices)
     private let routeSettings: TranscriptionSettings
     private let vault: KeyVault
     private let router: TranscriptionRouter
@@ -150,10 +151,12 @@ final class SetupFlow {
     /// Reads Readiness again when the system disables the tap for user input (`HotkeyTap.disabledByUserInput`).
     private var tapDisables: Task<Void, Never>?
 
-    /// `router` checks a key in onboarding.
+    /// `router` checks a key in onboarding. `openSpeechSettings` opens the Speech page, where a setup fix lands;
+    /// `openOtherSpeechServices` opens it with its "Advanced…" sheet, where the xAI and Azure routes are.
     init(
         readiness: Readiness, routeSettings: TranscriptionSettings, vault: KeyVault, router: TranscriptionRouter,
-        dictionary: @escaping @MainActor () -> DictionaryModel?, openSpeechSettings: @escaping @MainActor () -> Void
+        dictionary: @escaping @MainActor () -> DictionaryModel?, openSpeechSettings: @escaping @MainActor () -> Void,
+        openOtherSpeechServices: @escaping @MainActor () -> Void
     ) {
         self.readiness = readiness
         self.routeSettings = routeSettings
@@ -161,6 +164,7 @@ final class SetupFlow {
         self.router = router
         self.dictionary = dictionary
         self.openSpeechSettings = openSpeechSettings
+        self.openOtherSpeechServices = openOtherSpeechServices
     }
 
     /// Onboarding opens at launch until the owner clicks Done, unless kotoba is set up already (`AppPresence.window`).

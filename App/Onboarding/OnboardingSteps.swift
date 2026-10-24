@@ -20,7 +20,7 @@ struct WelcomeStep: View {
         } header: {
             StepHeading(
                 title: "Talk Instead of Type",
-                text: "Speak in any app, and kotoba types your words where your cursor is."
+                text: Text("Speak in any app, and kotoba types your words where your cursor is.")
             ) {
                 AppIconView(icon: NSApp.applicationIconImage, side: PageMetrics.welcomeIconSide)
             }
@@ -87,7 +87,7 @@ struct NamedKeycaps: View {
     }
 
     /// The names Apple's keyboards print on the modifier keys. A letter or a word key ("Space") names itself.
-    private static let names = ["⌃": "control", "⌥": "option", "⌘": "command", "⇧": "shift", "fn": "function"]
+    private static let names = ["⌃": "control", "⌥": "option", "⌘": "command", "⇧": "shift", "fn": "fn"]
 }
 
 /// The microphone and Accessibility, one row each with its own Allow button. kotoba cannot work without either, so
@@ -127,7 +127,10 @@ struct PermissionsStep: View {
             }
         } header: {
             StepHeading(
-                title: "Allow Access", text: "kotoba needs both to hear your shortcut and type your words.")
+                title: "Allow Access",
+                text: Text(
+                    "kotoba needs the microphone to hear you, and Accessibility for your shortcut and to type your "
+                        + "words."))
         } footer: {
             VStack(alignment: .leading) {
                 Text(
@@ -167,7 +170,7 @@ struct KeyStep: View {
         } header: {
             StepHeading(
                 title: "Connect a Speech Service",
-                text: "kotoba sends your audio to \(provider), which turns it into text.")
+                text: Text("kotoba sends your audio to \(provider), which turns it into text."))
         } footer: {
             VStack(alignment: .leading) {
                 PriceLine(route: model.route)
@@ -179,7 +182,7 @@ struct KeyStep: View {
                     {
                         Button("Get a Key at \(provider)…") { model.open(model.account.keysPage) }
                     }
-                    Button("Use xAI or Azure Instead…", action: model.openSpeechSettings)
+                    Button("Use xAI or Azure Instead…", action: model.openOtherSpeechServices)
                 }
                 .buttonStyle(.link)
             }
@@ -205,6 +208,7 @@ struct TryItStep: View {
 
     var body: some View {
         let chord = HotkeyChords.shared.handsFree.title
+        let hold = StatusText.holdToDictate(.shared)
         Section {
             TextField("Try It", text: $model.tryItText, prompt: Text("Your words appear here"), axis: .vertical)
                 .labelsHidden()
@@ -215,8 +219,7 @@ struct TryItStep: View {
             // Both ways to dictate sit together above the field, so the result line below never moves them.
             StepHeading(
                 title: "Try It",
-                text: "Press \(chord), say “Hello from kotoba”, then press \(chord) again. "
-                    + StatusText.holdToDictate(.shared))
+                text: Text("Press \(chord), say “Hello from kotoba”, then press \(chord) again. \(hold)"))
         } footer: {
             // Always laid out, so the step does not move when the dictation works.
             let works = model.isDone(.tryIt)
@@ -287,7 +290,7 @@ struct DoneStep: View {
     private func heading(isReady: Bool) -> some View {
         StepHeading(
             title: isReady ? "You’re Ready" : "Almost Ready",
-            text: "Open kotoba from the menu bar or the Dock to change your microphone or settings.")
+            text: Text("Open kotoba from the menu bar or the Dock to change your microphone or settings."))
     }
 
     /// What the row says before and after the import.
