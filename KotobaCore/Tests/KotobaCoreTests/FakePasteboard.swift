@@ -105,8 +105,19 @@ actor FakePasteboard: Pasteboard {
         return written
     }
 
+    /// The next restore waits for `gate` before it writes, as a slow pasteboard write would.
+    private var restoreGate: Gate?
+
+    func holdNextRestore(at gate: Gate) {
+        restoreGate = gate
+    }
+
     func restore(_ snapshot: PasteboardSnapshot, ifChangeCount changeCount: Int) async -> Bool {
         await Slowness.pause()
+        if let gate = restoreGate {
+            restoreGate = nil
+            await gate.pass()
+        }
         guard count == changeCount else { return false }
         text = snapshot.items.first?.first { $0.type == PasteboardSnapshot.plainTextType }
             .flatMap { String(bytes: $0.data, encoding: .utf8) }
