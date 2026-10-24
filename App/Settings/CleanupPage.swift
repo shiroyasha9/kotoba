@@ -212,7 +212,7 @@ extension Pane {
                 of: .modes(ModesModel(source: .sample(rules: ModeRules()), chords: HotkeyChords(defaults: nil))),
                 named: "settings-modes-empty", height: 1_400),
             MainWindow.snapshot(of: .modes(noKeyModel), named: "settings-modes-no-key", height: 1_600),
-            settledSheet("settings-modes-advanced") {
+            MainWindow.sheetSnapshot(named: "settings-modes-advanced") {
                 CleanupAdvanced(model: ModesModel(source: .sample(), chords: HotkeyChords(defaults: nil)))
             },
         ]

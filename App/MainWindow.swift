@@ -93,10 +93,6 @@ extension EnvironmentValues {
     /// Goes up by one each time the owner chooses Edit > Find… in the main window. A pane with a search field focuses
     /// it on each change.
     @Entry var findRequests = 0
-
-    /// Dead since the menu lost "Add Word…": always off. Its last reader is the Dictionary pane, whose rollout removes
-    /// it; this key goes then.
-    @Entry var addWordRequest: Binding<Bool> = .constant(false)
 }
 
 /// The main window: Home, History, Activity and the settings in one sidebar. Built when the owner opens it and

@@ -341,11 +341,11 @@ extension Pane {
                         route: .azureMAI, azureEndpoint: "", savedKeys: [.azure],
                         keyStatus: [.azure: .checked(.invalid)])),
                 named: "settings-speech-azure"),
-            settledSheet("settings-speech-advanced") {
+            MainWindow.sheetSnapshot(named: "settings-speech-advanced") {
                 SpeechAdvanced(
                     model: .sample(route: .openRouterGrok, azureEndpoint: "", savedKeys: [.openRouter, .xai]))
             },
-            settledSheet("settings-speech-advanced-azure") {
+            MainWindow.sheetSnapshot(named: "settings-speech-advanced-azure") {
                 SpeechAdvanced(
                     model: .sample(
                         route: .azureMAI, azureEndpoint: "https://example.cognitiveservices.azure.com/",
