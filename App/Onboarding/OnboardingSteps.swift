@@ -76,7 +76,7 @@ struct NamedKeycaps: View {
             ForEach(Array(keys.enumerated()), id: \.offset) { _, key in
                 VStack {
                     Keycaps(keys: [key])
-                    if let name = Self.names[key] {
+                    if let name = Keycaps.names[key] {
                         Text(name)
                             .font(.caption)
                             .foregroundStyle(.secondary)
@@ -85,11 +85,8 @@ struct NamedKeycaps: View {
             }
         }
         .accessibilityElement(children: .ignore)
-        .accessibilityLabel(keys.map { Self.names[$0] ?? $0 }.joined(separator: " "))
+        .accessibilityLabel(Keycaps.spoken(keys))
     }
-
-    /// The names Apple's keyboards print on the modifier keys. A letter or a word key ("Space") names itself.
-    private static let names = ["⌃": "control", "⌥": "option", "⌘": "command", "⇧": "shift", "fn": "fn"]
 }
 
 /// The microphone and Accessibility, one row each with its own Allow button. kotoba cannot work without either, so

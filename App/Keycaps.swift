@@ -17,7 +17,7 @@ struct Keycaps: View {
             }
         }
         .accessibilityElement(children: .ignore)
-        .accessibilityLabel(keys.joined(separator: " "))
+        .accessibilityLabel(Self.spoken(keys))
     }
 
     /// A modifier as its SF Symbol, which centres in the key; the font draws ⌃ at cap height, 3 pt above ⌥ and ⌘
@@ -29,6 +29,14 @@ struct Keycaps: View {
             Text(key)
                 .padding(.horizontal, PageMetrics.keycapInset)
         }
+    }
+
+    /// The names Apple's keyboards print on the modifier keys. VoiceOver reads them for the symbols ("control option
+    /// command"); a letter or a word key ("Esc") names itself.
+    static let names = ["⌃": "control", "⌥": "option", "⌘": "command", "⇧": "shift", "fn": "fn"]
+
+    static func spoken(_ keys: [String]) -> String {
+        keys.map { names[$0] ?? $0 }.joined(separator: " ")
     }
 
     private static let modifierSymbols = ["⌃": "control", "⌥": "option", "⌘": "command", "⇧": "shift"]
