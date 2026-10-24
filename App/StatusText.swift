@@ -129,36 +129,39 @@ enum StatusText {
         }
     }
 
-    /// A shortcut's name, as General, Home and onboarding label it.
+    /// A shortcut's name, as the Shortcuts page, Home and onboarding label it.
     static func shortcutTitle(_ role: ChordRole) -> String {
         switch role {
         case .handsFree: "Hands-free"
         case .pushToTalk: "Push to talk"
-        case .cleanup: "Clean up"
+        case .cleanup: "Dictate with cleanup"
         case .pasteLast: "Paste last dictation"
         case .copyLast: "Copy last dictation"
-        case .polishLast: "Polish last dictation"
+        case .polishLast: "Rewrite last dictation"
         }
     }
 
-    /// What a shortcut does: the line under its name.
+    /// What a shortcut does: the line under its name. "Press" and "hold", as Apple writes keys (plan, Copy).
     static func shortcutHelp(_ role: ChordRole) -> String {
         switch role {
         case .handsFree: "Press to start. Press again to stop and paste."
         case .pushToTalk: "Hold while you speak. Let go to paste."
-        case .cleanup: "Removes filler words and fixes punctuation. Takes a second or two longer."
+        case .cleanup: "Press or hold to dictate. Removes filler words and fixes punctuation; takes 1-2 s longer."
         case .pasteLast: "Pastes your last dictation again."
         case .copyLast: "Puts your last dictation on the clipboard."
-        case .polishLast: "Rewrites your last dictation shorter and clearer."
+        case .polishLast: "Makes your last dictation shorter and clearer."
         }
     }
 
-    /// Push to talk's line. A double tap records hands-free only while push to talk is its own chord: with one chord for
-    /// both, a tap already does.
+    /// Push to talk's line. A double press records hands-free only while push to talk is its own chord: with one chord
+    /// for both, a press already does.
     @MainActor static func pushToTalkHelp(_ chords: HotkeyChords) -> String {
         let help = shortcutHelp(.pushToTalk)
         return chords.separatePushToTalk == nil ? help : help + " Press it twice for hands-free."
     }
+
+    /// The line under `cancelLabel` on the Shortcuts page, by the Esc keycap.
+    static let cancelHelp = "Press while you dictate. Nothing is pasted."
 
     /// "1 Saved Dictation", "2 Saved Dictations": Foundation's grammar agreement picks the plural.
     static func counted(_ count: Int, _ noun: String) -> String {

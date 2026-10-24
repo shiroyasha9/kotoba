@@ -1,4 +1,3 @@
-import KotobaCore
 import SwiftUI
 
 // MARK: - Snapshots
@@ -11,10 +10,6 @@ extension Pane {
             MainWindow.snapshot(
                 of: .general(.sample(showsInDock: false)), named: "settings-general-dock-off", height: 1_240),
             loginFailureSnapshot(),
-            // Push to talk on its own chord: its line adds the double tap.
-            MainWindow.snapshot(
-                of: .general(.sample(chords: HotkeyChords(defaults: nil, pushToTalk: Chord(modifiers: .option)))),
-                named: "settings-general-push-to-talk", height: 1_200),
         ]
     }
 

@@ -40,6 +40,7 @@ enum Snapshots {
         Pane.dictionarySnapshots,
         Pane.speechSnapshots,
         Pane.microphoneSnapshots,
+        Pane.shortcutsSnapshots,
         Pane.generalSnapshots,
         Pane.activitySnapshots,
         Pane.modesSnapshots,
