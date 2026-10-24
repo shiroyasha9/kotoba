@@ -1,6 +1,6 @@
 import AppKit
 
-/// The 0.5.0 pill prototype's level: nine mirrored bars. Each level event enters at the centre bar and moves one bar
+/// The pill's level: nine mirrored bars. Each level event enters at the centre bar and moves one bar
 /// outward with the next event, so the bars move only when a level arrives: no timer and no display link. Custom
 /// because no system view draws a level as bars, and the pill stands vertical at a side edge.
 ///

@@ -6,7 +6,7 @@ import KotobaCore
 enum IndicatorVisibility: String, CaseIterable {
     /// The pill shows only while a dictation or its message is live. The default.
     case whileDictating
-    /// A small round pill stays at idle; a click on it starts and stops a dictation.
+    /// An idle bar stays at idle; hovering it shows the hands-free chord, and a click on it starts a dictation.
     case always
 
     /// The menu title.

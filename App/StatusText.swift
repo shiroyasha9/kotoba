@@ -61,8 +61,30 @@ enum StatusText {
         return named.count <= pillCharacters ? named : "Endpoint not found. Saved."
     }
 
+    /// The idle pill's hover, before the hands-free chord's keys: a chord never shows alone (owner, 2026-10-25).
+    static let dictate = "Dictate"
+    /// The recording pill while another app has Secure Input on: it explains why a paste can fail (owner, 2026-10-24).
+    static let secureInputOn = "Secure Input is on"
+
+    /// What VoiceOver reads for the recording pill: "Recording, hands-free, with cleanup, 10 minutes 12 seconds".
+    static func recordingLabel(isHandsFree: Bool, isCleaned: Bool, elapsed: Duration?, words: String?) -> String {
+        var parts = [isHandsFree ? "Recording, hands-free" : "Recording"]
+        if isCleaned { parts.append("with cleanup") }
+        if let elapsed { parts.append(elapsed.formatted(.units(allowed: [.minutes, .seconds], width: .wide))) }
+        if let words { parts.append(words) }
+        return parts.joined(separator: ", ")
+    }
+    /// What VoiceOver reads for the pill while text is on its way, and once it is pasted.
+    static let processingLabel = "Transcribing"
+    static let pastedLabel = "Pasted"
+    /// The hands-free pill's buttons, as VoiceOver reads them.
+    static let cancelLabel = "Cancel"
+    static let stopLabel = "Stop"
+
     /// The pill when the mic gives nothing because Microphone access was turned off (at a press, or while recording).
     static let microphoneOff = "Microphone access is off"
+    /// The pill's words for `microphoneOff`: beside the fix and Stop, the long form does not fit the 360 pt pill.
+    static let micAccessOff = "Mic access is off"
     /// The silent recording pill's help tag when Microphone access is off.
     static let microphoneOffHelp = "Turn on kotoba in System Settings > Privacy & Security > Microphone."
 
@@ -138,26 +160,6 @@ enum StatusText {
     }
 }
 
-/// What the App knows at render time that a `DictationState` does not carry.
-struct StatusContext {
-    /// The current speech model's provider, named in the error texts.
-    var provider: ProviderAccount
-    var microphone = Readiness.Microphone.allowed
-    /// Accessibility: without it kotoba copies the text instead of pasting.
-    var isPasteAllowed = true
-    var isSecureInputOn = false
-    /// The mic capture opened, named in the no-sound warning.
-    var microphoneName: String?
-    var longRecordingMinutes = 10
-    /// How long Undo can resume after Esc; the Undo pill's bar runs over it.
-    var undoWindow = Duration.seconds(5)
-    /// A development build gives way to the release app (`InstallYield`): its idle pill starts nothing.
-    var isYielding = false
-
-    /// Microphone access is off: the mic gives nothing, and the fix is in System Settings.
-    var isMicrophoneOff: Bool { microphone == .denied }
-}
-
 /// The words for each `DictationState`, shared by the menu and the indicator pill, so the two
 /// always say the same thing (copy deck: docs/research/ux-polish.md, 4.2). A notice shows in place of the phase.
 extension DictationState {
@@ -168,6 +170,21 @@ extension DictationState {
         notice.map { $0.statusText(context) } ?? phase.statusText(context)
     }
 
+    /// The pill's words: only where the owner must know something or can act (a notice, Undo, a silent mic, Secure
+    /// Input). Nil for a live phase, which shows its shape only; the menu's status line reads `statusText`.
+    func pillText(_ context: StatusContext) -> String? {
+        if context.isMicrophoneOff, notice == .captureFailed || notice == nil && phase.isSilentRecording {
+            return StatusText.micAccessOff
+        }
+        if let notice { return notice.statusText(context) }
+        return switch phase {
+        case .recording(_, isSilent: true, _, _): phase.statusText(context)
+        case .recording: context.isSecureInputOn ? StatusText.secureInputOn : nil
+        case .undoable: phase.statusText(context)
+        case .idle, .transcribing, .cleaning, .polishing: nil
+        }
+    }
+
     /// The one button the pill shows for this state, or nil.
     func pillAction(_ context: StatusContext) -> PillAction? {
         notice.map { $0.pillAction(context) } ?? phase.pillAction(context)
@@ -175,6 +192,10 @@ extension DictationState {
 }
 
 extension DictationPhase {
+    var isSilentRecording: Bool {
+        if case .recording(_, isSilent: true, _, _) = self { true } else { false }
+    }
+
     func statusText(_ context: StatusContext) -> String? {
         switch self {
         case .idle: nil

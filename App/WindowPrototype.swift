@@ -153,9 +153,8 @@ private struct SidebarAppIcon: View {
 
 @MainActor
 enum WindowPrototype {
-    /// `make prototype` opens kotoba Dev with `--prototype`: the prototype window and the pill gallery
-    /// (`PillPrototypeGallery`) on screen, with real glass, and nothing else of the app (no hotkey tap, audio, store or
-    /// menu bar item). It quits when its windows close. It runs before `CopyHandOver`, so it opens beside a running
+    /// `make prototype` opens kotoba Dev with `--prototype`: the prototype window on screen, with real glass, and
+    /// nothing else of the app (no hotkey tap, audio, store or menu bar item). It quits when its windows close. It runs before `CopyHandOver`, so it opens beside a running
     /// kotoba Dev.
     static func runIfRequested() {
         guard CommandLine.arguments.contains("--prototype") else { return }
@@ -183,7 +182,6 @@ enum WindowPrototype {
 private final class Launcher: NSObject, NSApplicationDelegate {
     private var mainMenu: MainMenu?
     private var window: NSWindow?
-    private var gallery: NSWindow?
 
     func applicationDidFinishLaunching(_ notification: Notification) {
         // ⌘W, ⌘Q and the Edit menu, as in the app.
@@ -202,10 +200,6 @@ private final class Launcher: NSObject, NSApplicationDelegate {
         window.center()
         self.window = window
         WindowFront.show(window)
-        // proto-pill's gallery of the 0.5.0 pill states, on real glass.
-        let gallery = PillPrototypeGallery.makeWindow()
-        self.gallery = gallery
-        WindowFront.show(gallery)
     }
 
     func applicationShouldTerminateAfterLastWindowClosed(_ sender: NSApplication) -> Bool {

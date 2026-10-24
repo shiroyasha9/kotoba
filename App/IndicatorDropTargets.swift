@@ -1,22 +1,23 @@
 import AppKit
 import KotobaCore
 
-/// The three drop targets shown while the owner drags the pill: a faint glass shape at each anchor,
-/// the nearest one tinted. They live only for the drag.
+/// The three drop targets shown while the owner drags the pill: a faint glass circle at each anchor, where the pill
+/// lands there, the nearest one tinted. They live only for the drag.
 @MainActor
 final class DropTargets {
     private var targets: [IndicatorAnchor: (panel: NSPanel, glass: NSGlassEffectView)] = [:]
     /// The tinted target; a drag event that keeps it changes nothing.
     private var nearest: IndicatorAnchor?
 
-    init(in visibleFrame: NSRect, contentWidth: CGFloat, below pill: NSPanel) {
+    init(in visibleFrame: NSRect, below pill: NSPanel) {
         for anchor in IndicatorAnchor.allCases {
             let frame = NSRect(
-                IndicatorPlacement.frame(
-                    at: anchor, isCompact: true, contentWidth: contentWidth, in: ScreenRect(visibleFrame)))
+                IndicatorPlacement.dropTarget(
+                    at: anchor, thickness: Double(PillGeometry.height), in: ScreenRect(visibleFrame)))
+            // Separate panels, not on the pill's glass.
             let glass = NSGlassEffectView()
             glass.style = .clear
-            glass.cornerRadius = IndicatorPlacement.cornerRadius
+            glass.cornerRadius = frame.height / 2
             let panel = IndicatorPanel.makeFloatingPanel(holding: glass, frame: frame)
             panel.ignoresMouseEvents = true
             panel.alphaValue = 0.6
@@ -67,12 +68,9 @@ extension NSRect {
 
 /// The window for the pill and for each drop target.
 extension IndicatorPanel {
-    /// Room around the glass in its window, so the shadow the glass draws is not cut off at the window edge.
-    static let shadowMargin: CGFloat = 16
-
-    /// The window frame for glass at `frame`: `shadowMargin` larger on each side.
+    /// The window frame for glass at `frame`: `PillGeometry.shadowMargin` larger on each side.
     static func windowFrame(around frame: NSRect) -> NSRect {
-        frame.insetBy(dx: -shadowMargin, dy: -shadowMargin)
+        frame.insetBy(dx: -PillGeometry.shadowMargin, dy: -PillGeometry.shadowMargin)
     }
 
     /// A borderless, non-activating, clear panel that floats on every Space, for the pill and its drop targets.
@@ -84,7 +82,7 @@ extension IndicatorPanel {
             contentRect: windowFrame(around: frame), styleMask: [.borderless, .nonactivatingPanel], backing: .buffered,
             defer: true)
         let margin = NSView(frame: NSRect(origin: .zero, size: panel.frame.size))
-        content.frame = margin.bounds.insetBy(dx: shadowMargin, dy: shadowMargin)
+        content.frame = margin.bounds.insetBy(dx: PillGeometry.shadowMargin, dy: PillGeometry.shadowMargin)
         content.autoresizingMask = [.width, .height]
         margin.addSubview(content)
         panel.contentView = margin
@@ -117,36 +115,37 @@ extension IndicatorPanel {
 // MARK: Drag
 
 extension IndicatorPanel {
+    /// The pill becomes a circle under the pointer, and a target shows at each anchor.
     func beginDrag() {
         guard let screen else { return }
-        dropTargetWidth = pill.fittingWidth
-        pill.layout = .round
-        dropTargets = DropTargets(in: screen.visibleFrame, contentWidth: dropTargetWidth, below: panel)
+        pill.look = .dragged
+        dropTargets = DropTargets(in: screen.visibleFrame, below: panel)
     }
 
     func moveDrag(to point: NSPoint) {
         guard let dropTargets else { return }
-        panel.setFrame(
-            Self.windowFrame(around: NSRect(IndicatorPlacement.dragFrame(centeredAt: ScreenPoint(point)))),
-            display: true)
+        let room = IndicatorPlacement.dragRoom(centeredAt: ScreenPoint(point), thickness: Double(PillGeometry.height))
+        panel.setFrame(Self.windowFrame(around: NSRect(room)), display: true)
         if let pointerScreen = NSScreen.screens.first(where: { $0.frame.contains(point) }), pointerScreen != screen {
             screen = pointerScreen
             dropTargets.close()
-            self.dropTargets = DropTargets(
-                in: pointerScreen.visibleFrame, contentWidth: dropTargetWidth, below: panel)
+            self.dropTargets = DropTargets(in: pointerScreen.visibleFrame, below: panel)
         }
         guard let screen else { return }
         self.dropTargets?.highlight(
-            IndicatorPlacement.nearestAnchor(to: ScreenPoint(point), in: ScreenRect(screen.visibleFrame)))
+            IndicatorPlacement.nearestAnchor(
+                to: ScreenPoint(point), thickness: Double(PillGeometry.height), in: ScreenRect(screen.visibleFrame)))
     }
 
-    /// Snaps to the anchor nearest `point` and saves it. Without a point (the pill hid during the
-    /// drag) only the drop targets go.
+    /// Snaps to the anchor nearest `point` and saves it, and the pill shows its look again there. Without a point (the
+    /// pill hid during the drag) only the drop targets go.
     func endDrag(at point: NSPoint? = nil) {
         guard let dropTargets else { return }
         dropTargets.close()
         self.dropTargets = nil
         guard let point, let screen else { return }
-        anchor = IndicatorPlacement.nearestAnchor(to: ScreenPoint(point), in: ScreenRect(screen.visibleFrame))
+        anchor = IndicatorPlacement.nearestAnchor(
+            to: ScreenPoint(point), thickness: Double(PillGeometry.height), in: ScreenRect(screen.visibleFrame))
+        dragEnded()
     }
 }

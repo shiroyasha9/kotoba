@@ -1,23 +1,25 @@
 import AppKit
 import KotobaCore
 
-/// The floating recording indicator: a Liquid Glass pill with the state and the mic level, on the
-/// screen that holds the focused window. It sits at one of three anchors (`IndicatorAnchor`), and
-/// the owner drags it between them. With "Show indicator: Always" a small round pill stays at idle, and
-/// a click on it starts and stops a dictation (not while a development build gives way to the release app). It never takes focus: a click or drag on it does not
-/// activate kotoba or move focus from the app the owner types in, so the paste goes to that app.
+/// The floating recording indicator: the glass pill (`PillView`), on the screen that holds the focused window. It sits
+/// at one of three anchors (`IndicatorAnchor`), and the owner drags it between them. With "Show indicator: Always" an
+/// idle bar stays at idle; hovering it shows the hands-free chord, and a click on it starts a dictation (not while a
+/// development build gives way to the release app). It never takes focus: a click or drag on it does not activate
+/// kotoba or move focus from the app the owner types in, so the paste goes to that app.
 @MainActor
 final class IndicatorPanel {
     private static let anchorKey = AppDefaults.Key.indicatorAnchor.rawValue
     private static let visibilityKey = AppDefaults.Key.indicatorVisibility.rawValue
 
-    /// Called when the owner clicks the pill's button.
+    /// Called when the owner clicks the pill's fix or Undo button.
     var onAction: ((PillAction) -> Void)?
-    /// A click on the recording pill, or on the idle pill with "Always" (`IndicatorPlacement.click`): AppDelegate
-    /// sends it as a chord tap.
+    /// A click on the recording pill or its Stop, or on the idle bar with "Always" (`IndicatorPlacement.click`):
+    /// AppDelegate sends it as a chord tap.
     var onTap: (() -> Void)?
-    /// The pointer held (true) or released (false) the Undo pill. The pipeline owns the Undo window, so
-    /// AppDelegate passes this on; the pill's bar holds by itself.
+    /// The hands-free pill's Cancel: AppDelegate sends it as Esc.
+    var onCancel: (() -> Void)?
+    /// The pointer held (true) or released (false) the Undo pill. The pipeline owns the Undo window, so AppDelegate
+    /// passes this on.
     var onUndoHoldChanged: ((Bool) -> Void)?
 
     /// Saved in UserDefaults; setting it moves a visible pill there.
@@ -31,7 +33,7 @@ final class IndicatorPanel {
         }
     }
 
-    /// Saved in UserDefaults; setting it shows or hides the idle pill at once.
+    /// Saved in UserDefaults; setting it shows or hides the idle bar at once.
     var visibility: IndicatorVisibility {
         get {
             UserDefaults.standard.string(forKey: Self.visibilityKey).flatMap(IndicatorVisibility.init)
@@ -45,19 +47,17 @@ final class IndicatorPanel {
         }
     }
 
-    /// Built on first show and kept. Building it at launch costs about 4.8 MB and 158 ms, and a
-    /// release after hide frees almost nothing (docs/research/memory-spike.md).
-    private var built: (panel: NSPanel, pill: IndicatorPillView)?
+    /// Built on first show and kept. Building it at launch costs about 4.8 MB and 158 ms, and a release after hide
+    /// frees almost nothing (docs/research/memory-spike.md).
+    private var built: (panel: NSPanel, pill: PillView)?
     var panel: NSPanel { build().panel }
-    var pill: IndicatorPillView { build().pill }
+    var pill: PillView { build().pill }
     /// The screen the pill shows on; chosen each time it appears.
     var screen: NSScreen?
     var dropTargets: DropTargets?
-    /// The pill's horizontal content width when the drag began, for the bottom target.
-    var dropTargetWidth: CGFloat = 0
     private var screenObserver: (any NSObjectProtocol)?
     private var spaceObserver: (any NSObjectProtocol)?
-    /// The pill's timer, the same one its bar shows. `task` waits for the deadline of a timer that hides the pill.
+    /// The pill's timer. `task` waits for the deadline of a timer that hides the pill.
     private struct Timer {
         var countdown: Countdown
         let kind: PillTimer.Kind
@@ -69,12 +69,17 @@ final class IndicatorPanel {
     private var isRecording = false
     /// The last dictation state, so a visibility change or a finished message can show it again.
     private var shown: (state: DictationState, context: StatusContext)?
+    /// What the pill shows; nil while it is hidden.
+    private var content: PillContent?
     /// The notice up (`show(_:)` with a `PillNotice`); an idle state does not replace it.
     private var notice: PillNotice?
     /// The pill was clicked to start a dictation, so the recording pill stays on this screen.
     private var isTapPending = false
+    /// Where the recording's time counts from, set when it passes the 10-minute mark (`StatusContext`); the
+    /// recording and its Undo window keep it.
+    private var timedFrom: ContinuousClock.Instant?
 
-    /// Shows the text and the button `StatusText` gives `state`, or the idle pill, or hides the pill.
+    /// Shows the look `IndicatorLook` gives `state`, with its words and button, or the idle bar, or hides the pill.
     func show(_ state: DictationState, context: StatusContext) {
         let wasNotice = shown?.state.notice
         shown = (state, context)
@@ -82,7 +87,10 @@ final class IndicatorPanel {
         if let wasNotice, wasNotice == state.notice {
             return
         }
-        if state == .idle, notice != nil {
+        countTime(of: state, context: context)
+        // The check and a notice of the App's own stay over the idle that follows them, until their time ends.
+        let isHeld = notice != nil || content?.look == .done
+        if isHeld, state.phase == .idle, state.notice == nil, !state.isPasted {
             return
         }
         notice = nil
@@ -93,17 +101,33 @@ final class IndicatorPanel {
         if state != .idle {
             isTapPending = false
         }
-        present(Self.content(for: state, context: context, visibility: visibility), followsFocus: followsFocus)
+        present(
+            Self.content(for: state, context: context, visibility: visibility, timedFrom: timedFrom),
+            followsFocus: followsFocus)
+    }
+
+    /// The time shows from the 10-minute mark: the pipeline says when it passes, and the count starts there.
+    private func countTime(of state: DictationState, context: StatusContext) {
+        switch state.phase {
+        case .recording(isLong: true, _, _, _):
+            if timedFrom == nil {
+                timedFrom = .now - .seconds(context.longRecordingMinutes * 60)
+            }
+        case .recording, .undoable:
+            break
+        case .idle, .transcribing, .cleaning, .polishing:
+            timedFrom = nil
+        }
     }
 
     /// Shows `notice` until its timer ends, a click on its button, or the next dictation state.
     func show(_ notice: PillNotice) {
         self.notice = notice
-        present(.init(notice), followsFocus: false)
+        present(PillContent(notice), followsFocus: false)
     }
 
-    /// Shows `notice` only while the pill is quiet (hidden, or the idle pill), so it never covers a dictation or
-    /// another notice.
+    /// Shows `notice` only while the pill is quiet (hidden, or the idle bar), so it never covers a dictation or another
+    /// notice.
     func showWhenQuiet(_ notice: PillNotice) {
         if isQuiet {
             show(notice)
@@ -118,7 +142,7 @@ final class IndicatorPanel {
     }
 
     /// A new context for the shown state, such as a development build that starts or stops giving way. Only a quiet
-    /// pill redraws now; a dictation's or a notice's pill keeps its text and timer, and the next pill reads it.
+    /// pill redraws now; a dictation's or a notice's pill keeps its words and timer, and the next pill reads it.
     func contextChanged(_ context: StatusContext) {
         shown = (shown?.state ?? .idle, context)
         if notice == nil, isQuiet {
@@ -126,9 +150,9 @@ final class IndicatorPanel {
         }
     }
 
-    /// Hidden, or the idle pill: no dictation and no notice is on screen.
+    /// Hidden, or the idle bar: no dictation and no notice is on screen.
     private var isQuiet: Bool {
-        built.map { !$0.panel.isVisible || $0.pill.content.isRound } ?? true
+        content.map { $0.look == .idle } ?? true
     }
 
     func showLevel(_ level: Float) {
@@ -136,32 +160,44 @@ final class IndicatorPanel {
     }
 
     /// Shows `content` (nil hides the pill) and starts its timer.
-    private func present(_ content: IndicatorPillView.Content?, followsFocus: Bool) {
+    private func present(_ content: PillContent?, followsFocus: Bool) {
         cancelTimer()
         guard let content else {
             orderOut()
             return
         }
-        pill.content = content
+        self.content = content
         let wasVisible = panel.isVisible
-        // The idle pill is not about a window, so it skips the window list and takes the pointer's screen.
+        // The idle bar is not about a window, so it skips the window list and takes the pointer's screen.
         if !wasVisible || (followsFocus && dropTargets == nil) {
-            screen = content.isRound ? NSScreen.withPointer : NSScreen.focused
+            let next = content.look == .idle ? NSScreen.withPointer : NSScreen.focused
+            if !wasVisible || next != screen {
+                screen = next
+                place(animated: wasVisible)
+            }
         }
-        place(animated: wasVisible)
+        pill.isClickable = content.click != nil
+        pill.toolTip = content.toolTip
+        if dropTargets == nil {
+            pill.look = look(for: content)
+        }
         if !wasVisible {
             panel.orderFrontRegardless()
             Self.rejoinAllSpaces(panel)
         }
-        // A pill that appears under a still pointer gets no mouse-entered event, but its exit must still come.
-        isHovering = panel.frame.insetBy(dx: Self.shadowMargin, dy: Self.shadowMargin).contains(NSEvent.mouseLocation)
-        pill.trackPointer(isInside: isHovering)
         if let timer = content.timer {
             start(timer)
         }
     }
 
-    /// The pill is done with its message: the idle pill with "Always", else nothing.
+    /// The content's look; the idle bar shows the hands-free chord while the pointer is on it and a click starts a
+    /// dictation.
+    private func look(for content: PillContent) -> PillLook {
+        guard content.look == .idle, content.click != nil, isHovering else { return content.look }
+        return .hover(keys: HotkeyChords.shared.handsFree.keycaps)
+    }
+
+    /// The pill is done with its message: the idle bar with "Always", else nothing.
     private func showQuiet() {
         notice = nil
         present(
@@ -169,11 +205,25 @@ final class IndicatorPanel {
         )
     }
 
-    private func perform(_ action: PillAction) {
-        onAction?(action)
-        // The pipeline ends the Undo window itself; any other action is done with the pill.
-        if action != .undo {
-            showQuiet()
+    private func perform(_ action: PillView.Action) {
+        switch action {
+        case .click:
+            guard content?.click != nil else { return }
+            if !isRecording {
+                isTapPending = true
+            }
+            onTap?()
+        case .stop:
+            onTap?()
+        case .cancel:
+            onCancel?()
+        case .button:
+            guard let pillAction = content?.look.action else { return }
+            onAction?(pillAction)
+            // The pipeline ends the Undo window itself; any other action is done with the pill.
+            if pillAction != .undo {
+                showQuiet()
+            }
         }
     }
 
@@ -182,31 +232,24 @@ final class IndicatorPanel {
         window != nil && window === built?.panel
     }
 
-    private func tapped() {
-        if !isRecording {
-            isTapPending = true
-        }
-        onTap?()
-    }
-
+    /// Hides the pill. Its look goes back to the idle bar offscreen, so no sweep, check or clock runs while hidden.
     private func orderOut() {
         endDrag()
+        content = nil
         guard let built else { return }
         built.panel.orderOut(nil)
-        // Empty content also stops the spinner.
-        built.pill.content = .init()
+        built.pill.look = .idle
         screen = nil
     }
 
-    private func build() -> (panel: NSPanel, pill: IndicatorPillView) {
+    private func build() -> (panel: NSPanel, pill: PillView) {
         if let built {
             return built
         }
-        let pill = IndicatorPillView(frame: .zero)
-        let panel = Self.makeFloatingPanel(holding: pill, frame: NSRect(x: 0, y: 0, width: 240, height: 40))
+        let pill = PillView(frame: .zero)
+        let panel = Self.makeFloatingPanel(holding: pill, frame: .zero)
         panel.hidesOnDeactivate = false
         pill.onAction = { [weak self] action in self?.perform(action) }
-        pill.onClick = { [weak self] in self?.tapped() }
         pill.onHoverChanged = { [weak self] isInside in self?.hoverChanged(isInside: isInside) }
         pill.onDragBegan = { [weak self] in self?.beginDrag() }
         pill.onDragMoved = { [weak self] point in self?.moveDrag(to: point) }
@@ -231,15 +274,14 @@ final class IndicatorPanel {
 extension IndicatorPanel {
     private func start(_ timer: PillTimer) {
         self.timer = Timer(
-            countdown: Countdown(duration: timer.duration, startingAt: .now, isHeld: isHovering),
-            kind: timer.kind)
+            countdown: Countdown(duration: timer.duration, startingAt: .now, isHeld: isHovering), kind: timer.kind)
         if isHovering, timer.kind == .followsUndoWindow {
             onUndoHoldChanged?(true)
         }
         timerChanged()
     }
 
-    /// Shows the timer on the bar, and waits for the deadline of a running timer that hides the pill.
+    /// Waits for the deadline of a running timer that hides the pill.
     private func timerChanged() {
         guard var timer else { return }
         timer.task?.cancel()
@@ -257,18 +299,19 @@ extension IndicatorPanel {
             }
         }
         self.timer = timer
-        pill.countdown = timer.countdown
     }
 
     private func cancelTimer() {
         timer?.task?.cancel()
         timer = nil
-        built?.pill.countdown = nil
     }
 
-    /// Hover holds the timer and its bar; leaving runs both on from the time that was left.
+    /// Hover holds the timer; leaving runs it on from the time that was left. On the idle bar it shows the chord.
     private func hoverChanged(isInside: Bool) {
         isHovering = isInside
+        if let content, dropTargets == nil {
+            pill.look = look(for: content)
+        }
         guard var timer, timer.countdown.isHeld != isInside else { return }
         if isInside {
             timer.countdown.hold(at: .now)
@@ -286,31 +329,29 @@ extension IndicatorPanel {
 // MARK: Placement
 
 extension IndicatorPanel {
-    /// Moves the pill to its anchor on `screen`, horizontal or vertical to fit the content.
+    /// Moves the pill's room to its anchor on `screen`; the capsule changes shape inside the room.
     private func place(animated: Bool) {
-        guard built != nil, dropTargets == nil, let screen = screen ?? NSScreen.focused else { return }
+        guard let built, dropTargets == nil, let screen = screen ?? NSScreen.focused else { return }
         let anchor = anchor
-        let content = pill.content
-        let visibleFrame = ScreenRect(screen.visibleFrame)
-        let pillFrame: ScreenRect
-        if content.isRound {
-            pill.layout = .round
-            pillFrame = IndicatorPlacement.roundFrame(at: anchor, in: visibleFrame)
-        } else {
-            let isCompact = content.isCompact
-            pill.layout = IndicatorPlacement.isVertical(at: anchor, isCompact: isCompact) ? .vertical : .horizontal
-            pillFrame = IndicatorPlacement.frame(
-                at: anchor, isCompact: isCompact, contentWidth: pill.fittingWidth, in: visibleFrame)
-        }
-        let frame = Self.windowFrame(around: NSRect(pillFrame))
-        guard animated, panel.isVisible else {
-            panel.setFrame(frame, display: true)
+        let room = IndicatorPlacement.room(
+            at: anchor, thickness: Double(PillGeometry.height), in: ScreenRect(screen.visibleFrame))
+        let frame = Self.windowFrame(around: NSRect(room))
+        built.pill.anchor = anchor
+        guard animated, built.panel.isVisible else {
+            built.panel.setFrame(frame, display: true)
             return
         }
-        NSAnimationContext.runAnimationGroup { [panel] context in
+        NSAnimationContext.runAnimationGroup { context in
             context.duration = 0.2
             context.timingFunction = CAMediaTimingFunction(name: .easeOut)
-            panel.animator().setFrame(frame, display: true)
+            built.panel.animator().setFrame(frame, display: true)
+        }
+    }
+
+    /// After a drop (the anchor's setter placed the room): the pill's look again.
+    func dragEnded() {
+        if let content {
+            pill.look = look(for: content)
         }
     }
 
@@ -320,5 +361,16 @@ extension IndicatorPanel {
             self.screen = NSScreen.focused
         }
         place(animated: false)
+    }
+}
+
+extension PillLook {
+    /// The button's action: a message's fix or Undo, or a silent mic's fix.
+    var action: PillAction? {
+        switch self {
+        case .message(let message): message.action
+        case .recording(let recording): recording.words?.action
+        case .idle, .hover, .processing, .done, .dragged: nil
+        }
     }
 }

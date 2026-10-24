@@ -2,9 +2,9 @@
 public enum IndicatorAnchor: String, CaseIterable, Sendable {
     /// A horizontal pill just above the Dock or the screen bottom. The default.
     case bottomCenter
-    /// Mid-height on the left edge; vertical when the pill shows no text.
+    /// Mid-height on the left edge; vertical when the pill shows no words.
     case left
-    /// Mid-height on the right edge; vertical when the pill shows no text.
+    /// Mid-height on the right edge; vertical when the pill shows no words.
     case right
 }
 
@@ -48,7 +48,7 @@ public struct ScreenRect: Sendable, Equatable {
     public var minY: Double { y }
     public var maxX: Double { x + width }
     public var maxY: Double { y + height }
-    var mid: ScreenPoint { ScreenPoint(x: x + width / 2, y: y + height / 2) }
+    public var mid: ScreenPoint { ScreenPoint(x: x + width / 2, y: y + height / 2) }
 
     func overlapArea(with other: Self) -> Double {
         let width = min(maxX, other.maxX) - max(minX, other.minX)
@@ -57,77 +57,79 @@ public struct ScreenRect: Sendable, Equatable {
     }
 }
 
-/// The indicator's placement math: one frame per anchor inside the screen's visible frame (so
-/// the pill never sits under the Dock, menu bar or notch), and the anchor nearest a drop point.
+/// The indicator's placement math: the room the pill's window covers at each anchor, inside the screen's visible frame
+/// (so the pill never sits under the Dock, menu bar or notch), where the capsule sits in that room, and the anchor
+/// nearest a drop point. The capsule's thickness is the pill buttons' measured height plus their margin; the App
+/// measures it and passes it in.
 public enum IndicatorPlacement {
-    /// The pill with text, and every pill at the bottom center, is as wide as its content within these limits.
-    static let minWidth = 120.0
+    /// The longest pill: about 34 characters of text beside a button (CODING_STANDARDS.md, "User-facing text" 7).
     public static let maxWidth = 360.0
-    static let horizontalHeight = 40.0
-    /// Every pill shape is a capsule: 40 pt across its short side.
-    public static let cornerRadius = horizontalHeight / 2
-    /// A compact pill (state dot and level only) at a side edge.
-    static let verticalSize = (width: 40.0, height: 112.0)
-    /// The 0.5.0 idle bar ("Show indicator: Always"): its long and short side, turned 90° at a side edge. The pill
-    /// prototype draws it (`PillGeometry`); placement takes it when the new pill replaces the round one.
+    /// The idle bar ("Show indicator: Always"): its long and short side, turned 90° at a side edge (Wispr Flow's and
+    /// Jot's rest size).
     public static let idleBarLength = 40.0
     public static let idleBarThickness = 8.0
-    /// The round pill under the pointer during a drag.
-    static let dragDiameter = 40.0
     static let bottomInset = 24.0
     static let sideInset = 12.0
     /// A press that moves less than this is a click, not a drag.
     static let dragThreshold = 4.0
 
-    /// `isCompact`: the pill shows only the state dot and the level, so at a side edge it can stand
-    /// vertical. A pill with text stays horizontal at every anchor.
-    public static func isVertical(at anchor: IndicatorAnchor, isCompact: Bool) -> Bool {
-        isCompact && anchor != .bottomCenter
+    /// `canStandVertical`: the pill shows no words (`IndicatorLook.canStandVertical`), so at a side edge it stands
+    /// vertical. A pill with words stays horizontal at every anchor.
+    public static func isVertical(at anchor: IndicatorAnchor, canStandVertical: Bool) -> Bool {
+        canStandVertical && anchor != .bottomCenter
     }
 
-    /// `contentWidth`: what the horizontal pill's content needs; a vertical pill ignores it.
-    public static func frame(
-        at anchor: IndicatorAnchor, isCompact: Bool, contentWidth: Double, in visibleFrame: ScreenRect
+    /// The room the pill's window covers at `anchor`: every capsule the pill takes there fits, so the capsule changes
+    /// shape inside it and the window does not move. A row along the bottom; a square at a side edge, where the pill
+    /// stands vertical or reaches inward.
+    public static func room(at anchor: IndicatorAnchor, thickness: Double, in visibleFrame: ScreenRect) -> ScreenRect {
+        let y = visibleFrame.mid.y - maxWidth / 2
+        return switch anchor {
+        case .bottomCenter:
+            ScreenRect(
+                x: visibleFrame.mid.x - maxWidth / 2, y: visibleFrame.minY + bottomInset, width: maxWidth,
+                height: thickness)
+        case .left: ScreenRect(x: visibleFrame.minX + sideInset, y: y, width: maxWidth, height: maxWidth)
+        case .right: ScreenRect(x: visibleFrame.maxX - sideInset - maxWidth, y: y, width: maxWidth, height: maxWidth)
+        }
+    }
+
+    /// Where a capsule of `width` by `height` sits in `room`. Every shape shares one centre line: the bottom room's
+    /// middle, or at a side edge the axis of a capsule `thickness` across that touches the edge. A capsule at least
+    /// that wide starts at the edge and reaches inward; a thinner one (the idle bar) centres on the axis.
+    public static func capsule(
+        width: Double, height: Double, at anchor: IndicatorAnchor, thickness: Double, in room: ScreenRect
     ) -> ScreenRect {
-        let size =
-            isVertical(at: anchor, isCompact: isCompact)
-            ? verticalSize : (width: min(max(contentWidth, minWidth), maxWidth), height: horizontalHeight)
+        let y = room.mid.y - height / 2
         let x =
             switch anchor {
-            case .bottomCenter: visibleFrame.mid.x - size.width / 2
-            case .left: visibleFrame.minX + sideInset
-            case .right: visibleFrame.maxX - sideInset - size.width
+            case .bottomCenter: room.mid.x - width / 2
+            case .left: width >= thickness ? room.minX : room.minX + (thickness - width) / 2
+            case .right: width >= thickness ? room.maxX - width : room.maxX - (thickness + width) / 2
             }
-        let y =
-            anchor == .bottomCenter
-            ? visibleFrame.minY + bottomInset
-            : visibleFrame.mid.y - size.height / 2
-        return ScreenRect(x: x, y: y, width: size.width, height: size.height)
+        return ScreenRect(x: x, y: y, width: width, height: height)
     }
 
-    /// The small round idle pill ("Show indicator: Always") at its anchor: where the pill with text centers at
-    /// the bottom, and mid-height at a side edge.
-    public static func roundFrame(at anchor: IndicatorAnchor, in visibleFrame: ScreenRect) -> ScreenRect {
-        let x =
-            switch anchor {
-            case .bottomCenter: visibleFrame.mid.x - dragDiameter / 2
-            case .left: visibleFrame.minX + sideInset
-            case .right: visibleFrame.maxX - sideInset - dragDiameter
-            }
-        let y = anchor == .bottomCenter ? visibleFrame.minY + bottomInset : visibleFrame.mid.y - dragDiameter / 2
-        return ScreenRect(x: x, y: y, width: dragDiameter, height: dragDiameter)
+    /// The dragged pill's room: a circle `thickness` across, centred under the pointer.
+    public static func dragRoom(centeredAt point: ScreenPoint, thickness: Double) -> ScreenRect {
+        ScreenRect(x: point.x - thickness / 2, y: point.y - thickness / 2, width: thickness, height: thickness)
     }
 
-    public static func dragFrame(centeredAt point: ScreenPoint) -> ScreenRect {
-        let radius = dragDiameter / 2
-        return ScreenRect(x: point.x - radius, y: point.y - radius, width: dragDiameter, height: dragDiameter)
+    /// The drop target at `anchor`: the circle the dragged pill is, where it lands there.
+    public static func dropTarget(at anchor: IndicatorAnchor, thickness: Double, in visibleFrame: ScreenRect)
+        -> ScreenRect
+    {
+        capsule(
+            width: thickness, height: thickness, at: anchor, thickness: thickness,
+            in: room(at: anchor, thickness: thickness, in: visibleFrame))
     }
 
     /// The anchor whose drop target center is nearest `point`.
-    public static func nearestAnchor(to point: ScreenPoint, in visibleFrame: ScreenRect) -> IndicatorAnchor {
+    public static func nearestAnchor(to point: ScreenPoint, thickness: Double, in visibleFrame: ScreenRect)
+        -> IndicatorAnchor
+    {
         func distance(to anchor: IndicatorAnchor) -> Double {
-            let center = frame(at: anchor, isCompact: true, contentWidth: minWidth, in: visibleFrame).mid
-            return center.distance(to: point)
+            dropTarget(at: anchor, thickness: thickness, in: visibleFrame).mid.distance(to: point)
         }
         return IndicatorAnchor.allCases.min { distance(to: $0) < distance(to: $1) } ?? .bottomCenter
     }

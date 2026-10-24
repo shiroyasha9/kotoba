@@ -137,6 +137,12 @@ final class HotkeyTap: Sendable {
         state.withLock { send($0.classifier.pillClick()) }
     }
 
+    /// The hands-free pill's Cancel: Esc, as the key sends it while the pill shows a recording. Sent under the lock, so
+    /// it keeps its place among the key events.
+    func sendEscape() {
+        state.withLock { _ in send([.escape]) }
+    }
+
     /// A mouse button went down (`MouseDownMonitors`), on the main thread after the click: during a press not yet
     /// announced it drops the press. Sent under the lock, so the press's own events cannot pass it; a late one, after the
     /// press ended or showed, changes nothing.

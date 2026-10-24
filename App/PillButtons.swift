@@ -1,27 +1,61 @@
 import AppKit
 import SwiftUI
 
-// The indicator pill's two buttons: its action ("Undo", "Choose Mic…") and, for VoiceOver, its own click.
+// The pill's buttons and the idle hover's keycaps (docs/research/ui-redesign.md, "Pill"). They sit on the pill's
+// glass, so none has glass of its own: Apple's rule is fills on glass, never glass on glass (lint
+// `glass_on_navigation_layer_only`).
 
-/// The pill's action button. The pill's panel never becomes key, and AppKit draws a `.glass` button's title
-/// dimmed in a window that is not key, too faint to read on the dark pill; SwiftUI's `controlActiveState`
-/// draws it as in the key window.
+/// A pill button: a text button ("Retry", "Undo") or a round symbol button (Cancel ×, Stop ■), in a system fill.
 struct PillButton: View {
-    var title = ""
+    enum Face: Equatable {
+        case text(String)
+        /// A round button that shows `symbol`; VoiceOver reads `label`.
+        case symbol(String, label: String)
+    }
+
+    var face = Face.text("")
+    /// The accent fill, for the one main action (Stop); the others take the neutral fill.
+    var isProminent = false
     var onClick: () -> Void = {}
 
     var body: some View {
-        Button(title, action: onClick)
-            .buttonStyle(.glass)
-            .controlSize(.small)
-            .environment(\.controlActiveState, .key)
+        let button = Button(action: onClick) {
+            switch face {
+            case .text(let title): Text(title)
+            case .symbol(let symbol, let label): Image(systemName: symbol).accessibilityLabel(label)
+            }
+        }
+        .buttonBorderShape(isRound ? .circle : .capsule)
+        // A large round button is as tall as a regular text button (24.5 and 24 pt on macOS 27), so both keep the
+        // same margin in the capsule.
+        .controlSize(isRound ? .large : .regular)
+        // The pill's panel is never key; this draws the button as in the key window, not dimmed.
+        .environment(\.controlActiveState, .key)
+        if isProminent {
+            button.buttonStyle(.borderedProminent)
+        } else {
+            button.buttonStyle(.bordered)
+        }
+    }
+
+    private var isRound: Bool {
+        if case .symbol = face { return true }
+        return false
+    }
+
+    /// What VoiceOver reads for the button.
+    var label: String {
+        switch face {
+        case .text(let title): title
+        case .symbol(_, let label): label
+        }
     }
 }
 
-/// Acts on the first click in a window that is not key, so a pill action works without activating kotoba. For VoiceOver
-/// it is the action's button itself ("Choose Mic…"), a sibling of the pill's own click, with the same action path as a
-/// click: offscreen and before the panel shows, SwiftUI exposes no button inside a hosting view.
-final class FirstClickHostingView: NSHostingView<PillButton> {
+/// Hosts a `PillButton` in the pill. It acts on the first click in the panel that is never key, so a pill action works
+/// without activating kotoba. For VoiceOver it is the button itself, offscreen too: SwiftUI exposes no button inside a
+/// hosting view before it shows.
+final class PillButtonHost: NSHostingView<PillButton> {
     override func acceptsFirstMouse(for event: NSEvent?) -> Bool {
         true
     }
@@ -35,7 +69,7 @@ final class FirstClickHostingView: NSHostingView<PillButton> {
     }
 
     override func accessibilityLabel() -> String? {
-        rootView.title
+        rootView.label
     }
 
     override func accessibilityChildren() -> [Any]? {
@@ -53,32 +87,14 @@ final class FirstClickHostingView: NSHostingView<PillButton> {
     }
 }
 
-/// The pill's click as a VoiceOver button over the whole pill; a press is the click (`onClick`). Custom: an AppKit
-/// view that handles its own mouse events has no control to expose. A view under the pill's content, not an
-/// `NSAccessibilityElement`: a view is a main-actor object like the pill, so the pill's hit test can hand it over
-/// (`IndicatorPillView.accessibilityHitTest`). It takes no mouse event.
-final class PillTapTarget: NSView {
-    private weak var pill: IndicatorPillView?
+/// The idle pill's keycaps on hover: the shared `Keycaps`, with legends in the primary colour (secondary legends were
+/// almost gone on coloured glass, owner trial 2026-10-24). VoiceOver reads the pill, not the caps.
+struct PillKeycaps: View {
+    var keys: [String] = []
 
-    init(pill: IndicatorPillView) {
-        self.pill = pill
-        super.init(frame: .zero)
-        setAccessibilityElement(false)
-        setAccessibilityRole(.button)
-    }
-
-    @available(*, unavailable)
-    required init?(coder: NSCoder) {
-        fatalError("PillTapTarget is built in code")
-    }
-
-    override func hitTest(_ point: NSPoint) -> NSView? {
-        nil
-    }
-
-    override func accessibilityPerformPress() -> Bool {
-        guard let onClick = pill?.onClick, pill?.content.click != nil else { return false }
-        onClick()
-        return true
+    var body: some View {
+        Keycaps(keys: keys)
+            .foregroundStyle(.primary)
+            .accessibilityHidden(true)
     }
 }

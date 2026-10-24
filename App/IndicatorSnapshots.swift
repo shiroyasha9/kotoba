@@ -5,216 +5,171 @@ import KotobaProviders
 // MARK: - Snapshots
 
 extension IndicatorPanel {
-    /// One pill to render: a state with its context.
-    private struct SnapshotRow {
+    /// One pill to render: a name and what the pill shows.
+    private struct Sample {
         let name: String
-        let state: DictationState
-        // Azure has the longest name, so its texts are the widest.
-        var context = StatusContext(provider: .azure)
-        /// The mic level the meter shows.
-        var level = 0.6
+        let content: PillContent
+        /// The mic level the bars show; nil: the mirrored ripple of a few speech levels.
+        var isSilent = false
+    }
 
-        init(
-            name: String, _ phase: DictationPhase, context: StatusContext = .init(provider: .azure), level: Double = 0.6
-        ) {
-            self.name = name
-            state = DictationState(phase)
-            self.context = context
-            self.level = level
-        }
+    /// Azure has the longest name, so its words are the widest.
+    private static let context = StatusContext(provider: .azure)
 
-        init(name: String, _ notice: DictationNotice, context: StatusContext = .init(provider: .azure)) {
-            self.name = name
-            state = DictationState(.idle, notice: notice)
-            self.context = context
+    /// The pill for `state`, as the panel maps it.
+    private static func sample(
+        _ name: String, _ state: DictationState, context: StatusContext = context,
+        visibility: IndicatorVisibility = .whileDictating
+    ) -> Sample? {
+        let timedFrom =
+            state.phase == .recording(isLong: true)
+                || state.phase
+                    == .recording(isLong: true, isPushToTalk: true)
+            ? ContinuousClock.now - .seconds(600) : nil
+        return content(for: state, context: context, visibility: visibility, timedFrom: timedFrom).map {
+            Sample(
+                name: name, content: $0,
+                isSilent: IndicatorLook(state, showsIdleBar: false, isSecureInputOn: false)
+                    == .recording(.init(isHandsFree: !Self.isPushToTalk(state), isSilent: true)))
         }
     }
 
-    /// Every state the owner reads, plus the dragged pill. A compact pill renders at the bottom and at an edge
-    /// (vertical there); a pill with text looks the same at every anchor, so it renders once. The run fails
-    /// when a pill's text is cut off.
+    private static func isPushToTalk(_ state: DictationState) -> Bool {
+        if case .recording(_, _, _, isPushToTalk: true) = state.phase { true } else { false }
+    }
+
+    /// Every look the owner sees: each phase and notice through the panel's own mapping, the hover, and the App's
+    /// notices. A look with no words renders at the bottom and at a side edge (vertical there); a look with words
+    /// looks the same at every anchor, so it renders once. The run fails on content longer than the pill, cut-off
+    /// words, words in a live pill, a second glass view, a VoiceOver problem, and any animation at idle.
     static func snapshots() -> [Snapshot] {
+        samples.flatMap { sample in
+            let anchors: [IndicatorAnchor] =
+                sample.content.look.canStandVertical ? [.bottomCenter, .left] : [.bottomCenter]
+            return anchors.map { anchor in
+                var snapshot = Snapshot(name: "pill-\(sample.name)-\(anchor.rawValue)") {
+                    pill(showing: sample, at: anchor)
+                } check: { view in
+                    guard let pill = view as? PillView else { return nil }
+                    return problem(of: pill, named: sample.name)
+                }
+                // The pill floats over other apps, so its glass shows over the fixed desktop.
+                snapshot.floatsOverDesktop = true
+                return snapshot
+            }
+        }
+    }
+
+    private static var samples: [Sample] {
         let id = DictationID()
-        let phases: [DictationPhase] = [
-            .idle, .recording(isLong: false), .transcribing, .cleaning, .undoable, .polishing,
+        var silent = context
+        // A long built-in mic name, the widest help tag.
+        silent.microphoneName = "MacBook Pro Microphone"
+        let denied = StatusContext(provider: .azure, microphone: .denied)
+        let secure = StatusContext(provider: .azure, isSecureInputOn: true)
+        let states: [Sample?] = [
+            sample("idle", .idle, visibility: .always),
+            sample("hands-free", .init(.recording(isLong: false))),
+            sample("hands-free-cleanup", .init(.recording(isLong: false, isCleaned: true))),
+            sample("push-to-talk", .init(.recording(isLong: false, isPushToTalk: true))),
+            sample("push-to-talk-cleanup", .init(.recording(isLong: false, isCleaned: true, isPushToTalk: true))),
+            sample("silent", .init(.recording(isLong: false, isSilent: true, isPushToTalk: true)), context: silent),
+            sample("silent-hands-free", .init(.recording(isLong: false, isSilent: true)), context: silent),
+            sample(
+                "silent-mic-off", .init(.recording(isLong: false, isSilent: true, isPushToTalk: true)),
+                context: denied),
+            sample("silent-mic-off-hands-free", .init(.recording(isLong: false, isSilent: true)), context: denied),
+            sample("secure-input", .init(.recording(isLong: false, isPushToTalk: true)), context: secure),
+            sample("secure-input-hands-free", .init(.recording(isLong: false)), context: secure),
+            sample("timer", .init(.recording(isLong: true, isPushToTalk: true))),
+            sample("timer-hands-free", .init(.recording(isLong: true))),
+            sample("transcribing", .init(.transcribing)),
+            sample("cleaning", .init(.cleaning)),
+            sample("rewriting", .init(.polishing)),
+            sample("done", .init(.idle, isPasted: true)),
+            sample("undo", .init(.undoable)),
         ]
+        return states.compactMap(\.self) + noticeSamples(id)
+            + [
+                Sample(
+                    name: "hover", content: PillContent(look: .hover(keys: ["⌃", "⌥", "⌘"]), click: .startsDictation)),
+                // Auto-learn's notice; the longest word that fits.
+                Sample(name: "learned", content: PillContent(.learned("Kubernetes", id: UUID()))),
+                // A development build beside the release app.
+                Sample(name: "yielding", content: PillContent(.yieldsToRelease)),
+            ]
+    }
+
+    /// Each notice, once for each wording. The switch has no default, so a new notice does not compile until it has a
+    /// sample here.
+    private static func noticeSamples(_ id: DictationID) -> [Sample] {
         let notices: [DictationNotice] = [
             .failed(id), .timedOut(id), .connectionBlocked(id), .hostNotFound(id, host: "x"), .rejected(id, .other),
             .needsSetup(id, .key), .cleanupFailed(id), .cleanupTooSlow(id), .returnSkipped(id), .copied(id),
             .recovered(id), .captureFailed, .nothingRecorded, .audioNotSaved(.diskFull), .audioCut(id, .diskFull),
             .clipboardNotKept(id), .polished(id, isReplaced: true), .polishFailed(.failed),
         ]
-        var snapshots = [
-            Snapshot(name: "indicator-drag") { pill(showing: .init(), anchor: nil) },
-            Snapshot(name: "indicator-idle-bottomCenter") {
-                pill(showing: .idle(click: .startsDictation), anchor: .bottomCenter)
-            } check: { view in
-                (view as? IndicatorPillView).flatMap { accessibilityProblem(of: $0, content: $0.content) }
-            },
-        ]
-        var contents = (phases.flatMap(rows(for:)) + notices.flatMap(rows(for:))).compactMap { row in
-            content(for: row.state, context: row.context, visibility: .whileDictating).map { (row.name, $0, row.level) }
-        }
-        // Auto-learn's notice; the longest word that fits.
-        contents.append(("learned", .init(.learned("Kubernetes", id: UUID())), 0.6))
-        // A development build beside the release app.
-        contents.append(("yielding", .init(.yieldsToRelease), 0.6))
-        for (name, content, level) in contents {
-            let anchors: [IndicatorAnchor] = content.isCompact ? [.bottomCenter, .left] : [.bottomCenter]
-            for anchor in anchors {
-                snapshots.append(
-                    Snapshot(name: "indicator-\(name)-\(anchor.rawValue)") {
-                        pill(showing: content, anchor: anchor, level: level)
-                    } check: { view in
-                        guard let pill = view as? IndicatorPillView else { return nil }
-                        if pill.isTextTruncated { return "the pill text \"\(content.text)\" is cut off" }
-                        return accessibilityProblem(of: pill, content: content)
-                    })
+        return notices.flatMap { notice -> [Sample?] in
+            switch notice {
+            case .needsSetup, .hostNotFound:
+                setupSamples(id)
+            case .rejected:
+                [RejectReason.emptyTranscript, .audioMissing, .other].map {
+                    sample("rejected-\($0.rawValue)", .init(.idle, notice: .rejected(id, $0)))
+                }
+            case .copied:
+                [
+                    sample("copied", .init(.idle, notice: notice)),
+                    sample(
+                        "copied-no-accessibility", .init(.idle, notice: notice),
+                        context: StatusContext(provider: .azure, isPasteAllowed: false)),
+                ]
+            case .captureFailed:
+                [
+                    sample("captureFailed", .init(.idle, notice: notice)),
+                    sample(
+                        "captureFailed-denied", .init(.idle, notice: notice),
+                        context: StatusContext(provider: .azure, microphone: .denied)),
+                ]
+            // Named after the case.
+            case .failed, .timedOut, .connectionBlocked, .cleanupFailed, .cleanupTooSlow, .returnSkipped, .recovered,
+                .nothingRecorded, .clipboardNotKept:
+                [sample(String("\(notice)".prefix { $0 != "(" }), .init(.idle, notice: notice))]
+            case .audioNotSaved:
+                [AudioLoss.diskFull, .other].map {
+                    sample("audioNotSaved-\($0)", .init(.idle, notice: .audioNotSaved($0)))
+                }
+            case .audioCut(let id, _):
+                [AudioLoss.diskFull, .other].map { sample("audioCut-\($0)", .init(.idle, notice: .audioCut(id, $0))) }
+            case .polished(let id, _):
+                [
+                    sample("polished", .init(.idle, notice: .polished(id, isReplaced: true))),
+                    sample("polished-copied", .init(.idle, notice: .polished(id, isReplaced: false))),
+                ]
+            case .polishFailed:
+                [PolishFailure.nothingToPolish, .cutOff, .tooSlow, .needsSetup(.key), .needsSetup(.credit), .failed].map
+                {
+                    sample("polishFailed-\(snapshotName(of: $0))", .init(.idle, notice: .polishFailed($0)))
+                }
             }
         }
-        // The pill floats over other apps, so its glass shows over the fixed desktop.
-        return snapshots.map {
-            var snapshot = $0
-            snapshot.floatsOverDesktop = true
-            return snapshot
-        }
-    }
-
-    /// What VoiceOver gets from the pill, or nil when it is right: the pill's click as one button with its label, and
-    /// the action's button beside it, not inside; a press on each runs the same path as a click.
-    private static func accessibilityProblem(of pill: IndicatorPillView, content: IndicatorPillView.Content) -> String?
-    {
-        let children = pill.accessibilityChildren() ?? []
-        let buttons = children.compactMap { $0 as? NSAccessibilityProtocol }.filter {
-            $0.accessibilityRole() == .button
-        }
-        let label = content.click.map(StatusText.pillClickLabel)
-        let taps = buttons.filter { $0 is PillTapTarget }
-        guard taps.map({ $0.accessibilityLabel() }) == (label.map { [$0] } ?? []) else {
-            return "VoiceOver gets \(taps.count) click buttons, not one \"\(label ?? "none")\""
-        }
-        var clicks = 0
-        pill.onClick = { clicks += 1 }
-        if let tap = taps.first, !tap.accessibilityPerformPress() || clicks != 1 {
-            return "a VoiceOver press on \"\(label ?? "")\" does not click the pill"
-        }
-        // VoiceOver's pointer at the pill's leading end, over the dot and the text.
-        let frame = NSAccessibility.screenRect(fromView: pill, rect: pill.bounds)
-        let leading = NSPoint(x: frame.minX + frame.height / 2, y: frame.midY)
-        if let tap = taps.first, pill.accessibilityHitTest(leading) as AnyObject !== tap as AnyObject {
-            return "VoiceOver's pointer on the pill does not reach \"\(label ?? "")\""
-        }
-        guard let action = content.action, pill.layout == .horizontal else { return nil }
-        guard let button = buttons.first(where: { $0 is NSView && $0.accessibilityLabel() == action.title }),
-            let view = button as? NSView
-        else {
-            return "VoiceOver gets no \"\(action.title)\" button beside the pill's click"
-        }
-        let buttonFrame = NSAccessibility.screenRect(fromView: view, rect: view.bounds)
-        if pill.accessibilityHitTest(NSPoint(x: buttonFrame.midX, y: buttonFrame.midY)) as AnyObject !== view {
-            return "VoiceOver's pointer on \"\(action.title)\" does not reach it"
-        }
-        var pressed: PillAction?
-        pill.onAction = { pressed = $0 }
-        return button.accessibilityPerformPress() && pressed == action
-            ? nil : "a VoiceOver press on \"\(action.title)\" does not run its action"
-    }
-
-    /// A long built-in mic name, the widest "No sound" text.
-    private static var silent: StatusContext {
-        var context = StatusContext(provider: .azure)
-        context.microphoneName = "MacBook Pro Microphone"
-        return context
-    }
-
-    /// The rows for one phase. The switch has no default, so a new phase does not compile until it has rows here;
-    /// give it a sample in `snapshots()` too.
-    private static func rows(for phase: DictationPhase) -> [SnapshotRow] {
-        switch phase {
-        case .idle: []
-        case .recording: recordingRows
-        case .transcribing: [SnapshotRow(name: "transcribing", phase)]
-        case .cleaning: [SnapshotRow(name: "cleaning", phase)]
-        case .undoable: [SnapshotRow(name: "undoable", phase)]
-        case .polishing: [SnapshotRow(name: "polishing", phase)]
-        }
-    }
-
-    /// The rows for one notice, as `rows(for:)` for a phase.
-    private static func rows(for notice: DictationNotice) -> [SnapshotRow] {
-        switch notice {
-        case .needsSetup(let id, _), .hostNotFound(let id, _):
-            setupRows(of: id)
-        case .rejected(let id, _):
-            [RejectReason.emptyTranscript, .audioMissing, .other].map {
-                SnapshotRow(name: "rejected-\($0.rawValue)", .rejected(id, $0))
-            }
-        case .copied:
-            [
-                SnapshotRow(name: "copied", notice),
-                SnapshotRow(
-                    name: "copied-no-accessibility", notice,
-                    context: StatusContext(provider: .azure, isPasteAllowed: false)),
-            ]
-        case .captureFailed:
-            [
-                SnapshotRow(name: "captureFailed", notice),
-                SnapshotRow(
-                    name: "captureFailed-denied", notice,
-                    context: StatusContext(provider: .azure, microphone: .denied)),
-            ]
-        // Named after the case, as its file always was.
-        case .failed, .timedOut, .connectionBlocked, .cleanupFailed, .cleanupTooSlow, .returnSkipped, .recovered,
-            .nothingRecorded, .clipboardNotKept:
-            [SnapshotRow(name: String("\(notice)".prefix { $0 != "(" }), notice)]
-        case .audioNotSaved: lossRows(named: "audioNotSaved") { .audioNotSaved($0) }
-        case .audioCut(let id, _): lossRows(named: "audioCut") { .audioCut(id, $0) }
-        // The replaced and the new-text outcome.
-        case .polished(let id, _):
-            [
-                SnapshotRow(name: "polished", .polished(id, isReplaced: true)),
-                SnapshotRow(name: "polished-copied", .polished(id, isReplaced: false)),
-            ]
-        case .polishFailed:
-            [PolishFailure.nothingToPolish, .cutOff, .tooSlow, .needsSetup(.key), .needsSetup(.credit), .failed].map {
-                SnapshotRow(name: "polishFailed-\(Self.snapshotName(of: $0))", .polishFailed($0))
-            }
-        }
-    }
-
-    /// The recording pill: plain, long, under Secure Input, silent (and silent with Microphone access off), cleaned up.
-    private static var recordingRows: [SnapshotRow] {
-        [
-            SnapshotRow(name: "recording", .recording(isLong: false)),
-            SnapshotRow(name: "recording-long", .recording(isLong: true)),
-            SnapshotRow(
-                name: "secure-input", .recording(isLong: false),
-                context: StatusContext(provider: .azure, isSecureInputOn: true)),
-            SnapshotRow(name: "recording-silent", .recording(isLong: false, isSilent: true), context: silent, level: 0),
-            SnapshotRow(
-                name: "recording-silent-denied", .recording(isLong: false, isSilent: true),
-                context: StatusContext(provider: .azure, microphone: .denied), level: 0),
-            SnapshotRow(name: "recording-cleaned", .recording(isLong: false, isCleaned: true)),
-        ]
+        .compactMap(\.self)
     }
 
     /// What the route needs from the owner, and an endpoint whose host does not resolve: named by its first label when
     /// that fits, else not named.
-    private static func setupRows(of id: DictationID) -> [SnapshotRow] {
+    private static func setupSamples(_ id: DictationID) -> [Sample?] {
         [
-            SnapshotRow(name: "needs-key", .needsSetup(id, .key)),
-            SnapshotRow(name: "needs-endpoint", .needsSetup(id, .endpoint)),
-            SnapshotRow(name: "needs-credit", .needsSetup(id, .credit)),
-            SnapshotRow(name: "hostNotFound-label", .hostNotFound(id, host: "kotoba-asr.cognitiveservices.azure.com")),
-            SnapshotRow(
-                name: "hostNotFound-unnamed",
-                .hostNotFound(id, host: "my-speech-resource.cognitiveservices.azure.com")),
+            sample("needs-key", .init(.idle, notice: .needsSetup(id, .key))),
+            sample("needs-endpoint", .init(.idle, notice: .needsSetup(id, .endpoint))),
+            sample("needs-credit", .init(.idle, notice: .needsSetup(id, .credit))),
+            sample(
+                "hostNotFound-label",
+                .init(.idle, notice: .hostNotFound(id, host: "kotoba-asr.cognitiveservices.azure.com"))),
+            sample(
+                "hostNotFound-unnamed",
+                .init(.idle, notice: .hostNotFound(id, host: "my-speech-resource.cognitiveservices.azure.com"))),
         ]
-    }
-
-    /// A lost-audio notice once for each cause: only a full disk says "Disk full?".
-    private static func lossRows(named name: String, _ notice: (AudioLoss) -> DictationNotice) -> [SnapshotRow] {
-        [AudioLoss.diskFull, .other].map { SnapshotRow(name: "\(name)-\($0)", notice($0)) }
     }
 
     private static func snapshotName(of failure: PolishFailure) -> String {
@@ -227,36 +182,125 @@ extension IndicatorPanel {
         }
     }
 
-    /// The pill at its size for `content` at `anchor`; a nil anchor shows the dragged pill. A pill with a timer shows
-    /// its bar held at 60 %.
-    private static func pill(
-        showing content: IndicatorPillView.Content, anchor: IndicatorAnchor?, level: Double = 0.6
-    ) -> IndicatorPillView {
-        let pill = IndicatorPillView(frame: .zero)
-        pill.content = content
-        pill.level = level
-        if let timer = content.timer {
-            let now = ContinuousClock.now
-            var countdown = Countdown(duration: timer.duration, startingAt: now - timer.duration * 0.4)
-            countdown.hold(at: now)
-            pill.countdown = countdown
+    /// The pill showing `sample` at `anchor`, in a view the size of its capsule (at least as thick as the capsule), after
+    /// a few level events, so the bars show the mirrored ripple, not one flat step.
+    private static func pill(showing sample: Sample, at anchor: IndicatorAnchor) -> PillView {
+        let pill = PillView(frame: .zero)
+        pill.anchor = anchor
+        pill.isClickable = sample.content.click != nil
+        pill.toolTip = sample.content.toolTip
+        pill.look = sample.content.look
+        for level in [0.3, 0.9, 0.5, 0.8] where sample.content.look != .processing {
+            pill.level = sample.isSilent ? 0 : level
         }
-        let frame: ScreenRect
-        if content.isRound, let anchor {
-            pill.layout = .round
-            frame = IndicatorPlacement.roundFrame(at: anchor, in: ScreenRect(x: 0, y: 0, width: 1512, height: 945))
-        } else if let anchor {
-            pill.layout =
-                IndicatorPlacement.isVertical(at: anchor, isCompact: content.isCompact) ? .vertical : .horizontal
-            // Only the size matters here, so any visible frame does.
-            frame = IndicatorPlacement.frame(
-                at: anchor, isCompact: content.isCompact, contentWidth: pill.fittingWidth,
-                in: ScreenRect(x: 0, y: 0, width: 1512, height: 945))
-        } else {
-            pill.layout = .round
-            frame = IndicatorPlacement.dragFrame(centeredAt: ScreenPoint(x: 0, y: 0))
-        }
-        pill.setFrameSize(NSSize(width: frame.width, height: frame.height))
+        let size = pill.shapeSize
+        pill.setFrameSize(
+            NSSize(width: max(size.width, PillGeometry.height), height: max(size.height, PillGeometry.height)))
         return pill
+    }
+
+    /// What is wrong with the pill as drawn, or nil.
+    private static func problem(of pill: PillView, named name: String) -> String? {
+        if pill.isTooLong { return "the content of \(name) needs more than the longest pill" }
+        if pill.isTextTruncated { return "the pill words in \(name) are cut off" }
+        if pill.isOverflowing { return "the content of \(name) is longer than its capsule" }
+        if pill.isLive, !pill.shownWords.isEmpty {
+            return "the live pill \(name) shows the words \(pill.shownWords); a live phase shows its shape only"
+        }
+        let glassCount = glassViews(in: pill)
+        if glassCount != 1 { return "the pill \(name) has \(glassCount) glass views, not one: no glass on glass" }
+        return accessibilityProblem(of: pill) ?? (pill.look == .idle ? idleCostProblem() : nil)
+    }
+
+    private static func glassViews(in view: NSView) -> Int {
+        (view is NSGlassEffectView ? 1 : 0) + view.subviews.map(glassViews).reduce(0, +)
+    }
+
+    /// What VoiceOver gets, or nil when it is right: the pill's label, and each button the look shows as a child that a
+    /// press runs; the idle bar with a click is a button that a press clicks.
+    private static func accessibilityProblem(of pill: PillView) -> String? {
+        guard let label = pill.accessibilityLabel(), !label.isEmpty else { return "the pill has no VoiceOver label" }
+        let buttons = (pill.accessibilityChildren() ?? []).compactMap { $0 as? PillButtonHost }
+        let labels = buttons.map { $0.accessibilityLabel() ?? "" }
+        guard labels == pill.look.buttonLabels else {
+            return "VoiceOver gets the buttons \(labels), not \(pill.look.buttonLabels)"
+        }
+        var pressed: [PillView.Action] = []
+        pill.onAction = { pressed.append($0) }
+        for button in buttons where !button.accessibilityPerformPress() {
+            return "a VoiceOver press on \(button.accessibilityLabel() ?? "") does nothing"
+        }
+        if pill.accessibilityRole() == .button, !pill.accessibilityPerformPress() {
+            return "a VoiceOver press on the idle pill does not click it"
+        }
+        let expected = buttons.count + (pill.accessibilityRole() == .button ? 1 : 0)
+        return pressed.count == expected ? nil : "VoiceOver presses ran \(pressed.count) actions, not \(expected)"
+    }
+
+    /// No work at idle: the idle bar has no animation, also after a sweep and a check, and the sweep runs while text is
+    /// on its way. Layer animations are the only clock the pill has at idle (no timer, no display link).
+    private static func idleCostProblem() -> String? {
+        let pill = PillView(frame: .zero)
+        if !pill.animatedLayers.isEmpty { return "the idle pill animates \(pill.animatedLayers.count) layers" }
+        pill.look = .processing
+        guard pill.animatedLayers.count == PillBars.count else {
+            return "the sweep animates \(pill.animatedLayers.count) layers, not \(PillBars.count)"
+        }
+        pill.look = .done
+        pill.look = .idle
+        return pill.animatedLayers.isEmpty
+            ? nil : "after a sweep the idle pill animates \(pill.animatedLayers.count) layers"
+    }
+}
+
+// MARK: Checks
+
+extension PillView {
+    /// Every layer under the pill with a running animation: the idle-cost check wants none at idle.
+    var animatedLayers: [CALayer] {
+        // A view's layer is also its parent view's sublayer, so each layer counts once.
+        var seen = Set<ObjectIdentifier>()
+        func walk(_ layer: CALayer) -> [CALayer] {
+            guard seen.insert(ObjectIdentifier(layer)).inserted else { return [] }
+            let own = (layer.animationKeys() ?? []).isEmpty ? [] : [layer]
+            return own + (layer.sublayers ?? []).flatMap(walk)
+        }
+        func walk(_ view: NSView) -> [CALayer] {
+            (view.layer.map(walk) ?? []) + view.subviews.flatMap(walk)
+        }
+        return walk(self)
+    }
+
+    /// The content is longer than the capsule, so an item sits outside it. Valid after layout.
+    var isOverflowing: Bool {
+        let content = stack.arrangedSubviews.map(\.frame).reduce(NSRect.null) { $0.union($1) }
+        return !content.isNull && !stack.bounds.insetBy(dx: -0.5, dy: -0.5).contains(content)
+    }
+
+    /// The content needs more than the longest pill, so its words cannot all show.
+    var isTooLong: Bool {
+        contentLength > PillGeometry.maxLength + 0.5
+    }
+
+    /// The words or the time are narrower than their text, so they end in "…" or are cut. Valid after layout.
+    var isTextTruncated: Bool {
+        stack.arrangedSubviews.contains {
+            guard let text = $0 as? NSTextField else { return false }
+            return text.intrinsicContentSize.width > text.frame.width + 0.5
+        }
+    }
+
+    /// A live phase with no words: a recording that shows only its bars and buttons, or the sweep.
+    var isLive: Bool {
+        switch look {
+        case .processing: true
+        case .recording(let recording): recording.words == nil && recording.timedFrom == nil
+        case .idle, .hover, .done, .message, .dragged: false
+        }
+    }
+
+    /// The words the pill shows, its time included.
+    var shownWords: [String] {
+        stack.arrangedSubviews.compactMap { ($0 as? NSTextField)?.stringValue }
     }
 }

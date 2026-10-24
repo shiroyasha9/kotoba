@@ -183,6 +183,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         Task { [audioRequests = audioRequests.stream] in await AudioRequest.send(audioRequests, to: pipeline) }
         // A click on the idle or recording pill is a chord tap; the front app keeps focus, so the paste goes there.
         indicator.onTap = { [hotkeys] in hotkeys.sendTap() }
+        indicator.onCancel = { [hotkeys] in hotkeys.sendEscape() }
         Task {
             for await state in pipeline.states {
                 render(state)

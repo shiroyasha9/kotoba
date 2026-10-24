@@ -6,68 +6,64 @@ import Testing
 struct IndicatorPlacementTests {
     static let visible = ScreenRect(x: 0, y: 70, width: 1512, height: 845)
 
-    struct FrameRow: Sendable, CustomTestStringConvertible {
-        let anchor: IndicatorAnchor
-        let isCompact: Bool
-        let frame: ScreenRect
+    /// The capsule's thickness: a 24.5 pt button and 6 pt above and below it.
+    static let thickness = 36.5
 
-        var testDescription: String { "\(anchor), compact: \(isCompact)" }
-    }
-
-    static let frameRows: [FrameRow] = [
-        FrameRow(anchor: .bottomCenter, isCompact: true, frame: ScreenRect(x: 636, y: 94, width: 240, height: 40)),
-        FrameRow(anchor: .bottomCenter, isCompact: false, frame: ScreenRect(x: 636, y: 94, width: 240, height: 40)),
-        FrameRow(anchor: .left, isCompact: true, frame: ScreenRect(x: 12, y: 436.5, width: 40, height: 112)),
-        FrameRow(anchor: .left, isCompact: false, frame: ScreenRect(x: 12, y: 472.5, width: 240, height: 40)),
-        FrameRow(anchor: .right, isCompact: true, frame: ScreenRect(x: 1460, y: 436.5, width: 40, height: 112)),
-        FrameRow(anchor: .right, isCompact: false, frame: ScreenRect(x: 1260, y: 472.5, width: 240, height: 40)),
+    static let roomRows: [(IndicatorAnchor, ScreenRect)] = [
+        (.bottomCenter, ScreenRect(x: 576, y: 94, width: 360, height: 36.5)),
+        (.left, ScreenRect(x: 12, y: 312.5, width: 360, height: 360)),
+        (.right, ScreenRect(x: 1140, y: 312.5, width: 360, height: 360)),
     ]
 
-    @Test(arguments: frameRows)
-    func theFrameSitsAtItsAnchorInsideTheVisibleFrame(_ row: FrameRow) {
-        let frame = IndicatorPlacement.frame(
-            at: row.anchor, isCompact: row.isCompact, contentWidth: 240, in: Self.visible)
-        #expect(frame == row.frame)
+    @Test(arguments: roomRows)
+    func theRoomSitsAtItsAnchorInsideTheVisibleFrame(_ anchor: IndicatorAnchor, _ room: ScreenRect) {
+        let frame = IndicatorPlacement.room(at: anchor, thickness: Self.thickness, in: Self.visible)
+        #expect(frame == room)
         #expect(frame.minX >= Self.visible.minX && frame.maxX <= Self.visible.maxX)
         #expect(frame.minY >= Self.visible.minY && frame.maxY <= Self.visible.maxY)
     }
 
-    static let roundRows: [(IndicatorAnchor, ScreenRect)] = [
-        (.bottomCenter, ScreenRect(x: 736, y: 94, width: 40, height: 40)),
-        (.left, ScreenRect(x: 12, y: 472.5, width: 40, height: 40)),
-        (.right, ScreenRect(x: 1460, y: 472.5, width: 40, height: 40)),
-    ]
-
-    @Test(arguments: roundRows)
-    func theRoundIdlePillSitsWhereThePillWithTextCenters(_ anchor: IndicatorAnchor, _ frame: ScreenRect) {
-        let round = IndicatorPlacement.roundFrame(at: anchor, in: Self.visible)
-        #expect(round == frame)
-        let pill = IndicatorPlacement.frame(at: anchor, isCompact: true, contentWidth: 240, in: Self.visible)
-        #expect(round.mid.y == pill.mid.y)
-        #expect(anchor != .bottomCenter || round.mid.x == pill.mid.x)
-    }
-
-    @Test func theFrameFollowsAVisibleFrameOnASecondScreen() {
+    @Test func theRoomFollowsAVisibleFrameOnASecondScreen() {
         let secondScreen = ScreenRect(x: 1512, y: -200, width: 1920, height: 1055)
-        let frame = IndicatorPlacement.frame(at: .right, isCompact: true, contentWidth: 240, in: secondScreen)
-        #expect(frame == ScreenRect(x: 3380, y: 271.5, width: 40, height: 112))
+        let room = IndicatorPlacement.room(at: .right, thickness: Self.thickness, in: secondScreen)
+        #expect(room == ScreenRect(x: 3060, y: 147.5, width: 360, height: 360))
     }
 
-    @Test func aHorizontalPillFitsItsContentWithinLimits() {
-        func width(_ contentWidth: Double, at anchor: IndicatorAnchor = .bottomCenter) -> Double {
-            IndicatorPlacement.frame(at: anchor, isCompact: false, contentWidth: contentWidth, in: Self.visible).width
+    private static func capsule(_ width: Double, _ height: Double, at anchor: IndicatorAnchor) -> ScreenRect {
+        IndicatorPlacement.capsule(
+            width: width, height: height, at: anchor, thickness: thickness,
+            in: IndicatorPlacement.room(at: anchor, thickness: thickness, in: visible))
+    }
+
+    /// At the bottom every shape grows from the room's middle.
+    @Test func atTheBottomEveryCapsuleSharesTheCentre() {
+        #expect(Self.capsule(40, 8, at: .bottomCenter) == ScreenRect(x: 736, y: 108.25, width: 40, height: 8))
+        #expect(Self.capsule(172, 36.5, at: .bottomCenter) == ScreenRect(x: 670, y: 94, width: 172, height: 36.5))
+    }
+
+    /// At a side edge a capsule touches the edge and reaches inward; the idle bar centres on the axis of a full one.
+    @Test func atASideEdgeACapsuleTouchesTheEdge() {
+        #expect(Self.capsule(36.5, 120, at: .left) == ScreenRect(x: 12, y: 432.5, width: 36.5, height: 120))
+        #expect(Self.capsule(300, 36.5, at: .left) == ScreenRect(x: 12, y: 474.25, width: 300, height: 36.5))
+        #expect(Self.capsule(8, 40, at: .left) == ScreenRect(x: 26.25, y: 472.5, width: 8, height: 40))
+        #expect(Self.capsule(36.5, 120, at: .right) == ScreenRect(x: 1463.5, y: 432.5, width: 36.5, height: 120))
+        #expect(Self.capsule(300, 36.5, at: .right) == ScreenRect(x: 1200, y: 474.25, width: 300, height: 36.5))
+        #expect(Self.capsule(8, 40, at: .right) == ScreenRect(x: 1477.75, y: 472.5, width: 8, height: 40))
+    }
+
+    @Test func onlyAPillWithoutWordsStandsVerticalAndOnlyAtASideEdge() {
+        #expect(IndicatorPlacement.isVertical(at: .left, canStandVertical: true))
+        #expect(IndicatorPlacement.isVertical(at: .right, canStandVertical: true))
+        #expect(!IndicatorPlacement.isVertical(at: .bottomCenter, canStandVertical: true))
+        #expect(!IndicatorPlacement.isVertical(at: .left, canStandVertical: false))
+    }
+
+    @Test func theDraggedPillIsACircleUnderThePointer() {
+        let room = IndicatorPlacement.dragRoom(centeredAt: ScreenPoint(x: 300, y: 200), thickness: 36)
+        #expect(room == ScreenRect(x: 282, y: 182, width: 36, height: 36))
+        for anchor in IndicatorAnchor.allCases {
+            #expect(IndicatorPlacement.capsule(width: 36, height: 36, at: anchor, thickness: 36, in: room) == room)
         }
-        #expect(width(172) == 172)
-        #expect(width(60) == 120)
-        #expect(width(900) == 360)
-        #expect(width(172, at: .right) == 172)
-        let vertical = IndicatorPlacement.frame(at: .left, isCompact: true, contentWidth: 172, in: Self.visible)
-        #expect(vertical.width == 40)
-    }
-
-    @Test func theDraggedPillIsASmallCircleUnderThePointer() {
-        let frame = IndicatorPlacement.dragFrame(centeredAt: ScreenPoint(x: 300, y: 200))
-        #expect(frame == ScreenRect(x: 280, y: 180, width: 40, height: 40))
     }
 
     struct DropRow: Sendable, CustomTestStringConvertible {
@@ -90,7 +86,8 @@ struct IndicatorPlacementTests {
 
     @Test(arguments: dropRows)
     func aDropSnapsToTheNearestAnchor(_ row: DropRow) {
-        #expect(IndicatorPlacement.nearestAnchor(to: row.point, in: Self.visible) == row.anchor)
+        #expect(
+            IndicatorPlacement.nearestAnchor(to: row.point, thickness: Self.thickness, in: Self.visible) == row.anchor)
     }
 
     @Test func aSmallMoveIsAClickAndALargerOneIsADrag() {
