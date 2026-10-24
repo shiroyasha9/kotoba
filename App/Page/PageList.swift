@@ -14,7 +14,7 @@ struct PageList<SelectionValue: Hashable, Content: View>: View {
         }
         .listStyle(.inset)
         // A list draws its rows in the safe area; `contentMargins(for: .scrollContent)`, which centres a form, leaves a
-        // list's rows full width (ui-history, 2026-10-25). The scroll bar stays at the window's edge.
+        // list's rows full width (ui-history, 2026-10-25).
         .safeAreaPadding(.horizontal, sideInset)
         .onGeometryChange(for: CGFloat.self, of: \.size.width) { width = $0 }
     }

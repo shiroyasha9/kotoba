@@ -10,6 +10,7 @@ extension MainWindow {
         [
             snapshot(of: Pane(id: .general) { AnyView(SystemSheet()) }, named: "page-system"),
             pageList,
+            framedList,
             // A sheet longer than the smallest window stops at its height and scrolls.
             sheetSnapshot(named: "page-sheet-long") {
                 PageSheet(title: "Long") {
@@ -82,6 +83,13 @@ private var pageList: Snapshot {
     }
     snapshot.settlesInWindow = true
     return snapshot
+}
+
+@MainActor
+/// A list page in the real window, title bar included: the title bar over the list.
+private var framedList: Snapshot {
+    let panes = [Pane.home(.sample), Pane(id: .history) { AnyView(ListSample()) }]
+    return MainWindow.windowSnapshot(of: panes, selecting: .history, named: "page-list-framed", isFramed: true)
 }
 
 private struct ListSample: View {
