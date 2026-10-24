@@ -28,7 +28,7 @@ extension PillPrototypeView {
         ("error-credit", .message(.init(text: "Add credit at OpenRouter", isProblem: true, button: "Add Credit…"))),
         (
             "error-mic-off",
-            .message(.init(text: StatusText.microphoneOff, isProblem: true, button: "Open System Settings…"))
+            .message(.init(text: "Mic access is off", isProblem: true, button: "Open Settings…"))
         ),
         ("error-no-mic", .message(.init(text: "No microphone found", isProblem: true, button: "Choose Mic…"))),
         ("undo-cancel", .message(.init(text: "Canceled", button: "Undo"))),
@@ -47,6 +47,7 @@ extension PillPrototypeView {
                     sampled(sample.look, isAtSideEdge: isAtSideEdge)
                 } check: { view in
                     guard let pill = view as? PillPrototypeView else { return nil }
+                    if pill.isTooLong { return "the content of \(sample.name) needs more than the longest pill" }
                     if pill.isTextTruncated { return "the pill text in \(sample.name) is cut off" }
                     if pill.isOverflowing { return "the content of \(sample.name) is longer than its capsule" }
                     return accessibilityProblem(of: pill) ?? (sample.look == .idle ? idleCostProblem() : nil)

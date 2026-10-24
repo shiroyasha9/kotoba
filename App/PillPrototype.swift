@@ -58,8 +58,13 @@ final class PillPrototypeView: NSView {
             view.setAccessibilityElement(false)
         }
         keycaps.sizingOptions = .intrinsicContentSize
-        for host in [cancel, stop, button] {
-            host.sizingOptions = .intrinsicContentSize
+        // A button and the keycaps keep their full width; only the words give way, so a message too long for the
+        // pill truncates its words every time, and the snapshot check sees it (owner trial: the button gave way on
+        // the first layout and not on the next).
+        for host in [cancel, stop, button] as [NSView] + [keycaps] {
+            (host as? PillFillButtonHost)?.sizingOptions = .intrinsicContentSize
+            host.setContentCompressionResistancePriority(.required, for: .horizontal)
+            host.setContentCompressionResistancePriority(.required, for: .vertical)
         }
         cancel.rootView.onClick = { [weak self] in self?.onAction?(.cancel) }
         stop.rootView.onClick = { [weak self] in self?.onAction?(.stop) }
@@ -82,6 +87,11 @@ final class PillPrototypeView: NSView {
         container.addSubview(check)
         glass.contentView = container
         addSubview(glass)
+        // One area over the view, kept in its visible rect by AppKit: the pointer's moves decide hover.
+        addTrackingArea(
+            NSTrackingArea(
+                rect: .zero, options: [.mouseEnteredAndExited, .mouseMoved, .activeAlways, .inVisibleRect], owner: self)
+        )
         apply(from: look)
     }
 
@@ -135,7 +145,6 @@ final class PillPrototypeView: NSView {
     }
 
     private var isMorphing = false
-    private var hoverArea: NSTrackingArea?
 
     private func placeGlass() {
         let size = shapeSize
@@ -143,7 +152,6 @@ final class PillPrototypeView: NSView {
             x: (bounds.width - size.width) / 2, y: (bounds.height - size.height) / 2, width: size.width,
             height: size.height)
         glass.cornerRadius = min(size.width, size.height) / 2
-        trackHover()
     }
 
     /// Shows the views the look needs, in order, and moves the capsule to its new shape: animated on screen, at once
@@ -290,6 +298,11 @@ final class PillPrototypeView: NSView {
         return !content.isNull && !stack.bounds.insetBy(dx: -0.5, dy: -0.5).contains(content)
     }
 
+    /// The content needs more than the longest pill, so its words cannot all show.
+    var isTooLong: Bool {
+        contentLength > PillGeometry.maxLength + 0.5
+    }
+
     /// The words end in "…" because the pill is at its longest. Valid after layout.
     var isTextTruncated: Bool {
         stack.arrangedSubviews.contains(label) && label.intrinsicContentSize.width > label.frame.width + 0.5
@@ -317,38 +330,38 @@ extension PillPrototypeView {
     // MARK: Mouse
 
     /// Hover follows the capsule, with a margin of half its height around the idle bar, which is only 8 pt tall; not
-    /// the whole view (the gallery's cell is far larger than the pill). A pointer already inside counts as inside.
-    private func trackHover() {
-        if let hoverArea { removeTrackingArea(hoverArea) }
+    /// the whole view (the gallery's cell is far larger than the pill).
+    private var hoverRect: NSRect {
         let margin = PillGeometry.height / 2
-        let rect = glass.frame.insetBy(dx: -margin, dy: -margin)
-        var options: NSTrackingArea.Options = [.mouseEnteredAndExited, .activeAlways]
-        if let window, rect.contains(convert(window.mouseLocationOutsideOfEventStream, from: nil)) {
-            options.insert(.assumeInside)
-        }
-        let area = NSTrackingArea(rect: rect, options: options, owner: self)
-        addTrackingArea(area)
-        hoverArea = area
+        return glass.frame.insetBy(dx: -margin, dy: -margin)
     }
 
-    override func acceptsFirstMouse(for event: NSEvent?) -> Bool {
-        true
-    }
-
-    override func mouseEntered(with event: NSEvent) {
-        if look == .idle, !hoverKeys.isEmpty {
+    /// Hover is where the pointer is now, not a count of enter and exit events: the pill used to add its own area
+    /// again at each glass move, and a lost exit left the idle row showing its keys (owner trial, round 2). Only the
+    /// pointer's moves over the view call this; at idle with the pointer away nothing runs.
+    private func updateHover(with event: NSEvent?) {
+        let isInside = event.map { hoverRect.contains(convert($0.locationInWindow, from: nil)) } ?? false
+        if isInside, look == .idle, !hoverKeys.isEmpty {
             look = .hover(keys: hoverKeys)
-        }
-    }
-
-    override func mouseExited(with event: NSEvent) {
-        if look.isHover, !hoverKeys.isEmpty {
+        } else if !isInside, look.isHover, !hoverKeys.isEmpty {
             look = .idle
         }
     }
 
+    override func mouseEntered(with event: NSEvent) {
+        updateHover(with: event)
+    }
+
+    override func mouseMoved(with event: NSEvent) {
+        updateHover(with: event)
+    }
+
+    override func mouseExited(with event: NSEvent) {
+        updateHover(with: nil)
+    }
+
     override func mouseUp(with event: NSEvent) {
-        if hoverArea?.rect.contains(convert(event.locationInWindow, from: nil)) == true {
+        if hoverRect.contains(convert(event.locationInWindow, from: nil)) {
             onAction?(.click)
         }
     }
