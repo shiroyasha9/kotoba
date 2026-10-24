@@ -149,13 +149,15 @@ final class FakeFocusedField: FocusedField {
     }
 
     func read(radius: Int) async -> String? {
-        shared.state.withLock { state in
+        await Slowness.pause()
+        return shared.state.withLock { state in
             state.reads.append(radius)
             return state.text
         }
     }
 
     func close() async {
+        await Slowness.pause()
         let waiter = shared.state.withLock { state in
             state.isClosed = true
             defer { state.waiter = nil }
@@ -180,6 +182,7 @@ final class FakeFieldWatcher: FieldWatcher {
     var opens: Int { count.withLock { $0 } }
 
     func focusedField() async -> (any FocusedField)? {
+        await Slowness.pause()
         count.withLock { $0 += 1 }
         if isHeld { await gate.pass() }
         return field

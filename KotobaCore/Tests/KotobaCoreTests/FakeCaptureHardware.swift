@@ -313,10 +313,12 @@ final class FakeCaptureRecorder: CaptureRecorder {
     }
 
     func stopNow() async -> RecordedAudio {
-        await close(.now)
+        await Slowness.pause()
+        return await close(.now)
     }
 
     func switchSampleRate(to sampleRate: Double) async {
+        await Slowness.pause()
         state.withLock { $0.rates.append(sampleRate) }
         await rateSwitchGate?.pass()
     }

@@ -78,7 +78,7 @@ format-lint:
 privacy:
 	scripts/privacy.sh
 
-check: privacy format-lint lint build-check view-checks test
+check: privacy format-lint lint build-check view-checks test test-slow
 
 # Every registered view's layout checks and the pills' VoiceOver checks (App/Snapshots.swift `--snapshot-checks`), with
 # no image written.
