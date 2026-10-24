@@ -77,15 +77,13 @@ struct WindowPrototypeView: View {
     var activity = ActivityPrototypeData.sample
     @State var page: PrototypePage = .home
     @State var period = ActivityPeriod.week
-    /// Off in snapshots: offscreen, the list's selection draws as a dark block over its row.
-    var showsSelection = true
     /// Gets each page the window shows: the window title follows it, as in System Settings. SwiftUI's
     /// `navigationTitle` does not reach a window that AppKit built.
     var onShow: (PrototypePage) -> Void = { _ in }
 
     var body: some View {
         NavigationSplitView {
-            List(selection: showsSelection ? Binding($page) : .constant(nil)) {
+            List(selection: Binding($page)) {
                 Section {
                     rows(PrototypePage.allCases.filter { !$0.isSetting })
                 }
@@ -230,29 +228,29 @@ extension WindowPrototype {
         let wide = PageMetrics.wideWindowSize
         let smallest = PageMetrics.minimumWindowSize
         return [
-            window(named: "prototype-window-home") { WindowPrototypeView(showsSelection: false) },
+            window(named: "prototype-window-home") { WindowPrototypeView() },
             window(named: "prototype-window-home-setup") {
-                WindowPrototypeView(home: .sampleNew, showsSelection: false)
+                WindowPrototypeView(home: .sampleNew)
             },
-            window(named: "prototype-window-activity") { WindowPrototypeView(page: .activity, showsSelection: false) },
+            window(named: "prototype-window-activity") { WindowPrototypeView(page: .activity) },
             window(named: "prototype-window-activity-month") {
-                WindowPrototypeView(page: .activity, period: .month, showsSelection: false)
+                WindowPrototypeView(page: .activity, period: .month)
             },
             window(named: "prototype-window-activity-new") {
-                WindowPrototypeView(activity: .sampleNew, page: .activity, showsSelection: false)
+                WindowPrototypeView(activity: .sampleNew, page: .activity)
             },
-            window(named: "prototype-window-home-wide", size: wide) { WindowPrototypeView(showsSelection: false) },
+            window(named: "prototype-window-home-wide", size: wide) { WindowPrototypeView() },
             window(named: "prototype-window-activity-wide", size: wide) {
-                WindowPrototypeView(page: .activity, showsSelection: false)
+                WindowPrototypeView(page: .activity)
             },
             window(named: "prototype-window-home-smallest", size: smallest) {
-                WindowPrototypeView(showsSelection: false)
+                WindowPrototypeView()
             },
             page(named: "prototype-home", height: PageMetrics.homePageHeight) { HomePrototype(data: .sample) { _ in } },
             page(named: "prototype-activity", height: PageMetrics.activityPageHeight) {
                 ActivityPrototype(data: .sample)
             },
-            Snapshot(name: "prototype-sidebar-tiles") { Snapshots.hostingView(TileSheet()) },
+            Snapshot(name: "prototype-sidebar-tiles") { NSHostingView(rootView: TileSheet()) },
         ]
     }
 
@@ -272,7 +270,7 @@ extension WindowPrototype {
     ) -> Snapshot {
         var snapshot = Snapshot(name: name) {
             let width = PageMetrics.detailWidth
-            let hosting = Snapshots.hostingView(view().frame(width: width, height: height))
+            let hosting = NSHostingView(rootView: view().frame(width: width, height: height))
             hosting.setFrameSize(NSSize(width: width, height: height))
             return hosting
         }
