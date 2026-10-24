@@ -79,6 +79,9 @@ struct WindowPrototypeView: View {
     @State var period = ActivityPeriod.week
     /// Off in snapshots: offscreen, the list's selection draws as a dark block over its row.
     var showsSelection = true
+    /// Gets each page the window shows: the window title follows it, as in System Settings. SwiftUI's
+    /// `navigationTitle` does not reach a window that AppKit built.
+    var onShow: (PrototypePage) -> Void = { _ in }
 
     var body: some View {
         NavigationSplitView {
@@ -96,7 +99,8 @@ struct WindowPrototypeView: View {
             detail
                 .navigationTitle(page.title)
         }
-        .frame(minWidth: 720, minHeight: 480)
+        .frame(minWidth: PageMetrics.minimumWindowSize.width, minHeight: PageMetrics.minimumWindowSize.height)
+        .onChange(of: page) { _, page in onShow(page) }
     }
 
     private func rows(_ pages: [PrototypePage]) -> some View {
@@ -127,9 +131,10 @@ struct WindowPrototypeView: View {
 
 @MainActor
 enum WindowPrototype {
-    /// `make prototype` opens kotoba Dev with `--prototype`: the prototype window on screen, with real glass, and
-    /// nothing else of the app (no hotkey tap, audio, store or menu bar item). It quits when its windows close. It
-    /// runs before `CopyHandOver`, so it opens beside a running kotoba Dev.
+    /// `make prototype` opens kotoba Dev with `--prototype`: the prototype window and the pill gallery
+    /// (`PillPrototypeGallery`) on screen, with real glass, and nothing else of the app (no hotkey tap, audio, store or
+    /// menu bar item). It quits when its windows close. It runs before `CopyHandOver`, so it opens beside a running
+    /// kotoba Dev.
     static func runIfRequested() {
         guard CommandLine.arguments.contains("--prototype") else { return }
         let launcher = Launcher()
@@ -143,11 +148,11 @@ enum WindowPrototype {
     /// The prototype window, as the main window is built (`MainWindow.window(showing:)`).
     static func window(showing view: WindowPrototypeView) -> NSWindow {
         let window = NSWindow(contentViewController: NSHostingController(rootView: view))
-        window.title = Install.displayName
+        window.title = PrototypePage.home.title
         window.styleMask = [.titled, .closable, .miniaturizable, .resizable, .fullSizeContentView]
         window.toolbarStyle = .unified
         window.isReleasedWhenClosed = false
-        window.setContentSize(MainWindow.defaultSize)
+        window.setContentSize(PageMetrics.defaultWindowSize)
         return window
     }
 }
@@ -156,6 +161,7 @@ enum WindowPrototype {
 private final class Launcher: NSObject, NSApplicationDelegate {
     private var mainMenu: MainMenu?
     private var window: NSWindow?
+    private var gallery: NSWindow?
 
     func applicationDidFinishLaunching(_ notification: Notification) {
         // ⌘W, ⌘Q and the Edit menu, as in the app.
@@ -163,10 +169,16 @@ private final class Launcher: NSObject, NSApplicationDelegate {
         NSApp.mainMenu = mainMenu.menu
         self.mainMenu = mainMenu
         WindowFront.activate()
-        let window = WindowPrototype.window(showing: WindowPrototypeView())
+        var view = WindowPrototypeView()
+        view.onShow = { [weak self] page in self?.window?.title = page.title }
+        let window = WindowPrototype.window(showing: view)
         window.center()
         self.window = window
         WindowFront.show(window)
+        // proto-pill's gallery of the 0.5.0 pill states, on real glass.
+        let gallery = PillPrototypeGallery.makeWindow()
+        self.gallery = gallery
+        WindowFront.show(gallery)
     }
 
     func applicationShouldTerminateAfterLastWindowClosed(_ sender: NSApplication) -> Bool {
@@ -215,8 +227,8 @@ extension WindowPrototype {
     /// The prototype window on each page and state, at the default size, wide (the centred column) and at its smallest;
     /// each page in full; the sidebar tiles at each sidebar icon size next to today's.
     static func snapshots() -> [Snapshot] {
-        let wide = NSSize(width: 1_440, height: 900)
-        let smallest = NSSize(width: 720, height: 480)
+        let wide = PageMetrics.wideWindowSize
+        let smallest = PageMetrics.minimumWindowSize
         return [
             window(named: "prototype-window-home") { WindowPrototypeView(showsSelection: false) },
             window(named: "prototype-window-home-setup") {
@@ -236,8 +248,10 @@ extension WindowPrototype {
             window(named: "prototype-window-home-smallest", size: smallest) {
                 WindowPrototypeView(showsSelection: false)
             },
-            page(named: "prototype-home", height: 1_000) { HomePrototype(data: .sample) { _ in } },
-            page(named: "prototype-activity", height: 1_300) { ActivityPrototype(data: .sample) },
+            page(named: "prototype-home", height: PageMetrics.homePageHeight) { HomePrototype(data: .sample) { _ in } },
+            page(named: "prototype-activity", height: PageMetrics.activityPageHeight) {
+                ActivityPrototype(data: .sample)
+            },
             Snapshot(name: "prototype-sidebar-tiles") { Snapshots.hostingView(TileSheet()) },
         ]
     }
@@ -245,20 +259,21 @@ extension WindowPrototype {
     /// The whole window content at `size`, laid out again after its first pass: the page column takes its width from
     /// the window (`PageForm`).
     private static func window(
-        named name: String, size: NSSize = MainWindow.defaultSize, _ view: @escaping @MainActor () -> some View
+        named name: String, size: NSSize = PageMetrics.defaultWindowSize, _ view: @escaping @MainActor () -> some View
     ) -> Snapshot {
         var snapshot = Snapshots.fixedWindow(named: name, size: size, view)
         snapshot.settlesInWindow = true
         return snapshot
     }
 
-    /// One page at the detail column's width (760 pt at the default window size), tall enough to show it whole.
+    /// One page at the detail column's width at the default window size, tall enough to show it whole.
     private static func page(
         named name: String, height: CGFloat, _ view: @escaping @MainActor () -> some View
     ) -> Snapshot {
         var snapshot = Snapshot(name: name) {
-            let hosting = Snapshots.hostingView(view().frame(width: 760, height: height))
-            hosting.setFrameSize(NSSize(width: 760, height: height))
+            let width = PageMetrics.detailWidth
+            let hosting = Snapshots.hostingView(view().frame(width: width, height: height))
+            hosting.setFrameSize(NSSize(width: width, height: height))
             return hosting
         }
         snapshot.settlesInWindow = true

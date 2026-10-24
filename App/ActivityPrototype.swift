@@ -183,22 +183,17 @@ private struct DailyWords: View {
         let started = shown.drop { $0.words == 0 }
         let average = started.isEmpty ? 0 : started.map(\.words).reduce(0, +) / started.count
         VStack(alignment: .leading) {
-            HStack(alignment: .firstTextBaseline) {
-                VStack(alignment: .leading) {
-                    Text("Daily Average")
-                        .foregroundStyle(.secondary)
-                    Text(StatusText.counted(average, "word"))
-                        .font(.largeTitle)
-                        .monospacedDigit()
-                }
-                Spacer()
-                Picker("Period", selection: $period) {
-                    ForEach(ActivityPeriod.allCases, id: \.self) { Text($0.title).tag($0) }
-                }
-                .pickerStyle(.segmented)
-                .labelsHidden()
-                .fixedSize()
+            // Across the card, as Battery's period switch.
+            Picker("Period", selection: $period) {
+                ForEach(ActivityPeriod.allCases, id: \.self) { Text($0.title).tag($0) }
             }
+            .pickerStyle(.segmented)
+            .labelsHidden()
+            .frame(maxWidth: .infinity)
+            Text("Daily Average")
+            Text(StatusText.counted(average, "word"))
+                .font(.largeTitle)
+                .monospacedDigit()
             Chart {
                 ForEach(shown, id: \.start) { day in
                     BarMark(
