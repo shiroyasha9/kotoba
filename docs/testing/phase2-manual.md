@@ -942,8 +942,13 @@ Shortcut recorders, the spoken commands, the Bluetooth switch and the Microphone
 | 1191 | On **Shortcuts**, turn on “Start a new line when you say “new line””, dictate “one new line two” into TextEdit | Two lines are pasted | |
 | 1192 | Mac with a built-in mic, AirPods connected and chosen as the system input, kotoba's list empty; dictate. Then turn off “Use Bluetooth mics only from the list” on **Microphone** and dictate again | First dictation records from the built-in mic (AirPods playback stays at full quality); after the switch the AirPods record and the page shows the Bluetooth warning, with no restart | |
 | 1193 | On **Microphone** with a USB mic first in the list and in use, unplug it, then plug it back in | Its row goes from “In use” to “Not connected” and the next mic shows “In use” within about a second; plugging it back gives “In use” back to it | |
-| 1194 | Mac with no built-in mic (or the built-in mic removed from the list and unavailable), AirPods as the system input, kotoba's list empty, switch on; dictate, click **Choose Mic…**, add AirPods with +, dictate again | The pill says “AirPods Pro isn’t in your mic list” with **Choose Mic…**; it opens Microphone; after the add the next dictation records from the AirPods | |
+| 1194 | Mac with no built-in mic (or the built-in mic removed from the list and unavailable), AirPods as the system input, kotoba's list empty, switch on; dictate, click **Choose Mic…**, add AirPods with +, dictate again | The pill says “Not in mic list: AirPods Pro” with **Choose Mic…**; it opens Microphone; after the add the next dictation records from the AirPods | |
 | 1198 | Open **Microphone** with the built-in mic in use; pick the built-in mic in the menu bar's Microphone menu; then drag another mic on the page | The built-in mic moves to the top of the list at once; the drag keeps the menu's pick | |
+
+## History on the page system (0.5.0, kotoba Dev)
+
+| # | Do this | Expect | Result |
+|---|---|---|---|
 | 1150 | On **History**, choose Edit > Find… (⌘F) and type a word from one dictation; then type a word that no dictation has | The cursor goes to the search field above the list; only matching rows stay and the field keeps the cursor while you type; then one row says “No results for “<word>”” and the field stays | |
 | 1151 | On History, click a row, press ↓ and ↑, press Space, Space again; ⇧-click a second row and press ⌘C, then ⌘V in TextEdit | The selection moves with the arrows; Space plays and stops the audio (a speaker symbol by the time); both texts paste, oldest first, a blank line between | |
 | 1152 | With TextEdit the last app you were in, Control-click a History row and choose **Paste Again** | TextEdit comes to the front and the text is pasted; the menu has Copy, Paste Again, Fix…, Transcribe Again (or Retry), Play Audio, Show Audio in Finder and Delete… | |
