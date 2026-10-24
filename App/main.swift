@@ -6,9 +6,6 @@ AppDefaults.registerDefaults()
 // Then, so a snapshot run (`--snapshots <folder>`) builds no hotkey tap and no audio engine; it exits when done.
 Snapshots.runIfRequested()
 
-// Then `--prototype` (`make prototype`): the 0.5.0 window prototype on screen, with no service of the app.
-WindowPrototype.runIfRequested()
-
 // Then, before the delegate builds any service: a second copy of this install hands over to the running one and quits,
 // so it never records, pastes or bills beside it (`CopyHandOver`).
 if let running = CopyHandOver.runningCopy() {
