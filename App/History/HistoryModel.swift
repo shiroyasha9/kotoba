@@ -45,6 +45,11 @@ final class HistoryModel {
         didSet {
             days = Self.days(of: list.rows, now: now())
             selected = list.rows.filter { selection.contains($0.id) }
+            // A row that goes (a search that leaves it out, a delete) takes its audio with it: nothing else could
+            // stop it.
+            if let playing = playback.playing, !list.rows.contains(where: { $0.id == playing }) {
+                playback.stop()
+            }
         }
     }
     private(set) var days: [Day] = []

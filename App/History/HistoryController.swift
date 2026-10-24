@@ -16,7 +16,7 @@ final class HistoryController {
     private let keys: KeyVault
     /// The Audio section's choices, to the pipeline's one consumer (`AudioRequest.send`).
     private let audioRequests: AsyncStream<AudioRequest>.Continuation
-    private var model: HistoryModel?
+    private(set) var model: HistoryModel?
     /// The pipeline's newest activity, kept while the window is closed so it opens with it.
     private var activity = PipelineActivity(isQuiet: true, inFlight: [])
     /// History changes for the open window, applied one at a time in order (two saves of one dictation must not land

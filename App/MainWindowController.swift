@@ -1,3 +1,4 @@
+import AppKit
 import KotobaCore
 import KotobaProviders
 import KotobaStorage
@@ -126,6 +127,13 @@ final class MainWindowController {
     func showOtherSpeechServices() {
         show(selecting: .speech)
         speech?.isAdvancedShown = true
+    }
+
+    /// The History page's model while History is shown in the key window, for the menu bar's Dictation menu; nil
+    /// otherwise, so the menu acts only on rows the owner sees.
+    var shownHistory: HistoryModel? {
+        guard NSApp.keyWindow?.delegate === window, window.shownPane == .history else { return nil }
+        return historyPane?.model
     }
 
     /// "Settings…": the settings pane the window shows, else General.

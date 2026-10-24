@@ -55,7 +55,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     let updater = Updater.forThisBuild()
     /// A development build gives way while the release app runs (`InstallYield`).
     let releaseWatcher = ReleaseAppWatcher()
-    lazy var mainMenu = MainMenu(target: self) { [weak self] in self?.updates }
+    lazy var mainMenu = MainMenu(target: self, dictation: historyMenu.menu) { [weak self] in self?.updates }
+    /// The menu bar's Dictation menu: History's actions on its selected rows.
+    lazy var historyMenu = HistoryMenu { [weak self] in self?.mainWindow.shownHistory }
     lazy var mainWindow: MainWindowController = MainWindowController(
         routeSettings: routeSettings, vault: vault, router: router, microphones: microphones, audio: audio,
         readiness: readiness, finishSetup: { [weak self] in self?.setup.finishSetup() },

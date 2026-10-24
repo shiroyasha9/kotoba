@@ -1,6 +1,6 @@
 import AppKit
 
-/// The main menu: kotoba, File, Edit, Window and Help. AppKit shows the first item as the app menu, so it comes
+/// The main menu: kotoba, File, Edit, Dictation (History's actions, `HistoryMenu`), Window and Help. AppKit shows the first item as the app menu, so it comes
 /// first; it holds About, Settings…, Hide and Quit (⌘Q) for the Dock app (story 35). The menu bar shows the menu only
 /// while kotoba is in the Dock, but its key equivalents work in every kotoba window: without File > Close and the
 /// Edit items, ⌘W and ⌘X/C/V/A/Z find no action in a text field and macOS beeps. Find… goes along the responder chain
@@ -21,7 +21,9 @@ final class MainMenu: NSObject, NSMenuDelegate {
     private weak var target: StatusMenuActions?
     private var updateItem: NSMenuItem?
 
-    init(target: StatusMenuActions?, updates: @escaping @MainActor () -> MenuModel.Updates?) {
+    init(
+        target: StatusMenuActions?, dictation: NSMenu? = nil, updates: @escaping @MainActor () -> MenuModel.Updates?
+    ) {
         self.target = target
         self.updates = updates
         super.init()
@@ -57,9 +59,8 @@ final class MainMenu: NSObject, NSMenuDelegate {
         window.addItem(
             withTitle: "Bring All to Front", action: #selector(NSApplication.arrangeInFront(_:)), keyEquivalent: "")
 
-        for (title, submenu) in [
-            (name, app), ("File", file), ("Edit", Self.edit()), ("Window", window), ("Help", help),
-        ] {
+        let menus = [(name, app), ("File", file), ("Edit", Self.edit())] + (dictation.map { [($0.title, $0)] } ?? [])
+        for (title, submenu) in menus + [("Window", window), ("Help", help)] {
             menu.addItem(withTitle: title, action: nil, keyEquivalent: "").submenu = submenu
         }
     }

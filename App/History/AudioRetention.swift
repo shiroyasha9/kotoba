@@ -4,10 +4,11 @@ import KotobaStorage
 import Observation
 import SwiftUI
 
-/// Story 31 on the History page: how long a transcribed dictation keeps its audio, the disk space the saved audio
-/// takes, and "Delete Audio Now…" (docs/research/ui-redesign.md, "Page map": next to the dictations it governs). The pipeline decides what goes (`AudioRetention`); this model only passes the
-/// owner's choices on as `AudioRequest`s. It measures the kept audio when the pane appears and after each history
-/// write that changes it while it is shown, so nothing runs at idle.
+/// Story 31 on the History page, next to the dictations it governs (docs/research/ui-redesign.md, "Page map"): how
+/// long a transcribed dictation keeps its audio, the disk space the saved audio takes, and "Delete Audio Now…". The
+/// pipeline decides what goes (`AudioRetention`); this model only passes the owner's choices on as `AudioRequest`s. It
+/// measures the kept audio when the page appears and after each history write that changes it while it is shown, so
+/// nothing runs at idle.
 @MainActor
 @Observable
 final class AudioRetentionModel {
@@ -180,13 +181,15 @@ extension AudioRetention {
     }
 }
 
-/// The History page's Audio section: the period, and the saved audio's size with "Delete Audio Now…".
-struct AudioSection: View {
+/// History's one audio row, above the dictations: the period and "Delete Audio Now…" side by side, and the saved
+/// audio's size under the title, as System Settings puts a setting and its action on one row (Storage's "Delete…").
+/// The page shows and hides the model (`show()`, `hide()`), not the row.
+struct AudioRetentionRow: View {
     @Bindable var model: AudioRetentionModel
 
     var body: some View {
-        Section {
-            PageRow(title: "Keep audio", subtitle: "For Retry, Transcribe Again and Play. The text always stays.") {
+        PageRow(title: "Keep audio", subtitle: sizeText) {
+            HStack {
                 Picker("Keep audio", selection: Binding(get: { model.retention }, set: model.choose)) {
                     ForEach(AudioRetention.allCases, id: \.self) { Text($0.title).tag($0) }
                 }
@@ -200,8 +203,6 @@ struct AudioSection: View {
                 } message: { shorter in
                     Text(Self.deleteMessage(bytes: shorter.bytes))
                 }
-            }
-            PageRow(title: "Saved audio", subtitle: sizeText) {
                 Button("Delete Audio Now…") { model.isAskingToDelete = true }
                     .disabled(!model.hasDeletableAudio)
                     .confirmationDialog("Delete Saved Audio?", isPresented: $model.isAskingToDelete) {
@@ -210,19 +211,18 @@ struct AudioSection: View {
                         Text(Self.deleteMessage(bytes: model.size?.deletable))
                     }
             }
-        } header: {
-            Text("Audio")
         }
-        .onAppear(perform: model.show)
-        .onDisappear(perform: model.hide)
     }
 
-    /// "48.2 MB", and the audio not yet transcribed, which stays until a retry or a delete; nil until measured.
-    private var sizeText: String? {
-        guard let size = model.size else { return nil }
-        let deletable = size.deletable.formatted(.byteCount(style: .file))
-        guard size.waiting > 0 else { return deletable }
-        return "\(deletable) · \(size.waiting.formatted(.byteCount(style: .file))) not yet transcribed, kept for Retry"
+    /// "48.2 MB saved. The text always stays.", with the audio not yet transcribed, which stays until a retry or a
+    /// delete; until the first measure, only what stays.
+    private var sizeText: String {
+        let stays = "The text always stays."
+        guard let size = model.size else { return stays }
+        let saved = size.deletable.formatted(.byteCount(style: .file))
+        guard size.waiting > 0 else { return "\(saved) saved. \(stays)" }
+        let waiting = size.waiting.formatted(.byteCount(style: .file))
+        return "\(saved) saved, and \(waiting) that waits for Retry. \(stays)"
     }
 
     /// Both questions: the size when it is known, then what stays.

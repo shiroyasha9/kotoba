@@ -10,26 +10,30 @@ extension Pane {
     }
 }
 
-/// The History page (docs/research/ui-redesign.md, "Page map"): how long audio stays, the search, and the dictations
-/// by day, newest first, in a list as Apple's list apps draw one (Mail, Notes, Voice Memos): rows load as they scroll
-/// into view, several can be selected, and the list keys work (arrows, Space plays, Delete, ⌘C). The actions are in
-/// the rows' context menu, as in those apps; there is no toolbar.
+/// The History page (docs/research/ui-redesign.md, "Page map"): the header, how long audio stays and the search pinned
+/// above the list, and the dictations by day, newest first, in a list as Apple's list apps draw one (Mail, Notes, Voice Memos):
+/// rows load as they scroll into view, several can be selected, and the list keys work (arrows, Space plays, Delete,
+/// ⌘C). The actions are in the rows' context menu and the menu bar's Dictation menu (`HistoryCommand`), as in those
+/// apps; there is no toolbar.
 struct HistoryView: View {
     @Bindable var model: HistoryModel
 
     var body: some View {
         PageList(selection: $model.selection) {
-            Section {
-                PageHeader(page: .history, summary: "Every dictation, newest first, to copy, paste again or fix.")
-                    .listRowSeparator(.hidden)
-            }
-            .selectionDisabled()
-            if let audio = model.audio {
-                AudioSection(model: audio)
-                    .selectionDisabled()
-            }
             content
+        } pinned: {
+            // Above the rows, never scrolled or rebuilt with them: the search keeps the focus while the rows reload
+            // under it, ⌘F always reaches it, and a failed read leaves it in place. It is an AppKit field, so while it
+            // has the focus a Space or Delete goes into it, never to the list's keys.
+            PageHeader(page: .history, summary: "Every dictation, newest first, to copy, paste again or fix.")
+            if let audio = model.audio {
+                AudioRetentionRow(model: audio)
+            }
+            PageSearchField(text: $model.search, prompt: "Search")
         }
+        // The page, not a row, measures the kept audio: a row's appear and disappear follow its scrolling.
+        .onAppear { model.audio?.show() }
+        .onDisappear { model.audio?.hide() }
         .contextMenu(forSelectionType: DictationID.self) { ids in
             menu(for: model.rows.filter { ids.contains($0.id) })
         }
@@ -68,7 +72,6 @@ struct HistoryView: View {
         }
     }
 
-    /// The search heads the first group of rows, so it stays while a search finds nothing.
     @ViewBuilder private var content: some View {
         if model.isLoadFailed {
             Section {
@@ -88,23 +91,13 @@ struct HistoryView: View {
                         subtitle: "Check the spelling or try a new search."
                     ) {}
                 }
-            } header: {
-                search
             }
             .selectionDisabled()
         } else {
             ForEach(model.days) { day in
-                Section {
+                Section(day.title) {
                     ForEach(day.rows) { record in
                         row(record)
-                    }
-                } header: {
-                    // One view: a header of two loose views lost the list's header style.
-                    VStack(alignment: .leading) {
-                        if day.id == model.days.first?.id {
-                            search
-                        }
-                        Text(day.title)
                     }
                 }
             }
@@ -120,10 +113,6 @@ struct HistoryView: View {
         }
     }
 
-    private var search: some View {
-        PageSearchField(text: $model.search, prompt: "Search")
-    }
-
     private func row(_ record: DictationRecord) -> some View {
         HistoryRow(
             record: record, apps: model.apps,
@@ -133,57 +122,33 @@ struct HistoryView: View {
             isPlaying: model.isPlaying([record]))
     }
 
-    /// The actions on the clicked rows (the selection when the click is in it): the text, the audio, the changes, then
-    /// Delete. No menu on the empty part of the list: every item needs a row.
+    /// The actions on the clicked rows (the selection when the click is in it), in `HistoryCommand`'s groups, as the
+    /// menu bar's Dictation menu has them. No menu on the empty part of the list: every item needs a row.
     @ViewBuilder
     private func menu(for records: [DictationRecord]) -> some View {
         if !records.isEmpty {
-            Section {
-                Button("Copy") { model.copy(records) }
-                    .disabled(!HistoryModel.hasText(records))
-                if records.contains(where: { LastDictation.rawText(of: $0) != nil }) {
-                    Button("Copy Without Cleanup") { model.copy(records, raw: true) }
+            ForEach(HistoryCommand.groups.indices, id: \.self) { group in
+                Section {
+                    let commands = HistoryCommand.groups[group].filter { model.offers($0, for: records) }
+                    ForEach(commands, id: \.self) { command in
+                        Button(
+                            model.title(of: command, for: records),
+                            role: command == .delete ? .destructive : nil
+                        ) { model.run(command, on: records) }
+                        .disabled(!model.canRun(command, on: records))
+                        .help(command == .transcribeAgain ? HistoryModel.transcribeAgainHelp : "")
+                        if command == .transcribeAgain {
+                            transcribeAgainWith(records)
+                        }
+                    }
                 }
-                Button("Paste Again") { model.pasteAgain(records) }
-                    .disabled(!model.canPasteAgain(records))
-                if model.canFix(records) {
-                    Button("Fix…") { model.fix(records) }
-                }
-            }
-            Section {
-                // A row with no text joins the retry queue; one row with text is transcribed again.
-                if model.canRetry(records) {
-                    Button("Retry") { model.retry(records) }
-                } else if model.againRecord(records) != nil {
-                    transcribeAgainItems(for: records)
-                }
-                if model.isPlaying(records) {
-                    Button("Stop Audio") { model.togglePlay(records) }
-                } else if model.audioRecord(records) != nil {
-                    Button("Play Audio") { model.togglePlay(records) }
-                        .disabled(!model.canPlay(records))
-                }
-                if model.canViewChanges(records) {
-                    Button("View Changes…") { model.viewChanges(records) }
-                }
-                if model.audioRecord(records) != nil {
-                    Button("Show Audio in Finder") { model.showInFinder(records) }
-                }
-            }
-            Section {
-                Button("Delete…", role: .destructive) { model.askToDelete(records) }
-                    .disabled(!model.canDelete(records))
             }
         }
     }
 
-    /// Transcribe Again with the current speech model, and with each other one that can send now.
+    /// Transcribe Again with each other speech model that can send now.
     @ViewBuilder
-    private func transcribeAgainItems(for records: [DictationRecord]) -> some View {
-        let isEnabled = model.canTranscribeAgain(records)
-        Button("Transcribe Again") { model.transcribeAgain(records) }
-            .help(Self.transcribeAgainHelp)
-            .disabled(!isEnabled)
+    private func transcribeAgainWith(_ records: [DictationRecord]) -> some View {
         let others = model.otherSpeechModels
         if !others.isEmpty {
             Menu("Transcribe Again With") {
@@ -191,14 +156,9 @@ struct HistoryView: View {
                     Button(choice.title) { model.transcribeAgain(records, model: choice.value) }
                 }
             }
-            .disabled(!isEnabled)
+            .disabled(!model.canTranscribeAgain(records))
         }
     }
-
-    /// Transcribe Again keeps no copy of the old text: the audio is what can bring a text back.
-    private static let transcribeAgainHelp =
-        "Transcribe the saved audio again. The new text replaces this one; the audio stays saved, so you can do it "
-        + "again at any time."
 
     private var deleteTitle: String {
         let count = model.pendingDelete?.count ?? 0

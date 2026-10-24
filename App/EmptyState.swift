@@ -27,13 +27,3 @@ extension EmptyState where Actions == EmptyView {
         self.init(title: title, systemImage: systemImage, description: description) { EmptyView() }
     }
 }
-
-/// A search with no results, centred like `EmptyState`.
-struct NoSearchResults: View {
-    let search: String
-
-    var body: some View {
-        ContentUnavailableView.search(text: search)
-            .frame(maxWidth: .infinity, maxHeight: .infinity)
-    }
-}
