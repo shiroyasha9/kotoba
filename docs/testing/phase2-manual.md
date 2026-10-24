@@ -970,3 +970,24 @@ Shortcut recorders, the spoken commands, the Bluetooth switch and the Microphone
 | 1195 | Open Activity > **Advanced…** (a sheet with Done only) and press Esc; open it again and press Return | Esc closes the sheet; Return closes it too (Done) | |
 | 1196 | Open Dictionary > Add Word (a sheet with Cancel and Add), type a word, press Esc | The sheet closes and nothing is added | |
 | 1197 | On History, type in the search field, then scroll the list down and up, and wait for a new dictation to arrive | The search field stays above the rows and keeps the cursor; the title bar has one tint across the whole page in light and dark | |
+
+## The 0.5.0 pill (kotoba Dev)
+
+One glass capsule that changes shape (docs/research/ui-redesign.md, "Pill"). Snapshots draw each look; these rows need a real chord, a real pointer and a real mic. Dictate in any text field.
+
+| # | Do this | Expect | Result |
+|---|---|---|---|
+| 1200 | General > Show indicator: **Always** | A thin glass bar at the bottom center | |
+| 1201 | Point at the bar, then move the pointer away | It grows to “Dictate ⌃ ⌥ ⌘”; away, the thin bar again | |
+| 1202 | Click the bar | A recording starts: the hands-free pill (×, bars, Stop) | |
+| 1203 | Press ⌃⌥⌘ and let go, speak, click **Stop** | The hands-free pill with × and Stop; after Stop the bars sweep, a green check shows, then the bar; the text pastes | |
+| 1204 | Start again and click **×**; click **Undo**; cancel once more and wait | “Canceled” with Undo; Undo goes on recording; untouched, the pill goes back to idle after about 5 s | |
+| 1205 | Hold ⌃⌥⌘ while you speak, let go | Bars only while held (push to talk); after the release the sweep, the check and the paste | |
+| 1206 | Point at a message (for example “Canceled”), then move away | It stays while the pointer is on it and goes after you move away | |
+| 1207 | Drag the pill to the left edge, then to the right edge; at each edge repeat rows 1203 and 1205 | It stands vertical at the edge, with the same looks turned 90° | |
+| 1208 | With Always on, change the indicator's place in General while the bar shows | The bar moves to the middle of that edge, not near its bottom | |
+| 1209 | During a recording, drag the pill to another place and drop it | It stays at the new place, centred there | |
+| 1210 | At a side edge, click and point in the clear area next to the pill | The clicks and the pointer reach the app below | |
+| 1211 | In a hands-free recording, mute the mic | Orange dots, “No sound from the mic”, Choose Mic… and Stop; × is gone (Esc still cancels) | |
+| 1212 | Dictate, fix a word in the pasted text, then dictate again | “Added “word”” with Undo shows after the second paste and stays for its time; the check does not replace it | |
+| 1213 | Dictate for more than 10 minutes | From 10:00 the time shows after the bars and counts up once a second | |
