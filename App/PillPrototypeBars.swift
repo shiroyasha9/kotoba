@@ -7,15 +7,13 @@ import AppKit
 /// While text is on its way (`isSweeping`), the bars settle to dots and one slow wave runs across them: a Core
 /// Animation loop in the render server, removed when the sweep ends.
 final class PillBars: NSView {
-    static let count = 9
-    /// The bar's thickness and its shortest length: a dot at silence.
-    static let thickness: CGFloat = 3
-    static let gap: CGFloat = 2
+    static let count = PillGeometry.barCount
+    static let thickness = PillGeometry.barThickness
+    static let gap = PillGeometry.barGap
     /// The longest bar, along the capsule's short side; the capsule keeps `PillGeometry.inset` plus a bar's
     /// thickness free at each end.
     static var longest: CGFloat { PillGeometry.height - 2 * (PillGeometry.inset + thickness) }
-    /// The sweep's wave: the dots grow to this many times their length and back.
-    private static let sweepScale: CGFloat = 2.6
+    private static let sweepScale = PillGeometry.sweepScale
     private static let sweepKey = "sweep"
 
     private let bars = (0..<count).map { _ in CALayer() }

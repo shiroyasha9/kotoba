@@ -92,14 +92,17 @@ struct PillKeycaps: View {
     var axis = Axis.horizontal
 
     var body: some View {
-        let layout = axis == .horizontal ? AnyLayout(HStackLayout(spacing: 4)) : AnyLayout(VStackLayout(spacing: 4))
+        let layout =
+            axis == .horizontal
+            ? AnyLayout(HStackLayout(spacing: PillGeometry.keycapGap))
+            : AnyLayout(VStackLayout(spacing: PillGeometry.keycapGap))
         layout {
             ForEach(Array(keys.enumerated()), id: \.offset) { _, key in
                 Text(key)
                     .font(.body)
                     .foregroundStyle(.secondary)
                     .frame(width: PillGeometry.controlHeight, height: PillGeometry.controlHeight)
-                    .background(.fill.tertiary, in: .rect(cornerRadius: PillGeometry.controlHeight / 4))
+                    .background(.fill.tertiary, in: .rect(cornerRadius: PillGeometry.keycapRadius))
             }
         }
         // The pill reads the chord as one label; the caps are not buttons.

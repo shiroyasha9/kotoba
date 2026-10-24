@@ -5,27 +5,6 @@ import SwiftUI
 // one glass capsule that changes shape, no status words, words only when the owner must know or can act. The owner
 // approves it in the gallery (`PillPrototypeGallery`); the prototype goes when the pill is rebuilt on it.
 
-/// The pill's sizes. The capsule is a regular button tall plus `inset` above and below, so a button's corners follow
-/// the capsule's (concentric: the button's radius plus `inset` is the capsule's radius).
-@MainActor
-enum PillGeometry {
-    /// The idle bar, turned 90° at a side edge (Wispr Flow's and Jot's rest size).
-    static let idle = NSSize(width: 40, height: 8)
-    static let inset: CGFloat = 6
-    /// Between the items in the capsule.
-    static let gap: CGFloat = 8
-    /// The longest pill: about 34 characters of text beside a button (CODING_STANDARDS.md, "User-facing text" 7).
-    static let maxLength: CGFloat = 360
-    /// The pill buttons' height on this macOS, measured once, not assumed.
-    static let controlHeight =
-        [PillFillButton(face: .text("Retry")), PillFillButton(face: .symbol("xmark", label: ""))]
-        .map { NSHostingView(rootView: $0).fittingSize.height }.max() ?? 0
-    static var height: CGFloat { controlHeight + 2 * inset }
-    /// Text, bars and symbols keep a round button's radius from the capsule's end, so they line up with a button's
-    /// centre on the pill below or above.
-    static var endPadding: CGFloat { controlHeight / 2 }
-}
-
 /// The prototype pill: one `NSGlassEffectView` capsule centred in the view, sized to the look. Nothing in it has glass
 /// of its own. At idle it does no work: no timer, display link or animation; hover is a tracking area.
 final class PillPrototypeView: NSView {
@@ -139,7 +118,8 @@ final class PillPrototypeView: NSView {
         switch look {
         case .idle:
             return isVertical
-                ? NSSize(width: PillGeometry.idle.height, height: PillGeometry.idle.width) : PillGeometry.idle
+                ? NSSize(width: PillGeometry.idleThickness, height: PillGeometry.idleLength)
+                : NSSize(width: PillGeometry.idleLength, height: PillGeometry.idleThickness)
         case .done: return NSSize(width: height, height: height)
         default:
             let fitting = stack.fittingSize

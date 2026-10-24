@@ -65,7 +65,7 @@ Reference: the copy deck in `docs/research/ux-polish.md` (sections 4.1-4.6). A n
 6. An error says what happened and what to do next, names the service ("Couldn't reach OpenRouter"), says when the audio is saved, and puts the fix on a button. Never blame the user.
 7. A pill message fits the 360 pt pill (about 34 characters); the snapshot run fails on truncation. The menu status line uses the same text.
 8. No " - " between phrases: two sentences, a colon, or "·" for a value after a state.
-9. One word per concept: Listening (live state), dictation, speech model, key, word, replacement, suggestion.
+9. One word per concept: Recording (live state; owner, 2026-10-24, was Listening), dictation, speech model, key, word, replacement, suggestion.
 10. Counts inflect (`AttributedString(localized: "^[…](inflect: true)")`); hide a zero count instead of "(0)".
 11. Pill and menu status strings live in `App/StatusText.swift` only.
 12. Every new window, pane, `DictationPhase` and `DictationNotice` gets a snapshot in `App/Snapshots.swift` (light and dark).

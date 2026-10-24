@@ -62,12 +62,16 @@ public struct ScreenRect: Sendable, Equatable {
 public enum IndicatorPlacement {
     /// The pill with text, and every pill at the bottom center, is as wide as its content within these limits.
     static let minWidth = 120.0
-    static let maxWidth = 360.0
+    public static let maxWidth = 360.0
     static let horizontalHeight = 40.0
     /// Every pill shape is a capsule: 40 pt across its short side.
     public static let cornerRadius = horizontalHeight / 2
     /// A compact pill (state dot and level only) at a side edge.
     static let verticalSize = (width: 40.0, height: 112.0)
+    /// The 0.5.0 idle bar ("Show indicator: Always"): its long and short side, turned 90° at a side edge. The pill
+    /// prototype draws it (`PillGeometry`); placement takes it when the new pill replaces the round one.
+    public static let idleBarLength = 40.0
+    public static let idleBarThickness = 8.0
     /// The round pill under the pointer during a drag.
     static let dragDiameter = 40.0
     static let bottomInset = 24.0
