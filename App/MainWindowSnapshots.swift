@@ -1,4 +1,5 @@
 import AppKit
+import KotobaCore
 import SwiftUI
 
 // MARK: - Snapshots
@@ -148,5 +149,31 @@ private struct TileSheet: View {
             }
         }
         .padding()
+    }
+}
+
+extension MainWindow {
+    /// A frame saved before the window had a maximum width (0.4.6 kept one up to the screen's width) comes back at most
+    /// `PageMetrics.maximumWindowWidth` wide: AppKit restores the saved frame as it is, and the hosting controller's
+    /// maximum content size narrows it at the first layout, before the window shows (review-upgrade, 2026-10-25). The
+    /// run fails if a change loses that. No image.
+    static func frameChecks() -> [Snapshot] {
+        var width: CGFloat = 0
+        var snapshot = Snapshot(name: "window-wide-saved-frame") {
+            let panes = [Pane.home(.sample)]
+            let window = window(showing: MainView(panes: panes, selection: Selection(panes: panes, showing: .home)))
+            // A 0.4.6 frame 1,440 pt wide, as `setFrameUsingName` reads it from the saved string.
+            window.setFrame(from: "100 100 1440 800 0 0 1920 1080 ")
+            Snapshots.settle()
+            window.layoutIfNeeded()
+            width = window.contentLayoutRect.width
+            return NSView()
+        } check: { _ in
+            width > PageMetrics.maximumWindowWidth + 0.5
+                ? "a saved frame stays \(width) pt wide, more than the maximum \(PageMetrics.maximumWindowWidth) pt"
+                : nil
+        }
+        snapshot.hasImage = false
+        return [snapshot]
     }
 }
