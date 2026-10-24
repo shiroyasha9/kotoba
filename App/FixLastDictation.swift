@@ -1,5 +1,3 @@
-// 0.5.0 ratchet: the Fix Last Dictation window's rollout puts this file on the page system and removes the next line.
-// swiftlint:disable ui_layout_literal ui_layout_constant page_form
 import AppKit
 import KotobaCore
 import Observation
@@ -13,11 +11,6 @@ import SwiftUI
 /// terminals.
 @MainActor
 final class FixLastDictationController: NSObject, NSWindowDelegate {
-    static let width: CGFloat = 480
-    /// The tallest the form gets; past it the form scrolls. Below it the window is as tall as its content, so it
-    /// grows when Learn adds the words it found.
-    static let maxFormHeight: CGFloat = 440
-
     /// Which dictation the open window fixes.
     private enum Fixing {
         /// The menu's last dictation, read when the window opened; nil when there was none.
@@ -225,20 +218,21 @@ final class FixLastDictationModel {
 struct FixLastDictationView: View {
     @Bindable var model: FixLastDictationModel
     let close: () -> Void
-    // Starts at the tallest, so the window opens at its tallest frame and only shrinks to the measured height.
-    @State private var formHeight = FixLastDictationController.maxFormHeight
+    // Starts at the tallest, so the window opens at its tallest frame and only shrinks to the measured height. Past
+    // the tallest the form scrolls; below it the window is as tall as its content, so it grows when Learn adds words.
+    @State private var formHeight = PageMetrics.fixFormMaxHeight
 
     var body: some View {
         VStack(spacing: 0) {
             if model.pasted == nil {
                 empty
             } else {
-                Form {
+                PageForm {
                     Section {
                         TextEditor(text: $model.text, selection: $model.selection)
                             .font(.body)
                             .scrollContentBackground(.hidden)
-                            .frame(minHeight: 100)
+                            .frame(minHeight: PageMetrics.editorMinHeight)
                     } footer: {
                         footer
                     }
@@ -246,22 +240,22 @@ struct FixLastDictationView: View {
                         found(corrections)
                     }
                 }
-                .formStyle(.grouped)
                 // A form takes all the height it is offered; this gives it its content's, so the window (sized by its
                 // content) has no empty half and grows when Learn adds words.
                 .onScrollGeometryChange(for: CGFloat.self, of: \.contentSize.height) { _, height in
                     formHeight = height
                 }
-                .frame(height: min(formHeight, FixLastDictationController.maxFormHeight))
+                .frame(height: min(formHeight, PageMetrics.fixFormMaxHeight))
+                // Under the form, its edges in line with the cards'.
                 buttons
-                    .padding([.horizontal, .bottom], 20)
+                    .padding([.horizontal, .bottom], PageMetrics.formInset)
             }
         }
-        .frame(width: FixLastDictationController.width)
+        .frame(width: PageMetrics.fixWindowWidth)
     }
 
     private var footer: some View {
-        VStack(alignment: .leading, spacing: 4) {
+        VStack(alignment: .leading) {
             if model.canLearn {
                 Text(
                     "Fix the wrong words, then click Learn. To add a word that is right, select it and click Add "
@@ -270,9 +264,9 @@ struct FixLastDictationView: View {
                 Text("Fix the wrong words, then click Copy.")
             }
             if !model.addedWords.isEmpty {
-                Label(
+                StatusLine(
                     "Added \(model.addedWords.map { "“\($0)”" }.formatted(.list(type: .and))) to your dictionary.",
-                    systemImage: "checkmark.circle")
+                    .good)
             }
         }
     }
@@ -287,7 +281,7 @@ struct FixLastDictationView: View {
                 Button("Close", action: close).keyboardShortcut(.defaultAction)
             }
         }
-        .padding(20)
+        .padding(PageMetrics.formInset)
         // As tall as the message and the button: the window fits its content.
         .fixedSize(horizontal: false, vertical: true)
     }
