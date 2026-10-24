@@ -76,15 +76,6 @@ public enum TranscriptionRoute: String, CaseIterable, Sendable {
         self == .openRouterMAI ? "MAI-Transcribe-2 via OpenRouter" : title
     }
 
-    /// A short note for the menu under the title, or nil.
-    public var note: String? {
-        switch self {
-        // The live check on 2026-10-15 got a 404 "No endpoints found matching your data policy" for Grok with zdr.
-        case .openRouterGrok: "OpenRouter may keep audio"
-        case .openRouterMAI, .xaiGrok, .azureMAI: nil
-        }
-    }
-
     /// The direct routes: shown under "Advanced". They are built from the docs and not yet tested live.
     public var isAdvanced: Bool { self == .xaiGrok || self == .azureMAI }
 

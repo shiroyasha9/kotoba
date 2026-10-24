@@ -7,6 +7,8 @@ import SwiftUI
 /// field holds nothing). The key itself never comes back to the screen; it stays in the Keychain.
 struct KeyField: View {
     let account: ProviderAccount
+    /// The speech model in use: it decides what stops without this key (`removeMessage`).
+    let route: TranscriptionRoute
     let keyChecks: KeyChecks
     /// The owner clicked Change…: the field shows over the saved key until Save or Cancel.
     @State private var isChanging = false
@@ -32,7 +34,7 @@ struct KeyField: View {
                 Button("Remove", role: .destructive) { keyChecks.remove(account) }
                 Button("Cancel", role: .cancel) {}
             } message: {
-                Text(Self.removeMessage)
+                Text(Self.removeMessage(account, route: route))
             }
         } else {
             HStack {
@@ -60,7 +62,16 @@ struct KeyField: View {
         "Remove Your \(account.title) Key?"
     }
 
-    static let removeMessage = "kotoba can’t dictate until you save a new key."
+    /// What stops until a new key is saved: dictations with the speech model's own key, cleanup and rewrite with the
+    /// OpenRouter key (they run on OpenRouter whatever the speech model), and nothing with another key.
+    static func removeMessage(_ account: ProviderAccount, route: TranscriptionRoute) -> String {
+        switch (account == route.account, account == .openRouter) {
+        case (true, true): "Until you save a new key, dictations wait, and cleanup and rewrite are off."
+        case (true, false): "Until you save a new key, dictations wait."
+        case (false, true): "Until you save a new key, cleanup and rewrite are off."
+        case (false, false): "The speech model you chose doesn’t use this key."
+        }
+    }
 
     private var isDraftEmpty: Bool { draft.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty }
 

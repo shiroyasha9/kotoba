@@ -50,8 +50,6 @@ struct TranscriptionSettingsTests {
 
     @Test func eachProviderHasOneKeyAndDirectRoutesAreMarkedUntested() {
         #expect(TranscriptionRoute.allCases.map(\.account) == [.openRouter, .openRouter, .xai, .azure])
-        #expect(TranscriptionRoute.openRouterGrok.note == "OpenRouter may keep audio")
-        #expect(TranscriptionRoute.allCases.filter { $0.note != nil } == [.openRouterGrok])
         #expect(TranscriptionRoute.allCases.filter(\.isAdvanced) == [.xaiGrok, .azureMAI])
     }
 

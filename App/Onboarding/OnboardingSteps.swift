@@ -166,7 +166,7 @@ struct KeyStep: View {
                 SymbolTile(
                     systemImage: PaneID.speech.systemImage, tint: PaneID.speech.tint, side: PageMetrics.rowTileSide)
             } trailing: {
-                KeyField(account: model.account, keyChecks: model.keyChecks)
+                KeyField(account: model.account, route: model.route, keyChecks: model.keyChecks)
             }
             result
         } header: {

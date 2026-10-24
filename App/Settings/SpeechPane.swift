@@ -302,7 +302,7 @@ private struct KeyRow: View {
 
     var body: some View {
         LabeledContent {
-            KeyField(account: account, keyChecks: model.keyChecks)
+            KeyField(account: account, route: model.route, keyChecks: model.keyChecks)
         } label: {
             // The status is the row's subtitle, as System Settings shows a row's state under its name.
             Text(label)
@@ -354,18 +354,24 @@ extension Pane {
                         route: .azureMAI, azureEndpoint: "https://example.cognitiveservices.azure.com/",
                         savedKeys: [.openRouter, .azure]))
             },
-            removeKeyAlert,
+            // One per message: the speech model's OpenRouter key, its xAI key, the OpenRouter key beside xAI, another key.
+            removeKeyAlert("settings-speech-remove-key", .openRouter, route: .openRouterMAI),
+            removeKeyAlert("settings-speech-remove-key-speech", .xai, route: .xaiGrok),
+            removeKeyAlert("settings-speech-remove-key-cleanup", .openRouter, route: .xaiGrok),
+            removeKeyAlert("settings-speech-remove-key-unused", .azure, route: .openRouterMAI),
         ]
     }
 
     /// The Remove confirmation as AppKit draws it, with KeyField's words: SwiftUI's `.alert` is a sheet on the window,
     /// which an offscreen run cannot show.
-    private static var removeKeyAlert: Snapshot {
-        Snapshot(name: "settings-speech-remove-key") {
+    private static func removeKeyAlert(_ name: String, _ account: ProviderAccount, route: TranscriptionRoute)
+        -> Snapshot
+    {
+        Snapshot(name: name) {
             let alert = NSAlert()
             alert.alertStyle = .warning
-            alert.messageText = KeyField.removeTitle(.openRouter)
-            alert.informativeText = KeyField.removeMessage
+            alert.messageText = KeyField.removeTitle(account)
+            alert.informativeText = KeyField.removeMessage(account, route: route)
             alert.addButton(withTitle: "Remove").hasDestructiveAction = true
             alert.addButton(withTitle: "Cancel")
             alert.layout()
