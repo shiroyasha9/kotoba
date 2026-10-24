@@ -24,7 +24,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     lazy var setup = SetupFlow(
         readiness: readiness, routeSettings: routeSettings, vault: vault, router: router,
         dictionary: { [weak self] in self?.mainWindow.dictionary },
-        openSpeechSettings: { [weak self] in self?.mainWindow.show(selecting: .speech) })
+        openSpeechSettings: { [weak self] in self?.mainWindow.show(selecting: .speech) },
+        openOtherSpeechServices: { [weak self] in self?.mainWindow.showOtherSpeechServices() })
     /// Its audio retention is set once the history opens (`AppDefaults.chooseAudioRetention`).
     private var settings = DictationPipeline.Settings(
         audioDirectory: AppFiles.audio,

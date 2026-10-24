@@ -182,7 +182,7 @@ struct KeyStep: View {
                     {
                         Button("Get a Key at \(provider)…") { model.open(model.account.keysPage) }
                     }
-                    Button("Use xAI or Azure Instead…", action: model.openSpeechSettings)
+                    Button("Use xAI or Azure Instead…", action: model.openOtherSpeechServices)
                 }
                 .buttonStyle(.link)
             }
