@@ -6,6 +6,13 @@ import SwiftUI
 // corner radii and text colours are the system's. Symbols take the font of the text next to them. The few sizes Apple
 // gives no value for live in `PageMetrics`, each with its source.
 
+extension Color {
+    /// kotoba's brand colour, the icon's coral caret (App/Assets.xcassets/Brand, light and dark): the charts and the pill
+    /// bars, always. Selection, buttons and switches keep the user's accent; the asset is also the app's accent colour
+    /// (`NSAccentColorName`), which macOS uses only while the user's accent is Multicolor.
+    static let brand = Color("Brand")
+}
+
 /// The sizes the system gives no value for (Apple publishes no tile, keycap or column size: HIG Sidebars, WWDC25 310),
 /// each with where it comes from. Every other size in a page comes from a system style.
 enum PageMetrics {
@@ -358,41 +365,4 @@ struct AppIconView: View {
         .frame(width: side, height: side)
         .accessibilityHidden(true)
     }
-}
-
-/// A chord drawn as keys, one keycap per key. Custom: macOS has no keycap view.
-struct Keycaps: View {
-    let keys: [String]
-
-    var body: some View {
-        HStack {
-            ForEach(Array(keys.enumerated()), id: \.offset) { _, key in
-                // The push button's own title size.
-                Self.legend(key)
-                    .font(.body)
-                    .frame(minWidth: PageMetrics.keycapSide, minHeight: PageMetrics.keycapSide)
-                    .fixedSize()
-                    .background(.fill.tertiary, in: Self.shape)
-                    .overlay(Self.shape.strokeBorder(.separator))
-            }
-        }
-        .accessibilityElement(children: .ignore)
-        .accessibilityLabel(keys.joined(separator: " "))
-    }
-
-    /// A modifier as its SF Symbol, which centres in the key; the font draws ⌃ at cap height, 3 pt above ⌥ and ⌘
-    /// (review-window.md, 5). Any other key as text.
-    @ViewBuilder private static func legend(_ key: String) -> some View {
-        if let symbol = modifierSymbols[key] {
-            Image(systemName: symbol)
-        } else {
-            Text(key)
-                .padding(.horizontal, PageMetrics.keycapInset)
-        }
-    }
-
-    private static let modifierSymbols = ["⌃": "control", "⌥": "option", "⌘": "command", "⇧": "shift"]
-
-    private static let shape = RoundedRectangle(
-        cornerRadius: PageMetrics.keycapSide * PageMetrics.tileCornerRatio, style: .continuous)
 }
