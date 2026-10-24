@@ -84,22 +84,16 @@ struct PageSheet<Content: View>: View {
     var confirm: Confirm?
     @ViewBuilder let content: Content
     @Environment(\.dismiss) private var dismiss
-    /// The form's content height: a form takes all the height it is offered, so the sheet asks for its content's.
-    @State private var contentHeight: CGFloat = 0
 
     var body: some View {
-        Form {
-            content
+        IdealHeight(within: PageMetrics.sheetHeights) {
+            Form {
+                content
+            }
+            .formStyle(.grouped)
         }
-        .formStyle(.grouped)
-        .onScrollGeometryChange(for: CGFloat.self, of: \.contentSize.height) { _, height in
-            contentHeight = height
-        }
+        .frame(width: PageMetrics.sheetWidth)
         .navigationTitle(title)
-        .frame(
-            width: PageMetrics.sheetWidth,
-            height: min(max(contentHeight, PageMetrics.sheetHeights.lowerBound), PageMetrics.sheetHeights.upperBound)
-        )
         .toolbar {
             if let confirm {
                 ToolbarItem(placement: .cancellationAction) {
@@ -117,6 +111,27 @@ struct PageSheet<Content: View>: View {
                 }
             }
         }
+    }
+}
+
+/// Its one subview at the subview's own ideal height, kept within `range`, in the same layout pass: a form takes all the
+/// height it is offered, and a height measured after the first layout (`onScrollGeometryChange`) came a run loop turn
+/// late, so a sheet opened, and was drawn, at its smallest height. Custom: SwiftUI has no "ideal height, clamped" frame.
+private struct IdealHeight: Layout {
+    let range: ClosedRange<CGFloat>
+
+    init(within range: ClosedRange<CGFloat>) {
+        self.range = range
+    }
+
+    func sizeThatFits(proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) -> CGSize {
+        let ideal = subviews.first?.sizeThatFits(ProposedViewSize(width: proposal.width, height: nil)) ?? .zero
+        return CGSize(
+            width: proposal.width ?? ideal.width, height: min(max(ideal.height, range.lowerBound), range.upperBound))
+    }
+
+    func placeSubviews(in bounds: CGRect, proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) {
+        subviews.first?.place(at: bounds.origin, proposal: ProposedViewSize(bounds.size))
     }
 }
 
