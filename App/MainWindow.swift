@@ -19,6 +19,7 @@ enum PaneID: String, Hashable, CaseIterable {
     case home
     case history
     case activity
+    case shortcuts
     case speech
     case dictionary
     case modes
@@ -30,6 +31,7 @@ enum PaneID: String, Hashable, CaseIterable {
         case .home: "Home"
         case .history: "History"
         case .activity: "Activity"
+        case .shortcuts: "Shortcuts"
         case .speech: "Speech"
         case .dictionary: "Dictionary"
         case .modes: "Modes"
@@ -45,6 +47,7 @@ enum PaneID: String, Hashable, CaseIterable {
         case .home: "house"
         case .history: "clock"
         case .activity: "chart.bar"
+        case .shortcuts: "keyboard"
         case .speech: "waveform"
         case .dictionary: "character.book.closed"
         case .modes: "square.grid.2x2"
@@ -58,6 +61,7 @@ enum PaneID: String, Hashable, CaseIterable {
         case .home: .blue
         case .history: .pink
         case .activity: .indigo
+        case .shortcuts: .gray
         case .speech: .teal
         case .dictionary: .orange
         case .modes: .purple
@@ -70,7 +74,7 @@ enum PaneID: String, Hashable, CaseIterable {
     var isSetting: Bool {
         switch self {
         case .home, .history, .activity: false
-        case .speech, .dictionary, .modes, .microphones, .general: true
+        case .shortcuts, .speech, .dictionary, .modes, .microphones, .general: true
         }
     }
 
