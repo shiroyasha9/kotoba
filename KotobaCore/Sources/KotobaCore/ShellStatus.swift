@@ -127,7 +127,7 @@ public struct ShellStatus: Sendable, Equatable {
         dictation = state
         let isRecordingStart = state.phase.isRecording && !wasRecording
         // The mic can also go silent because its access was turned off while kotoba runs.
-        let isSilent = if case .recording(_, isSilent: true, _) = state.phase { true } else { false }
+        let isSilent = if case .recording(_, isSilent: true, _, _) = state.phase { true } else { false }
         let isRecovered = if case .recovered = state.notice { true } else { false }
         return Reactions(
             cue: isRecordingStart ? .start : wasRecording && state.phase == .transcribing ? .stop : nil,

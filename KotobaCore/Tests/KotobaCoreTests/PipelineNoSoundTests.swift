@@ -82,6 +82,7 @@ struct PipelineNoSoundTests {
 
         #expect(await states.next()?.phase == .recording(isLong: false))
         #expect(await states.next()?.phase == .transcribing)
+        #expect(await states.next() == DictationState(.idle, isPasted: true))
         #expect(await states.next() == .idle)
         #expect(await pipeline.state == .idle)
     }
@@ -118,8 +119,9 @@ struct PipelineNoSoundTests {
         await pipeline.settle()
 
         #expect(await world.paster.pasted == ["push to talk"])
-        #expect(await states.next()?.phase == .recording(isLong: false))
+        #expect(await states.next()?.phase == .recording(isLong: false, isPushToTalk: true))
         #expect(await states.next()?.phase == .transcribing)
+        #expect(await states.next() == DictationState(.idle, isPasted: true))
         #expect(await states.next() == .idle)
     }
 

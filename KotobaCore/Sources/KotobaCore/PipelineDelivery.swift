@@ -32,7 +32,9 @@ extension DictationPipeline {
             segments: live.takeSegments(of: current.id))
         let outcome = await delivery.deliver(
             job, gate: self, beforeCleanup: { await self.cleanupStarted(current.id) })
-        finishDictation(current.id, showing: outcome.showing ?? .outcome(of: outcome.record))
+        finishDictation(
+            current.id, showing: outcome.showing ?? .outcome(of: outcome.record),
+            isPasted: outcome.record.status == .pasted)
         if let wait = outcome.record.lastError?.retryAfter { scheduleRetry(after: wait) }
         // Return submitted the field: the text is no longer where it was pasted.
         if outcome.isSubmitted {

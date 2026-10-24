@@ -43,7 +43,12 @@ extension DictationPipeline {
         let isTap = now - current.startedAt < settings.tapThreshold
         switch (current.gesture, isTap) {
         case (.tapOrHold, true), (.toggle, true):
-            await announce(current.id, at: now)
+            // A release handled after the threshold passed: announced as push to talk, it runs hands-free.
+            if current.isAnnounced {
+                recordingModeChanged()
+            } else {
+                await announce(current.id, at: now)
+            }
         case (.toggle, false):
             // Announced at the threshold; it runs until the next press.
             break

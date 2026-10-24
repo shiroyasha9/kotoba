@@ -123,7 +123,7 @@ struct PipelineHotkeyTests {
 
         world.clock.advance(by: .milliseconds(1))
         await pipeline.settle()
-        #expect(await pipeline.state.phase == .recording(isLong: false))
+        #expect(await pipeline.state.phase == .recording(isLong: false, isPushToTalk: true))
         #expect(await world.audio.isCapturing)
     }
 
@@ -143,6 +143,7 @@ struct PipelineHotkeyTests {
         // The shortcut emitted nothing; the first states belong to the dictation after it.
         #expect(await states.next()?.phase == .recording(isLong: false))
         #expect(await states.next()?.phase == .transcribing)
+        #expect(await states.next() == DictationState(.idle, isPasted: true))
         #expect(await states.next() == .idle)
     }
 
@@ -244,12 +245,12 @@ struct PipelineHotkeyTests {
         await pipeline.handle(.chordDown(.tapOrHold))
         world.clock.advance(by: .milliseconds(500))
         await pipeline.settle()
-        #expect(await pipeline.state.phase == .recording(isLong: false))
+        #expect(await pipeline.state.phase == .recording(isLong: false, isPushToTalk: true))
         await pipeline.handle(.chordInterrupted)
 
         #expect(await world.audio.isCapturing)
         #expect(await world.audio.discarded.isEmpty)
-        #expect(await pipeline.state.phase == .recording(isLong: false))
+        #expect(await pipeline.state.phase == .recording(isLong: false, isPushToTalk: true))
     }
 
     @Test func aKeyPressedAfterTheStartTapIsOrdinaryTyping() async {
@@ -304,6 +305,7 @@ struct PipelineHotkeyTests {
 
         #expect(await states.next()?.phase == .recording(isLong: false))
         #expect(await states.next()?.phase == .transcribing)
+        #expect(await states.next() == DictationState(.idle, isPasted: true))
         #expect(await states.next() == .idle)
     }
 

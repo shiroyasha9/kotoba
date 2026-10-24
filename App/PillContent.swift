@@ -66,7 +66,7 @@ extension IndicatorPanel {
         switch state.phase {
         case .idle:
             return isAlways ? .idle(click: click) : nil
-        case .recording(let isLong, let isSilent, let isCleaned):
+        case .recording(let isLong, let isSilent, let isCleaned, _):
             // Only a plain "Listening" pill stands vertical at an edge; the others carry more words.
             let isPlain = !isLong && !isSilent && !context.isSecureInputOn
             let toolTip = recordingHelp(isSilent: isSilent, isCleaned: isCleaned, context: context)

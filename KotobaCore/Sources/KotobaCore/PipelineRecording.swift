@@ -78,19 +78,30 @@ extension DictationPipeline {
         let isSilent = update(&sound)
         recording?.sound = sound
         armSoundDeadline(of: id)
-        guard recording?.isAnnounced == true, case .recording(let isLong, _, let isCleaned) = state.phase else {
+        guard recording?.isAnnounced == true,
+            case .recording(let isLong, _, let isCleaned, let isPushToTalk) = state.phase
+        else {
             return
         }
-        emit(.recording(isLong: isLong, isSilent: isSilent, isCleaned: isCleaned))
+        emit(.recording(isLong: isLong, isSilent: isSilent, isCleaned: isCleaned, isPushToTalk: isPushToTalk))
+    }
+
+    /// The announced recording's stop changed from its release to the next press: the pill shows it hands-free.
+    func recordingModeChanged() {
+        guard let recording, recording.isAnnounced,
+            case .recording(let isLong, let isSilent, let isCleaned, _) = state.phase
+        else { return }
+        emit(
+            .recording(isLong: isLong, isSilent: isSilent, isCleaned: isCleaned, isPushToTalk: recording.isPushToTalk))
     }
 
     /// The recording is still live after `Settings.longRecordingWarning`; it never stops on its own.
     private func warnLong(_ id: DictationID) {
-        if recording?.id == id {
+        if let recording, recording.id == id {
             emit(
                 .recording(
-                    isLong: true, isSilent: recording?.sound.isWarning ?? false,
-                    isCleaned: recording?.isCleaned ?? false))
+                    isLong: true, isSilent: recording.sound.isWarning, isCleaned: recording.isCleaned,
+                    isPushToTalk: recording.isPushToTalk))
         }
     }
 
@@ -106,7 +117,10 @@ extension DictationPipeline {
         // route in about 2 s, so a short dictation gains), and the large one follows it, as only bytes warm the rest.
         largePrimerDue = warmth.isWarm(within: settings.primerInterval) ? nil : id
         primeRoute(for: id, size: .silent)
-        emit(.recording(isLong: false, isSilent: current.sound.isWarning, isCleaned: current.isCleaned))
+        emit(
+            .recording(
+                isLong: false, isSilent: current.sound.isWarning, isCleaned: current.isCleaned,
+                isPushToTalk: current.isPushToTalk))
         await ports.readback?.dictationStarted()
     }
 

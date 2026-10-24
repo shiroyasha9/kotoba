@@ -70,7 +70,7 @@ struct PipelineGestureTests {
         #expect(await pipeline.state == .idle)
         world.clock.advance(by: .milliseconds(1))
         await pipeline.settle()
-        #expect(await pipeline.state.phase == .recording(isLong: false))
+        #expect(await pipeline.state.phase == .recording(isLong: false, isPushToTalk: true))
 
         world.clock.advance(by: .seconds(2))
         await pipeline.handle(.chordUp)

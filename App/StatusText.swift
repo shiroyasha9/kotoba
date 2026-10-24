@@ -178,9 +178,9 @@ extension DictationPhase {
     func statusText(_ context: StatusContext) -> String? {
         switch self {
         case .idle: nil
-        case .recording(_, isSilent: true, _):
+        case .recording(_, isSilent: true, _, _):
             context.isMicrophoneOff ? StatusText.microphoneOff : StatusText.noSound
-        case .recording(isLong: true, _, _): "Still listening · \(context.longRecordingMinutes) min"
+        case .recording(isLong: true, _, _, _): "Still listening · \(context.longRecordingMinutes) min"
         case .recording: context.isSecureInputOn ? "Listening · Secure Input on" : "Listening"
         case .transcribing: "Transcribing"
         case .cleaning: "Cleaning up"
@@ -192,7 +192,7 @@ extension DictationPhase {
     func pillAction(_ context: StatusContext) -> PillAction? {
         switch self {
         case .undoable: .undo
-        case .recording(_, isSilent: true, _):
+        case .recording(_, isSilent: true, _, _):
             context.isMicrophoneOff ? .openMicrophoneSettings : .chooseMicrophone
         case .idle, .recording, .transcribing, .cleaning, .polishing: nil
         }

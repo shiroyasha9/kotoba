@@ -6,7 +6,9 @@ public enum DictationPhase: Sendable, Equatable {
     /// `isSilent` is on while the mic gives no sound (`NoSoundPolicy`); it clears when sound arrives.
     /// `isCleaned`: the dictation will be cleaned up, by the cleanup chord or by the mode of the app in front at
     /// key-down; the app in front at the stop decides in the end.
-    case recording(isLong: Bool, isSilent: Bool = false, isCleaned: Bool = false)
+    /// `isPushToTalk`: the release of the press that started it stops it (a hold past the threshold); off, the next
+    /// press stops it (hands-free: a tap, the hands-free chord of a split pair, the pill, an Undo).
+    case recording(isLong: Bool, isSilent: Bool = false, isCleaned: Bool = false, isPushToTalk: Bool = false)
     case transcribing
     /// The transcript is with the cleaner (LLM cleanup, 1.6 s p50 in kotoba-bench-v1); the paste follows.
     case cleaning

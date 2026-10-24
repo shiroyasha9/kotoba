@@ -242,13 +242,21 @@ extension DictationPipeline {
     }
 
     /// The dictation ended: a recording in progress keeps the indicator on recording; other dictations in flight keep
-    /// it on their step, under `notice` when there is one.
-    func finishDictation(_ id: DictationID, showing notice: DictationNotice?) {
+    /// it on their step, under `notice` when there is one. `isPasted` with no notice: the pill's check shows first
+    /// (`DictationState.isPasted`).
+    func finishDictation(_ id: DictationID, showing notice: DictationNotice?, isPasted: Bool = false) {
         dropSegments(of: id)
         live.end(id)
         // A live recording or an open Undo window keeps the indicator; the notice would hide it.
         guard !live.hasRecording else { return }
-        if let notice { show(notice) } else { emit(inFlightPhase) }
+        if let notice {
+            show(notice)
+            return
+        }
+        if isPasted {
+            publish(DictationState(inFlightPhase, isPasted: true))
+        }
+        emit(inFlightPhase)
     }
 
     /// The phase when no recording or Undo window shows: the step the dictations in flight wait on, else Polish, else

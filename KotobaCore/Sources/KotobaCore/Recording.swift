@@ -42,6 +42,10 @@ extension DictationPipeline {
         /// The pill marks the dictation as one that will be cleaned up.
         var isCleaned: Bool { isCleanupSeen || cleansAtKeyDown }
 
+        /// The release of the starting press will stop it: a hold announced at the threshold, unless the hands-free
+        /// chord of a split pair started it. A tap, or an Undo, leaves it to the next press.
+        var isPushToTalk: Bool { isUndecided && gesture != .toggle }
+
         /// The recording is over (stopped, dropped or kept): none of its timers fires. Esc keeps the long-recording
         /// warning, which stays due once Undo resumes.
         func cancelTimers() {
