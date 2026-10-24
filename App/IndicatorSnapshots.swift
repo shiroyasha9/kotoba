@@ -13,8 +13,9 @@ extension IndicatorPanel {
         var isSilent = false
     }
 
-    /// Azure has the longest name, so its words are the widest.
-    private static let context = StatusContext(provider: .azure)
+    /// OpenRouter has the longest name of the providers, so its words are the widest; only Azure has an endpoint.
+    private static let context = StatusContext(provider: .openRouter)
+    private static let azure = StatusContext(provider: .azure)
 
     /// The pill for `state`, as the panel maps it.
     private static func sample(
@@ -163,14 +164,16 @@ extension IndicatorPanel {
     private static func setupSamples(_ id: DictationID) -> [Sample?] {
         [
             sample("needs-key", .init(.idle, notice: .needsSetup(id, .key))),
-            sample("needs-endpoint", .init(.idle, notice: .needsSetup(id, .endpoint))),
+            sample("needs-endpoint", .init(.idle, notice: .needsSetup(id, .endpoint)), context: azure),
             sample("needs-credit", .init(.idle, notice: .needsSetup(id, .credit))),
             sample(
                 "hostNotFound-label",
-                .init(.idle, notice: .hostNotFound(id, host: "kotoba-asr.cognitiveservices.azure.com"))),
+                .init(.idle, notice: .hostNotFound(id, host: "kotoba-asr.cognitiveservices.azure.com")),
+                context: azure),
             sample(
                 "hostNotFound-unnamed",
-                .init(.idle, notice: .hostNotFound(id, host: "my-speech-resource.cognitiveservices.azure.com"))),
+                .init(.idle, notice: .hostNotFound(id, host: "my-speech-resource.cognitiveservices.azure.com")),
+                context: azure),
         ]
     }
 
