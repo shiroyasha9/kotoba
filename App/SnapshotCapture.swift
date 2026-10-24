@@ -106,20 +106,9 @@ enum SnapshotCapture {
     }
 
     /// The window as the window server composites it. A window that is never ordered in is captured on its own
-    /// (`desktopIndependentWindow`), so nothing shows on screen. About half of new windows are not yet known to the
-    /// capture at the first try (error -3812, invalid parameter); a run loop turn before the next try is mostly
-    /// enough, but a full run also saw two failures in a row, so it tries up to 5 times.
+    /// (`desktopIndependentWindow`), so nothing shows on screen.
     static func image(of window: NSWindow, scale: CGFloat) throws -> CGImage {
         #if DEBUG
-            for _ in 1..<5 {
-                do {
-                    return try captureOnce(window, scale: scale)
-                } catch SCStreamError.invalidParameter {
-                    CFRunLoopRunInMode(.defaultMode, 0.01, true)
-                } catch SCStreamError.userDeclined {
-                    throw CaptureFailure.noScreenRecording(responsibleApp)
-                }
-            }
             do {
                 return try captureOnce(window, scale: scale)
             } catch SCStreamError.userDeclined {
@@ -135,10 +124,21 @@ enum SnapshotCapture {
             window.displayIfNeeded()
             CATransaction.flush()
             let id = CGWindowID(window.windowNumber)
+            let size = window.frame.size
+            // AppKit sends a window's changes to the window server without waiting, and ScreenCaptureKit reads the
+            // window list over another connection: under load it listed a new window with a zero frame, and the
+            // capture of that zero size failed with -3812 (invalid parameter). This window list call waits for the
+            // window server's answer on the app's own connection, so the window server has applied every earlier
+            // change when it returns (2026-10-25 spike: 0 of 120 new windows listed at zero with it under load, 89 of
+            // 120 without). Its answer is empty: the list leaves out a window never ordered in.
+            _ = CGWindowListCopyWindowInfo(.optionIncludingWindow, id)
             return try wait {
                 let content = try await SCShareableContent.currentProcess
                 guard let listed = content.windows.first(where: { $0.windowID == id }) else {
                     throw CaptureFailure.notListed(id)
+                }
+                guard listed.frame.size == size else {
+                    throw CaptureFailure.listedFrame(id, listed.frame, size)
                 }
                 let filter = SCContentFilter(desktopIndependentWindow: listed)
                 let configuration = SCStreamConfiguration()
@@ -181,6 +181,8 @@ enum SnapshotCapture {
     private enum CaptureFailure: Error, CustomStringConvertible {
         /// The capture does not list the window: it has no window server window (a window made with `defer: true`).
         case notListed(CGWindowID)
+        /// ScreenCaptureKit lists the window at another size than the window server has it.
+        case listedFrame(CGWindowID, CGRect, CGSize)
         case timedOut
         case releaseBuild
         /// The capture's error -3801 (the user declined): the app that runs `make` has no Screen Recording grant.
@@ -189,6 +191,7 @@ enum SnapshotCapture {
         var description: String {
             switch self {
             case .notListed(let id): "window \(id) has no window server window"
+            case .listedFrame(let id, let frame, let size): "the capture lists window \(id) at \(frame), not \(size)"
             case .timedOut: "the capture did not answer in 10 s"
             case .releaseBuild: "snapshots need a Debug build (make snapshots)"
             case .noScreenRecording(let app):
