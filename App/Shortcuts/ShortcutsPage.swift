@@ -1,5 +1,4 @@
 import KotobaCore
-import KotobaProviders
 import Observation
 import SwiftUI
 
@@ -11,15 +10,11 @@ extension Pane {
     }
 }
 
-/// The Shortcuts page's settings: every chord, the cleanup model, and the spoken Return and line break commands. A chord
-/// is saved by its recorder (`HotkeyChords`); each other change applies at once.
+/// The Shortcuts page's settings: every chord, and the spoken Return and line break commands. A chord is saved by its
+/// recorder (`HotkeyChords`); a command's switch applies at once.
 @MainActor
 @Observable
 final class ShortcutsModel {
-    var cleanupModel: CleanupModel {
-        didSet { settings.cleanupModel = cleanupModel }
-    }
-
     var isSubmitPhraseOn: Bool {
         didSet { submitPhrase.write(isSubmitPhraseOn) }
     }
@@ -28,31 +23,25 @@ final class ShortcutsModel {
         didSet { lineBreakPhrase.write(isLineBreakPhraseOn) }
     }
 
-    /// Observable itself: the rows and the cleanup model follow a new recording.
+    /// Observable itself: the rows follow a new recording.
     @ObservationIgnored let chords: HotkeyChords
-    @ObservationIgnored private let settings: TranscriptionSettings
     @ObservationIgnored private let submitPhrase: Setting<Bool>
     @ObservationIgnored private let lineBreakPhrase: Setting<Bool>
 
     init(
-        settings: TranscriptionSettings, chords: HotkeyChords, submitPhrase: Setting<Bool>,
-        lineBreakPhrase: Setting<Bool>
+        chords: HotkeyChords, submitPhrase: Setting<Bool>, lineBreakPhrase: Setting<Bool>
     ) {
-        self.settings = settings
         self.chords = chords
         self.submitPhrase = submitPhrase
         self.lineBreakPhrase = lineBreakPhrase
-        cleanupModel = settings.cleanupModel
         isSubmitPhraseOn = submitPhrase.read()
         isLineBreakPhraseOn = lineBreakPhrase.read()
     }
 
     /// The app's chords and saved commands; `pasteSettingChanged` hands a new spoken command setting to the pipeline.
-    static func live(
-        settings: TranscriptionSettings, pasteSettingChanged: @escaping @MainActor (PasteSetting) -> Void
-    ) -> ShortcutsModel {
+    static func live(pasteSettingChanged: @escaping @MainActor (PasteSetting) -> Void) -> ShortcutsModel {
         ShortcutsModel(
-            settings: settings, chords: .shared,
+            chords: .shared,
             submitPhrase: Setting(
                 read: { AppDefaults.isSubmitPhraseOn },
                 write: {
@@ -67,10 +56,9 @@ final class ShortcutsModel {
                 }))
     }
 
-    /// Fixed values for snapshots: no UserDefaults or settings file is read or written.
+    /// Fixed values for snapshots: no UserDefaults is read or written.
     static func sample(chords: HotkeyChords = HotkeyChords(defaults: nil)) -> ShortcutsModel {
-        ShortcutsModel(
-            settings: .inMemory(), chords: chords, submitPhrase: .fixed(true), lineBreakPhrase: .fixed(false))
+        ShortcutsModel(chords: chords, submitPhrase: .fixed(true), lineBreakPhrase: .fixed(false))
     }
 }
 
@@ -90,10 +78,6 @@ private struct ShortcutsPage: View {
                 recorder(.handsFree, StatusText.shortcutHelp(.handsFree))
                 recorder(.pushToTalk, StatusText.pushToTalkHelp(model.chords))
                 recorder(.cleanup, StatusText.shortcutHelp(.cleanup))
-                Picker("Cleanup model", selection: $model.cleanupModel) {
-                    ForEach(CleanupModel.allCases, id: \.self) { Text($0.title).tag($0) }
-                }
-                .disabled(model.chords.cleanup == nil)
                 PageRow(title: StatusText.cancelLabel, subtitle: StatusText.cancelHelp) {
                     Keycaps(keys: ["Esc"])
                 }
@@ -104,14 +88,14 @@ private struct ShortcutsPage: View {
                 recorder(.polishLast, StatusText.shortcutHelp(.polishLast) + " Off until you record a shortcut.")
             }
             Section {
-                Toggle(isOn: $model.isSubmitPhraseOn) {
-                    Text("Press Return when you say “press enter”")
-                    Text("Also “press return”. Say it last; kotoba leaves it out of the text.")
-                }
-                Toggle(isOn: $model.isLineBreakPhraseOn) {
-                    Text("Start a new line when you say “new line”")
-                    Text("“New paragraph” adds an empty line. Some terminals run each line as a command.")
-                }
+                PageToggle(
+                    title: "Press Return when you say “press enter”",
+                    subtitle: "Also “press return”. Say it last; kotoba leaves it out of the text.",
+                    isOn: $model.isSubmitPhraseOn)
+                PageToggle(
+                    title: "Start a new line when you say “new line”",
+                    subtitle: "“New paragraph” adds an empty line. Some terminals run each line as a command.",
+                    isOn: $model.isLineBreakPhraseOn)
             } header: {
                 Text("Voice Commands")
             } footer: {

@@ -59,15 +59,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         routeSettings: routeSettings, vault: vault, router: router, microphones: microphones, audio: audio,
         readiness: readiness, finishSetup: { [weak self] in self?.setup.finishSetup() },
         tryIt: { [weak self] in self?.setup.tryIt() }, fixLast: { [weak self] in self?.fixWindow.show() },
-        makeGeneral: { [indicator, cues, updater, weak self] in
-            GeneralModel(
-                indicator: indicator, cues: cues, updater: updater,
-                audio: self.flatMap { app in
-                    app.store.map { .live(requests: app.audioRequests.continuation, store: $0) }
-                })
+        makeGeneral: { [indicator, cues, updater] in
+            GeneralModel(indicator: indicator, cues: cues, updater: updater)
         },
-        makeShortcuts: { [routeSettings, weak self] in
-            .live(settings: routeSettings) { self?.pasteSettingChanged($0) }
+        makeShortcuts: { [weak self] in
+            .live { self?.pasteSettingChanged($0) }
         })
 
     func applicationDidFinishLaunching(_ notification: Notification) {

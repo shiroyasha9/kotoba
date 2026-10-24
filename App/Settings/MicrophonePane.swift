@@ -71,10 +71,10 @@ private struct MicrophonePane: View {
                 Text("Drag to change the order.")
             }
             Section {
-                Toggle(isOn: $model.isBluetoothOnlyWhenListed) {
-                    Text("Use Bluetooth mics only from the list")
-                    Text("Bluetooth mics record at call quality and can miss your first word.")
-                }
+                PageToggle(
+                    title: "Use Bluetooth mics only from the list",
+                    subtitle: "Bluetooth mics record at call quality and can miss your first word.",
+                    isOn: $model.isBluetoothOnlyWhenListed)
             }
             Section {
                 LabeledContent("Input level") {

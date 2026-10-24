@@ -105,16 +105,13 @@ final class GeneralModel {
     var hasUpdater: Bool { backing.checksForUpdates != nil }
 
     @ObservationIgnored private let backing: Backing
-    /// The History section; nil when the history database did not open.
-    @ObservationIgnored let audio: AudioRetentionModel?
 
     /// Reads the current values.
-    convenience init(indicator: IndicatorPanel, cues: SoundCues, updater: Updater?, audio: AudioRetentionModel?) {
-        self.init(audio: audio, backing: .live(indicator: indicator, cues: cues, updater: updater))
+    convenience init(indicator: IndicatorPanel, cues: SoundCues, updater: Updater?) {
+        self.init(backing: .live(indicator: indicator, cues: cues, updater: updater))
     }
 
-    private init(audio: AudioRetentionModel?, backing: Backing) {
-        self.audio = audio
+    private init(backing: Backing) {
         self.backing = backing
         isLaunchAtLoginOn = backing.loginItem.isOn()
         loginProblem = backing.loginItem.problem()
@@ -140,7 +137,6 @@ final class GeneralModel {
         loginItem: LoginItem = .init(isOn: { true }, problem: { nil }, change: { _ in nil }), showsInDock: Bool = true
     ) -> GeneralModel {
         GeneralModel(
-            audio: .sample(),
             backing: Backing(
                 loginItem: loginItem, showsInDock: .fixed(showsInDock), showsMenuBarIcon: .fixed(true),
                 soundCues: .fixed(true), cueVoice: .fixed(.nylon), indicatorAnchor: .fixed(.bottomCenter),
@@ -158,10 +154,8 @@ private struct GeneralPane: View {
                 PageHeader(page: .general, summary: "How kotoba sounds and shows itself, opens and updates.")
             }
             Section("Sounds") {
-                Toggle(isOn: $model.areSoundsOn) {
-                    Text("Play sounds")
-                    Text("When a dictation starts and stops.")
-                }
+                PageToggle(
+                    title: "Play sounds", subtitle: "When a dictation starts and stops.", isOn: $model.areSoundsOn)
                 Picker("Sound", selection: $model.cueVoice) {
                     ForEach(CueVoice.allCases, id: \.self) { Text($0.title).tag($0) }
                 }
@@ -179,9 +173,6 @@ private struct GeneralPane: View {
                     .fixedSize()
                 }
             }
-            if let audio = model.audio {
-                AudioSection(model: audio)
-            }
             Section {
                 Toggle(
                     "Open at login",
@@ -195,10 +186,11 @@ private struct GeneralPane: View {
                 }
             }
             Section {
-                Toggle(isOn: $model.showsInDock) {
-                    Text("Show in Dock")
-                    Text("When off, kotoba is in the Dock only while one of its windows is open.")
-                }
+                PageToggle(
+                    title: "Show in Dock",
+                    subtitle: "When off, kotoba is in the Dock only while one of its windows is open.",
+                    isOn: $model.showsInDock
+                )
                 .disabled(!model.presence.canHideDockIcon)
                 Toggle("Show in menu bar", isOn: $model.showsMenuBarIcon)
                     .disabled(!model.presence.canHideMenuBarIcon)
