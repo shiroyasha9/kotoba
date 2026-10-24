@@ -57,8 +57,7 @@ enum ActivityPeriod: CaseIterable, Hashable {
 
 struct ActivityPrototype: View {
     let data: ActivityPrototypeData
-    /// Set by the window toolbar's Week/Month switch (`WindowPrototypeView`).
-    var period = ActivityPeriod.week
+    @State var period = ActivityPeriod.week
 
     var body: some View {
         PageForm {
@@ -71,6 +70,19 @@ struct ActivityPrototype: View {
             }
             Section {
                 DailyWords(days: data.insights.days, period: period)
+            } header: {
+                // Above the chart card, outside it, so the card holds no control (owner, 2026-10-24); Battery puts its
+                // period switch at the top of its charts. Centred: a segmented control does not stretch.
+                HStack {
+                    Spacer()
+                    Picker("Period", selection: $period) {
+                        ForEach(ActivityPeriod.allCases, id: \.self) { Text($0.title).tag($0) }
+                    }
+                    .pickerStyle(.segmented)
+                    .labelsHidden()
+                    .fixedSize()
+                    Spacer()
+                }
             }
             highlights
             topApps

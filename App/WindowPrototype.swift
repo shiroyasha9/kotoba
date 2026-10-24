@@ -95,19 +95,6 @@ struct WindowPrototypeView: View {
         } detail: {
             detail
                 .navigationTitle(page.title)
-                // Activity's period switch, at the trailing edge (owner, 2026-10-24). The item stays on every page, so
-                // the toolbar keeps one height and the traffic lights, title and sidebar never move between pages.
-                .toolbar {
-                    ToolbarItem(placement: .primaryAction) {
-                        if page == .activity {
-                            Picker("Period", selection: $period) {
-                                ForEach(ActivityPeriod.allCases, id: \.self) { Text($0.title).tag($0) }
-                            }
-                            .pickerStyle(.segmented)
-                            .labelsHidden()
-                        }
-                    }
-                }
         }
         // No sidebar toggle, as System Settings. On the split view, not the sidebar list: there it made the split view
         // ignore `navigationSplitViewColumnWidth` (sidebar 144 pt, not 215 pt; sidebar-spike, 2026-10-24).
@@ -271,7 +258,7 @@ extension WindowPrototype {
                 ActivityPrototype(data: .sample)
             },
             Snapshot(name: "prototype-sidebar-tiles") { NSHostingView(rootView: TileSheet()) },
-            // The real window, title bar and toolbar included: Activity's period switch sits in the toolbar.
+            // The real window, title bar included: the title bar keeps one height on every page.
             framed(named: "prototype-framed-home", .home),
             framed(named: "prototype-framed-activity", .activity),
             framed(named: "prototype-framed-history", .history),
