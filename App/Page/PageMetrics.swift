@@ -120,4 +120,26 @@ enum PageMetrics {
     /// A chart's average line and a month's date lines: a hairline of short dashes, as Screen Time's average and
     /// Battery's time lines.
     static let dashedLine = StrokeStyle(lineWidth: 1, dash: [2, 2])
+
+    // MARK: Separate windows
+
+    /// A grouped form's side inset to its sections: the section edge at 40 px in the 2x Fix Last Dictation snapshot.
+    /// Content outside a form that lines up with its cards (a window's button row under its form, onboarding's step
+    /// heading and footer) takes it.
+    static let formInset: CGFloat = 20
+
+    /// The onboarding window: the page column's width and the main window's first height.
+    static let onboardingWindowSize = CGSize(width: columnWidth, height: defaultWindowSize.height)
+
+    /// The app icon on onboarding's Welcome step: Journal's and Freeform's welcome sheets draw theirs at about 68 pt
+    /// (refs/apple/journal-welcome-light, freeform-welcome-light).
+    static let welcomeIconSide: CGFloat = 64
+
+    /// The Fix Last Dictation window's width, and the most its form grows before it scrolls (the window fits its
+    /// content, so a long dictation with many words to learn does not run off a small screen).
+    static let fixWindowWidth: CGFloat = 480
+    static let fixFormMaxHeight: CGFloat = 440
+
+    /// The Fix window's text editor at its smallest: about four lines of body text with the editor's insets.
+    static let editorMinHeight: CGFloat = 100
 }
