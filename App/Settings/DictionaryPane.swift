@@ -47,6 +47,8 @@ private struct DictionaryPane: View {
         .sheet(item: $editing) { editing in
             EntryEditor(draft: editing.draft, isNew: editing.row == nil) { draft throws(DictionaryError) in
                 try model.save(draft, replacing: editing.row)
+                // A new word shows in the list, whatever the search was.
+                if editing.row == nil { search = "" }
             }
         }
         .sheet(isPresented: $isAdvancedShown) {
@@ -72,8 +74,9 @@ private struct DictionaryPane: View {
                 }
             }
         } header: {
-            // The field names the list ("Search words"), so the group needs no other header.
-            if model.rows.isEmpty {
+            // The field names the list ("Search words"), so the group needs no other header. It stays while it
+            // filters, even when no word is left, so a search never hides words with no field to clear it.
+            if model.rows.isEmpty && search.isEmpty {
                 Text("Words")
             } else {
                 PageSearchField(text: $search, prompt: "Search words")
