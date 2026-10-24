@@ -1,6 +1,6 @@
 # UI redesign (0.5.0)
 
-Status: agreed with the owner on 2026-10-24 (grill session, about 19:00-20:55 IST). Not started.
+Status: agreed with the owner on 2026-10-24 (grill session, about 19:00-20:55 IST). Prototype approved by the owner on 2026-10-25 (Home, Activity and the pill at 5418ff9 and 348e8bd); next: extract the system, then roll it out to every page.
 Research notes (with a source for each claim): `<runbooks>/2026-10-24-kotoba-ui-redesign/`:
 - `native-ui-libraries-research.md`: libraries, Apple's macOS 26 rules (WWDC25 219, 310, 323, 356; HIG), and the 15 most visible departures in the code, with file:line.
 - `ui-inventory.md`: every surface, control and visible text, with file:line; duplications; advanced controls; internal terms.
@@ -90,4 +90,4 @@ Pattern: one small glass capsule that changes shape; no status words (Hex, Wispr
 
 ## Unresolved questions
 
-- The exact content width, spacing, symbol sizes, pill geometry and colours come out of the prototype; the owner approves them there.
+- None for the visual system: the owner approved the prototype on 2026-10-25 and left the remaining taste items (keycap legend colour, the wide-window width limit, the independent review's taste findings) to the chief of staff.
