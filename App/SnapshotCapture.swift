@@ -29,8 +29,15 @@ enum SnapshotCapture {
     /// its current frame. A repeating one (a spinner) never ends and is left out. SwiftUI animates in process, one
     /// update per frame, so its animations are not listed here.
     static func runningAnimation(in window: NSWindow) -> String? {
-        guard let root = window.contentView?.superview?.layer else { return nil }
-        return runningAnimation(in: root)
+        (window.contentView?.superview ?? window.contentView).flatMap(runningAnimation(in:))
+    }
+
+    /// From each top layer-backed view down: a borderless window's frame view has no layer of its own.
+    private static func runningAnimation(in view: NSView) -> String? {
+        if let layer = view.layer {
+            return runningAnimation(in: layer)
+        }
+        return view.subviews.lazy.compactMap { runningAnimation(in: $0) }.first
     }
 
     private static func runningAnimation(in layer: CALayer) -> String? {
@@ -38,7 +45,12 @@ enum SnapshotCapture {
             guard let animation = layer.animation(forKey: key), animation.repeatCount.isFinite,
                 animation.repeatDuration.isFinite
             else { continue }
-            return "\(layer.delegate.map { "\(type(of: $0))" } ?? "\(type(of: layer))") \(key)"
+            // The nearest view up the layer tree names where it runs; a plain sublayer has no delegate of its own.
+            let owner = sequence(first: layer, next: \.superlayer).lazy.compactMap(\.delegate).first
+            let path = (animation as? CAPropertyAnimation)?.keyPath ?? "\(type(of: animation))"
+            let left = animation.beginTime + animation.duration - layer.convertTime(CACurrentMediaTime(), from: nil)
+            return "\(type(of: layer)) key \(key), \(path), in \(owner.map { "\(type(of: $0))" } ?? "no view"), "
+                + "\(Int(animation.duration * 1000)) ms long, \(Int(left * 1000)) ms left"
         }
         return (layer.sublayers ?? []).lazy.compactMap { runningAnimation(in: $0) }.first
     }
