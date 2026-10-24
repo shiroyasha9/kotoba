@@ -944,6 +944,7 @@ Shortcut recorders, the spoken commands, the Bluetooth switch and the Microphone
 | 1193 | On **Microphone** with a USB mic first in the list and in use, unplug it, then plug it back in | Its row goes from “In use” to “Not connected” and the next mic shows “In use” within about a second; plugging it back gives “In use” back to it | |
 | 1194 | Mac with no built-in mic (or the built-in mic removed from the list and unavailable), AirPods as the system input, kotoba's list empty, switch on; dictate, click **Choose Mic…**, add AirPods with +, dictate again | The pill says “Not in mic list: AirPods Pro” with **Choose Mic…**; it opens Microphone; after the add the next dictation records from the AirPods | |
 | 1198 | Open **Microphone** with the built-in mic in use; pick the built-in mic in the menu bar's Microphone menu; then drag another mic on the page | The built-in mic moves to the top of the list at once; the drag keeps the menu's pick | |
+| 1199 | Mac with no built-in mic running 0.4.6 with AirPods as the system input: put the AirPods in their case, update to 0.5.0 and let it relaunch; take the AirPods out and dictate. Then open **Microphone** | The dictation records from the AirPods; “Use Bluetooth mics only from the list” is off and the list is as 0.4 left it | |
 
 ## History on the page system (0.5.0, kotoba Dev)
 

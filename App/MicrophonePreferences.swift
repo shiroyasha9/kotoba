@@ -32,20 +32,29 @@ final class MicrophonePreferences: Sendable {
         set { UserDefaults.standard.set(newValue, forKey: AppDefaults.Key.bluetoothOnlyWhenListed.rawValue) }
     }
 
-    /// Once per install, before the first mic choice: a Mac whose only mic was a Bluetooth default, used by 0.4 with an
-    /// empty order, gets that mic in its order, so the switch does not stop its dictation
-    /// (`InputDevicePolicy.orderAfterUpdate`). One device read, on the first launch only.
-    func keepUpdatedMacsDictating() {
+    /// Once per install, before the first mic choice (`MicrophoneSettings.afterFirstLaunch`): an update to a Mac with
+    /// no built-in mic turns the Bluetooth switch off, as 0.4 behaved there; a new install lists its Bluetooth default.
+    /// `isUpdate`: onboarding was done before (by 0.4). One device read, until the check has decided; the flag is
+    /// written last, so a launch that stops halfway checks again.
+    func checkFirstLaunch(isUpdate: Bool) {
         let defaults = UserDefaults.standard
-        let checked = AppDefaults.Key.microphoneUpdateChecked.rawValue
-        guard !defaults.bool(forKey: checked) else { return }
-        defaults.set(true, forKey: checked)
+        let checked = AppDefaults.Key.microphoneFirstLaunchChecked.rawValue
+        let before = MicrophoneSettings(
+            order: order, bluetoothOnlyWhenListed: isBluetoothOnlyWhenListed,
+            isFirstLaunchChecked: defaults.bool(forKey: checked))
+        guard !before.isFirstLaunchChecked else { return }
         let devices = AudioDevices.all()
-        let updated = InputDevicePolicy.orderAfterUpdate(
-            order, defaultInput: AudioDevices.defaultInput(), devices: devices)
-        guard updated != order else { return }
-        entries = updated.map { uid in Entry(uid: uid, name: devices.first { $0.uid == uid }?.name ?? uid) }
-        Log.audio.notice("The update put the Bluetooth default in the mic list")
+        let after = before.afterFirstLaunch(
+            isUpdate: isUpdate || !before.order.isEmpty, defaultInput: AudioDevices.defaultInput(), devices: devices)
+        if after.order != before.order {
+            entries = after.order.map { uid in Entry(uid: uid, name: devices.first { $0.uid == uid }?.name ?? uid) }
+            Log.audio.notice("The first launch put the Bluetooth default in the mic list")
+        }
+        if after.bluetoothOnlyWhenListed != before.bluetoothOnlyWhenListed {
+            isBluetoothOnlyWhenListed = after.bluetoothOnlyWhenListed
+            Log.audio.notice("The update keeps the Bluetooth default of a Mac with no built-in mic")
+        }
+        defaults.set(after.isFirstLaunchChecked, forKey: checked)
     }
 
     /// The menu's quick switch: the mic moves to the top of the order (an explicit choice, so it joins it).

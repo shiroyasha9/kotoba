@@ -66,9 +66,10 @@ extension AudioCapture {
     /// Posted on the main actor when the mic in use (`inputInUse`) changes, for the Microphone pane.
     static let inputDidChange = Notification.Name("AudioCapture.inputDidChange")
 
-    init(preferences: MicrophonePreferences) {
+    /// `isUpdate`: kotoba ran on this Mac before (`MicrophonePreferences.checkFirstLaunch`).
+    init(preferences: MicrophonePreferences, isUpdate: Bool) {
         // Before the capture chooses its first mic.
-        preferences.keepUpdatedMacsDictating()
+        preferences.checkFirstLaunch(isUpdate: isUpdate)
         self.init(hardware: HALCaptureHardware(preferences: preferences)) {
             Task { @MainActor in NotificationCenter.default.post(name: Self.inputDidChange, object: nil) }
         }

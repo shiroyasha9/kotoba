@@ -145,26 +145,6 @@ struct InputDevicePolicyTests {
         #expect(InputDevicePolicy.bluetoothKeptOut(defaultInput: nil, devices: [builtInSpeakers]) == nil)
     }
 
-    // MARK: The update from 0.4
-
-    /// 0.4's state on a Mac mini: no order, AirPods as the default, which 0.4 recorded from. The update keeps them.
-    @Test func anUpdateKeepsTheBluetoothDefaultOfAMacWithNoBuiltInMic() {
-        let macMini = [builtInSpeakers, airPods, usbMic]
-        let order = InputDevicePolicy.orderAfterUpdate([], defaultInput: airPods, devices: macMini)
-        #expect(order == ["AirPods"])
-        #expect(InputDevicePolicy.micInUse(defaultInput: airPods, devices: macMini, order: order) == airPods)
-    }
-
-    @Test func anUpdateLeavesEveryOtherOrderAlone() {
-        let laptop = [builtInMic, airPods]
-        #expect(InputDevicePolicy.orderAfterUpdate([], defaultInput: airPods, devices: laptop).isEmpty)
-        #expect(
-            InputDevicePolicy.orderAfterUpdate(["USBMic"], defaultInput: airPods, devices: [airPods, usbMic])
-                == ["USBMic"])
-        #expect(InputDevicePolicy.orderAfterUpdate([], defaultInput: usbMic, devices: [usbMic]).isEmpty)
-        #expect(InputDevicePolicy.orderAfterUpdate([], defaultInput: nil, devices: [airPods]).isEmpty)
-    }
-
     @Test func choosingAMicMovesItToTheTopOfTheOrder() {
         #expect(InputDevicePolicy.order(["A", "B", "C"], choosing: "C") == ["C", "A", "B"])
         #expect(InputDevicePolicy.order(["A", "B"], choosing: "New") == ["New", "A", "B"])

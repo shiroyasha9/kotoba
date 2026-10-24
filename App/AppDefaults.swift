@@ -17,8 +17,8 @@ enum AppDefaults {
         case polishLastChord = "hotkey.polishLastChord"
         case microphoneOrder = "microphone.order"
         case bluetoothOnlyWhenListed = "microphone.bluetoothOnlyWhenListed"
-        /// Set once the update from 0.4 has checked the order (`MicrophonePreferences.keepUpdatedMacsDictating`).
-        case microphoneUpdateChecked = "microphone.updateChecked"
+        /// Set once the first launch of 0.5.0 has decided (`MicrophonePreferences.checkFirstLaunch`).
+        case microphoneFirstLaunchChecked = "microphone.firstLaunchChecked"
         case submitPhrase = "paste.submitPhrase"
         case lineBreakPhrase = "paste.lineBreakPhrase"
         case learnsFromEdits = "dictionary.learnsFromEdits"
@@ -39,8 +39,8 @@ enum AppDefaults {
             Key.submitPhrase.rawValue: true,
             Key.learnsFromEdits.rawValue: true,
             // On for an update too (docs/research/ui-redesign.md, "Microphone"): a Bluetooth default gives way to the
-            // built-in mic as in 0.4, and to a USB mic. A Mac whose only mic was a Bluetooth default keeps it through
-            // its order (`MicrophonePreferences.keepUpdatedMacsDictating`).
+            // built-in mic as in 0.4. An update to a Mac with no built-in mic stores it off once, as 0.4 behaved there
+            // (`MicrophonePreferences.checkFirstLaunch`).
             Key.bluetoothOnlyWhenListed.rawValue: true,
             // On for an update too (owner, 2026-10-16): kotoba becomes a Dock app.
             Key.showsInDock.rawValue: true,

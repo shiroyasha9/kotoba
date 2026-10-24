@@ -13,7 +13,7 @@ import os
 final class AppDelegate: NSObject, NSApplicationDelegate {
     let hotkeys = HotkeyTap(chords: .shared)
     let microphones = MicrophonePreferences()
-    lazy var audio = AudioCapture(preferences: microphones)
+    lazy var audio = AudioCapture(preferences: microphones, isUpdate: OnboardingController.isComplete)
     /// Read by the provider on every request, so a menu change applies to the next dictation.
     let routeSettings = TranscriptionSettings()
     /// Also read by the menu: Rewrite shows once an OpenRouter key is saved.
