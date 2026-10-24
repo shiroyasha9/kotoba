@@ -1,4 +1,3 @@
-import Charts
 import KotobaCore
 import KotobaStorage
 import SwiftUI
@@ -217,34 +216,5 @@ private struct HomePage: View {
         case .setup(.endpoint, _): "Add Endpoint…"
         case .setup(.credit, _): "Add Credit…"
         }
-    }
-}
-
-/// The week's words as Screen Time's week: Activity's bars (`DayBars`) with today in the brand colour, the day
-/// initials under them, no word counts; it takes the height of the headline beside it.
-private struct WeekBars: View {
-    let days: ChartDays
-
-    var body: some View {
-        Chart {
-            DayBars(days: days, marksToday: true)
-        }
-        .chartYScale(domain: 0...days.top)
-        .chartXAxis {
-            AxisMarks(values: .stride(by: .day)) { value in
-                // Every slot keeps its mark, so Charts centres each label on its day; a blank slot's label is empty.
-                AxisValueLabel(centered: true, anchor: .top) {
-                    if let date = value.as(Date.self), days.isLabelled(date) {
-                        Text(date, format: .dateTime.weekday(.narrow))
-                    }
-                }
-            }
-        }
-        .chartYAxis(.hidden)
-        // Headroom over the tallest bar: the system's padding, so the bars stay level with the figure, not the label.
-        .padding(.top)
-        // No height of its own: it takes the height of the text beside it.
-        .frame(maxWidth: .infinity, minHeight: 0, idealHeight: 0, maxHeight: .infinity)
-        .accessibilityLabel("Words per day this week")
     }
 }

@@ -198,6 +198,8 @@ extension Pane {
                     selection.id = id
                     Snapshots.settle()
                     window.displayIfNeeded()
+                    // Each page's own cost, the first time: the window opens on Home, so Home's is what most owners pay.
+                    if cycle == 1 { reportFootprint(at: "  \(id.rawValue)") }
                 }
                 reportFootprint(at: "window open \(cycle)")
                 window.close()

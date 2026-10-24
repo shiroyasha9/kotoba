@@ -112,10 +112,12 @@ enum PageMetrics {
     /// takes only a fixed radius, so a month's thin bar keeps it too.
     static let barCornerRadius: CGFloat = 4
 
-    /// Home's stub for an empty day: as tall as a bar's corner, lifted by half its height so it stands on the base line
-    /// (a `RectangleMark` is centred on its value).
+    /// Home's stub for an empty day: as tall as a bar's corner, standing on the base line.
     static let barStubHeight = barCornerRadius
-    static let barStubLift = barStubHeight / 2
+
+    /// Home's week: from the bars' base line to the top of a day initial's capitals, as Swift Charts drew it (14 px at 2x
+    /// in the 0.5.0 Home snapshot), less the space the text frame keeps above its capitals.
+    static let weekLabelGap: CGFloat = 4
 
     /// A chart's average line and a month's date lines: a hairline of short dashes, as Screen Time's average and
     /// Battery's time lines.
