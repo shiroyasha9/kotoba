@@ -70,7 +70,7 @@ Reference: the copy deck in `docs/research/ux-polish.md` (sections 4.1-4.6). A n
 11. Pill and menu status strings live in `App/StatusText.swift` only.
 12. Every new window, pane, `DictationPhase` and `DictationNotice` gets a snapshot in `App/Snapshots.swift` (light and dark).
 13. Typographic punctuation: curly apostrophe and quotes (’ “ ”) in UI text, never ' or " inside the visible words.
-14. Voice (Apple HIG Writing, Apple Style Guide): no “we” (name kotoba or the thing), no “please”, no “enable”, “disable” or “toggle” (a switch’s label names what is on: “Keep filler words”), no interjections (“oops”, “sorry”).
+14. Voice (Apple HIG Writing, Apple Style Guide): no “we”, “our” or “us” (name kotoba or the thing), no “please”, no “enable”, “disable” or “toggle” (a switch’s label names what is on: “Keep filler words”), no interjections (“oops”, “sorry”).
 
 ## Tests
 

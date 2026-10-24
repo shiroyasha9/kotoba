@@ -211,9 +211,9 @@ custom_rules:
   ui_text_plain_words:
     name: "UI text: plain words"
     included: ["App/.*\\.swift"]
-    regex: "(?i:\\b(?:we|please|(?:en|dis)abl(?:e|ed|es|ing)|toggl(?:e|ed|es|ing)|oops|whoops|uh-oh|sorry|yay|hooray|woohoo)\\b)(?<=(?:\\b(?:Text|Button|Toggle|Section|Label|Picker|LabeledContent|Link|Menu|TextField|SecureField|GroupBox|NSMenuItem|NSButton|NSTextField|NSAlert|MenuChoice|StepText|help|navigationTitle|confirmationDialog|alert)\\(|\\.(?:title|subtitle|toolTip|messageText|informativeText|placeholderString|stringValue|prompt) = )(?:[ \\t]{0,4}\\n[ \\t]{0,40})?[^\\n]{0,200}(?i:\\b(?:we|please|(?:en|dis)abl(?:e|ed|es|ing)|toggl(?:e|ed|es|ing)|oops|whoops|uh-oh|sorry|yay|hooray|woohoo)\\b))"
+    regex: "(?i:\\b(?:we|our|(?-i:us)|please|(?:en|dis)abl(?:e|ed|es|ing)|toggl(?:e|ed|es|ing)|oops|whoops|uh-oh|sorry|yay|hooray|woohoo)\\b)(?<=(?:\\b(?:Text|Button|Toggle|Section|Label|Picker|LabeledContent|Link|Menu|TextField|SecureField|GroupBox|NSMenuItem|NSButton|NSTextField|NSAlert|MenuChoice|StepText|help|navigationTitle|confirmationDialog|alert)\\(|\\.(?:title|subtitle|toolTip|messageText|informativeText|placeholderString|stringValue|prompt) = )(?:[ \\t]{0,4}\\n[ \\t]{0,40})?[^\\n]{0,200}(?i:\\b(?:we|our|(?-i:us)|please|(?:en|dis)abl(?:e|ed|es|ing)|toggl(?:e|ed|es|ing)|oops|whoops|uh-oh|sorry|yay|hooray|woohoo)\\b))"
     match_kinds: [string]
-    message: "Plain words in UI text: no \"we\", no \"please\", no \"enable\", \"disable\" or \"toggle\" (name what is on: \"Keep filler words\"), no interjections such as \"oops\" or \"sorry\" (CODING_STANDARDS.md, User-facing text 14)."
+    message: "Plain words in UI text: no \"we\", no \"please\", no \"enable\", \"disable\" or \"toggle\" (name what is on: \"Keep filler words\"), no interjections such as \"oops\" or \"sorry\"; \"our\" and \"us\" also go (CODING_STANDARDS.md, User-facing text 14)."
     severity: error
   # What the shell shows is decided in KotobaCore's `ShellStatus` and tested there; these two files only collect its
   # facts and draw its output. b235fa0 and 3a9743b changed such rules here with no test: a pattern match on a state in
@@ -270,9 +270,9 @@ custom_rules:
   status_text_plain_words:
     name: "Status text: plain words"
     included: ["App/StatusText\\.swift", "KotobaCore/Sources/KotobaCore/ShellStatus\\.swift"]
-    regex: "(?i:\\b(?:we|please|(?:en|dis)abl(?:e|ed|es|ing)|toggl(?:e|ed|es|ing)|oops|whoops|uh-oh|sorry|yay|hooray|woohoo)\\b)"
+    regex: "(?i:\\b(?:we|our|(?-i:us)|please|(?:en|dis)abl(?:e|ed|es|ing)|toggl(?:e|ed|es|ing)|oops|whoops|uh-oh|sorry|yay|hooray|woohoo)\\b)"
     match_kinds: [string]
-    message: "Plain words in pill and menu text: no \"we\", \"please\", \"enable\", \"disable\", \"toggle\" or interjections (CODING_STANDARDS.md, User-facing text 14)."
+    message: "Plain words in pill and menu text: no \"we\", \"our\", \"us\", \"please\", \"enable\", \"disable\", \"toggle\" or interjections (CODING_STANDARDS.md, User-facing text 14)."
     severity: error
   # The mic input's lifecycle (which mic, when to rebuild, what waits for the end of a capture) lives in
   # KotobaCore's `AudioCapture`, tested through a fake. App/ only runs the hardware through `HALCaptureHardware`.
