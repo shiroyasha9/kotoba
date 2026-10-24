@@ -232,6 +232,32 @@ custom_rules:
     excluded_match_kinds: [comment, doccomment, string]
     message: "A pill button acts on what its `PillAction` carries (such as `.copy(id)`), not on the shell's last state: the next state can come between the draw and the click."
     severity: error
+  # The 0.5.0 pill (docs/research/ui-redesign.md, "Pill"; <runbooks>/lint-proposal.md rules 4, 6 and 7). The snapshot
+  # run checks what regex cannot: one glass view in the pill, no words in a live pill (App/IndicatorSnapshots.swift).
+  ui_font_size_literal:
+    name: "Type: text styles, not point sizes"
+    included: ["App/.*\\.swift"]
+    excluded: ["App/(?:\\w+/)?\\w*Snapshots\\.swift", "App/PillGeometry\\.swift"]
+    regex: "\\.system\\(\\s*size\\s*:\\s*(?<![\\w.])(?:[1-9][\\d_]*(?:\\.\\d+)?|0\\.\\d*[1-9]\\d*)\\b|\\b\\w*[sS]ystemFont\\(ofSize\\s*:\\s*(?<![\\w.])(?:[1-9][\\d_]*(?:\\.\\d+)?|0\\.\\d*[1-9]\\d*)\\b|\\bpointSize\\s*:\\s*(?<![\\w.])(?:[1-9][\\d_]*(?:\\.\\d+)?|0\\.\\d*[1-9]\\d*)\\b"
+    excluded_match_kinds: [comment, doccomment]
+    message: "Use a text style (`.body`, `.callout`, `.headline`; `NSFont.preferredFont(forTextStyle:)`; `NSImage.SymbolConfiguration(textStyle:scale:)`), not a point size (HIG Typography), so a symbol takes the weight and scale of the text beside it."
+    severity: error
+  glass_on_navigation_layer_only:
+    name: "Glass: navigation layer only, never glass on glass"
+    included: ["App/.*\\.swift"]
+    excluded: ["App/(?:\\w+/)?\\w*Snapshots\\.swift", "App/IndicatorDropTargets\\.swift"]
+    regex: "\\.buttonStyle\\(\\s*\\.glass(?:Prominent)?\\b|\\.glassEffect\\s*\\(|\\bGlassEffectContainer\\b|\\bNSGlassEffect(?:Container)?View\\s*\\(|\\.bezelStyle\\s*=\\s*\\.glass\\b"
+    excluded_match_kinds: [comment, doccomment, string]
+    message: "Liquid Glass is for the navigation layer: the pill's one capsule, and the toolbar and sidebar that the system draws. Never put glass on glass: on the pill, a button uses a fill (WWDC25 219, HIG Materials). The pill's own glass has `// swiftlint:disable:this glass_on_navigation_layer_only`, its reason in its doc comment."
+    severity: error
+  pill_reads_pill_text:
+    name: "Pill: words only when the user must know or act"
+    included: ["App/(?:Pill|Indicator)\\w*\\.swift"]
+    excluded: ["App/(?:\\w+/)?\\w*Snapshots\\.swift"]
+    regex: "\\.statusText\\s*\\("
+    excluded_match_kinds: [comment, doccomment, string]
+    message: "The pill shows words only for an error, a silent mic, Secure Input, Undo, a learned word or the 10-minute timer. Read `pillText(_:)`; `statusText(_:)` is the menu's status line (docs/research/ui-redesign.md, Pill)."
+    severity: error
   status_text_key_names:
     name: "Status text: keys as symbols"
     included: ["App/StatusText\\.swift", "KotobaCore/Sources/KotobaCore/ShellStatus\\.swift"]

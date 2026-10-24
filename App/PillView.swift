@@ -42,9 +42,9 @@ final class PillView: NSView {
     var onDragMoved: ((NSPoint) -> Void)?
     var onDragEnded: ((NSPoint) -> Void)?
 
-    /// The capsule, the pill's one glass (the navigation layer; nothing in it has glass). Its frame is the look's shape
-    /// in the room.
-    let glass = NSGlassEffectView()
+    /// The capsule, the pill's one glass: the navigation layer, and nothing in it has glass of its own. Its frame is
+    /// the look's shape in the room.
+    let glass = NSGlassEffectView()  // swiftlint:disable:this glass_on_navigation_layer_only
     /// The content, along the capsule.
     let stack = NSStackView()
     private let bars = PillBars()

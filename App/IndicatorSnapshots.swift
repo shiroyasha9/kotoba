@@ -9,7 +9,7 @@ extension IndicatorPanel {
     private struct Sample {
         let name: String
         let content: PillContent
-        /// The mic level the bars show; nil: the mirrored ripple of a few speech levels.
+        /// The bars show silence, not the mirrored ripple of a few speech levels.
         var isSilent = false
     }
 
@@ -21,21 +21,10 @@ extension IndicatorPanel {
         _ name: String, _ state: DictationState, context: StatusContext = context,
         visibility: IndicatorVisibility = .whileDictating
     ) -> Sample? {
-        let timedFrom =
-            state.phase == .recording(isLong: true)
-                || state.phase
-                    == .recording(isLong: true, isPushToTalk: true)
-            ? ContinuousClock.now - .seconds(600) : nil
-        return content(for: state, context: context, visibility: visibility, timedFrom: timedFrom).map {
-            Sample(
-                name: name, content: $0,
-                isSilent: IndicatorLook(state, showsIdleBar: false, isSecureInputOn: false)
-                    == .recording(.init(isHandsFree: !Self.isPushToTalk(state), isSilent: true)))
+        // Any instant: the render counts from its own (`timedNow`).
+        content(for: state, context: context, visibility: visibility, timedFrom: .now).map {
+            Sample(name: name, content: $0, isSilent: state.phase.isSilentRecording)
         }
-    }
-
-    private static func isPushToTalk(_ state: DictationState) -> Bool {
-        if case .recording(_, _, _, isPushToTalk: true) = state.phase { true } else { false }
     }
 
     /// Every look the owner sees: each phase and notice through the panel's own mapping, the hover, and the App's
@@ -189,7 +178,7 @@ extension IndicatorPanel {
         pill.anchor = anchor
         pill.isClickable = sample.content.click != nil
         pill.toolTip = sample.content.toolTip
-        pill.look = sample.content.look
+        pill.look = timedNow(sample.content.look)
         for level in [0.3, 0.9, 0.5, 0.8] where sample.content.look != .processing {
             pill.level = sample.isSilent ? 0 : level
         }
@@ -197,6 +186,13 @@ extension IndicatorPanel {
         pill.setFrameSize(
             NSSize(width: max(size.width, PillGeometry.height), height: max(size.height, PillGeometry.height)))
         return pill
+    }
+
+    /// The recording's time counted from 10 minutes before the render, so every image reads 10:00.
+    private static func timedNow(_ look: PillLook) -> PillLook {
+        guard case .recording(var recording) = look, recording.timedFrom != nil else { return look }
+        recording.timedFrom = .now - .seconds(600)
+        return .recording(recording)
     }
 
     /// What is wrong with the pill as drawn, or nil.

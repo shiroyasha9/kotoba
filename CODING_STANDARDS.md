@@ -63,7 +63,7 @@ Reference: the copy deck in `docs/research/ux-polish.md` (sections 4.1-4.6). A n
 4. Keys: modifier symbols ⌃ ⌥ ⌘ ⇧ fn and ⌘V in UI, never the key names in words, onboarding included (owner, 2026-10-16).
 5. No internal terms in UI: route, keyterm, ZDR, zero-data-retention, needsSetup, provider slugs, API parameter names, "untested", owner-specific numbers, file paths (unless the user must act on one).
 6. An error says what happened and what to do next, names the service ("Couldn't reach OpenRouter"), says when the audio is saved, and puts the fix on a button. Never blame the user.
-7. A pill message fits the 360 pt pill (about 34 characters); the snapshot run fails on truncation. The menu status line uses the same text.
+7. A pill message fits the 360 pt pill (about 34 characters); the snapshot run fails on truncation. A live pill (recording, transcribing, cleanup, rewrite) shows no words: the pill reads `pillText`, which is nil there (lint `pill_reads_pill_text`; the snapshot run fails on words in a live pill), and the menu status line reads `statusText`. The pill has one glass, its capsule; its buttons use a fill (lint `glass_on_navigation_layer_only`; the snapshot run fails on a second glass view). Symbols and text take text styles, never a point size (lint `ui_font_size_literal`).
 8. No " - " between phrases: two sentences, a colon, or "·" for a value after a state.
 9. One word per concept: Recording (live state; owner, 2026-10-24, was Listening), dictation, speech model, key, word, replacement, suggestion.
 10. Counts inflect (`AttributedString(localized: "^[…](inflect: true)")`); hide a zero count instead of "(0)".
