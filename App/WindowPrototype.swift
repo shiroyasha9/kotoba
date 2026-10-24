@@ -96,6 +96,19 @@ struct WindowPrototypeView: View {
         } detail: {
             detail
                 .navigationTitle(page.title)
+                // Activity's period switch, at the trailing edge (owner, 2026-10-24). The item stays on every page, so
+                // the toolbar keeps one height and the traffic lights, title and sidebar never move between pages.
+                .toolbar {
+                    ToolbarItem(placement: .primaryAction) {
+                        if page == .activity {
+                            Picker("Period", selection: $period) {
+                                ForEach(ActivityPeriod.allCases, id: \.self) { Text($0.title).tag($0) }
+                            }
+                            .pickerStyle(.segmented)
+                            .labelsHidden()
+                        }
+                    }
+                }
         }
         .frame(minWidth: PageMetrics.minimumWindowSize.width, minHeight: PageMetrics.minimumWindowSize.height)
         .onChange(of: page) { _, page in onShow(page) }
@@ -144,9 +157,9 @@ enum WindowPrototype {
     }
 
     /// The prototype window, as the main window is built (`MainWindow.window(showing:)`).
-    static func window(showing view: WindowPrototypeView) -> NSWindow {
+    static func window(showing view: WindowPrototypeView, title: String = PrototypePage.home.title) -> NSWindow {
         let window = NSWindow(contentViewController: NSHostingController(rootView: view))
-        window.title = PrototypePage.home.title
+        window.title = title
         window.styleMask = [.titled, .closable, .miniaturizable, .resizable, .fullSizeContentView]
         window.toolbarStyle = .unified
         window.isReleasedWhenClosed = false
@@ -167,9 +180,14 @@ private final class Launcher: NSObject, NSApplicationDelegate {
         NSApp.mainMenu = mainMenu.menu
         self.mainMenu = mainMenu
         WindowFront.activate()
-        var view = WindowPrototypeView()
+        // `--prototype activity` opens on that page.
+        let arguments = CommandLine.arguments
+        let first =
+            arguments.firstIndex(of: "--prototype").flatMap { arguments.dropFirst($0 + 1).first }
+            .flatMap(PrototypePage.init(rawValue:)) ?? .home
+        var view = WindowPrototypeView(page: first)
         view.onShow = { [weak self] page in self?.window?.title = page.title }
-        let window = WindowPrototype.window(showing: view)
+        let window = WindowPrototype.window(showing: view, title: first.title)
         window.center()
         self.window = window
         WindowFront.show(window)
@@ -251,6 +269,10 @@ extension WindowPrototype {
                 ActivityPrototype(data: .sample)
             },
             Snapshot(name: "prototype-sidebar-tiles") { NSHostingView(rootView: TileSheet()) },
+            // The real window, title bar and toolbar included: Activity's period switch sits in the toolbar.
+            framed(named: "prototype-framed-home", .home),
+            framed(named: "prototype-framed-activity", .activity),
+            framed(named: "prototype-framed-history", .history),
         ]
     }
 
@@ -262,6 +284,12 @@ extension WindowPrototype {
         var snapshot = Snapshots.fixedWindow(named: name, size: size, view)
         snapshot.settlesInWindow = true
         return snapshot
+    }
+
+    private static func framed(named name: String, _ page: PrototypePage) -> Snapshot {
+        Snapshots.window(named: name, contentSize: PageMetrics.defaultWindowSize) {
+            window(showing: WindowPrototypeView(page: page), title: page.title)
+        }
     }
 
     /// One page at the detail column's width at the default window size, tall enough to show it whole.

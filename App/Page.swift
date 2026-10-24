@@ -64,12 +64,17 @@ enum PageMetrics {
     /// of 50 px in the 2x captures); one point size for every symbol made wide ones (house, chart) fill 80-88 %.
     static let tileGlyphShare: CGFloat = 0.62
 
-    /// A keycap is as tall as two lines of body text (2 x 16 pt leading, HIG Typography), so the Title 2 key symbol
-    /// reads at a glance.
-    static let keycapSide: CGFloat = 32
+    /// A keycap is as tall as a regular push button, read from AppKit at launch (owner, 2026-10-24: 32 pt keycaps were
+    /// "comically huge"), so it follows the system's control metrics.
+    @MainActor static let keycapSide: CGFloat = {
+        let button = NSButton(title: "", target: nil, action: nil)
+        button.bezelStyle = .push
+        button.controlSize = .regular
+        return button.intrinsicContentSize.height
+    }()
 
     /// A word keycap's inset on each side ("Space"): a quarter of its side. A modifier symbol's keycap stays square.
-    static let keycapInset: CGFloat = keycapSide / 4
+    @MainActor static var keycapInset: CGFloat { keycapSide / 4 }
 
     /// A bar chart's height: Screen Time's daily chart is about 110 pt in the owner's capture; 120 pt is the height of
     /// the Insights chart today.
@@ -249,8 +254,9 @@ struct Keycaps: View {
     var body: some View {
         HStack {
             ForEach(Array(keys.enumerated()), id: \.offset) { _, key in
+                // The push button's own title size.
                 Self.legend(key)
-                    .font(.title2.weight(.medium))
+                    .font(.body)
                     .frame(minWidth: PageMetrics.keycapSide, minHeight: PageMetrics.keycapSide)
                     .fixedSize()
                     .background(.fill.tertiary, in: Self.shape)

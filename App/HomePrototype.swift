@@ -1,5 +1,7 @@
 import AppKit
+import Charts
 import KotobaCore
+import KotobaStorage
 import SwiftUI
 
 // The 0.5.0 Home page, as a prototype on the new visual system (`Page.swift`; docs/research/ui-redesign.md, "Page
@@ -13,24 +15,25 @@ struct HomePrototypeData {
     var appIcon: NSImage
     /// Newest first: the last dictation, then the ones before it.
     var recent: [DictationRecord]
-    var todayWords: Int
-    var streak: Int
+    /// Words per day, today last, the streak and the speaking speed: the Activity sample, so both pages agree.
+    var insights: DictationInsights
     let apps = InstalledApps()
 
-    /// Home's snapshot sample: ready, five dictations, 640 words today, a 5-day streak.
-    static var sample: Self { Self(HomeModel.sample) }
+    /// Home's snapshot sample: ready, five dictations, the Activity sample's days and streak.
+    static var sample: Self { Self(HomeModel.sample, insights: ActivityPrototypeData.sample.insights) }
 
     /// A first launch: no OpenRouter key yet, nothing dictated.
-    static var sampleNew: Self { Self(HomeModel.sampleNew) }
+    static var sampleNew: Self { Self(HomeModel.sampleNew, insights: DictationInsights()) }
 
-    private init(_ model: HomeModel) {
+    private init(_ model: HomeModel, insights: DictationInsights) {
         readiness = model.readiness
         chords = model.chords
         appIcon = model.identity.icon
         recent = model.reader.value?.recent ?? []
-        todayWords = model.today?.words ?? 0
-        streak = model.reader.value?.insights.streak ?? 0
+        self.insights = insights
     }
+
+    var todayWords: Int { insights.days.last?.words ?? 0 }
 }
 
 struct HomePrototype: View {
@@ -43,8 +46,16 @@ struct HomePrototype: View {
 
     var body: some View {
         PageForm {
+            if let missing = data.readiness.firstMissing {
+                Section {
+                    problem(missing)
+                }
+            } else if data.insights.dictations > 0 {
+                Section {
+                    today
+                }
+            }
             Section {
-                status
                 shortcut(
                     "Hands-free", help: "Press to start, press again to stop.", keys: data.chords.handsFree.keycaps)
                 shortcut("Push to talk", help: "Hold while you speak.", keys: data.chords.pushToTalk.keycaps)
@@ -63,30 +74,60 @@ struct HomePrototype: View {
                     }
                 }
             }
-            if data.todayWords > 0 || data.streak > 0 {
-                Section {
-                    activityLine
-                }
+        }
+    }
+
+    /// Setup is not complete: the problem and the button that fixes it take the today card's place.
+    private func problem(_ missing: Readiness.Missing) -> some View {
+        LabeledContent {
+            Button(Self.fixTitle(missing)) {}
+                .buttonStyle(.borderedProminent)
+        } label: {
+            PageHeader(title: "Not ready to dictate", summary: missing.problemText) {
+                SymbolTile(systemImage: "exclamationmark.triangle", tint: .orange, side: PageMetrics.headerTileSide)
             }
         }
     }
 
-    /// Ready, or the first problem and the button that fixes it.
-    @ViewBuilder private var status: some View {
-        if let missing = data.readiness.firstMissing {
-            LabeledContent {
-                Button(Self.fixTitle(missing)) {}
-                    .buttonStyle(.borderedProminent)
-            } label: {
-                PageHeader(title: "Not ready to dictate", summary: missing.problemText) {
-                    SymbolTile(systemImage: "exclamationmark.triangle", tint: .orange, side: PageMetrics.headerTileSide)
+    /// Today as Screen Time's "Daily Average" card: the words as the headline, the time they saved and the streak
+    /// under it, and the week's bars; it opens Activity. Custom: a button card, as System Settings' cards that open a
+    /// page; `NavigationLink` needs a navigation stack, which the window's detail column does not have.
+    private var today: some View {
+        Button {
+            open(.activity)
+        } label: {
+            HStack {
+                VStack(alignment: .leading) {
+                    Text("\(StatusText.counted(data.todayWords, "word")) today")
+                        .font(.largeTitle)
+                        .monospacedDigit()
+                    Text(Self.todaySummary(data.insights))
+                        .foregroundStyle(.secondary)
                 }
+                .fixedSize()
+                WeekBars(days: DailyWords.shown(data.insights.days, period: .week))
+                Image(systemName: "chevron.forward")
+                    .foregroundStyle(.tertiary)
             }
-        } else {
-            PageHeader(title: "Ready to dictate", summary: "Works in any app where you can type.") {
-                AppIconView(icon: data.appIcon, side: PageMetrics.headerTileSide)
-            }
+            .fixedSize(horizontal: false, vertical: true)
+            .contentShape(.rect)
         }
+        .buttonStyle(.plain)
+    }
+
+    /// "About 11 min saved · 5-day streak": today's words typed at `InsightsModel.typingSpeed` less the time to say
+    /// them at the owner's speaking speed, as Activity's "Time saved"; a part with nothing to say is left out.
+    private static func todaySummary(_ insights: DictationInsights) -> String {
+        let words = Double(insights.days.last?.words ?? 0)
+        let typing = words / Double(InsightsModel.typingSpeed)
+        let speaking = insights.wordsPerMinute.map { words / Double($0) } ?? 0
+        let saved = Duration.seconds(Int(((typing - speaking) * 60).rounded()))
+        return [
+            saved >= .seconds(60)
+                ? "About \(saved.formatted(.units(allowed: [.hours, .minutes], width: .abbreviated))) saved" : nil,
+            insights.streak > 0 ? "\(insights.streak.formatted())-day streak" : nil,
+        ]
+        .compactMap(\.self).joined(separator: " · ")
     }
 
     private func shortcut(_ title: String, help: String, keys: [String]) -> some View {
@@ -166,38 +207,6 @@ struct HomePrototype: View {
         }
     }
 
-    /// Today's words and the streak; it opens Activity. Custom: a row button, as System Settings' rows that open a
-    /// page; `NavigationLink` needs a navigation stack, which the window's detail column does not have.
-    private var activityLine: some View {
-        Button {
-            open(.activity)
-        } label: {
-            LabeledContent {
-                Image(systemName: "chevron.forward")
-                    .foregroundStyle(.tertiary)
-            } label: {
-                Label {
-                    Text(Self.activitySummary(words: data.todayWords, streak: data.streak))
-                } icon: {
-                    SymbolTile(
-                        systemImage: PrototypePage.activity.systemImage, tint: PrototypePage.activity.tint,
-                        side: PageMetrics.lineTileSide)
-                }
-            }
-            .contentShape(.rect)
-        }
-        .buttonStyle(.plain)
-    }
-
-    /// "640 words today · 5-day streak"; a part with nothing to say is left out.
-    private static func activitySummary(words: Int, streak: Int) -> String {
-        [
-            words > 0 ? "\(StatusText.counted(words, "word")) today" : nil,
-            streak > 0 ? "\(streak.formatted())-day streak" : nil,
-        ]
-        .compactMap(\.self).joined(separator: " · ")
-    }
-
     /// "0:07 · 15 words".
     private static func details(of record: DictationRecord) -> String {
         var parts = [record.audio.duration.formatted(.time(pattern: .minuteSecond))]
@@ -215,5 +224,26 @@ struct HomePrototype: View {
         case .setup(.endpoint, _): "Add Endpoint…"
         case .setup(.credit, _): "Add Credit…"
         }
+    }
+}
+
+/// The week's words as small bars, no axes: the today card's chart, filling the height of the text beside it.
+private struct WeekBars: View {
+    let days: [DictationInsights.Day]
+
+    var body: some View {
+        Chart(days, id: \.start) { day in
+            BarMark(
+                x: .value("Day", day.start, unit: .day), y: .value("Words", day.words),
+                width: .ratio(PageMetrics.barWidthRatio)
+            )
+            .cornerRadius(PageMetrics.barCornerRadius)
+            .foregroundStyle(.tint)
+        }
+        .chartXAxis(.hidden)
+        .chartYAxis(.hidden)
+        // No height of its own: it takes the height of the text beside it.
+        .frame(maxWidth: .infinity, minHeight: 0, idealHeight: 0, maxHeight: .infinity)
+        .accessibilityLabel("Words per day this week")
     }
 }

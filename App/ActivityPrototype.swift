@@ -57,7 +57,8 @@ enum ActivityPeriod: CaseIterable, Hashable {
 
 struct ActivityPrototype: View {
     let data: ActivityPrototypeData
-    @State var period = ActivityPeriod.week
+    /// Set by the window toolbar's Week/Month switch (`WindowPrototypeView`).
+    var period = ActivityPeriod.week
 
     var body: some View {
         PageForm {
@@ -69,7 +70,7 @@ struct ActivityPrototype: View {
                 }
             }
             Section {
-                DailyWords(days: data.insights.days, period: $period)
+                DailyWords(days: data.insights.days, period: period)
             }
             highlights
             topApps
@@ -170,24 +171,19 @@ struct ActivityPrototype: View {
 }
 
 /// Words per day as Screen Time draws its daily use: the daily average as the headline, rounded bars in the accent
-/// colour, the average as a line, the word counts on the right. The chart starts at the first dictation: days before
-/// it are not drawn, but a week's seven slots stay so a new user's bars keep their width.
-private struct DailyWords: View {
+/// colour, the average as a line with "avg" in the axis column, the word counts on the right, no grid lines. The chart
+/// starts at the first dictation: days before it are not drawn, but a week's seven slots stay so a new user's bars keep
+/// their width.
+struct DailyWords: View {
     let days: [DictationInsights.Day]
-    @Binding var period: ActivityPeriod
+    let period: ActivityPeriod
 
     var body: some View {
         let shown = Self.shown(days, period: period)
         let started = shown.drop { $0.words == 0 }
         let average = started.isEmpty ? 0 : started.map(\.words).reduce(0, +) / started.count
+        let top = Self.scaleTop(shown.map(\.words).max() ?? 0)
         VStack(alignment: .leading) {
-            // Across the card, as Battery's period switch.
-            Picker("Period", selection: $period) {
-                ForEach(ActivityPeriod.allCases, id: \.self) { Text($0.title).tag($0) }
-            }
-            .pickerStyle(.segmented)
-            .labelsHidden()
-            .frame(maxWidth: .infinity)
             Text("Daily Average")
             Text(StatusText.counted(average, "word"))
                 .font(.largeTitle)
@@ -201,7 +197,6 @@ private struct DailyWords: View {
                     .cornerRadius(PageMetrics.barCornerRadius)
                     .foregroundStyle(.tint)
                 }
-                // No "average" label on the line: at the right end it covers today's bar, and the headline names it.
                 if average > 0 {
                     RuleMark(y: .value("Daily average", average))
                         .foregroundStyle(Color.secondary)
@@ -224,19 +219,41 @@ private struct DailyWords: View {
                     }
                 }
             }
+            .chartYScale(domain: 0...top)
             .chartYAxis {
-                // Labels only, as Screen Time: a grid line beside the average line read as two lines. The base line stays.
-                AxisMarks(position: .trailing, values: .automatic(desiredCount: 3)) {
+                // Labels only, as Screen Time: no grid line runs beside the average line.
+                AxisMarks(position: .trailing, values: Self.ticks(top: top, clearOf: average)) {
                     AxisValueLabel(anchor: .leading)
                         .font(.body)
                 }
-                AxisMarks(values: [0]) {
-                    AxisGridLine()
+                if average > 0 {
+                    AxisMarks(position: .trailing, values: [average]) {
+                        AxisValueLabel(anchor: .leading) {
+                            Text("avg")
+                        }
+                        .font(.body)
+                    }
                 }
             }
             .frame(height: PageMetrics.chartHeight)
             .accessibilityLabel("Words per day")
         }
+    }
+
+    /// The scale's top: the largest day rounded up to its leading digit (910 to 1,000, 410 to 500).
+    static func scaleTop(_ largest: Int) -> Int {
+        guard largest > 0 else { return 1 }
+        let step = Int(pow(10, floor(log10(Double(largest)))))
+        return (largest + step - 1) / step * step
+    }
+
+    /// 0, the middle and the top, less one that "avg" would overlap: a label nearer the average than one line of body
+    /// text on the chart's scale yields to it (Screen Time draws them on top of each other).
+    @MainActor static func ticks(top: Int, clearOf average: Int) -> [Int] {
+        let font = NSFont.preferredFont(forTextStyle: .body)
+        let line = font.ascender - font.descender + font.leading
+        let clearance = Double(top) * line / PageMetrics.chartHeight
+        return [0, top / 2, top].filter { average == 0 || abs(Double($0 - average)) >= clearance }
     }
 
     /// The period's days from the first dictation on, at least a week of them, today last.
