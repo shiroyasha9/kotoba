@@ -1,27 +1,30 @@
 import SwiftUI
 
-/// A page that is a list (History: many rows, selection, list keys, rows built as they scroll into view), in the list
-/// style of Apple's list apps. Its rows sit where a `PageForm`'s cards sit, in the same centred column. Put
-/// `PageHeader` and rows that are not selectable in its first sections with `.selectionDisabled()`.
+/// A page that is a list (History: many rows, selection, list keys, rows built as they scroll into view), in the inset
+/// list style of Apple's list apps, across the whole detail column as Mail's and Notes' lists. Put `PageHeader` and rows
+/// that are not selectable in its first sections with `.selectionDisabled()`.
+///
+/// Full width, not in the page column (chief of staff, 2026-10-25, option A): SwiftUI's List ignores scroll content
+/// margins, and a list narrowed by safe-area padding narrows its scroll view, so the title bar took its tint over the
+/// column only (dark mode, ui-history). The centred list (d19b02d) comes back with a revert of this change.
 struct PageList<SelectionValue: Hashable, Content: View>: View {
     @Binding var selection: Set<SelectionValue>
+    /// The page's search (`PageSearchField`), pinned above the rows: it stays in view and keeps the focus while the
+    /// list scrolls and reloads under it. Nil: no search.
+    var search: (text: Binding<String>, prompt: String)?
     @ViewBuilder let content: Content
-    @State private var width: CGFloat = 0
 
     var body: some View {
         List(selection: $selection) {
             content
         }
         .listStyle(.inset)
-        // A list draws its rows in the safe area; `contentMargins(for: .scrollContent)`, which centres a form, leaves a
-        // list's rows full width (ui-history, 2026-10-25).
-        .safeAreaPadding(.horizontal, sideInset)
-        .onGeometryChange(for: CGFloat.self, of: \.size.width) { width = $0 }
-    }
-
-    /// The margin that centres the column, then the form's own inset to its cards, less the list's deeper row inset, so
-    /// a row's text starts where a card's text does.
-    private var sideInset: CGFloat {
-        max(width - PageMetrics.columnWidth, 0) / 2 + PageMetrics.formInset - PageMetrics.listRowExtraInset
+        // In the list's top safe area, so the rows scroll under it and the title bar keeps the list's tint across.
+        .safeAreaInset(edge: .top, spacing: 0) {
+            if let search {
+                PageSearchField(text: search.text, prompt: search.prompt)
+                    .padding()
+            }
+        }
     }
 }

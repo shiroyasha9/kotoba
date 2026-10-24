@@ -73,7 +73,7 @@ extension MainWindow {
     }
 }
 
-/// A list page in a wide detail column: its rows start where a form's card text does (`PageList`).
+/// A list page in a wide detail column (`PageList`), with its pinned search.
 @MainActor
 private var pageList: Snapshot {
     var snapshot = Snapshot(name: "page-list") {
@@ -94,9 +94,10 @@ private var framedList: Snapshot {
 
 private struct ListSample: View {
     @State private var selection: Set<Int> = [2]
+    @State private var search = ""
 
     var body: some View {
-        PageList(selection: $selection) {
+        PageList(selection: $selection, search: ($search, "Search")) {
             Section {
                 PageHeader(page: .history, summary: "Every dictation, newest first.")
             }
