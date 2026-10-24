@@ -197,7 +197,7 @@ final class PillPrototypeView: NSView {
         case .idle: return []
         case .done: return []
         case .processing:
-            bars.color = PillBars.accent
+            bars.color = PillBars.level
             return [bars]
         case .hover(let keys):
             // A chord never shows alone: the word says what it starts (owner, 2026-10-25).
@@ -304,7 +304,7 @@ extension PillPrototypeView {
     }
 
     private func views(for recording: PillRecording) -> [NSView] {
-        bars.color = recording.isSilent ? .systemOrange : PillBars.accent
+        bars.color = recording.isSilent ? .systemOrange : PillBars.level
         var views: [NSView] = []
         // Silent and hands-free, the words and Choose Mic… need Cancel's room; Esc still cancels.
         if recording.isHandsFree, !recording.isSilent { views.append(cancel) }

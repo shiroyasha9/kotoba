@@ -39,21 +39,23 @@ final class PillBars: NSView {
         }
     }
 
-    /// The level's colour: the accent, brighter on light glass (owner, 2026-10-24). Light glass over a warm backdrop
-    /// dulls the plain accent; mixing in white washed it out, and a brightness lift of 0.2 kept its hue and read best
-    /// on the gallery's colour band (0.35 went pink on pink).
-    static let accent = NSColor(name: nil) { appearance in
-        let accent = NSColor.controlAccentColor
-        guard appearance.bestMatch(from: [.aqua, .darkAqua]) == .aqua, let rgb = accent.usingColorSpace(.sRGB) else {
-            return accent
-        }
+    /// The level's colour: the brand colour, the icon's coral caret (asset `Brand`; owner, 2026-10-25), deeper on light
+    /// glass. Coral is close in hue to a warm backdrop under the glass, so it reads by brightness there: on light glass
+    /// the plain shade and a lighter one blended into pink and orange, and a 0.15 lower brightness read best on the
+    /// gallery's colour band. The dark shade is already at full brightness, so dark glass takes it as it is.
+    static let level = NSColor(name: nil) { appearance in
+        let brand = NSColor(named: "Brand") ?? .controlAccentColor
+        guard appearance.bestMatch(from: [.aqua, .darkAqua]) == .aqua else { return brand }
+        var rgb: NSColor?
+        appearance.performAsCurrentDrawingAppearance { rgb = brand.usingColorSpace(.sRGB) }
+        guard let rgb else { return brand }
         return NSColor(
             hue: rgb.hueComponent, saturation: rgb.saturationComponent,
-            brightness: min(1, rgb.brightnessComponent + 0.2), alpha: rgb.alphaComponent)
+            brightness: max(0, rgb.brightnessComponent - 0.15), alpha: rgb.alphaComponent)
     }
 
     /// The bars' fill: a system color, resolved again when the appearance changes.
-    var color = PillBars.accent {
+    var color = PillBars.level {
         didSet { updateColors() }
     }
 
