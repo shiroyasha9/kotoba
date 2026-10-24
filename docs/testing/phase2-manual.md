@@ -889,16 +889,16 @@ Home, Activity and the window shell on the 0.5.0 page system (docs/research/ui-r
 
 | # | Do this | Expect | Result |
 |---|---|---|---|
-| 1100 | Open the window (menu > **Open kotoba…**). Look at the sidebar; drag the window wider until it stops | The sidebar starts with the kotoba Dev icon and name; it is as wide as System Settings' sidebar (215 pt). The window stops growing at about 1,055 pt; the page column stays in the middle with no wide blank side | |
+| 1100 | Open the window (menu > **Open kotoba Dev…**). Look at the sidebar; drag the window wider until it stops | The sidebar starts with the kotoba Dev icon and name; it is as wide as System Settings' sidebar (215 pt). The window stops growing at about 1,055 pt; the page column stays in the middle with no wide blank side | |
 | 1101 | System Settings > Appearance > Sidebar icon size: Small, then Large; look at the kotoba sidebar each time | The tiles and the app icon follow the size; no symbol is cut off or blurred | |
-| 1102 | Click **Home**, **Activity**, **Speech**, **Modes**, **Microphone**, **General** in turn | The title bar, traffic lights and sidebar rows do not move. (History and Dictionary still have a toolbar until their rollout.) | |
+| 1102 | Click **Home**, **History**, **Activity**, **Shortcuts**, **Speech**, **Dictionary**, **Cleanup**, **Microphone**, **General** in turn | The title bar, traffic lights and sidebar rows do not move; no page has a toolbar | |
 | 1103 | With "Prefer tabs: Always" (System Settings > Desktop & Dock), open the window, then Menu > **Fix Last Dictation…** | Two separate windows, no tabs | |
 | 1104 | Dictate in TextEdit, then open Home; click **Paste Again** on the Last Dictation card | TextEdit comes to the front and the text pastes there once | |
 | 1105 | On Home's Last Dictation card, click **Copy**, then press ⌘V in TextEdit; click **Fix…** | The text pastes; the Fix window opens on the last dictation | |
 | 1106 | Start a hands-free dictation, and while it records look at Home's Last Dictation card | **Paste Again** is dimmed until the dictation ends | |
 | 1107 | On Home, click the today card; click **Home**, then **Show All** | The window shows Activity, then History | |
 | 1108 | A new install with a key but no dictation (or a test user): on Home, click **Try It…** | Onboarding opens on the Try It step | |
-| 1109 | Turn kotoba Dev off in System Settings > Privacy & Security > Accessibility; look at Home; click **Allow Accessibility…**; turn it on again | Home's first card says “Not ready to dictate” with the button; it opens onboarding on the Accessibility step; after the grant the today card comes back within about a second | |
+| 1109 | Turn kotoba Dev off in System Settings > Privacy & Security > Accessibility; look at Home; click **Allow Accessibility…**; turn it on again | Home's first card says “Not ready to dictate” with the button; it opens onboarding on the Allow Access step; after the grant the today card comes back within about a second | |
 | 1110 | On Activity, click **Month**, then **Week**; dictate in TextEdit with Activity shown | The chart changes period; today's bar and the figures go up after the dictation | |
 | 1111 | On Activity, click **Advanced…**, then **Done** | A sheet lists this month's spend by model; Done closes it | |
 | 1112 | Show **Activity**, close the window; open kotoba Dev again from Spotlight. Then with 0.4 having left the window on Insights or Usage, open it | It opens at Activity; a pane saved as Insights or Usage opens Home | |
@@ -910,8 +910,8 @@ Home, Activity and the window shell on the 0.5.0 page system (docs/research/ui-r
 | 1175 | On **Dictionary**, click **Advanced…**, star a word, click **Done**, open **Advanced…** again | The star stays yellow; the first line says how many words kotoba sends as hints | |
 | 1176 | With word suggestions waiting, look at the Dictionary sidebar row, then on **Dictionary** click **Add** on one, the × on another, then **Add All** | The sidebar row shows the count; each suggestion leaves the list; the count goes down to none | |
 | 1177 | On **Cleanup**, turn on **Every dictation in writing apps**, dictate “um so I think, uh, yes” into Notes; turn it off and dictate again | With it on the pasted text has no “um” or “uh”; with it off the text is as spoken | |
-| 1178 | On **Cleanup**, click **+** > a recent app, change its style to Code, select it and click **−**; click **+** > **Choose App…** and pick an app; with no Rewrite shortcut, click **Set Shortcut…** | Each app joins the list with a style and leaves it; the open panel adds the app; Set Shortcut… opens the page with the shortcut recorders | |
-| 1179 | On **Cleanup**, click **Advanced…**, click **Claude Haiku 5.5**, **Done**; dictate with the Clean up shortcut; open **Activity** > **Advanced…** | The check moves to Claude Haiku 5.5; this month's spend lists it as the cleanup model | |
+| 1178 | On **Cleanup**, click **+** > a recent app, change its style to Code, select it and click **−**; click **+** > **Choose App…** and pick an app; with no Rewrite shortcut, click **Set Shortcut…** | Each app joins the list with a style and leaves it; the open panel adds the app; Set Shortcut… opens Shortcuts | |
+| 1179 | On **Cleanup**, click **Advanced…**, click **Claude Haiku 5.5**, **Done**; dictate with the **Dictate with cleanup** shortcut; open **Activity** > **Advanced…** | The check moves to Claude Haiku 5.5; this month's spend lists it as the cleanup model | |
 | 1180 | Remove the OpenRouter key on **Speech**, open **Cleanup**, click **Add Key…** | Cleanup's first group says it needs the OpenRouter key; Add Key… opens Speech | |
 
 ## Status menu, onboarding and Fix Last Dictation on the page system (0.5.0, kotoba Dev)
@@ -920,12 +920,12 @@ The status menu, the five onboarding steps and the Fix Last Dictation window (do
 
 | # | Do this | Expect | Result |
 |---|---|---|---|
-| 1130 | Open the menu bar menu before the first dictation, then after one with cleanup; hold ⌥ while the menu is open | Before: the status line, Microphone, **Open kotoba Dev…**, Quit. After: **Paste Last Dictation**, **Copy Last Dictation**, **Rewrite Last Dictation** (only with an OpenRouter key saved) and **Fix Last Dictation…** under the status line; with ⌥ held, Paste reads **Paste Last Without Cleanup** and pastes the text before cleanup. No Speech Model, Add Word…, word suggestions, History…, Settings… or About | |
+| 1130 | Open the menu bar menu before the first dictation, then after one with cleanup; hold ⌥ while the menu is open | Before: the status line, Microphone, **Open kotoba Dev…**, **Check for Updates…**, Quit. After: **Paste Last Dictation**, **Copy Last Dictation**, **Rewrite Last Dictation** (only with an OpenRouter key saved) and **Fix Last Dictation…** under the status line; with ⌥ held, Paste reads **Paste Last Without Cleanup** and pastes the text before cleanup. No Speech Model, Add Word…, word suggestions, History…, Settings… or About | |
 | 1131 | With TextEdit in front, menu > **Open kotoba Dev…**; close the window; menu > **Paste Last Dictation** | The window opens in front on the page it showed last; the paste lands in TextEdit | |
 | 1132 | With two mics connected, menu > **Microphone** > the second mic; dictate; open the Microphone page | The dictation records from the picked mic; it is first in the Microphone page's list | |
 | 1133 | Fresh setup, open kotoba Dev. On Welcome, look at the keys; click **Get Started** | Welcome shows the app icon, a bold left-aligned title, three rows (Fast, Accurate, Private), and Hands-free and Push to talk with keycaps that have “control”, “option”, “command” under them. Get Started opens Allow Access with 2 of 5 dots | |
-| 1134 | On Allow Access, click the Microphone row's **Allow…**; the owner clicks Allow in the system prompt | The prompt shows; the row turns to “Allowed”; the Accessibility row's **Allow…** becomes the blue default button; the window stays on Allow Access and Continue stays dimmed | |
-| 1135 | Click the Accessibility row's **Allow…**, then **Allow…** again; the owner turns kotoba Dev on in System Settings | The first click shows the system prompt, the second opens System Settings > Accessibility; the row turns to “Allowed” within about a second; Continue turns blue and Return presses it | |
+| 1134 | On Allow Access, click the Microphone row's **Allow…**; the owner clicks Allow in the system prompt | The prompt shows; the row turns to “Allowed”; the Accessibility row's **Allow…** becomes the default button (in the accent colour); the window stays on Allow Access and Continue stays dimmed | |
+| 1135 | Click the Accessibility row's **Allow…**, then **Allow…** again; the owner turns kotoba Dev on in System Settings | The first click shows the system prompt, the second opens System Settings > Accessibility; the row turns to “Allowed” within about a second; Continue becomes the default button and Return presses it | |
 | 1136 | Close onboarding on Allow Access, quit and reopen kotoba Dev. Then quit, run `defaults write tech.teensy.kotoba.dev onboarding.step microphone` (a 0.4 step), reopen | It opens on Allow Access both times | |
 | 1137 | On the key step, paste a key with ⌘V, select it with ⌘A first; on Try It, dictate, then ⌘A and ⌘V in the field | ⌘A and ⌘V work in both fields; the key row shows the masked key and “Key works” under its name; Try It shows “It works.” | |
 | 1138 | With Wispr Flow installed, go to Done; click **Import…**, then **Import** | Done has a “Wispr Flow dictionary” row; the alert lists what it adds; the row then says what it added and “Imported”. Without Wispr Flow (rename its folder in Application Support) there is no row | |
@@ -940,7 +940,7 @@ Shortcut recorders, the spoken commands, the Bluetooth switch and the Microphone
 |---|---|---|---|
 | 1190 | On **Shortcuts**, click the Hands-free recorder, press ⌃⌥⇧⌘ (refused) then ⌥⌘; turn VoiceOver on and move through the Hands-free row | The refusal shows under the recorder and the button keeps its width while it listens; ⌥⌘ is saved and dictates; VoiceOver reads the title, the line under it and the recorder, and reaches Turn Off and Reset on a row that has them | |
 | 1191 | On **Shortcuts**, turn on “Start a new line when you say “new line””, dictate “one new line two” into TextEdit | Two lines are pasted | |
-| 1192 | Mac with a built-in mic, AirPods connected and chosen as the system input, kotoba's list empty; dictate. Then turn off “Use Bluetooth mics only from the list” on **Microphone** and dictate again | First dictation records from the built-in mic (AirPods playback stays at full quality); after the switch the AirPods record and the page shows the Bluetooth warning, with no restart | |
+| 1192 | Mac with a built-in mic, AirPods connected and chosen as the system input, kotoba's list empty; dictate. Then turn off “Use Bluetooth microphones only from the list” on **Microphone** and dictate again | First dictation records from the built-in mic (AirPods playback stays at full quality); after the switch the AirPods record and the page shows the Bluetooth warning, with no restart | |
 | 1193 | On **Microphone** with a USB mic first in the list and in use, unplug it, then plug it back in | Its row goes from “In use” to “Not connected” and the next mic shows “In use” within about a second; plugging it back gives “In use” back to it | |
 | 1194 | Mac with no built-in mic (or the built-in mic removed from the list and unavailable), AirPods as the system input, kotoba's list empty, switch on; dictate, click **Choose Mic…**, add AirPods with +, dictate again | The pill says “Not in mic list: AirPods Pro” with **Choose Mic…**; it opens Microphone; after the add the next dictation records from the AirPods | |
 | 1198 | Open **Microphone** with the built-in mic in use; pick the built-in mic in the menu bar's Microphone menu; then drag another mic on the page | The built-in mic moves to the top of the list at once; the drag keeps the menu's pick | |
@@ -977,7 +977,7 @@ One glass capsule that changes shape (docs/research/ui-redesign.md, "Pill"). Sna
 
 | # | Do this | Expect | Result |
 |---|---|---|---|
-| 1200 | General > Show indicator: **Always** | A thin glass bar at the bottom center | |
+| 1200 | **General** > Indicator > Show: **Always** | A thin glass bar at the bottom center | |
 | 1201 | Point at the bar, then move the pointer away | It grows to “Dictate ⌃ ⌥ ⌘”; away, the thin bar again | |
 | 1202 | Click the bar | A recording starts: the hands-free pill (×, bars, Stop) | |
 | 1203 | Press ⌃⌥⌘ and let go, speak, click **Stop** | The hands-free pill with × and Stop; after Stop the bars sweep, a green check shows, then the bar; the text pastes | |
@@ -990,4 +990,4 @@ One glass capsule that changes shape (docs/research/ui-redesign.md, "Pill"). Sna
 | 1210 | At a side edge, click and point in the clear area next to the pill | The clicks and the pointer reach the app below | |
 | 1211 | In a hands-free recording, mute the mic | Orange dots, “No sound from the mic”, Choose Mic… and Stop; × is gone (Esc still cancels) | |
 | 1212 | Dictate, fix a word in the pasted text, then dictate again | “Added “word”” with Undo shows after the second paste and stays for its time; the check does not replace it | |
-| 1213 | Dictate for more than 10 minutes | From 10:00 the time shows after the bars and counts up once a second | |
+| 1213 | Dictate for more than 10 minutes; open the menu bar menu | From 10:00 the time shows after the bars and counts up once a second; the menu's status line says “Still recording · 10 minutes” | |
