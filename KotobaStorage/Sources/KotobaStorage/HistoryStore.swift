@@ -9,52 +9,6 @@ import SQLite3
 public actor HistoryStore: Store {
     typealias Value = SQLiteDatabase.Value
 
-    private static let schema = """
-        PRAGMA journal_mode = WAL;
-        PRAGMA synchronous = NORMAL;
-        PRAGMA busy_timeout = 2000;
-        CREATE TABLE IF NOT EXISTS dictations (
-            id TEXT PRIMARY KEY,
-            created_at REAL NOT NULL,
-            audio_path TEXT NOT NULL,
-            audio_duration_ms INTEGER NOT NULL,
-            transcript TEXT,
-            model TEXT,
-            status TEXT NOT NULL,
-            recovered_at REAL,
-            cleaned_text TEXT,
-            needs_setup TEXT,
-            mode TEXT NOT NULL DEFAULT 'transcript',
-            reject_reason TEXT,
-            app_bundle_id TEXT,
-            app_name TEXT,
-            audio_deleted INTEGER NOT NULL DEFAULT 0,
-            audio_bytes INTEGER,
-            cleanup_mode TEXT,
-            polished_text TEXT,
-            attempts INTEGER NOT NULL DEFAULT 0
-        );
-        CREATE INDEX IF NOT EXISTS dictations_status ON dictations (status);
-        -- The History window's order, newest first.
-        CREATE INDEX IF NOT EXISTS dictations_created ON dictations (created_at, id);
-        CREATE TABLE IF NOT EXISTS latency_marks (
-            dictation_id TEXT NOT NULL REFERENCES dictations (id) ON DELETE CASCADE,
-            mark TEXT NOT NULL,
-            offset_ms REAL NOT NULL,
-            PRIMARY KEY (dictation_id, mark)
-        );
-        \(ledgerSchema)
-        \(discardedSchema)
-        """
-
-    /// Columns added after the first build the owner ran; an older database gets them on open.
-    private static let addedColumns = [
-        ("model", "TEXT"), ("recovered_at", "REAL"), ("cleaned_text", "TEXT"), ("needs_setup", "TEXT"),
-        ("mode", "TEXT NOT NULL DEFAULT 'transcript'"), ("reject_reason", "TEXT"), ("app_bundle_id", "TEXT"),
-        ("app_name", "TEXT"), ("audio_deleted", "INTEGER NOT NULL DEFAULT 0"), ("audio_bytes", "INTEGER"),
-        ("cleanup_mode", "TEXT"), ("polished_text", "TEXT"), ("attempts", "INTEGER NOT NULL DEFAULT 0"),
-    ]
-
     private static let columns = """
         id, created_at, audio_path, audio_duration_ms, transcript, model, status, recovered_at, cleaned_text,
         needs_setup, mode, reject_reason, app_bundle_id, app_name, cleanup_mode, polished_text
@@ -64,7 +18,7 @@ public actor HistoryStore: Store {
 
     /// SQL lists of statuses, from `DictationRecord.Status`: the retry queue, the rows whose text reached the owner,
     /// and every row with text.
-    private static let retryable = sqlList([.pending, .failed])
+    static let retryable = sqlList([.pending, .failed])
     private static let delivered = sqlList([.pasted, .copied, .notPasted])
     private static let transcribed = sqlList(DictationRecord.Status.allCases.filter(\.isTranscribed))
     /// The kept rows the History pane's Retry puts back in the queue.
@@ -83,35 +37,14 @@ public actor HistoryStore: Store {
         audioFolder = audio
         try FileManager.default.createDirectory(at: url.deletingLastPathComponent(), withIntermediateDirectories: true)
         database = try SQLiteDatabase(url: url)
-        try database.execute(Self.schema)
-        try Self.migrate(database)
+        try Self.prepare(database)
         try database.execute("PRAGMA foreign_keys = ON;")
-        // Statistics for the planner, so retention reads its partial index (SQLite's advice for each open; a no-op
-        // when they are current).
+        // Statistics for the planner (SQLite's advice for each open; a no-op when they are current). The partial
+        // indexes give each read its plan without them too (`readIndexes`), as on a new install.
         try database.execute("PRAGMA optimize = 0x10002;")
         hadDictationsAtOpen =
             try database.query("SELECT EXISTS (SELECT 1 FROM dictations);").first?.first
             == .integer(1)
-    }
-
-    /// One transaction that also reads the columns, so a quit halfway leaves the old schema for the next launch, and
-    /// a second process that opens the file at the same time waits and then finds the work done.
-    private static func migrate(_ database: SQLiteDatabase) throws(SQLiteError) {
-        try database.transaction { () throws(SQLiteError) in
-            let existing = Set(
-                try database.query("PRAGMA table_info(dictations);").compactMap { string($0[1]) })
-            for (name, type) in addedColumns where !existing.contains(name) {
-                try database.execute("ALTER TABLE dictations ADD COLUMN \(name) \(type);")
-            }
-            try fillLedger(database)
-            // After the columns: an older database gets `audio_deleted` above.
-            try database.execute(keptAudioIndex)
-            // A phase 2 build kept "waits for a key" as needs_key = 1.
-            if existing.contains("needs_key") {
-                try database.execute(
-                    "UPDATE dictations SET needs_setup = 'key' WHERE needs_key = 1 AND needs_setup IS NULL;")
-            }
-        }
     }
 
     public func save(_ record: DictationRecord) throws {
@@ -210,12 +143,14 @@ public actor HistoryStore: Store {
         return DictationRecord.Status(rawValue: status)
     }
 
+    /// The status as a literal, so the planner can match `dictations_recovered` (a bound value cannot prove a partial
+    /// index's condition).
+    static let isRecovered = "status = '\(DictationRecord.Status.recovered.rawValue)'"
+
     public func recovered(since cutoff: Date) throws -> [DictationRecord] {
         try records(
-            where: "status = ?2 AND recovered_at >= ?1 ORDER BY recovered_at DESC",
-            [.real(cutoff.timeIntervalSince1970), .text(DictationRecord.Status.recovered.rawValue)],
-            withLatency: false
-        )
+            where: "\(Self.isRecovered) AND recovered_at >= ?1 ORDER BY recovered_at DESC",
+            [.real(cutoff.timeIntervalSince1970)], withLatency: false)
     }
 
     public func markCopied(_ id: DictationID) throws {

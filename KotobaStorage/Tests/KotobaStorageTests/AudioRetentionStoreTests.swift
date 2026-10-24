@@ -276,15 +276,17 @@ struct AudioRetentionStoreTests {
         }
     }
 
-    /// The cost on 10,000 files, in SQLite's statements and steps (`TimingTests` times it), with the store opened
-    /// again after the fill as at launch, so the planner has its statistics (the plan: `batchesReadThePartialIndex`).
+    /// The cost on 10,000 files, in SQLite's statements and steps (`TimingTests` times it), on a store with no
+    /// statistics for the planner (a new install) and on one opened again after the fill, as at launch.
     /// The first run reads 20 batches of 500 in the index's order (no sort), each from the cursor (the same steps
     /// each), and marks each; then one read finds none. The run after the next dictation is one probe, with fewer
     /// steps than the history has rows. The size is the read of rows with no size and one aggregate: no statement for
     /// each row.
-    @Test func tenThousandFilesAreDeletedAndTheNextRunIsOneProbe() async throws {
-        try await saveExpired(to: try HistoryStore(url: url, audio: audio))
-        let store = try HistoryStore(url: url, audio: audio)
+    @Test(arguments: [false, true])
+    func tenThousandFilesAreDeletedAndTheNextRunIsOneProbe(withStatistics: Bool) async throws {
+        let opened = try HistoryStore(url: url, audio: audio)
+        try await saveExpired(to: opened)
+        let store = withStatistics ? try HistoryStore(url: url, audio: audio) : opened
         var deleted: Set<DictationID> = []
         let size = try await costs(on: store) { _ = try await store.keptAudioSize() }
         let first = try await costs(on: store) { deleted = try await deleteAudio(store, before: now) }

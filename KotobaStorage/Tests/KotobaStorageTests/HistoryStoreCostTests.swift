@@ -49,14 +49,16 @@ extension HistoryStoreTests {
         return costs
     }
 
-    /// What the History pane's reads cost on a large history, in SQLite's own steps (`TimingTests` times them), with
-    /// the store opened again after the fill as at launch, so the planner has its statistics (`PRAGMA optimize`). A
-    /// read that finds its rows through an index costs the same on 10,000 rows as on 5,000. A search that matches
-    /// nothing reads every row once, with no sort: the history has no FTS index (`HistoryStore.page`). The menu's
-    /// read of recovered dictations reads every row too (no index on `recovered_at`); it stays one pass.
-    @Test func theHistoryReadsUseTheirIndexOn10000Rows() async throws {
-        let ids = try await saveSpoken(0..<5_000, to: try HistoryStore(url: url, audio: audio))
-        let store = try HistoryStore(url: url, audio: audio)
+    /// What the History pane's reads cost on a large history, in SQLite's own steps (`TimingTests` times them): on a
+    /// store with no statistics for the planner (a new install, until a later launch) and on one opened again after
+    /// the fill, as at launch (`PRAGMA optimize`). A read that finds its rows through an index costs the same on
+    /// 10,000 rows as on 5,000. A search that matches nothing reads every row once, with no sort: the history has no
+    /// FTS index (`HistoryStore.page`).
+    @Test(arguments: [false, true])
+    func theHistoryReadsUseTheirIndexOn10000Rows(withStatistics: Bool) async throws {
+        let opened = try HistoryStore(url: url, audio: audio)
+        let ids = try await saveSpoken(0..<5_000, to: opened)
+        let store = withStatistics ? try HistoryStore(url: url, audio: audio) : opened
         let half = try await historyReadCosts(store, known: ids)
         _ = try await saveSpoken(5_000..<10_000, to: store)
         let full = try await historyReadCosts(store, known: ids)
@@ -83,9 +85,9 @@ enum HistoryRead: String, CustomStringConvertible {
     case lastDelivered = "last delivered"
     case knownIDs = "known ids"
 
-    /// The reads that no index serves: each reads every row once.
+    /// The read that no index serves: it reads every row once.
     var readsEveryRow: Bool {
-        self == .searchThatMatchesNothing || self == .recovered
+        self == .searchThatMatchesNothing
     }
 
     var description: String { rawValue }
