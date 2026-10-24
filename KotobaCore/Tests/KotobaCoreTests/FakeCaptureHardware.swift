@@ -31,6 +31,7 @@ final class FakeCaptureHardware: CaptureHardware {
         var devices: [AudioDevice]
         var defaultInput: AudioDevice?
         var order: [String] = []
+        var bluetoothOnlyWhenListed = true
         var sampleRates: [String: Double] = [:]
         /// By device UID: the errors the next opens throw, first first.
         var openFailures: [String: [any Error]] = [:]
@@ -73,6 +74,10 @@ final class FakeCaptureHardware: CaptureHardware {
 
     func setOrder(_ order: [String]) {
         state.withLock { $0.order = order }
+    }
+
+    func setBluetoothOnlyWhenListed(_ isOn: Bool) {
+        state.withLock { $0.bluetoothOnlyWhenListed = isOn }
     }
 
     /// Opens of `device` throw these errors, one per open, before an open succeeds.
@@ -151,6 +156,8 @@ final class FakeCaptureHardware: CaptureHardware {
     func defaultInput() -> AudioDevice? { state.withLock { $0.defaultInput } }
 
     func microphoneOrder() -> [String] { state.withLock { $0.order } }
+
+    func bluetoothOnlyWhenListed() -> Bool { state.withLock { $0.bluetoothOnlyWhenListed } }
 
     func observeDevices(_ onChange: @escaping @Sendable (AudioDeviceChange) -> Void) -> AnyObject {
         let token = Token()

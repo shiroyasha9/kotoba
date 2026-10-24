@@ -2,10 +2,10 @@ import Foundation
 import KotobaCore
 import Observation
 
-/// The microphone preference order as the pane shows it: "Your order" holds only mics the owner
-/// put there (a menu pick, or Add to Order here); the other connected mics are offered by the Add
-/// menu and are never saved by a drag or a remove. So a Bluetooth mic joins the order only when the
-/// owner adds it.
+/// The microphone preference order as the page shows it: the list holds only mics the owner put
+/// there (a menu pick, or Add to Order here); the other connected mics are offered by the Add menu
+/// and are never saved by a drag or a remove. So a Bluetooth mic joins the order only when the owner
+/// adds it, and while the Bluetooth switch is on, only a listed one is used (`InputDevicePolicy`).
 @MainActor
 @Observable
 final class MicrophoneModel {
@@ -24,6 +24,8 @@ final class MicrophoneModel {
         var inputs: @MainActor () -> [AudioDevice]
         var entries: @MainActor () -> [MicrophonePreferences.Entry]
         var save: @MainActor ([MicrophonePreferences.Entry]) -> Void
+        /// The switch "Use Bluetooth mics only from the list" (`MicrophonePreferences.isBluetoothOnlyWhenListed`).
+        var bluetoothOnlyWhenListed: Setting<Bool> = .fixed(true)
         /// The UID of the mic kotoba records from.
         var current: @MainActor () -> String?
         /// What the menu also warns about the mic in use (a Bluetooth mic).
@@ -41,6 +43,9 @@ final class MicrophoneModel {
                 inputs: AudioDevices.inputs,
                 entries: { preferences.entries },
                 save: { preferences.entries = $0 },
+                bluetoothOnlyWhenListed: Setting(
+                    read: { preferences.isBluetoothOnlyWhenListed },
+                    write: { preferences.isBluetoothOnlyWhenListed = $0 }),
                 current: { audio.inputInUse?.uid },
                 warning: {
                     InputDevicePolicy.warning(
@@ -62,7 +67,8 @@ final class MicrophoneModel {
         /// connected, and AirPods (Bluetooth) connected but not in the order. `order` and `current` (UIDs) change that.
         @MainActor
         static func sample(
-            order: [String] = ["shure", "built-in"], current: String = "built-in", warning: MicrophoneWarning? = nil
+            order: [String] = ["shure", "built-in"], current: String = "built-in", warning: MicrophoneWarning? = nil,
+            bluetoothOnlyWhenListed: Bool = true
         ) -> Self {
             let builtIn = AudioDevice(
                 id: 1, uid: "built-in", name: "MacBook Pro Microphone", transport: .builtIn, hasInput: true)
@@ -71,8 +77,8 @@ final class MicrophoneModel {
             let names = ["shure": "Shure MV7", "built-in": builtIn.name, "airpods": airPods.name]
             var entries = order.map { MicrophonePreferences.Entry(uid: $0, name: names[$0] ?? $0) }
             return Self(
-                inputs: { [builtIn, airPods] }, entries: { entries }, save: { entries = $0 }, current: { current },
-                warning: { warning })
+                inputs: { [builtIn, airPods] }, entries: { entries }, save: { entries = $0 },
+                bluetoothOnlyWhenListed: .fixed(bluetoothOnlyWhenListed), current: { current }, warning: { warning })
         }
     }
 
@@ -96,6 +102,14 @@ final class MicrophoneModel {
     /// The mic in use, by UID.
     private(set) var currentUID: String?
     private(set) var warning: MicrophoneWarning?
+
+    /// The switch on the page; a change can change the mic in use, so it goes to the audio engine as a reorder does.
+    var isBluetoothOnlyWhenListed: Bool {
+        didSet {
+            source.bluetoothOnlyWhenListed.write(isBluetoothOnlyWhenListed)
+            onChange()
+        }
+    }
     /// The mic test: not run, running with the input level 0...1, or why the last click started nothing.
     enum TestState: Equatable {
         case idle
@@ -117,6 +131,7 @@ final class MicrophoneModel {
     init(source: Source, onChange: @escaping @MainActor () -> Void) {
         self.source = source
         self.onChange = onChange
+        isBluetoothOnlyWhenListed = source.bluetoothOnlyWhenListed.read()
         reload()
     }
 

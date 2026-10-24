@@ -29,11 +29,6 @@ struct InputDevicePolicyTests {
         #expect(InputDevicePolicy.micInUse(defaultInput: usbMic, devices: devices) == usbMic)
     }
 
-    @Test func aMacWithNoBuiltInMicKeepsTheBluetoothDefault() {
-        let devices = [builtInSpeakers, airPods]
-        #expect(InputDevicePolicy.micInUse(defaultInput: airPods, devices: devices) == airPods)
-    }
-
     @Test func aDefaultThatIsNotConnectedIsNoMic() {
         #expect(InputDevicePolicy.micInUse(defaultInput: usbMic, devices: [builtInSpeakers]) == nil)
         #expect(InputDevicePolicy.micInUse(defaultInput: nil, devices: [builtInMic]) == nil)
@@ -84,6 +79,34 @@ struct InputDevicePolicyTests {
         let choice = InputDevicePolicy.micInUse(
             defaultInput: usbMic, devices: devices, order: ["BuiltInSpeakers"])
         #expect(choice == usbMic)
+    }
+
+    // MARK: Bluetooth only when listed (the Microphone page's switch, on by default)
+
+    @Test func anUnlistedBluetoothDefaultIsNeverUsed() {
+        let devices = [builtInSpeakers, airPods]
+        #expect(InputDevicePolicy.micInUse(defaultInput: airPods, devices: devices) == nil)
+        #expect(
+            InputDevicePolicy.micInUse(defaultInput: airPods, devices: devices, order: ["StudioMic"]) == nil)
+    }
+
+    @Test func aListedBluetoothMicIsUsedWithTheSwitchOn() {
+        let devices = [builtInSpeakers, airPods]
+        #expect(InputDevicePolicy.micInUse(defaultInput: airPods, devices: devices, order: ["AirPods"]) == airPods)
+    }
+
+    @Test func withTheSwitchOffTheBluetoothDefaultIsFollowed() {
+        let devices = [builtInMic, airPods]
+        let choice = InputDevicePolicy.micInUse(
+            defaultInput: airPods, devices: devices, bluetoothOnlyWhenListed: false)
+        #expect(choice == airPods)
+    }
+
+    @Test func withTheSwitchOffTheOrderStillComesFirst() {
+        let devices = [builtInMic, airPods]
+        let choice = InputDevicePolicy.micInUse(
+            defaultInput: airPods, devices: devices, order: ["BuiltInMic"], bluetoothOnlyWhenListed: false)
+        #expect(choice == builtInMic)
     }
 
     @Test func choosingAMicMovesItToTheTopOfTheOrder() {

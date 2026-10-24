@@ -56,6 +56,20 @@ struct AudioCaptureChangeTests {
         #expect(hardware.inputs.count == 1)
     }
 
+    @Test func theBluetoothSwitchChangesTheMicAtTheNextChoice() async {
+        let hardware = FakeCaptureHardware(
+            devices: [FakeCaptureHardware.builtIn, FakeCaptureHardware.airPods],
+            defaultInput: FakeCaptureHardware.airPods)
+        let capture = AudioCapture(hardware: hardware)
+        await capture.prepare()
+        #expect(hardware.opened == ["built-in"])
+
+        hardware.setBluetoothOnlyWhenListed(false)
+        await capture.inputMayHaveChanged()
+        #expect(hardware.opened == ["built-in", "airpods"])
+        #expect(capture.inputInUse == FakeCaptureHardware.airPods)
+    }
+
     // MARK: Mic test
 
     @Test func aDictationEndsTheMicTestAndRecordsOnTheSameMic() async throws {

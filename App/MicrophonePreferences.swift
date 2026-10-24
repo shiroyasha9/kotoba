@@ -20,6 +20,12 @@ final class MicrophonePreferences: Sendable {
 
     var order: [String] { entries.map(\.uid) }
 
+    /// On (the default): a Bluetooth mic is used only when it is in the order (`InputDevicePolicy`).
+    var isBluetoothOnlyWhenListed: Bool {
+        get { UserDefaults.standard.bool(forKey: AppDefaults.Key.bluetoothOnlyWhenListed.rawValue) }
+        set { UserDefaults.standard.set(newValue, forKey: AppDefaults.Key.bluetoothOnlyWhenListed.rawValue) }
+    }
+
     /// The menu's quick switch: the mic moves to the top of the order (an explicit choice, so it joins it).
     func choose(uid: String, name: String) {
         let names = Dictionary(entries.map { ($0.uid, $0.name) }, uniquingKeysWith: { first, _ in first })

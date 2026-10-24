@@ -1,5 +1,3 @@
-// 0.5.0 ratchet: the Microphone page's rollout puts this file on the page system and removes the next line.
-// swiftlint:disable row_is_page_row page_form
 import KotobaCore
 import Observation
 import SwiftUI
@@ -12,25 +10,35 @@ extension Pane {
     }
 }
 
+/// The ranked list of mics, the Bluetooth switch, and the mic test (docs/research/ui-redesign.md, "Microphone"). Each
+/// row's status follows the device and mic-in-use events while the page shows (`MicrophoneModel.appear`).
 private struct MicrophonePane: View {
     @Bindable var model: MicrophoneModel
 
     var body: some View {
-        Form {
+        PageForm {
             Section {
-                if let warning = model.warning {
-                    Label {
-                        Text(StatusText.title(warning))
-                        Text(StatusText.detail(warning))
-                    } icon: {
-                        Image(systemName: "exclamationmark.triangle.fill").symbolRenderingMode(.multicolor)
+                PageHeader(
+                    page: .microphones,
+                    summary:
+                        "kotoba uses the first connected mic in the list. When one is unplugged, it moves to the next.")
+            }
+            if let warning = model.warning {
+                Section {
+                    PageRow(title: StatusText.title(warning), subtitle: StatusText.detail(warning)) {
+                        SymbolTile(
+                            systemImage: "exclamationmark.triangle", tint: .orange, side: PageMetrics.rowTileSide)
+                    } trailing: {
                     }
                 }
+            }
+            Section {
                 EditableList(
-                    rows: model.listed, emptyText: "No mics in your order: kotoba follows the system default input.",
-                    addTitle: "Add to Order",
-                    addHelp: model.others.isEmpty ? "No other mics are connected" : "Add a connected mic to the order",
-                    isAddDisabled: model.others.isEmpty, removeTitle: "Remove from Order", remove: model.remove,
+                    rows: model.listed,
+                    emptyText: "No mics in the list. kotoba uses the input chosen in System Settings.",
+                    addTitle: "Add to List",
+                    addHelp: model.others.isEmpty ? "No other mics are connected" : "Add a connected mic to the list",
+                    isAddDisabled: model.others.isEmpty, removeTitle: "Remove from List", remove: model.remove,
                     move: model.move
                 ) { row in
                     LabeledContent {
@@ -50,8 +58,8 @@ private struct MicrophonePane: View {
                         }
                     }
                 } accessory: {
-                    // Clears the order, so it sits with the buttons that change it.
-                    Button("Follow System Default", action: model.followSystemDefault)
+                    // Clears the list, so it sits with the buttons that change it.
+                    Button("Clear List", action: model.followSystemDefault)
                         .labelStyle(.titleOnly)
                         .buttonStyle(.bordered)
                         .controlSize(.small)
@@ -60,7 +68,13 @@ private struct MicrophonePane: View {
             } header: {
                 Text("Microphone Order")
             } footer: {
-                Text("kotoba uses the first connected mic in this list. Drag to change the order.")
+                Text("Drag to change the order.")
+            }
+            Section {
+                Toggle(isOn: $model.isBluetoothOnlyWhenListed) {
+                    Text("Use Bluetooth mics only from the list")
+                    Text("Bluetooth mics record at call quality and can miss your first word.")
+                }
             }
             Section {
                 LabeledContent("Input level") {
@@ -85,7 +99,6 @@ private struct MicrophonePane: View {
                 }
             }
         }
-        .formStyle(.grouped)
         .onAppear(perform: model.appear)
         .onDisappear(perform: model.disappear)
     }
@@ -147,6 +160,9 @@ extension Pane {
                             warning: .bluetoothMic(interruptsPlayback: true))
                     ) {}),
                 named: "settings-microphone-bluetooth"),
+            MainWindow.snapshot(
+                of: .microphones(MicrophoneModel(source: .sample(bluetoothOnlyWhenListed: false)) {}),
+                named: "settings-microphone-bluetooth-switch-off"),
         ]
     }
 }

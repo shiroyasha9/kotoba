@@ -97,13 +97,13 @@ enum StatusText {
     /// The Microphone menu and pane warning while a Bluetooth mic is in use (`MicrophoneWarning`).
     static func title(_ warning: MicrophoneWarning) -> String {
         switch warning {
-        case .bluetoothMic: "Bluetooth mic: call-quality audio"
+        case .bluetoothMic: "Bluetooth mic: lower quality"
         }
     }
 
     /// The note on a Bluetooth mic that is not in use, in the Microphone pane's rows and Add menu: the same
     /// phrase as `title(_:)`.
-    static let bluetoothMicNote = "Bluetooth: call-quality audio"
+    static let bluetoothMicNote = "Bluetooth: lower quality"
 
     /// The second line under `title(_:)`.
     static func detail(_ warning: MicrophoneWarning) -> String {

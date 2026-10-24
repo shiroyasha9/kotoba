@@ -344,11 +344,12 @@ extension AudioCapture {
 
 extension AudioCapture {
     /// The mic to record from among `devices`, without the ones in `leftOut`: the first one in the owner's order, else
-    /// the system default (a Bluetooth default replaced by the built-in mic, `InputDevicePolicy`).
+    /// the system default (a Bluetooth default replaced by the built-in mic while the owner's switch says so,
+    /// `InputDevicePolicy`).
     private func micInUse(among devices: [AudioDevice], leftOut: Set<String> = []) -> AudioDevice? {
         InputDevicePolicy.micInUse(
             defaultInput: hardware.defaultInput(), devices: devices, order: hardware.microphoneOrder(),
-            leftOut: leftOut)
+            leftOut: leftOut, bluetoothOnlyWhenListed: hardware.bluetoothOnlyWhenListed())
     }
 }
 

@@ -36,10 +36,11 @@ public enum MicrophoneWarning: Sendable, Equatable {
 /// Which microphone to record from (docs/spec.md, "Audio", microphone choice).
 ///
 /// The owner's preference order comes first: the first connected input in it is used, Bluetooth
-/// included. With none of them connected, kotoba follows the system default, except that a
-/// Bluetooth default is replaced by the built-in mic: a Bluetooth mic runs in the HFP call profile,
-/// with low quality and a slow start that clips the first words, and opening it drops the headset's
-/// playback to call quality.
+/// included. With none of them connected, kotoba follows the system default. While
+/// `bluetoothOnlyWhenListed` is on (the Microphone page's switch, on by default), a Bluetooth
+/// default is replaced by the built-in mic, and with no built-in mic there is no mic: a Bluetooth
+/// mic runs in the HFP call profile, with low quality and a slow start that clips the first words,
+/// and opening it drops the headset's playback to call quality. Off, the Bluetooth default is used.
 public enum InputDevicePolicy {
     /// The mic to record from among the connected `devices`; nil when none is left. The mics in `leftOut` (by UID) did
     /// not open: the next in the order goes first, and the rules hold without them, so a Bluetooth default that the
@@ -48,7 +49,8 @@ public enum InputDevicePolicy {
         defaultInput: AudioDevice?,
         devices: [AudioDevice],
         order: [String] = [],
-        leftOut: Set<String> = []
+        leftOut: Set<String> = [],
+        bluetoothOnlyWhenListed: Bool = true
     ) -> AudioDevice? {
         let inputs = devices.filter(\.hasInput)
         let open = inputs.filter { !leftOut.contains($0.uid) }
@@ -59,8 +61,9 @@ public enum InputDevicePolicy {
         }
         guard let followed = inputs.first(where: { $0.uid == defaultInput?.uid }) else { return nil }
         let chosen =
-            followed.transport == .bluetooth ? inputs.first { $0.transport == .builtIn } ?? followed : followed
-        return leftOut.contains(chosen.uid) ? nil : chosen
+            followed.transport == .bluetooth && bluetoothOnlyWhenListed
+            ? inputs.first { $0.transport == .builtIn } : followed
+        return chosen.flatMap { leftOut.contains($0.uid) ? nil : $0 }
     }
 
     /// The order after the owner picks `uid` in the menu: it moves to the top, the rest keep their order.

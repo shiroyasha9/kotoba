@@ -16,6 +16,7 @@ enum AppDefaults {
         case copyLastChord = "hotkey.copyLastChord"
         case polishLastChord = "hotkey.polishLastChord"
         case microphoneOrder = "microphone.order"
+        case bluetoothOnlyWhenListed = "microphone.bluetoothOnlyWhenListed"
         case submitPhrase = "paste.submitPhrase"
         case lineBreakPhrase = "paste.lineBreakPhrase"
         case learnsFromEdits = "dictionary.learnsFromEdits"
@@ -35,6 +36,9 @@ enum AppDefaults {
             Key.soundCues.rawValue: true,
             Key.submitPhrase.rawValue: true,
             Key.learnsFromEdits.rawValue: true,
+            // An update keeps the built-in mic over a Bluetooth default, as 0.4 did (docs/research/ui-redesign.md,
+            // "Microphone").
+            Key.bluetoothOnlyWhenListed.rawValue: true,
             // On for an update too (owner, 2026-10-16): kotoba becomes a Dock app.
             Key.showsInDock.rawValue: true,
             Key.showsMenuBarIcon.rawValue: true,
