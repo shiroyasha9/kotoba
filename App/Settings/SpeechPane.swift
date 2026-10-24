@@ -28,6 +28,9 @@ final class SpeechSettingsModel {
         get { read(settings.keepsGrokFillerWords) }
         set { write { settings.keepsGrokFillerWords = newValue } }
     }
+    /// The page's "Advanced…" sheet is open: the page's button, the endpoint warning, or another window
+    /// (`MainWindowController.showOtherSpeechServices`, onboarding's “Use xAI or Azure Instead…”).
+    var isAdvancedShown = false
     /// The stored endpoint. The pane writes it only through `commitAzureEndpoint`.
     var azureEndpoint: String { read(settings.azureEndpoint) }
     let keyChecks: KeyChecks
@@ -105,7 +108,6 @@ final class SpeechSettingsModel {
 /// "Advanced…" (docs/research/ui-redesign.md, "Page map").
 private struct SpeechPane: View {
     @Bindable var model: SpeechSettingsModel
-    @State private var isAdvancedShown = false
 
     private var account: ProviderAccount { model.route.account }
 
@@ -131,7 +133,7 @@ private struct SpeechPane: View {
                         SymbolTile(
                             systemImage: "exclamationmark.triangle", tint: .orange, side: PageMetrics.rowTileSide)
                     } trailing: {
-                        Button("Add Endpoint…") { isAdvancedShown = true }
+                        Button("Add Endpoint…") { model.isAdvancedShown = true }
                     }
                 }
             } header: {
@@ -171,14 +173,14 @@ private struct SpeechPane: View {
                 }
             }
         }
-        .sheet(isPresented: $isAdvancedShown) {
+        .sheet(isPresented: $model.isAdvancedShown) {
             SpeechAdvanced(model: model)
         }
     }
 
     /// Alone at the trailing edge under the last group, as Activity's and Battery's "Options…".
     private var advancedButton: some View {
-        Button("Advanced…") { isAdvancedShown = true }
+        Button("Advanced…") { model.isAdvancedShown = true }
             .buttonStyle(.automatic)
     }
 }

@@ -43,6 +43,8 @@ final class MainWindowController {
     private var pipelineActivity = PipelineActivity(isQuiet: true, inFlight: [])
     /// The open window's Home, which reads again after each history write while shown.
     private weak var home: HomeModel?
+    /// The open window's Speech page model, whose "Advanced…" sheet another window can open.
+    private weak var speech: SpeechSettingsModel?
 
     /// `router` checks a saved key in the Speech pane. Home's buttons call `finishSetup` (onboarding on a missing
     /// permission), `tryIt` (onboarding's Try It step) and `fixLast` (the Fix window).
@@ -121,6 +123,13 @@ final class MainWindowController {
         window.show(panes(), selecting: pane)
     }
 
+    /// The Speech page with its "Advanced…" sheet open, where the xAI and Azure routes are: onboarding's “Use xAI or
+    /// Azure Instead…”.
+    func showOtherSpeechServices() {
+        show(selecting: .speech)
+        speech?.isAdvancedShown = true
+    }
+
     /// "Settings…": the settings pane the window shows, else General.
     func showSettings() {
         show(selecting: window.shownPane?.isSetting == true ? nil : .general)
@@ -155,8 +164,9 @@ final class MainWindowController {
                     Task { await audio.inputMayHaveChanged() }
                 }
             ))
-        panes.append(
-            .speech(SpeechSettingsModel(settings: routeSettings, vault: vault, checkKey: router.checkKey(_:for:))))
+        let speech = SpeechSettingsModel(settings: routeSettings, vault: vault, checkKey: router.checkKey(_:for:))
+        self.speech = speech
+        panes.append(.speech(speech))
         if let history {
             // The dictionary at the read: the main window can open before it is read at launch.
             let activity = ActivityModel { [weak self] now in

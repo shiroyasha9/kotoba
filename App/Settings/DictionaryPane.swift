@@ -281,7 +281,9 @@ extension Pane {
             MainWindow.snapshot(
                 of: .dictionary(sampleModel(sample, suggestions: sampleSuggestions)),
                 named: "settings-dictionary-suggestions", height: 1_200),
-            settledSheet("settings-dictionary-advanced") { DictionaryAdvanced(model: sampleOverCapModel) },
+            settledSheet("settings-dictionary-advanced") {
+                DictionaryAdvanced(model: sampleOverCapModel)
+            },
             MainWindow.snapshot(
                 of: .dictionary(sampleModel(PersonalDictionary())), named: "settings-dictionary-empty"),
             importAlert(.preview(sample.importPreview(of: incoming), contents), named: "settings-dictionary-import"),
@@ -311,7 +313,7 @@ extension Pane {
         }
     }
 
-    /// A sheet as it shows: it takes its content's height a run loop turn after its first layout.
+    /// A sheet as it shows: it takes its content's height a run loop turn after its first layout, as Activity's.
     static func settledSheet(_ name: String, _ view: @escaping @MainActor () -> some View) -> Snapshot {
         var snapshot = Snapshot(name: name) { NSHostingView(rootView: view()) }
         snapshot.settlesInWindow = true
