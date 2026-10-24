@@ -92,7 +92,6 @@ struct WindowPrototypeView: View {
                 }
             }
             .navigationSplitViewColumnWidth(PageMetrics.sidebarWidth)
-            .toolbar(removing: .sidebarToggle)
         } detail: {
             detail
                 .navigationTitle(page.title)
@@ -110,6 +109,9 @@ struct WindowPrototypeView: View {
                     }
                 }
         }
+        // No sidebar toggle, as System Settings. On the split view, not the sidebar list: there it made the split view
+        // ignore `navigationSplitViewColumnWidth` (sidebar 144 pt, not 215 pt; sidebar-spike, 2026-10-24).
+        .toolbar(removing: .sidebarToggle)
         .frame(minWidth: PageMetrics.minimumWindowSize.width, minHeight: PageMetrics.minimumWindowSize.height)
         .onChange(of: page) { _, page in onShow(page) }
     }
