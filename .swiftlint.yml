@@ -79,6 +79,14 @@ custom_rules:
     regex: "(\\bThread\\.sleep|(?<![.\\w])(?<!func )(usleep|nanosleep|sleep)\\s*\\(|\\.asyncAfter\\s*\\()"
     message: "No fixed waits. React to an event; for a real timeout, sleep on the injected PipelineClock."
     severity: error
+  no_wall_clock_in_tests:
+    name: "No wall clock in tests"
+    included: [".*/Tests/.*\\.swift"]
+    excluded: [".*/Tests/.*/(TimingTests|StopProbeTests)\\.swift"]
+    regex: "\\b(ContinuousClock|SuspendingClock)\\(\\)|\\b(ContinuousClock|SuspendingClock)\\.now\\s*-|\\.duration\\(to:|\\bTask\\.sleep\\b|\\btimeIntervalSinceNow\\b|\\bCFAbsoluteTimeGetCurrent\\b|\\bDispatchTime\\.now\\b"
+    excluded_match_kinds: [comment, doccomment, string]
+    message: "A test in `make test` never times work or waits on the wall clock: load from other builds fails it while the code is fine. Count the work (`costs(on:of:)` in KotobaStorage's tests) or control time with ManualClock; a time limit goes in a `TimingTests` suite (`make timing`)."
+    severity: error
   no_task_sleep_in_core:
     name: "No Task.sleep in KotobaCore"
     included: ["KotobaCore/Sources/.*\\.swift"]

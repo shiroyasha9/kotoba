@@ -237,13 +237,10 @@ struct UsageLedgerTests {
         #expect(try await store.queuedRecord(pasted.id) == nil)
     }
 
-    /// The cost the 0.4 Usage pane paid when it opened (Activity reads one range): two ranges over 10,000 dictations of two answers on average.
-    /// Measured 2026-10-16 (debug build): about 18 ms for both. The bound is loose for other agents' builds on the same
-    /// machine.
-    @Test func aSummaryOf10000DictationsStaysFast() async throws {
-        let store = try HistoryStore(url: url, audio: audio)
+    /// Dictations a second apart at each index, of two answers on average: a large history for the summary.
+    func saveAnswered(_ indices: Range<Int>, to store: HistoryStore) async throws {
         let apps = [Self.notes, Self.mail, DictationApp(bundleID: "com.apple.Terminal", name: "Terminal"), nil]
-        for index in 0..<10_000 {
+        for index in indices {
             let id = DictationID()
             let time = TimeInterval(index)
             var usage = [
@@ -259,16 +256,29 @@ struct UsageLedgerTests {
             }
             try await store.save(dictation(at: time, usage))
         }
-        let clock = ContinuousClock()
+    }
+
+    /// What the 0.4 Usage pane read when it opened (Activity reads one range): every answer, and the newer half of
+    /// the `saved` dictations.
+    func summaries(_ store: HistoryStore, saved: Int) async throws -> UsageSummary {
+        let summary = try await everything(store)
+        _ = try await store.usage(from: Date(timeIntervalSince1970: TimeInterval(saved / 2)), to: .distantFuture)
+        return summary
+    }
+
+    /// The cost of those reads over 10,000 dictations, in SQLite's own steps (`TimingTests` times them): the same
+    /// statements as on 5,000, each one pass over the rows.
+    @Test func aSummaryOf10000DictationsIsOnePass() async throws {
+        try await saveAnswered(0..<5_000, to: try HistoryStore(url: url, audio: audio))
+        let store = try HistoryStore(url: url, audio: audio)
+        let half = try await costs(on: store) { _ = try await summaries(store, saved: 5_000) }
+        try await saveAnswered(5_000..<10_000, to: store)
         var summary = UsageSummary()
-        let time = try await clock.measure {
-            summary = try await store.usage(from: .distantPast, to: .distantFuture)
-            _ = try await store.usage(from: Date(timeIntervalSince1970: 5_000), to: .distantFuture)
-        }
+        let full = try await costs(on: store) { summary = try await summaries(store, saved: 10_000) }
 
         #expect(summary.dictations == 10_000)
         #expect(summary.words == 128_000)
         #expect(summary.cost == (try usd("3.6")))
-        #expect(time < .milliseconds(150))
+        #expect(full.growsNoFasterThanTheRows(from: half))
     }
 }

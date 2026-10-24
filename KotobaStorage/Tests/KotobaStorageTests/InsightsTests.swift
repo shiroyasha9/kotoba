@@ -227,28 +227,32 @@ struct InsightsTests {
         #expect(try await store.learnedWords() == [.edit: 1, .fix: 1])
     }
 
-    /// The cost the Activity page pays for its insights when it opens, over 10,000 kept dictations in 70 days (a streak past the
-    /// chart). Measured 2026-10-16: see `docs/research/memory-spike.md`, "Insights pane". The bound is loose for other
-    /// agents' builds on the same machine.
-    @Test func insightsOf10000DictationsStayFast() async throws {
-        let store = try makeStore()
-        let now = try date(10, 14, 18)
+    /// The Activity page's large history: a dictation every 10 minutes back from `now` at each index, in four apps.
+    func saveDictations(_ indices: Range<Int>, to store: HistoryStore, before now: Date) async throws {
         let apps = [Self.notes, Self.mail, DictationApp(bundleID: "com.apple.Terminal", name: "Terminal"), nil]
-        for index in 0..<10_000 {
+        for index in indices {
             try await store.save(
                 try record(
                     at: now - Double(index) * 600, recorded: .seconds(8), billed: .seconds(8), words: 13,
                     app: apps[index % 4]))
         }
-        let clock = ContinuousClock()
+    }
+
+    /// The cost the Activity page pays for its insights when it opens, over 10,000 kept dictations in 70 days (a
+    /// streak past the chart), in SQLite's own steps (`TimingTests` times it): the same statements as on 5,000, each
+    /// one pass over the rows.
+    @Test func insightsOf10000DictationsAreOnePass() async throws {
+        let now = try date(10, 14, 18)
+        try await saveDictations(0..<5_000, to: try makeStore(), before: now)
+        let store = try makeStore()
+        let half = try await costs(on: store) { _ = try await store.insights(at: now, in: Self.india) }
+        try await saveDictations(5_000..<10_000, to: store, before: now)
         var insights = DictationInsights()
-        let time = try await clock.measure {
-            insights = try await store.insights(at: now, in: Self.india)
-        }
+        let full = try await costs(on: store) { insights = try await store.insights(at: now, in: Self.india) }
 
         #expect(insights.dictations == 10_000)
         #expect(insights.words == 130_000)
         #expect(insights.streak == 70)
-        #expect(time < .milliseconds(150))
+        #expect(full.growsNoFasterThanTheRows(from: half))
     }
 }

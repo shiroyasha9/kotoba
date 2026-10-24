@@ -39,7 +39,34 @@ final class SQLiteDatabase {
     /// SQLITE_TRANSIENT: SQLite copies bound text before the call returns.
     private static let transient = unsafeBitCast(-1, to: sqlite3_destructor_type.self)
 
+    /// What one finished statement cost SQLite (`sqlite3_stmt_status`): counts of work that load on the machine does
+    /// not change, so a test can check that a read on a large history uses its index instead of timing it.
+    struct StatementCost: Equatable, Sendable {
+        var sql: String
+        /// Steps through a whole table or index with no index constraint (SQLITE_STMTSTATUS_FULLSCAN_STEP): one per row
+        /// a scan visits, until a LIMIT stops it.
+        var scanSteps: Int
+        /// Sorts SQLite did because no index gave the order (SQLITE_STMTSTATUS_SORT).
+        var sorts: Int
+        /// Steps of SQLite's virtual machine (SQLITE_STMTSTATUS_VM_STEP): all the statement's work, a constant number for
+        /// each row it visits, whether a scan or an index found the row.
+        var steps: Int
+
+        init(_ statement: OpaquePointer) {
+            sql = sqlite3_sql(statement).map { String(cString: $0) } ?? ""
+            scanSteps = Int(sqlite3_stmt_status(statement, SQLITE_STMTSTATUS_FULLSCAN_STEP, 0))
+            sorts = Int(sqlite3_stmt_status(statement, SQLITE_STMTSTATUS_SORT, 0))
+            steps = Int(sqlite3_stmt_status(statement, SQLITE_STMTSTATUS_VM_STEP, 0))
+        }
+    }
+
+    /// The costs kept between `startCounting` and `stopCounting`; the trace callback reaches it through its context.
+    private final class CostLog {
+        var costs: [StatementCost] = []
+    }
+
     private let handle: OpaquePointer
+    private var costLog: CostLog?
 
     init(url: URL, flags: Int32 = SQLITE_OPEN_READWRITE | SQLITE_OPEN_CREATE) throws(SQLiteError) {
         var handle: OpaquePointer?
@@ -100,6 +127,29 @@ final class SQLiteDatabase {
         }
     }
 
+    /// Keeps the cost of each statement that finishes on this connection until `stopCounting()`, for tests. Off
+    /// otherwise: the app never sets the trace, so a statement pays nothing for it.
+    func startCounting() {
+        precondition(costLog == nil, "startCounting while counting: stopCounting first")
+        let log = CostLog()
+        costLog = log
+        sqlite3_trace_v2(
+            handle, UInt32(SQLITE_TRACE_PROFILE),
+            { _, context, statement, _ in
+                guard let context, let statement else { return 0 }
+                let log = Unmanaged<CostLog>.fromOpaque(context).takeUnretainedValue()
+                log.costs.append(StatementCost(OpaquePointer(statement)))
+                return 0
+            }, Unmanaged.passUnretained(log).toOpaque())
+    }
+
+    /// The cost of each statement since `startCounting()`, in order; the trace is off again.
+    func stopCounting() -> [StatementCost] {
+        sqlite3_trace_v2(handle, 0, nil, nil)
+        defer { costLog = nil }
+        return costLog?.costs ?? []
+    }
+
     private static func bind(_ value: Value, at position: Int32, in statement: OpaquePointer) {
         switch value {
         case .null: sqlite3_bind_null(statement, position)
@@ -120,5 +170,16 @@ final class SQLiteDatabase {
 
     private func lastError() -> SQLiteError {
         SQLiteError(code: sqlite3_errcode(handle), message: String(cString: sqlite3_errmsg(handle)))
+    }
+}
+
+/// The store's side of `SQLiteDatabase.startCounting`, for tests that check what a read on a large history costs.
+extension HistoryStore {
+    func startCounting() {
+        database.startCounting()
+    }
+
+    func stopCounting() -> [SQLiteDatabase.StatementCost] {
+        database.stopCounting()
     }
 }

@@ -219,43 +219,6 @@ struct HistoryStoreTests {
         #expect(try await store.knownIDs(among: []).isEmpty)
     }
 
-    /// The cost the History pane pays: a page, a deep page, a search and one changed row on 10,000 rows of about 30
-    /// words, and the menu's reads. Measured 2026-10-16 (debug build): about 0.8 ms a page, 3.3 ms for a search that
-    /// matches nothing, 0.06 ms for one row, 2.8 ms for the menu, 17.5 ms for the launch's id check of 10,001 files.
-    /// The bound is loose for other agents' builds on the same machine.
-    @Test func aPageAndASearchOn10000RowsStayFast() async throws {
-        let store = try HistoryStore(url: url, audio: audio)
-        let words = "please move the standup to thursday and ask the team to review the pull request before lunch"
-            .split(separator: " ")
-        var ids: [DictationID] = []
-        for index in 0..<10_000 {
-            let text = (0..<30).map { words[($0 * 7 + index) % words.count] }.joined(separator: " ")
-            let saved = spoken(text + " row\(index)", at: TimeInterval(index))
-            try await store.save(saved)
-            ids.append(saved.id)
-        }
-        let clock = ContinuousClock()
-        var first: [DictationRecord] = []
-        let page = try await clock.measure { first = try await store.page(limit: 200) }
-        let deep = try await clock.measure { _ = try await store.page(after: first.last, limit: 200) }
-        let hit = try await clock.measure { _ = try await store.page(matching: "Thursday", limit: 200) }
-        let miss = try await clock.measure { _ = try await store.page(matching: "kubernetes", limit: 200) }
-        let row = try await clock.measure { _ = try await store.record(first[100].id, matching: "thursday") }
-        // The menu's reads after each burst of history writes (`AppDelegate.scheduleQueueRefresh`).
-        let menu = try await clock.measure {
-            _ = try await store.recovered(since: .distantPast)
-            _ = try await store.pendingCount()
-            _ = try await store.lastDelivered()
-        }
-        // The launch's check for audio with no row (`OrphanAudio`), with every file in the folder named.
-        let known = try await clock.measure { _ = try await store.knownIDs(among: ids + [DictationID()]) }
-
-        #expect(first.count == 200)
-        for time in [page, deep, hit, miss, row, menu, known] {
-            #expect(time < .milliseconds(100))
-        }
-    }
-
     @Test func aCancelledOrRejectedDictationIsQueuedForRetry() async throws {
         let store = try HistoryStore(url: url, audio: audio)
         let cancelled = record(.cancelled, at: 1_000)

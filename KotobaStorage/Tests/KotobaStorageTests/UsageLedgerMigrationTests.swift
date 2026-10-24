@@ -49,9 +49,8 @@ struct UsageLedgerMigrationTests {
             ])
     }
 
-    /// The one-time move at the first launch after this change, on 10,000 kept dictations of 30 words. Measured
-    /// 2026-10-16 (debug build): about 165 ms, once, at launch. The bound is loose for other agents' builds on the same machine.
-    @Test func migrating10000OldDictationsStaysFast() throws {
+    /// A database from before usage with `count` kept dictations of 30 words.
+    func saveOldDictations(_ count: Int) throws {
         let old = try SQLiteDatabase(url: url)
         try old.execute(
             """
@@ -62,15 +61,23 @@ struct UsageLedgerMigrationTests {
             """)
         let text = String(repeating: "move the standup to thursday ", count: 6)
         try old.transaction { () throws(SQLiteError) in
-            for index in 0..<10_000 {
+            for index in 0..<count {
                 try old.run(
                     "INSERT INTO dictations VALUES (?1, ?2, '/tmp/a.flac', 8000, ?3, 'x-ai/grok-stt-1.0', 'pasted');",
                     [.text(UUID().uuidString), .real(Double(index)), .text(text)])
             }
         }
+    }
 
-        let time = try ContinuousClock().measure { _ = try HistoryStore(url: url, audio: audio) }
+    /// The one-time move at the first launch after this change, on 10,000 kept dictations: each gets its answer
+    /// (`TimingTests` times the open).
+    @Test func migrating10000OldDictationsFillsTheLedger() async throws {
+        try saveOldDictations(10_000)
 
-        #expect(time < .seconds(2))
+        let summary = try await everything(try HistoryStore(url: url, audio: audio))
+
+        #expect(summary.dictations == 10_000)
+        #expect(summary.words == 300_000)
+        #expect(summary.unpricedAnswers == 10_000)
     }
 }

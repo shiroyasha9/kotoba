@@ -5,7 +5,7 @@ import KotobaCore
 extension HistoryStore {
     /// One page of the History pane, newest first: the rows after `last` (the previous page's last row) whose texts
     /// (transcript, cleaned, polished) or app name contain `search` (case-insensitive for ASCII letters); an empty `search` matches every row.
-    /// A search that matches nothing scans every row: about 3 ms on 10,000 rows (debug build, `HistoryStoreTests`), so
+    /// A search that matches nothing scans every row: about 3 ms on 10,000 rows (debug build, `make timing`), so
     /// the history needs no FTS index. A page is about 1 ms.
     public func page(matching search: String = "", after last: DictationRecord? = nil, limit: Int) throws
         -> [DictationRecord]

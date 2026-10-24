@@ -33,14 +33,16 @@ struct WordDiffTests {
     }
 
     /// The bench's longest Polish input is 924 words; its rewrite keeps about 0.78 of them.
-    @Test func aLongPolishDiffsQuickly() {
+    static func longPolish() -> (before: String, after: String) {
         let words = (0..<924).map { "word\($0 % 97)" }
-        let before = words.joined(separator: " ")
-        let after = words.enumerated().filter { $0.offset % 5 != 0 }.map(\.element).joined(separator: " ")
-        let start = ContinuousClock.now
+        let after = words.enumerated().filter { $0.offset % 5 != 0 }.map(\.element)
+        return (words.joined(separator: " "), after.joined(separator: " "))
+    }
+
+    /// `TimingTests` times it.
+    @Test func aLongPolishDiffs() {
+        let (before, after) = Self.longPolish()
         let runs = WordDiff.runs(from: before, to: after)
-        let elapsed = ContinuousClock.now - start
         #expect(runs.filter { $0.kind == .removed }.map(\.words).reduce(0, +) >= 185)
-        #expect(elapsed < .milliseconds(500), "\(elapsed)")
     }
 }

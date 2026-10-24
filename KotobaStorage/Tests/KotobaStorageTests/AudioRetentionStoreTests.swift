@@ -269,25 +269,37 @@ struct AudioRetentionStoreTests {
         #expect(after == KeptAudioSize(deletable: 0, waiting: before.waiting))
     }
 
-    /// Cost on 10,000 files (debug build, 2026-10-16): the first run deletes them all in about 1.0 s, in batches of
-    /// 500; the run after the next dictation finds none in about 0.6 ms; the size is one aggregate in about 3 ms. The
-    /// bounds are loose, so a busy machine does not fail the run.
-    @Test func tenThousandFilesAreDeletedAndTheNextRunIsOneProbe() async throws {
-        let store = try HistoryStore(url: url, audio: audio)
+    /// 10,000 dictations whose audio is past every period.
+    func saveExpired(to store: HistoryStore) async throws {
         for _ in 0..<10_000 {
             try await store.save(try dictation(.pasted, daysAgo: 10))
         }
-        let clock = ContinuousClock()
+    }
+
+    /// The cost on 10,000 files, in SQLite's statements and steps (`TimingTests` times it), with the store opened
+    /// again after the fill as at launch, so the planner has its statistics (the plan: `batchesReadThePartialIndex`).
+    /// The first run reads 20 batches of 500 in the index's order (no sort), each from the cursor (the same steps
+    /// each), and marks each; then one read finds none. The run after the next dictation is one probe, with fewer
+    /// steps than the history has rows. The size is the read of rows with no size and one aggregate: no statement for
+    /// each row.
+    @Test func tenThousandFilesAreDeletedAndTheNextRunIsOneProbe() async throws {
+        try await saveExpired(to: try HistoryStore(url: url, audio: audio))
+        let store = try HistoryStore(url: url, audio: audio)
         var deleted: Set<DictationID> = []
-        let size = try await clock.measure { _ = try await store.keptAudioSize() }
-        let first = try await clock.measure { deleted = try await deleteAudio(store, before: now) }
-        let next = try await clock.measure { _ = try await deleteAudio(store, before: now) }
+        let size = try await costs(on: store) { _ = try await store.keptAudioSize() }
+        let first = try await costs(on: store) { deleted = try await deleteAudio(store, before: now) }
+        let next = try await costs(on: store) { _ = try await deleteAudio(store, before: now) }
 
         #expect(deleted.count == 10_000)
         let files = try FileManager.default.contentsOfDirectory(atPath: audio.path)
         #expect(files.isEmpty)
-        #expect(first < .seconds(10))
-        #expect(next < .milliseconds(100))
-        #expect(size < .milliseconds(500))
+        let reads = first.filter { $0.sql.hasPrefix("SELECT") }
+        #expect(reads.count == 21)
+        #expect(first.count == 41)
+        #expect(first.allSatisfy { $0.sorts == 0 })
+        #expect(Set(reads.dropFirst().dropLast().map(\.steps)).count == 1)
+        #expect(next.count == 1)
+        #expect(next.allSatisfy { $0.sorts == 0 && $0.steps < 10_000 })
+        #expect(size.count == 2)
     }
 }

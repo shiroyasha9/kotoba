@@ -18,7 +18,9 @@ actor Gate {
         guard !isOpen else { return }
         let id = UUID()
         Task {
-            try? await Task.sleep(for: Self.limit)  // Real time: the bound on a test that forgot to open.
+            // Real time: the bound on a test that forgot to open, never a wait in a test that works.
+            // swiftlint:disable:next no_wall_clock_in_tests
+            try? await Task.sleep(for: Self.limit)
             self.expire(id)
         }
         await withTaskCancellationHandler {

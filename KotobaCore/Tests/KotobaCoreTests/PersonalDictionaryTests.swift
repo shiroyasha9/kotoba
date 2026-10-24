@@ -84,19 +84,21 @@ struct ReplacementTests {
         #expect(PersonalDictionary(rules: rules).applyReplacements(to: "abc abcd") == "Y Xcd")
     }
 
-    @Test func manyRulesOnALongTranscriptStayFast() {
+    /// 200 rules and a transcript of 2,000 words.
+    static func manyRules() -> (dictionary: PersonalDictionary, text: String) {
         let rules = (0..<200).map { ReplacementRule(find: "phrase number \($0)", replacement: "P\($0)") }
         let words = ["so", "I", "opened", "the", "router", "and", "phrase", "number", "7", "again"]
         let text = (0..<2_000).map { words[$0 % words.count] }.joined(separator: " ")
-        let dictionary = PersonalDictionary(rules: rules)
-        let clock = ContinuousClock()
+        return (PersonalDictionary(rules: rules), text)
+    }
 
-        var replaced = ""
-        let elapsed = clock.measure { replaced = dictionary.applyReplacements(to: text) }
+    /// `TimingTests` times it.
+    @Test func manyRulesOnALongTranscript() {
+        let (dictionary, text) = Self.manyRules()
+        let replaced = dictionary.applyReplacements(to: text)
 
         #expect(replaced.contains("P7"))
-        // Measured 2026-10-15 (debug build): see the dictionary report; the limit leaves wide room for a busy machine.
-        #expect(elapsed < .milliseconds(250))
+        #expect(!replaced.contains("phrase number 7"))
     }
 
     @Test func theDictionaryAppliesItsOwnRules() {

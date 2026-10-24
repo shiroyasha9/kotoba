@@ -12,7 +12,7 @@ SWIFT_SRC   := App KotobaCore/Sources KotobaCore/Tests KotobaCore/Package.swift 
                KotobaStorage/Sources KotobaStorage/Tests KotobaStorage/Package.swift
 SWIFTFORMAT := xcrun swift-format
 
-.PHONY: gen build build-check test lint lint-files format format-lint privacy check view-checks snapshots readme-images memory window-memory latency latency-log stop-probe \
+.PHONY: gen build build-check test lint lint-files format format-lint privacy check view-checks snapshots readme-images memory window-memory latency latency-log stop-probe timing \
 	release dmg appcast
 
 gen:
@@ -41,6 +41,15 @@ RUN_TESTS = swift build --build-tests --package-path $(1) $(call SCRATCH,$(1)) &
 test:
 	$(call RUN_TESTS,KotobaCore)
 	$(call RUN_TESTS,KotobaProviders)
+	$(call RUN_TESTS,KotobaStorage)
+
+# Wall-clock checks (the TimingTests suites): the History pane's reads, Activity, retention and the ledger fill on
+# 10,000 dictations, the Polish diff and the dictionary's replacements, each against a time limit. Off in `make test`,
+# where load from other builds fails a time limit; run it on an idle machine. KotobaProviders has no such suite.
+timing: export KOTOBA_TIMING = 1
+timing: FILTER = TimingTests
+timing:
+	$(call RUN_TESTS,KotobaCore)
 	$(call RUN_TESTS,KotobaStorage)
 
 # The ui_text_* rules each hold a copy of the UI-builder list; a copy that drifts lets UI text skip a rule.
