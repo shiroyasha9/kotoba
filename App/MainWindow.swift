@@ -8,6 +8,9 @@ import SwiftUI
 /// it to the list in `MainWindowController`.
 struct Pane: Identifiable {
     let id: PaneID
+    /// The count on the page's sidebar row (Dictionary's word suggestions), as Mail's unread count; none at 0. Read while
+    /// the sidebar draws, so an `@Observable` source redraws the row when it changes.
+    var badge: @MainActor () -> Int = { 0 }
     let content: @MainActor () -> AnyView
 
     var title: String { id.title }
@@ -280,6 +283,7 @@ struct MainView: View {
             } icon: {
                 SidebarTile(systemImage: pane.id.systemImage, tint: pane.id.tint)
             }
+            .badge(pane.badge())
         }
     }
 }

@@ -117,7 +117,16 @@ extension MainWindow {
     /// Each page's sidebar tile and the header tile, at the small, medium and large sidebar icon sizes (System Settings
     /// > Appearance), to compare the symbols' weight and size.
     static func tileSnapshots() -> [Snapshot] {
-        [Snapshot(name: "sidebar-tiles") { NSHostingView(rootView: TileSheet()) }]
+        [
+            Snapshot(name: "sidebar-tiles") { NSHostingView(rootView: TileSheet()) },
+            // A page's sidebar badge (`Pane.badge`), on a page that is not shown and on the shown one.
+            windowSnapshot(
+                of: [
+                    .home(.sample), Pane(id: .history, badge: { 3 }, content: { AnyView(EmptyView()) }),
+                    Pane(id: .dictionary, badge: { 12 }, content: { AnyView(EmptyView()) }),
+                ],
+                selecting: .dictionary, named: "sidebar-badge"),
+        ]
     }
 }
 
