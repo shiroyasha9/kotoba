@@ -35,6 +35,7 @@ enum Snapshots {
     /// Each feature adds one line with its own snapshot list.
     private static let registry: [@MainActor () -> [Snapshot]] = [
         IndicatorPanel.snapshots,
+        PillPrototypeView.snapshots,
         Pane.dictionarySnapshots,
         Pane.speechSnapshots,
         Pane.microphoneSnapshots,
@@ -52,8 +53,8 @@ enum Snapshots {
         Pane.switchSnapshots,
         Pane.emptyWindowSnapshots,
         Pane.readmeSnapshots,
-    ]
         WindowPrototype.snapshots,
+    ]
 
     private static let padding: CGFloat = 16
 
