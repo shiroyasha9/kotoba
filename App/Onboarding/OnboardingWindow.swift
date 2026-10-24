@@ -1,5 +1,3 @@
-// 0.5.0 ratchet: the onboarding's rollout puts this file on the page system and removes the next line.
-// swiftlint:disable appkit_layout_literal
 import AppKit
 import KotobaCore
 import KotobaProviders
@@ -9,7 +7,7 @@ import SwiftUI
 /// so it costs nothing at idle. The app opens it on first launch and from "Finish Setting Up kotoba…".
 @MainActor
 final class OnboardingController: NSObject, NSWindowDelegate {
-    static let size = NSSize(width: 560, height: 600)
+    static let size = PageMetrics.onboardingWindowSize
 
     private enum Key {
         static let isComplete = "onboarding.completed"
@@ -49,11 +47,11 @@ final class OnboardingController: NSObject, NSWindowDelegate {
     /// Shows the window on `step`; nil resumes where the owner closed it, or starts at Welcome.
     func show(step: OnboardingStep? = nil) {
         WindowFront.activate()
-        let resumed = UserDefaults.standard.string(forKey: Key.step).flatMap(OnboardingStep.init)
         let model =
             model
             ?? OnboardingModel(
-                step: step ?? resumed ?? .welcome, readiness: readiness,
+                step: step ?? OnboardingStep(saved: UserDefaults.standard.string(forKey: Key.step)),
+                readiness: readiness,
                 keyChecks: KeyChecks(vault: vault, checkKey: router.checkKey(_:for:)),
                 source: .live(routeSettings: routeSettings, dictionary: dictionary),
                 openSpeechSettings: openSpeechSettings)
@@ -106,8 +104,8 @@ final class OnboardingController: NSObject, NSWindowDelegate {
 // MARK: - Snapshots
 
 extension OnboardingController {
-    /// Every step as the whole window, plus the states a step changes into (mic off, granted, key saved, Wispr Flow
-    /// imported, all done). Wispr Flow shows as installed, so its step is in the flow.
+    /// Every step as the whole window, plus the states a step changes into (microphone off, one grant, both grants,
+    /// key saved, Wispr Flow imported, all done). Wispr Flow shows as installed, so Done has its row.
     static func snapshots() -> [Snapshot] {
         let ready = Readiness.sample()
         let first = OnboardingStep.allCases.map { step in
@@ -118,26 +116,30 @@ extension OnboardingController {
             }
         }
         return first + [
-            window("onboarding-microphone-denied") { model(.microphone, .sample(microphone: .denied)) },
-            window("onboarding-microphone-allowed") { model(.microphone, ready) },
-            window("onboarding-accessibility-allowed") { model(.accessibility, ready) },
+            window("onboarding-permissions-denied") {
+                model(.permissions, .sample(microphone: .denied, isAccessibilityAllowed: false))
+            },
+            window("onboarding-permissions-microphone-allowed") {
+                model(.permissions, .sample(microphone: .allowed, isAccessibilityAllowed: false))
+            },
+            window("onboarding-permissions-allowed") { model(.permissions, ready) },
             window("onboarding-key-works") { model(.key, ready, keys: [.openRouter: .checked(.valid)], hasKey: true) },
             window("onboarding-key-no-credit") {
                 model(.key, ready, keys: [.openRouter: .checked(.noCredit)], hasKey: true)
             },
             window("onboarding-key-saved-earlier") { model(.key, ready, hasKey: true) },
-            window("onboarding-wisprImport-done") {
-                let model = model(.wisprImport, ready)
-                let (incoming, _) = Pane.sampleWisprImport
-                model.wisprImportAnswered(PersonalDictionary().importPreview(of: incoming))
-                return model
-            },
             window("onboarding-tryIt-works") {
                 let model = model(.tryIt, ready)
                 model.tryItText = "Hello from kotoba."
                 return model
             },
             window("onboarding-done-ready") { model(.done, ready) },
+            window("onboarding-done-imported") {
+                let model = model(.done, ready)
+                let (incoming, _) = Pane.sampleWisprImport
+                model.wisprImportAnswered(PersonalDictionary().importPreview(of: incoming))
+                return model
+            },
         ]
     }
 

@@ -1,17 +1,27 @@
 import Foundation
 
-/// The first-run steps (docs/research/ux-polish.md, section 3). `OnboardingFlow` puts them in order.
+/// The first-run steps (docs/research/ui-redesign.md, "Onboarding"). `OnboardingFlow` puts them in order.
 public enum OnboardingStep: String, CaseIterable, Sendable, Identifiable {
     case welcome
-    case microphone
-    case accessibility
+    /// The microphone and Accessibility, one row each.
+    case permissions
     case key
-    /// Only when Wispr Flow is on this Mac (`OnboardingFlow.init`).
-    case wisprImport
     case tryIt
+    /// The Wispr Flow import is a row here when Wispr Flow is on this Mac.
     case done
 
     public var id: Self { self }
+
+    /// The step to show for `saved`, the raw value stored where the owner closed the window: Welcome when there is
+    /// none. 0.4 had seven steps; its microphone and Accessibility steps are `permissions` now, and its Wispr Flow
+    /// step resumes at the step after it, Try It. An unknown value starts at Welcome.
+    public init(saved: String?) {
+        switch saved {
+        case "microphone", "accessibility": self = .permissions
+        case "wisprImport": self = .tryIt
+        default: self = saved.flatMap(Self.init(rawValue:)) ?? .welcome
+        }
+    }
 }
 
 /// What the footer offers on a step, next to Back.
@@ -26,54 +36,37 @@ public enum OnboardingFooter: Equatable, Sendable {
 
     case getStarted
     case `continue`(Emphasis)
-    /// The step is optional and not done: the footer moves on without it.
-    case notNow
-    /// Continue shows dimmed until the step is done: kotoba cannot work without it (a permission).
+    /// Continue shows dimmed until the step is done: kotoba cannot work without it (both permissions).
     case waitsForStep
     case done
 }
 
 /// The order of the onboarding steps, and how the window moves through them. kotoba cannot work without the
-/// microphone or Accessibility (the hotkey tap needs it), so those steps wait for their grant and never move on by
-/// themselves: the owner sees the granted state and clicks Continue (owner, 2026-10-16).
-public struct OnboardingFlow: Equatable, Sendable {
-    public let steps: [OnboardingStep]
+/// microphone or Accessibility (the hotkey tap needs it), so the permissions step waits for both grants and never moves
+/// on by itself: the owner sees the granted state and clicks Continue (owner, 2026-10-16).
+public enum OnboardingFlow {
+    public static let steps = OnboardingStep.allCases
 
-    /// The Wispr Flow step shows when Wispr Flow is on this Mac and kotoba's dictionary is open to import into.
-    public init(isWisprInstalled: Bool, isDictionaryOpen: Bool) {
-        let offersWisprImport = isWisprInstalled && isDictionaryOpen
-        steps = OnboardingStep.allCases.filter { $0 != .wisprImport || offersWisprImport }
-    }
-
-    /// The position of `step` from 0, for "Step 2 of 7"; a step the flow lacks counts as the first.
-    public func index(of step: OnboardingStep) -> Int {
+    /// The position of `step` from 0, for "Step 2 of 5".
+    public static func index(of step: OnboardingStep) -> Int {
         steps.firstIndex(of: step) ?? 0
     }
 
-    public func next(after step: OnboardingStep) -> OnboardingStep? {
-        steps.firstIndex(of: step).flatMap { steps.indices.contains($0 + 1) ? steps[$0 + 1] : nil }
+    public static func next(after step: OnboardingStep) -> OnboardingStep? {
+        let next = index(of: step) + 1
+        return steps.indices.contains(next) ? steps[next] : nil
     }
 
-    public func previous(before step: OnboardingStep) -> OnboardingStep? {
-        steps.firstIndex(of: step).flatMap { $0 > 0 ? steps[$0 - 1] : nil }
+    public static func previous(before step: OnboardingStep) -> OnboardingStep? {
+        let previous = index(of: step) - 1
+        return steps.indices.contains(previous) ? steps[previous] : nil
     }
 
-    /// The step to show for `saved` (where the owner closed the window): itself when the flow has it, else the step
-    /// after its place (the Wispr Flow step after Wispr Flow was removed), else Welcome.
-    public func resuming(_ saved: OnboardingStep?) -> OnboardingStep {
-        guard let saved else { return .welcome }
-        if steps.contains(saved) { return saved }
-        let order = OnboardingStep.allCases
-        let place = order.firstIndex(of: saved) ?? 0
-        return steps.first { (order.firstIndex(of: $0) ?? 0) > place } ?? .welcome
-    }
-
-    /// The footer's forward button on `step`; `isDone` is the step's own requirement (a grant, an import).
+    /// The footer's forward button on `step`; `isDone` is the step's own requirement (the grants, a key, a dictation).
     public static func footer(on step: OnboardingStep, isDone: Bool) -> OnboardingFooter {
         switch step {
         case .welcome: .getStarted
-        case .microphone, .accessibility: isDone ? .continue(.defaultAction) : .waitsForStep
-        case .wisprImport: isDone ? .continue(.defaultAction) : .notNow
+        case .permissions: isDone ? .continue(.defaultAction) : .waitsForStep
         case .key, .tryIt: .continue(isDone ? .prominent : .plain)
         case .done: .done
         }

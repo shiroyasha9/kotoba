@@ -1,223 +1,201 @@
-// 0.5.0 ratchet: the onboarding's rollout puts this file on the page system and removes the next line.
-// swiftlint:disable ui_layout_literal page_form
 import KotobaCore
 import KotobaProviders
 import SwiftUI
 
-// The onboarding steps and the small views they share. `OnboardingView` shows one at a time.
+// The onboarding steps, each a `PageForm`'s sections with its `StepHeading` over the first card. `OnboardingView`
+// shows one at a time.
 
-private struct StepText: View {
-    let text: String
-
-    init(_ text: String) {
-        self.text = text
-    }
-
-    var body: some View {
-        Text(text)
-            .foregroundStyle(.secondary)
-            .fixedSize(horizontal: false, vertical: true)
-            .frame(maxWidth: OnboardingView.textWidth)
-    }
-}
-
-// MARK: - Steps
-
-/// What kotoba is good at, in three short points, and both ways to dictate. Keys show as symbols only (owner,
-/// 2026-10-16).
+/// What kotoba is good at, in three rows, and both ways to dictate with their keys drawn as keycaps.
 struct WelcomeStep: View {
     var body: some View {
-        StepText("Speak in any app, and kotoba types your words where your cursor is.")
-        VStack(alignment: .leading, spacing: 12) {
-            Point("Fast", systemImage: "bolt", text: "Your words appear about one second after you stop.")
+        let chords = HotkeyChords.shared
+        Section {
+            Point("Fast", systemImage: "bolt", tint: .green, text: "Your words appear about a second after you stop.")
             Point(
-                "Accurate", systemImage: "character.book.closed",
+                "Accurate", page: .dictionary,
                 text: "Add names and terms to your dictionary, and kotoba spells them your way.")
             Point(
-                "Private", systemImage: "lock",
-                text:
-                    "kotoba needs no account. Your audio goes only to the speech service you choose, with your own key."
-            )
-        }
-        .frame(width: OnboardingView.textWidth, alignment: .leading)
-        .padding(.vertical, 2)
-        Form {
-            Section {
-                LabeledContent(StatusText.shortcutTitle(.handsFree)) {
-                    ChordRecorder(chords: .shared, role: .handsFree)
-                }
-                LabeledContent(StatusText.shortcutTitle(.pushToTalk)) {
-                    ChordRecorder(chords: .shared, role: .pushToTalk)
-                }
-            } footer: {
-                let chords = HotkeyChords.shared
-                Text(
-                    "Tap \(chords.handsFree.title), speak, then tap it again.\n" + StatusText.holdToDictate(chords)
-                )
-                .frame(maxWidth: .infinity, alignment: .leading)
+                "Private", systemImage: "hand.raised", tint: .blue,
+                text: "No account. Your audio goes only to the speech service you choose, with your own key.")
+        } header: {
+            StepHeading(
+                title: "Talk Instead of Type",
+                text: "Speak in any app, and kotoba types your words where your cursor is."
+            ) {
+                AppIconView(icon: NSApp.applicationIconImage, side: PageMetrics.welcomeIconSide)
             }
         }
-        .formStyle(.grouped)
-        .scrollDisabled(true)
-        // A form fills its container; here it is only as tall as its rows.
-        .fixedSize(horizontal: false, vertical: true)
-        .frame(width: OnboardingView.textWidth + 20)
+        Section {
+            PageRow(title: StatusText.shortcutTitle(.handsFree), subtitle: StatusText.shortcutHelp(.handsFree)) {
+                NamedKeycaps(keys: chords.handsFree.keycaps)
+            }
+            PageRow(title: StatusText.shortcutTitle(.pushToTalk), subtitle: StatusText.pushToTalkHelp(chords)) {
+                NamedKeycaps(keys: chords.pushToTalk.keycaps)
+            }
+        }
     }
 
-    /// One selling point: a symbol, a short title and one sentence, as a "What’s New" sheet shows a feature.
+    /// One selling point: a tile, a short title and one sentence, as a "What’s New" sheet shows a feature.
     private struct Point: View {
         let title: String
         let systemImage: String
+        let tint: Color
         let text: String
 
-        init(_ title: String, systemImage: String, text: String) {
+        init(_ title: String, systemImage: String, tint: Color, text: String) {
             self.title = title
             self.systemImage = systemImage
+            self.tint = tint
             self.text = text
         }
 
+        /// A point about a page shows that page's sidebar tile.
+        init(_ title: String, page: PaneID, text: String) {
+            self.init(title, systemImage: page.systemImage, tint: page.tint, text: text)
+        }
+
         var body: some View {
-            Label {
-                VStack(alignment: .leading, spacing: 2) {
-                    Text(title).font(.headline)
-                    Text(text).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
+            PageRow(title: title, subtitle: text) {
+                SymbolTile(systemImage: systemImage, tint: tint, side: PageMetrics.rowTileSide)
+            } trailing: {
+                EmptyView()
+            }
+        }
+    }
+}
+
+/// A chord as keycaps with each key's name in small text under it, as a Mac keyboard prints "control" under ⌃
+/// (docs/research/ui-redesign.md, "Onboarding"): the first time the owner meets the symbols, the names teach them.
+struct NamedKeycaps: View {
+    let keys: [String]
+
+    var body: some View {
+        HStack(alignment: .top) {
+            ForEach(Array(keys.enumerated()), id: \.offset) { _, key in
+                VStack {
+                    Keycaps(keys: [key])
+                    if let name = Self.names[key] {
+                        Text(name)
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                    }
                 }
-            } icon: {
-                Image(systemName: systemImage)
-                    .font(.title2)
-                    .foregroundStyle(.tint)
-                    .frame(width: 32)
             }
-            .multilineTextAlignment(.leading)
         }
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel(keys.map { Self.names[$0] ?? $0 }.joined(separator: " "))
     }
+
+    /// The names Apple's keyboards print on the modifier keys. A letter or a word key ("Space") names itself.
+    private static let names = ["⌃": "control", "⌥": "option", "⌘": "command", "⇧": "shift", "fn": "function"]
 }
 
-struct MicrophoneStep: View {
+/// The microphone and Accessibility, one row each with its own Allow button. kotoba cannot work without either, so
+/// Continue waits for both (`OnboardingFlow.footer`).
+struct PermissionsStep: View {
     let model: OnboardingModel
 
     var body: some View {
-        StepText("kotoba listens only while you dictate. The orange dot in the menu bar shows when the mic is on.")
-        Group {
-            switch model.readiness.microphone {
-            case .allowed:
-                StatusLine("Microphone allowed", .good)
-            case .denied:
-                StatusLine("Microphone access is off.", .problem)
-                Button("Open System Settings…", action: model.openMicrophoneSettings)
-                    .buttonStyle(.borderedProminent)
-                    .keyboardShortcut(.defaultAction)
-                Text("Turn on kotoba in the Microphone list.")
-                    .font(.callout)
-                    .foregroundStyle(.secondary)
-            case .notAsked:
-                Button("Allow Microphone") { Task { await model.allowMicrophone() } }
-                    .buttonStyle(.borderedProminent)
-                    .keyboardShortcut(.defaultAction)
+        Section {
+            PageRow(title: "Microphone", subtitle: microphoneText) {
+                SymbolTile(
+                    systemImage: PaneID.microphones.systemImage, tint: PaneID.microphones.tint,
+                    side: PageMetrics.rowTileSide)
+            } trailing: {
+                switch model.readiness.microphone {
+                case .allowed:
+                    StatusLine("Allowed", .good)
+                case .denied:
+                    Button("Open System Settings…", action: model.openMicrophoneSettings)
+                        .keyboardShortcut(.defaultAction)
+                case .notAsked:
+                    Button("Allow…") { Task { await model.allowMicrophone() } }
+                        .keyboardShortcut(.defaultAction)
+                }
+            }
+            PageRow(title: "Accessibility", subtitle: "So your shortcut works in every app, and kotoba can paste.") {
+                SymbolTile(systemImage: "accessibility", tint: .blue, side: PageMetrics.rowTileSide)
+            } trailing: {
+                if model.readiness.isAccessibilityAllowed {
+                    StatusLine("Allowed", .good)
+                } else {
+                    // The default button once the microphone is done, so one button at a time stands out and Return goes
+                    // on to the next grant.
+                    Button("Allow…", action: model.allowAccessibility)
+                        .keyboardShortcut(model.readiness.microphone == .allowed ? .defaultAction : nil)
+                }
+            }
+        } header: {
+            StepHeading(
+                title: "Allow Access", text: "kotoba needs both to hear your shortcut and type your words.")
+        } footer: {
+            VStack(alignment: .leading) {
+                Text(
+                    "kotoba reads only the text field it pasted into, and only when “Learn from my edits” is on, "
+                        + "to learn your corrections. It never reads your screen.")
+                if !model.readiness.isAccessibilityAllowed {
+                    Text(
+                        "If kotoba is on in the Accessibility list already and this step stays open, turn it off "
+                            + "and on again.")
+                }
             }
         }
-        .controlSize(.large)
-        .padding(.top, 8)
     }
-}
 
-struct AccessibilityStep: View {
-    let model: OnboardingModel
-
-    var body: some View {
-        StepText(
-            "kotoba needs Accessibility to notice \(StatusText.dictationChords(.shared)) in every app and to paste "
-                + "your text. kotoba reads only the text field it pasted into, and only when “Learn from my edits” "
-                + "is on, to learn your corrections. It never reads your screen."
-        )
-        if model.readiness.isAccessibilityAllowed {
-            StatusLine("Accessibility allowed", .good).padding(.top, 8)
-        } else {
-            Button("Open System Settings…", action: model.allowAccessibility)
-                .buttonStyle(.borderedProminent)
-                .keyboardShortcut(.defaultAction)
-                .controlSize(.large)
-                .padding(.top, 8)
-            Text("Turn on kotoba in the list. If it is on already and this step stays open, turn it off and on again.")
-                .font(.callout)
-                .foregroundStyle(.secondary)
-                .fixedSize(horizontal: false, vertical: true)
-                .frame(maxWidth: OnboardingView.textWidth)
+    private var microphoneText: String {
+        switch model.readiness.microphone {
+        case .denied: "Access is off. Turn on kotoba in the Microphone list."
+        case .allowed, .notAsked: "Used only while you dictate, with an orange dot in the menu bar."
         }
     }
 }
 
+/// The speech service's key: kotoba sends the audio there with the owner's own key.
 struct KeyStep: View {
     let model: OnboardingModel
 
     var body: some View {
         let provider = model.account.title
-        StepText("kotoba sends your audio to \(provider), which turns it into text.")
-        PriceLine(route: model.route)
-            .font(.callout)
-        KeyField(account: model.account, keyChecks: model.keyChecks, fieldWidth: 280)
-            .padding(.top, 4)
-        result
-            .font(.callout)
-            .frame(minHeight: 34, alignment: .top)
-        // The links sit below the field and its result, so a link that goes away moves nothing the pointer is on.
-        HStack(spacing: 16) {
-            // Gone once a key is saved, unless the provider refused it: Change… is then the next thing to do.
-            if !model.keyChecks.isSaved(model.account) || model.keyChecks.status[model.account] == .checked(.invalid) {
-                Button("Get a Key at \(provider)…") { model.open(model.account.keysPage) }
+        Section {
+            PageRow(title: "\(provider) key", subtitle: nil) {
+                SymbolTile(
+                    systemImage: PaneID.speech.systemImage, tint: PaneID.speech.tint, side: PageMetrics.rowTileSide)
+            } trailing: {
+                KeyField(account: model.account, keyChecks: model.keyChecks)
             }
-            Button("Use xAI or Azure Instead…", action: model.openSpeechSettings)
+            result
+        } header: {
+            StepHeading(
+                title: "Connect a Speech Service",
+                text: "kotoba sends your audio to \(provider), which turns it into text.")
+        } footer: {
+            VStack(alignment: .leading) {
+                PriceLine(route: model.route)
+                // Below the card, so a link that goes away moves nothing the pointer is on.
+                HStack {
+                    // Gone once a key is saved, unless the provider refused it: Change… is then the next thing to do.
+                    if !model.keyChecks.isSaved(model.account)
+                        || model.keyChecks.status[model.account] == .checked(.invalid)
+                    {
+                        Button("Get a Key at \(provider)…") { model.open(model.account.keysPage) }
+                    }
+                    Button("Use xAI or Azure Instead…", action: model.openSpeechSettings)
+                }
+                .buttonStyle(.link)
+            }
         }
-        .buttonStyle(.link)
-        .font(.callout)
     }
 
     /// The shared check result after a save here; with none, what `Readiness` knows about a key saved before.
+    /// In the row's text column, under the key's name.
     @ViewBuilder private var result: some View {
         if let status = model.keyChecks.status[model.account] {
-            KeyCheckLine(status: status, account: model.account)
+            KeyCheckLine(status: status, account: model.account).inRowTextColumn()
         } else if model.readiness.missingSetup?.item == .endpoint {
-            StatusLine("Key saved. Add your Azure endpoint to check it.", .neutral)
+            StatusLine("Key saved. Add your Azure endpoint to check it.", .neutral).inRowTextColumn()
         } else if model.readiness.missingSetup == nil {
-            StatusLine("Key saved", .good)
+            StatusLine("Key saved", .good).inRowTextColumn()
         }
-    }
-}
-
-/// Wispr Flow is on this Mac: one click shows what its dictionary would add (the alert Settings > Dictionary shows),
-/// and Import adds it. Optional: "Not Now" moves on, and Settings > Dictionary keeps the same button.
-struct WisprImportStep: View {
-    let model: OnboardingModel
-
-    var body: some View {
-        StepText(
-            "Add the words and replacements from your Wispr Flow dictionary, so kotoba spells them right "
-                + "from the start."
-        )
-        Group {
-            if let added = model.wisprImported {
-                StatusLine(Self.importedText(added), .good)
-            } else if model.dictionary?.wisprImport?.isReading == true {
-                ProgressView().controlSize(.small)
-            } else {
-                Button("Import from Wispr Flow…", action: model.previewWisprImport)
-                    .buttonStyle(.borderedProminent)
-                    .keyboardShortcut(.defaultAction)
-                    .controlSize(.large)
-            }
-        }
-        .padding(.top, 8)
-        if model.wisprImported == nil {
-            Text("You can also do this later in Settings > Dictionary.")
-                .font(.callout)
-                .foregroundStyle(.secondary)
-        }
-    }
-
-    static func importedText(_ added: DictionaryImport) -> String {
-        added.isEmpty
-            ? "Your dictionary already has every word from Wispr Flow."
-            : "Added \(added.countsText)."
     }
 }
 
@@ -227,68 +205,100 @@ struct TryItStep: View {
 
     var body: some View {
         let chord = HotkeyChords.shared.handsFree.title
-        // Both ways to dictate sit together above the field, so the field's result line below never moves them.
-        StepText(
-            "Tap \(chord), say \u{201C}Hello from kotoba\u{201D}, then tap \(chord) again.\n"
-                + StatusText.holdToDictate(.shared))
-        TextField("Try It", text: $model.tryItText, prompt: Text("Your words appear here"), axis: .vertical)
-            .labelsHidden()
-            .multilineTextAlignment(.leading)
-            .textFieldStyle(.roundedBorder)
-            .lineLimit(2...3)
-            .frame(width: 360)
-            .focused($isFieldFocused)
-            .onAppear { isFieldFocused = true }
-        // Always laid out, so the step does not move when the dictation works.
-        let works = model.isDone(.tryIt)
-        StatusLine("It works.", .good)
-            .font(.callout)
-            .opacity(works ? 1 : 0)
-            .accessibilityHidden(!works)
+        Section {
+            TextField("Try It", text: $model.tryItText, prompt: Text("Your words appear here"), axis: .vertical)
+                .labelsHidden()
+                .lineLimit(3...5)
+                .focused($isFieldFocused)
+                .onAppear { isFieldFocused = true }
+        } header: {
+            // Both ways to dictate sit together above the field, so the result line below never moves them.
+            StepHeading(
+                title: "Try It",
+                text: "Press \(chord), say “Hello from kotoba”, then press \(chord) again. "
+                    + StatusText.holdToDictate(.shared))
+        } footer: {
+            // Always laid out, so the step does not move when the dictation works.
+            let works = model.isDone(.tryIt)
+            StatusLine("It works.", .good)
+                .opacity(works ? 1 : 0)
+                .accessibilityHidden(!works)
+        }
     }
 }
 
+/// Setup's result, the two choices a new install makes, and the Wispr Flow import when Wispr Flow is on this Mac.
 struct DoneStep: View {
     @Bindable var model: OnboardingModel
 
     var body: some View {
-        StepText("Open kotoba from the menu bar or the Dock to change your microphone or settings.")
-        Form {
+        let isReady = model.readiness.isComplete
+        if let step = model.firstMissingStep, let missing = model.readiness.firstMissing {
+            Section {
+                PageRow(title: missing.problemText, subtitle: nil) {
+                    SymbolTile(systemImage: "exclamationmark.triangle", tint: .orange, side: PageMetrics.rowTileSide)
+                } trailing: {
+                    if model.readiness.missingSetup?.item == .endpoint {
+                        Button("Add Your Azure Endpoint…", action: model.openSpeechSettings)
+                    } else {
+                        Button(Self.fixTitle(step)) { model.step = step }
+                    }
+                }
+            } header: {
+                heading(isReady: isReady)
+            }
+        }
+        Section {
             Toggle(
                 "Open kotoba when you log in",
                 isOn: Binding(get: { model.opensAtLogin }, set: { model.setOpensAtLogin($0) }))
-            Toggle("Play a sound when dictation starts and stops", isOn: $model.playsSounds)
-        }
-        .formStyle(.grouped)
-        .scrollDisabled(true)
-        // A form fills its container; here it is only as tall as its rows.
-        .fixedSize(horizontal: false, vertical: true)
-        .frame(width: OnboardingView.textWidth)
-        // Applied as the step shows (default on), so a problem shows here before Done closes the window.
-        .task { model.setOpensAtLogin(model.opensAtLogin) }
-        if let problem = model.loginProblem {
-            Text(problem.text).font(.callout).foregroundStyle(.secondary)
-            Button("Open Login Items…", action: model.openLoginItemsSettings)
-        }
-        if let step = model.firstMissingStep, let missing = model.readiness.firstMissing {
-            HStack {
-                StatusLine(missing.problemText, .problem)
-                if model.readiness.missingSetup?.item == .endpoint {
-                    Button("Add Your Azure Endpoint…", action: model.openSpeechSettings)
-                } else {
-                    Button(fixTitle(step)) { model.step = step }
+            if let problem = model.loginProblem {
+                PageRow(title: problem.text, subtitle: nil) {
+                    Button("Open Login Items…", action: model.openLoginItemsSettings)
                 }
             }
-            .font(.callout)
-            .padding(.top, 4)
+            Toggle("Play a sound when dictation starts and stops", isOn: $model.playsSounds)
+        } header: {
+            if model.firstMissingStep == nil {
+                heading(isReady: isReady)
+            }
+        }
+        // Applied as the step shows (default on), so a problem shows here before Done closes the window.
+        .task { model.setOpensAtLogin(model.opensAtLogin) }
+        if model.offersWisprImport {
+            Section {
+                PageRow(title: "Wispr Flow dictionary", subtitle: wisprText) {
+                    SymbolTile(
+                        systemImage: PaneID.dictionary.systemImage, tint: PaneID.dictionary.tint,
+                        side: PageMetrics.rowTileSide)
+                } trailing: {
+                    if model.wisprImported != nil {
+                        StatusLine("Imported", .good)
+                    } else if model.dictionary?.wisprImport?.isReading == true {
+                        ProgressView().controlSize(.small)
+                    } else {
+                        Button("Import…", action: model.previewWisprImport)
+                    }
+                }
+            }
         }
     }
 
-    private func fixTitle(_ step: OnboardingStep) -> String {
-        switch step {
-        case .microphone: "Allow Microphone"
-        case .accessibility: "Allow Accessibility"
-        default: "Add Your Key"
+    private func heading(isReady: Bool) -> some View {
+        StepHeading(
+            title: isReady ? "You’re Ready" : "Almost Ready",
+            text: "Open kotoba from the menu bar or the Dock to change your microphone or settings.")
+    }
+
+    /// What the row says before and after the import.
+    private var wisprText: String {
+        guard let added = model.wisprImported else {
+            return "Add your words and replacements from Wispr Flow, so kotoba spells them right from the start."
         }
+        return added.isEmpty ? "Your dictionary already has every word from Wispr Flow." : "Added \(added.countsText)."
+    }
+
+    private static func fixTitle(_ step: OnboardingStep) -> String {
+        step == .permissions ? "Allow Access" : "Add Your Key"
     }
 }

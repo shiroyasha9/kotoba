@@ -179,8 +179,7 @@ final class SetupFlow {
     /// "Finish Setting Up kotoba…": onboarding on the first missing step. An Azure endpoint is set in Settings.
     func finishSetup() {
         switch readiness.firstMissing {
-        case .microphone: onboarding.show(step: .microphone)
-        case .accessibility: onboarding.show(step: .accessibility)
+        case .microphone, .accessibility: onboarding.show(step: .permissions)
         case .setup(.key, _): onboarding.show(step: .key)
         case .setup(.endpoint, _), .setup(.credit, _): openSpeechSettings()
         case nil: onboarding.show()
@@ -194,7 +193,7 @@ final class SetupFlow {
 
     /// The pill's "Allow Pasting…".
     func allowPasting() {
-        onboarding.show(step: .accessibility)
+        onboarding.show(step: .permissions)
     }
 
     /// A grant made in System Settings shows without a click: Readiness reads again when the menu opens (the menu

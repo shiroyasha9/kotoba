@@ -1,96 +1,37 @@
-// 0.5.0 ratchet: the onboarding's rollout puts this file on the page system and removes the next line.
-// swiftlint:disable ui_layout_literal ui_layout_constant ui_divider
 import KotobaCore
 import KotobaProviders
 import SwiftUI
 
-/// One step at a time: a symbol (kotoba's icon on Welcome), a title, one or two plain sentences and the step's own
-/// control, with the step dots and Back/Continue at the bottom. A grant never moves the window on: the step shows it
-/// and the owner clicks Continue (owner, 2026-10-16).
+/// One step at a time, built from the page parts (`PageForm`, `PageRow`, `SymbolTile`): a bold, left-aligned title and
+/// one plain sentence (macOS 26 onboarding, WWDC25 356), the step's cards, and the step dots with Back and Continue at
+/// the bottom. A grant never moves the window on: the step shows it and the owner clicks Continue (owner, 2026-10-16).
 struct OnboardingView: View {
-    /// A readable line length in the window: every step's text and boxes share it.
-    static let textWidth: CGFloat = 420
-    /// The app icon's size on Welcome; every step's symbol sits in a slot this tall.
-    private static let iconHeight: CGFloat = 80
-
     @Bindable var model: OnboardingModel
     /// Closes the window after Done.
     let close: @MainActor () -> Void
 
     var body: some View {
         VStack(spacing: 0) {
-            // Top-aligned at a fixed inset, with the icon in a slot of one height, so the title stays in place from step
-            // to step.
-            VStack(spacing: 14) {
-                icon
-                    .frame(height: Self.iconHeight)
-                Text(title)
-                    .font(.title)
-                    .fontWeight(.semibold)
+            PageForm {
                 content
             }
-            .multilineTextAlignment(.center)
-            .padding(.horizontal, 48)
-            .padding(.top, 28)
-            .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
-            Divider()
             footer
-                .padding(.horizontal, 20)
-                .padding(.vertical, 14)
+                .padding([.horizontal, .bottom], PageMetrics.formInset)
         }
-        .frame(minWidth: 480, minHeight: 360)
+        // The window does not resize: its rows wrap to its width, as they would in any window this wide. Without it the
+        // form asks for its rows' one-line width.
+        .frame(width: PageMetrics.onboardingWindowSize.width)
         .task { await model.checkWispr() }
         .wisprImportAlert(model.dictionary, imported: model.wisprImportAnswered)
-    }
-
-    /// The step's symbol; kotoba's app icon on Welcome.
-    @ViewBuilder private var icon: some View {
-        if let symbol {
-            Image(systemName: symbol)
-                .font(.largeTitle)
-                .imageScale(.large)
-                .foregroundStyle(.tint)
-        } else {
-            Image(nsImage: NSApp.applicationIconImage)
-                .resizable()
-                .frame(width: Self.iconHeight, height: Self.iconHeight)
-                .accessibilityHidden(true)
-        }
     }
 
     @ViewBuilder private var content: some View {
         switch model.step {
         case .welcome: WelcomeStep()
-        case .microphone: MicrophoneStep(model: model)
-        case .accessibility: AccessibilityStep(model: model)
+        case .permissions: PermissionsStep(model: model)
         case .key: KeyStep(model: model)
-        case .wisprImport: WisprImportStep(model: model)
         case .tryIt: TryItStep(model: model)
         case .done: DoneStep(model: model)
-        }
-    }
-
-    private var symbol: String? {
-        switch model.step {
-        case .welcome: nil
-        case .microphone: "mic"
-        case .accessibility: "accessibility"
-        case .key: "key"
-        case .wisprImport: "character.book.closed"
-        case .tryIt: "text.cursor"
-        case .done: model.readiness.isComplete ? "checkmark.circle" : "exclamationmark.circle"
-        }
-    }
-
-    private var title: String {
-        switch model.step {
-        case .welcome: "Talk Instead of Type"
-        case .microphone: "Allow the Microphone"
-        case .accessibility: "Allow Accessibility"
-        case .key: "Connect a Speech Service"
-        case .wisprImport: "Bring Your Words from Wispr Flow"
-        case .tryIt: "Try It"
-        case .done: model.readiness.isComplete ? "You\u{2019}re Ready" : "Almost Ready"
         }
     }
 
@@ -98,7 +39,7 @@ struct OnboardingView: View {
         HStack {
             StepDots(model: model)
             Spacer()
-            if model.flow.previous(before: model.step) != nil {
+            if OnboardingFlow.previous(before: model.step) != nil {
                 Button("Back", action: model.goBack)
             }
             switch OnboardingFlow.footer(on: model.step, isDone: model.isDone(model.step)) {
@@ -111,10 +52,8 @@ struct OnboardingView: View {
                 Button("Continue", action: model.goForward)
                     .buttonStyle(.borderedProminent)
                     .keyboardShortcut(emphasis == .defaultAction ? .defaultAction : nil)
-            case .notNow:
-                Button("Not Now", action: model.goForward)
             case .waitsForStep:
-                // Until the grant arrives, the step's own button is the default one; Continue shows where it leads.
+                // Until both grants arrive, the rows' Allow buttons are the way on; Continue shows where it leads.
                 Button("Continue", action: model.goForward).disabled(true)
             case .done:
                 Button("Done") {
@@ -128,25 +67,55 @@ struct OnboardingView: View {
     }
 }
 
-/// One dot per step: done steps show a checkmark, the shown step is in the accent color, done or not, so the owner
+/// A step's title and its one sentence, bold and left-aligned as macOS 26's onboarding and alerts (WWDC25 356), over
+/// the step's first card; Welcome puts kotoba's icon above it. The first section's header, so it starts where the
+/// cards' text starts.
+struct StepHeading<Icon: View>: View {
+    let title: String
+    let text: String
+    @ViewBuilder var icon: Icon
+
+    var body: some View {
+        VStack(alignment: .leading) {
+            icon
+            Text(title)
+                .font(.largeTitle)
+                .bold()
+                .foregroundStyle(.primary)
+            Text(text)
+                .font(.title3)
+                .foregroundStyle(.secondary)
+                .fixedSize(horizontal: false, vertical: true)
+        }
+        .accessibilityElement(children: .combine)
+        .accessibilityAddTraits(.isHeader)
+    }
+}
+
+extension StepHeading where Icon == EmptyView {
+    init(title: String, text: String) {
+        self.init(title: title, text: text) { EmptyView() }
+    }
+}
+
+/// One dot per step: done steps show a checkmark, the shown step is in the accent colour, done or not, so the owner
 /// always sees where they are. Custom: macOS has no page indicator control (UIPageControl is iOS only).
 private struct StepDots: View {
     let model: OnboardingModel
 
     var body: some View {
-        HStack(spacing: 6) {
-            ForEach(model.flow.steps) { step in
+        HStack {
+            ForEach(OnboardingFlow.steps) { step in
                 let isShown = step == model.step
                 let isDone = model.isDone(step)
                 Image(systemName: Self.symbol(isShown: isShown, isDone: isDone))
                     .foregroundStyle(Self.style(isShown: isShown, isDone: isDone))
                     .font(.caption2)
                     .imageScale(.small)
-                    .opacity(isShown || isDone ? 1 : 0.8)
             }
         }
         .accessibilityElement(children: .ignore)
-        .accessibilityLabel("Step \(model.flow.index(of: model.step) + 1) of \(model.flow.steps.count)")
+        .accessibilityLabel("Step \(OnboardingFlow.index(of: model.step) + 1) of \(OnboardingFlow.steps.count)")
     }
 
     private static func symbol(isShown: Bool, isDone: Bool) -> String {
