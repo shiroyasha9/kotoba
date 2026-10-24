@@ -164,34 +164,38 @@ custom_rules:
     excluded_match_kinds: [comment, doccomment, string]
     message: "Every paste is one transaction: run it through `ClipboardPaste.run(_:gate:)`, which owns the gate, the clipboard and the keys; a copy goes through `DictationPipeline.copyAgain`, so a waiting restore cannot overwrite it (docs/spec.md, \"Paste\")."
     severity: error
-  # CODING_STANDARDS.md "User-facing text" rules 3, 5 and 8, on UI strings in App/ only: strings on a line that
-  # builds UI (Text(, Button(, NSMenuItem(title:, .toolTip = …) and every string in App/StatusText.swift.
-  # Log strings are not on such lines, so they never trip these rules.
+  # CODING_STANDARDS.md "User-facing text" rules 3, 4, 5, 8, 13 and 14, on UI strings in App/ only: strings on a line
+  # that builds UI (Text(, Button(, NSMenuItem(title:, .toolTip = …), or on the line after its `(`, and every string in
+  # App/StatusText.swift. Log strings are not on such lines, so they never trip these rules.
+  # Each ui_text_* regex is `T(?<=<builders>…T)`: the target first, then a lookbehind that ends with the same target.
+  # The engine tries the lookbehind only where the target matches; with the lookbehind first it runs at every
+  # character, about 1-3 s per rule on App/ against 0.1-0.2 s. A lookbehind needs a bounded length, so a target has no
+  # `+` or `*`. scripts/ui-text-builders.sh checks that every rule has this shape and the same builders.
   ui_text_ellipsis:
     name: "UI text: one-character ellipsis"
     included: ["App/.*\\.swift"]
-    regex: "(?<=(?:\\b(?:Text|Button|Toggle|Section|Label|Picker|LabeledContent|Link|Menu|TextField|SecureField|GroupBox|NSMenuItem|NSButton|NSTextField|NSAlert|MenuChoice|help|navigationTitle|confirmationDialog|alert)\\(|\\.(?:title|subtitle|toolTip|messageText|informativeText|placeholderString|stringValue|prompt) = )[^\\n]{0,200})\\.\\.\\."
+    regex: "\\.\\.\\.(?<=(?:\\b(?:Text|Button|Toggle|Section|Label|Picker|LabeledContent|Link|Menu|TextField|SecureField|GroupBox|NSMenuItem|NSButton|NSTextField|NSAlert|MenuChoice|StepText|help|navigationTitle|confirmationDialog|alert)\\(|\\.(?:title|subtitle|toolTip|messageText|informativeText|placeholderString|stringValue|prompt) = )(?:[ \\t]{0,4}\\n[ \\t]{0,40})?[^\\n]{0,200}\\.\\.\\.)"
     match_kinds: [string]
     message: "Use the one-character ellipsis \"…\", only on an item that opens a window or asks for more input (CODING_STANDARDS.md, User-facing text 3)."
     severity: error
   ui_text_internal_terms:
     name: "UI text: no internal terms"
     included: ["App/.*\\.swift"]
-    regex: "(?<=(?:\\b(?:Text|Button|Toggle|Section|Label|Picker|LabeledContent|Link|Menu|TextField|SecureField|GroupBox|NSMenuItem|NSButton|NSTextField|NSAlert|MenuChoice|help|navigationTitle|confirmationDialog|alert)\\(|\\.(?:title|subtitle|toolTip|messageText|informativeText|placeholderString|stringValue|prompt) = )[^\\n]{0,200})(?i:\\b(?:routes?|keyterms?|ZDR|zero-data-retention|needsSetup|untested|(?:microsoft|x-ai|openai|google)/[\\w.-]+)\\b)"
+    regex: "(?i:\\b(?:routes?|keyterms?|ZDR|zero-data-retention|needsSetup|untested|(?:microsoft|x-ai|openai|google)/[\\w.-]{1,64})\\b)(?<=(?:\\b(?:Text|Button|Toggle|Section|Label|Picker|LabeledContent|Link|Menu|TextField|SecureField|GroupBox|NSMenuItem|NSButton|NSTextField|NSAlert|MenuChoice|StepText|help|navigationTitle|confirmationDialog|alert)\\(|\\.(?:title|subtitle|toolTip|messageText|informativeText|placeholderString|stringValue|prompt) = )(?:[ \\t]{0,4}\\n[ \\t]{0,40})?[^\\n]{0,200}(?i:\\b(?:routes?|keyterms?|ZDR|zero-data-retention|needsSetup|untested|(?:microsoft|x-ai|openai|google)/[\\w.-]{1,64})\\b))"
     match_kinds: [string]
     message: "No internal terms in UI text: route, keyterm, ZDR, zero-data-retention, needsSetup, untested, model slugs (CODING_STANDARDS.md, User-facing text 5)."
     severity: error
   ui_text_dash:
     name: "UI text: no \" - \" between phrases"
     included: ["App/.*\\.swift"]
-    regex: "(?<=(?:\\b(?:Text|Button|Toggle|Section|Label|Picker|LabeledContent|Link|Menu|TextField|SecureField|GroupBox|NSMenuItem|NSButton|NSTextField|NSAlert|MenuChoice|help|navigationTitle|confirmationDialog|alert)\\(|\\.(?:title|subtitle|toolTip|messageText|informativeText|placeholderString|stringValue|prompt) = )[^\\n]{0,200}) - "
+    regex: " - (?<=(?:\\b(?:Text|Button|Toggle|Section|Label|Picker|LabeledContent|Link|Menu|TextField|SecureField|GroupBox|NSMenuItem|NSButton|NSTextField|NSAlert|MenuChoice|StepText|help|navigationTitle|confirmationDialog|alert)\\(|\\.(?:title|subtitle|toolTip|messageText|informativeText|placeholderString|stringValue|prompt) = )(?:[ \\t]{0,4}\\n[ \\t]{0,40})?[^\\n]{0,200} - )"
     match_kinds: [string]
     message: "No \" - \" between phrases in UI text: two sentences, a colon, or \"·\" before a value (CODING_STANDARDS.md, User-facing text 8)."
     severity: error
   ui_text_straight_quotes:
     name: "UI text: curly apostrophe and quotes"
     included: ["App/.*\\.swift"]
-    regex: "(?<=(?:\\b(?:Text|Button|Toggle|Section|Label|Picker|LabeledContent|Link|Menu|TextField|SecureField|GroupBox|NSMenuItem|NSButton|NSTextField|NSAlert|MenuChoice|help|navigationTitle|confirmationDialog|alert)\\(|\\.(?:title|subtitle|toolTip|messageText|informativeText|placeholderString|stringValue|prompt) = )[^\\n]{0,200})(?:'|\\\\\")"
+    regex: "(?:'|\\\\\")(?<=(?:\\b(?:Text|Button|Toggle|Section|Label|Picker|LabeledContent|Link|Menu|TextField|SecureField|GroupBox|NSMenuItem|NSButton|NSTextField|NSAlert|MenuChoice|StepText|help|navigationTitle|confirmationDialog|alert)\\(|\\.(?:title|subtitle|toolTip|messageText|informativeText|placeholderString|stringValue|prompt) = )(?:[ \\t]{0,4}\\n[ \\t]{0,40})?[^\\n]{0,200}(?:'|\\\\\"))"
     match_kinds: [string]
     message: "Use the curly apostrophe and quotes (’ “ ”) in UI text, not ' or \\\" (CODING_STANDARDS.md, User-facing text 13)."
     severity: error
@@ -200,9 +204,16 @@ custom_rules:
   ui_text_key_names:
     name: "UI text: keys as symbols"
     included: ["App/.*\\.swift"]
-    regex: "(?<=(?:\\b(?:Text|Button|Toggle|Section|Label|Picker|LabeledContent|Link|Menu|TextField|SecureField|GroupBox|NSMenuItem|NSButton|NSTextField|NSAlert|MenuChoice|help|navigationTitle|confirmationDialog|alert)\\(|\\.(?:title|subtitle|toolTip|messageText|informativeText|placeholderString|stringValue|prompt) = )[^\\n]{0,200})(?i:\\b(?:Ctrl|Control|Opt|Option|Alt|Cmd|Command|Shift|Fn)[-+ ](?:Ctrl|Control|Opt|Option|Alt|Cmd|Command|Shift|Fn|Enter|Return|Escape|Esc|Tab|Space|Delete|Backspace|F\\d+|[A-Z0-9])\\b)"
+    regex: "(?i:\\b(?:Ctrl|Control|Opt|Option|Alt|Cmd|Command|Shift|Fn)[-+ ](?:Ctrl|Control|Opt|Option|Alt|Cmd|Command|Shift|Fn|Enter|Return|Escape|Esc|Tab|Space|Delete|Backspace|F\\d{1,2}|[A-Z0-9])\\b)(?<=(?:\\b(?:Text|Button|Toggle|Section|Label|Picker|LabeledContent|Link|Menu|TextField|SecureField|GroupBox|NSMenuItem|NSButton|NSTextField|NSAlert|MenuChoice|StepText|help|navigationTitle|confirmationDialog|alert)\\(|\\.(?:title|subtitle|toolTip|messageText|informativeText|placeholderString|stringValue|prompt) = )(?:[ \\t]{0,4}\\n[ \\t]{0,40})?[^\\n]{0,200}(?i:\\b(?:Ctrl|Control|Opt|Option|Alt|Cmd|Command|Shift|Fn)[-+ ](?:Ctrl|Control|Opt|Option|Alt|Cmd|Command|Shift|Fn|Enter|Return|Escape|Esc|Tab|Space|Delete|Backspace|F\\d{1,2}|[A-Z0-9])\\b))"
     match_kinds: [string]
     message: "Write keys as symbols in UI text: ⌃ ⌥ ⌘ ⇧ fn, ⌘V, never \"Control-Option-Command\" or \"Cmd+V\" (CODING_STANDARDS.md, User-facing text 4)."
+    severity: error
+  ui_text_plain_words:
+    name: "UI text: plain words"
+    included: ["App/.*\\.swift"]
+    regex: "(?i:\\b(?:we|please|(?:en|dis)abl(?:e|ed|es|ing)|toggl(?:e|ed|es|ing)|oops|whoops|uh-oh|sorry|yay|hooray|woohoo)\\b)(?<=(?:\\b(?:Text|Button|Toggle|Section|Label|Picker|LabeledContent|Link|Menu|TextField|SecureField|GroupBox|NSMenuItem|NSButton|NSTextField|NSAlert|MenuChoice|StepText|help|navigationTitle|confirmationDialog|alert)\\(|\\.(?:title|subtitle|toolTip|messageText|informativeText|placeholderString|stringValue|prompt) = )(?:[ \\t]{0,4}\\n[ \\t]{0,40})?[^\\n]{0,200}(?i:\\b(?:we|please|(?:en|dis)abl(?:e|ed|es|ing)|toggl(?:e|ed|es|ing)|oops|whoops|uh-oh|sorry|yay|hooray|woohoo)\\b))"
+    match_kinds: [string]
+    message: "Plain words in UI text: no \"we\", no \"please\", no \"enable\", \"disable\" or \"toggle\" (name what is on: \"Keep filler words\"), no interjections such as \"oops\" or \"sorry\" (CODING_STANDARDS.md, User-facing text 14)."
     severity: error
   # What the shell shows is decided in KotobaCore's `ShellStatus` and tested there; these two files only collect its
   # facts and draw its output. b235fa0 and 3a9743b changed such rules here with no test: a pattern match on a state in
@@ -255,6 +266,13 @@ custom_rules:
     regex: " - "
     match_kinds: [string]
     message: "No \" - \" between phrases in pill or menu text (CODING_STANDARDS.md, User-facing text 8)."
+    severity: error
+  status_text_plain_words:
+    name: "Status text: plain words"
+    included: ["App/StatusText\\.swift", "KotobaCore/Sources/KotobaCore/ShellStatus\\.swift"]
+    regex: "(?i:\\b(?:we|please|(?:en|dis)abl(?:e|ed|es|ing)|toggl(?:e|ed|es|ing)|oops|whoops|uh-oh|sorry|yay|hooray|woohoo)\\b)"
+    match_kinds: [string]
+    message: "Plain words in pill and menu text: no \"we\", \"please\", \"enable\", \"disable\", \"toggle\" or interjections (CODING_STANDARDS.md, User-facing text 14)."
     severity: error
   # The mic input's lifecycle (which mic, when to rebuild, what waits for the end of a capture) lives in
   # KotobaCore's `AudioCapture`, tested through a fake. App/ only runs the hardware through `HALCaptureHardware`.

@@ -43,7 +43,9 @@ test:
 	$(call RUN_TESTS,KotobaProviders)
 	$(call RUN_TESTS,KotobaStorage)
 
+# The ui_text_* rules each hold a copy of the UI-builder list; a copy that drifts lets UI text skip a rule.
 lint:
+	scripts/ui-text-builders.sh
 	swiftlint lint --strict --quiet
 
 format:
