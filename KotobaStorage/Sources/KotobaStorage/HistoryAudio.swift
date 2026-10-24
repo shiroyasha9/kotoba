@@ -37,6 +37,18 @@ extension HistoryStore {
         CREATE INDEX IF NOT EXISTS dictations_kept_audio_2 ON dictations (\(transcribedAt), id) WHERE \(keptAudio);
         """
 
+    /// The kept audio's sizes, for Settings (`keptAudioSize`). The rows with no size yet have an index of their own,
+    /// empty once measured. It holds every column their read names, so the planner takes it over the table whatever
+    /// its statistics say (they still count the rows from before the sizes were filled): the read is one probe. The sum
+    /// reads only the kept audio's index, never the table, nor the rows whose audio is gone. `audio_bytes` comes first:
+    /// an index that starts with `status`, with no statistics, makes the planner read retention's batches through it
+    /// and sort them, as `dictations_status` did (`HistoryStore.readIndexes`).
+    static let keptSizeIndexes = """
+        CREATE INDEX IF NOT EXISTS dictations_unsized ON dictations (audio_bytes, id, audio_path) WHERE \(unsized);
+        CREATE INDEX IF NOT EXISTS dictations_kept_size ON dictations (audio_bytes, status) WHERE audio_deleted = 0;
+        """
+    private static let unsized = "audio_deleted = 0 AND audio_bytes IS NULL"
+
     /// One batch, oldest text first; `after` adds the cursor's condition as ?3 and ?4.
     static func expiredAudioQuery(after: Bool) -> String {
         """
@@ -138,8 +150,7 @@ extension HistoryStore {
     }
 
     /// Sums the sizes kept with the rows (`save` writes them). Rows from before that column get theirs once, off this
-    /// actor, from their files. One aggregate over the rows: about 3 ms for 10,000 (debug build). Nil when a kept file
-    /// cannot be measured.
+    /// actor, from their files. One aggregate over `dictations_kept_size`. Nil when a kept file cannot be measured.
     @concurrent
     public nonisolated func keptAudioSize() async throws -> KeptAudioSize? {
         try await sizeUnsizedAudio()
@@ -162,7 +173,7 @@ extension HistoryStore {
     }
 
     private func unsizedAudio() throws -> [(id: String, path: String)] {
-        try database.query("SELECT id, audio_path FROM dictations WHERE audio_deleted = 0 AND audio_bytes IS NULL;")
+        try database.query("SELECT id, audio_path FROM dictations WHERE \(Self.unsized);")
             .compactMap { row in
                 guard let id = row[0].string, let path = row[1].string else { return nil }
                 return (id, path)

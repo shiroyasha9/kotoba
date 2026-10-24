@@ -77,6 +77,7 @@ extension HistoryStore {
             try fillLedger(database)
             // After the columns: an older database gets `audio_deleted` and `recovered_at` above.
             try database.execute(keptAudioIndex)
+            try database.execute(keptSizeIndexes)
             try database.execute(readIndexes)
             // A phase 2 build kept "waits for a key" as needs_key = 1.
             if existing.contains("needs_key") {

@@ -4,7 +4,7 @@ import Testing
 
 @testable import KotobaStorage
 
-/// The read indexes after 0.4.6 (`HistoryStore.readIndexes`), added to the shape 0.4.6 shipped (AGENTS.md
+/// The read indexes after 0.4.6 (`HistoryStore.readIndexes`, `keptSizeIndexes`), added to the shape 0.4.6 shipped (AGENTS.md
 /// "Migrations"). The shape is the schema SQL of v0.4.6, as written there, after its ledger fill.
 struct IndexMigrationTests {
     let folder = TemporaryFolder()
@@ -114,7 +114,9 @@ struct IndexMigrationTests {
 
         let opened = try indexes()
         #expect(!opened.contains("dictations_status"))
-        #expect(opened.contains("dictations_retry") && opened.contains("dictations_recovered"))
+        for index in ["dictations_retry", "dictations_recovered", "dictations_unsized", "dictations_kept_size"] {
+            #expect(opened.contains(index), "\(index)")
+        }
         #expect(try await store.pendingRetries().map(\.id.rawValue) == [ids[2]])
         #expect(try await store.pendingCount() == 1)
         #expect(try await store.recovered(since: .distantPast).map(\.id.rawValue) == [ids[3]])
@@ -124,7 +126,8 @@ struct IndexMigrationTests {
     }
 
     /// The History pane's reads on a migrated 0.4.6 history cost what they cost on a new one
-    /// (`HistoryStoreCostTests`): the same on 10,000 rows as on 5,000, but for the search that matches nothing.
+    /// (`HistoryStoreCostTests`): the same on 10,000 rows as on 5,000, but for the search that matches nothing. The
+    /// old rows have no audio size: the first size read measures them, and the next one finds none with a probe.
     @Test func a046HistoryReadsThroughTheNewIndexes() async throws {
         let ids = try oldHistory(pasted: 0..<5_000).map(DictationID.init)
         let history = HistoryStoreTests()
@@ -136,5 +139,9 @@ struct IndexMigrationTests {
         for (read, cost) in full where !read.readsEveryRow {
             #expect(cost == half[read], "\(read)")
         }
+        _ = try await store.keptAudioSize()
+        let size = try await costs(on: store) { _ = try await store.keptAudioSize() }
+        #expect(size.count == 2)
+        #expect(size.first.map { $0.steps < 5_000 } == true)
     }
 }

@@ -280,8 +280,8 @@ struct AudioRetentionStoreTests {
     /// statistics for the planner (a new install) and on one opened again after the fill, as at launch.
     /// The first run reads 20 batches of 500 in the index's order (no sort), each from the cursor (the same steps
     /// each), and marks each; then one read finds none. The run after the next dictation is one probe, with fewer
-    /// steps than the history has rows. The size is the read of rows with no size and one aggregate: no statement for
-    /// each row.
+    /// steps than the history has rows. The size is a probe for rows with no size and one aggregate over the kept
+    /// audio only: with every file deleted, both are probes.
     @Test(arguments: [false, true])
     func tenThousandFilesAreDeletedAndTheNextRunIsOneProbe(withStatistics: Bool) async throws {
         let opened = try HistoryStore(url: url, audio: audio)
@@ -291,6 +291,7 @@ struct AudioRetentionStoreTests {
         let size = try await costs(on: store) { _ = try await store.keptAudioSize() }
         let first = try await costs(on: store) { deleted = try await deleteAudio(store, before: now) }
         let next = try await costs(on: store) { _ = try await deleteAudio(store, before: now) }
+        let sizeAfter = try await costs(on: store) { _ = try await store.keptAudioSize() }
 
         #expect(deleted.count == 10_000)
         let files = try FileManager.default.contentsOfDirectory(atPath: audio.path)
@@ -303,5 +304,8 @@ struct AudioRetentionStoreTests {
         #expect(next.count == 1)
         #expect(next.allSatisfy { $0.sorts == 0 && $0.steps < 10_000 })
         #expect(size.count == 2)
+        #expect(size.first.map { $0.steps < 10_000 } == true)
+        #expect(sizeAfter.count == 2)
+        #expect(sizeAfter.allSatisfy { $0.steps < 10_000 })
     }
 }
