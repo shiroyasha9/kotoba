@@ -1,4 +1,4 @@
-## kotoba next
+## kotoba 0.5.0
 
 ### New
 
