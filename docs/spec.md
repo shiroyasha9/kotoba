@@ -228,6 +228,10 @@ Design and evidence: `docs/research/per-app-modes.md`.
 - Speech model, language and website rules per mode: later, not v1.
 - The Writing prompt ships in a release only after its benchmark passes (`docs/release.md`).
 
+### UI redesign (0.5.0; owner, 2026-10-24)
+
+Decisions and plan: `docs/research/ui-redesign.md`. A native prototype (Home, Activity, the pill) sets one visual system, then every page, the pill and all copy move to it in one release. New page map: Home, History, Activity (Insights and Usage), then Shortcuts, Speech, Dictionary, Cleanup, Microphone, General. The pill becomes one glass capsule that changes shape, with no status words. No Rust UI for now.
+
 ### Wispr Flow transition
 - The owner keeps Wispr Flow until kotoba passes the gates and one week of daily use.
 
