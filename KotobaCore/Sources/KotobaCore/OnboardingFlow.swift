@@ -62,6 +62,12 @@ public enum OnboardingFlow {
         return steps.indices.contains(previous) ? steps[previous] : nil
     }
 
+    /// The Done step offers the Wispr Flow import when Wispr Flow is on this Mac and kotoba's dictionary is open to
+    /// import into (it is read at launch, maybe after the window opened).
+    public static func offersWisprImport(isWisprInstalled: Bool, isDictionaryOpen: Bool) -> Bool {
+        isWisprInstalled && isDictionaryOpen
+    }
+
     /// The footer's forward button on `step`; `isDone` is the step's own requirement (the grants, a key, a dictation).
     public static func footer(on step: OnboardingStep, isDone: Bool) -> OnboardingFooter {
         switch step {

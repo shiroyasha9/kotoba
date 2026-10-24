@@ -75,7 +75,7 @@ Status line; Paste, Copy and Fix last dictation; Microphone; "Open kotoba…"; Q
 5 steps: Welcome (keycaps with each key's name in small text under it), Permissions (Microphone and Accessibility as two rows, each with its own Allow button), Key, Try It, Done (the Wispr Flow import is a row here when Wispr Flow is installed). Text is bold and left-aligned (macOS 26).
 
 ### Fix Last Dictation
-Stays a separate window (the menu and a global shortcut open it while another app is in front). Restyled.
+Stays a separate window (the status menu opens it while another app is in front). Restyled.
 
 ### Pill
 Pattern: one small glass capsule that changes shape; no status words (Hex, Wispr Flow, Jot). Nothing inside it has its own glass (Apple: avoid glass on glass), so the buttons use a fill.

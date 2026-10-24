@@ -181,28 +181,28 @@ custom_rules:
   ui_text_ellipsis:
     name: "UI text: one-character ellipsis"
     included: ["App/.*\\.swift"]
-    regex: "\\.\\.\\.(?<=(?:\\b(?:Text|Button|Toggle|Section|Label|Picker|LabeledContent|Link|Menu|TextField|SecureField|GroupBox|NSMenuItem|NSButton|NSTextField|NSAlert|MenuChoice|StepHeading|PageRow|PageHeader|ChartHeadline|PageSheet|PageToggle|ChoiceRow|CleanupSample|PageSearchField|help|navigationTitle|confirmationDialog|alert)\\(|\\.(?:title|subtitle|toolTip|messageText|informativeText|placeholderString|stringValue|prompt) = )(?:[ \\t]{0,4}\\n[ \\t]{0,40})?[^\\n]{0,200}\\.\\.\\.)"
+    regex: "\\.\\.\\.(?<=(?:\\b(?:Text|Button|Toggle|Section|Label|Picker|LabeledContent|Link|Menu|TextField|SecureField|GroupBox|NSMenuItem|NSButton|NSTextField|NSAlert|MenuChoice|StepHeading|StatusLine|Point|PageRow|PageHeader|ChartHeadline|PageSheet|PageToggle|ChoiceRow|CleanupSample|PageSearchField|help|navigationTitle|confirmationDialog|alert)\\(|\\.(?:title|subtitle|toolTip|messageText|informativeText|placeholderString|stringValue|prompt) = )(?:[ \\t]{0,4}\\n[ \\t]{0,40})?[^\\n]{0,200}\\.\\.\\.)"
     match_kinds: [string]
     message: "Use the one-character ellipsis \"…\", only on an item that opens a window or asks for more input (CODING_STANDARDS.md, User-facing text 3)."
     severity: error
   ui_text_internal_terms:
     name: "UI text: no internal terms"
     included: ["App/.*\\.swift"]
-    regex: "(?i:\\b(?:routes?|keyterms?|ZDR|zero-data-retention|needsSetup|untested|(?:microsoft|x-ai|openai|google)/[\\w.-]{1,64})\\b)(?<=(?:\\b(?:Text|Button|Toggle|Section|Label|Picker|LabeledContent|Link|Menu|TextField|SecureField|GroupBox|NSMenuItem|NSButton|NSTextField|NSAlert|MenuChoice|StepHeading|PageRow|PageHeader|ChartHeadline|PageSheet|PageToggle|ChoiceRow|CleanupSample|PageSearchField|help|navigationTitle|confirmationDialog|alert)\\(|\\.(?:title|subtitle|toolTip|messageText|informativeText|placeholderString|stringValue|prompt) = )(?:[ \\t]{0,4}\\n[ \\t]{0,40})?[^\\n]{0,200}(?i:\\b(?:routes?|keyterms?|ZDR|zero-data-retention|needsSetup|untested|(?:microsoft|x-ai|openai|google)/[\\w.-]{1,64})\\b))"
+    regex: "(?i:\\b(?:routes?|keyterms?|ZDR|zero-data-retention|needsSetup|untested|(?:microsoft|x-ai|openai|google)/[\\w.-]{1,64})\\b)(?<=(?:\\b(?:Text|Button|Toggle|Section|Label|Picker|LabeledContent|Link|Menu|TextField|SecureField|GroupBox|NSMenuItem|NSButton|NSTextField|NSAlert|MenuChoice|StepHeading|StatusLine|Point|PageRow|PageHeader|ChartHeadline|PageSheet|PageToggle|ChoiceRow|CleanupSample|PageSearchField|help|navigationTitle|confirmationDialog|alert)\\(|\\.(?:title|subtitle|toolTip|messageText|informativeText|placeholderString|stringValue|prompt) = )(?:[ \\t]{0,4}\\n[ \\t]{0,40})?[^\\n]{0,200}(?i:\\b(?:routes?|keyterms?|ZDR|zero-data-retention|needsSetup|untested|(?:microsoft|x-ai|openai|google)/[\\w.-]{1,64})\\b))"
     match_kinds: [string]
     message: "No internal terms in UI text: route, keyterm, ZDR, zero-data-retention, needsSetup, untested, model slugs (CODING_STANDARDS.md, User-facing text 5)."
     severity: error
   ui_text_dash:
     name: "UI text: no \" - \" between phrases"
     included: ["App/.*\\.swift"]
-    regex: " - (?<=(?:\\b(?:Text|Button|Toggle|Section|Label|Picker|LabeledContent|Link|Menu|TextField|SecureField|GroupBox|NSMenuItem|NSButton|NSTextField|NSAlert|MenuChoice|StepHeading|PageRow|PageHeader|ChartHeadline|PageSheet|PageToggle|ChoiceRow|CleanupSample|PageSearchField|help|navigationTitle|confirmationDialog|alert)\\(|\\.(?:title|subtitle|toolTip|messageText|informativeText|placeholderString|stringValue|prompt) = )(?:[ \\t]{0,4}\\n[ \\t]{0,40})?[^\\n]{0,200} - )"
+    regex: " - (?<=(?:\\b(?:Text|Button|Toggle|Section|Label|Picker|LabeledContent|Link|Menu|TextField|SecureField|GroupBox|NSMenuItem|NSButton|NSTextField|NSAlert|MenuChoice|StepHeading|StatusLine|Point|PageRow|PageHeader|ChartHeadline|PageSheet|PageToggle|ChoiceRow|CleanupSample|PageSearchField|help|navigationTitle|confirmationDialog|alert)\\(|\\.(?:title|subtitle|toolTip|messageText|informativeText|placeholderString|stringValue|prompt) = )(?:[ \\t]{0,4}\\n[ \\t]{0,40})?[^\\n]{0,200} - )"
     match_kinds: [string]
     message: "No \" - \" between phrases in UI text: two sentences, a colon, or \"·\" before a value (CODING_STANDARDS.md, User-facing text 8)."
     severity: error
   ui_text_straight_quotes:
     name: "UI text: curly apostrophe and quotes"
     included: ["App/.*\\.swift"]
-    regex: "(?:'|\\\\\")(?<=(?:\\b(?:Text|Button|Toggle|Section|Label|Picker|LabeledContent|Link|Menu|TextField|SecureField|GroupBox|NSMenuItem|NSButton|NSTextField|NSAlert|MenuChoice|StepHeading|PageRow|PageHeader|ChartHeadline|PageSheet|PageToggle|ChoiceRow|CleanupSample|PageSearchField|help|navigationTitle|confirmationDialog|alert)\\(|\\.(?:title|subtitle|toolTip|messageText|informativeText|placeholderString|stringValue|prompt) = )(?:[ \\t]{0,4}\\n[ \\t]{0,40})?[^\\n]{0,200}(?:'|\\\\\"))"
+    regex: "(?:'|\\\\\")(?<=(?:\\b(?:Text|Button|Toggle|Section|Label|Picker|LabeledContent|Link|Menu|TextField|SecureField|GroupBox|NSMenuItem|NSButton|NSTextField|NSAlert|MenuChoice|StepHeading|StatusLine|Point|PageRow|PageHeader|ChartHeadline|PageSheet|PageToggle|ChoiceRow|CleanupSample|PageSearchField|help|navigationTitle|confirmationDialog|alert)\\(|\\.(?:title|subtitle|toolTip|messageText|informativeText|placeholderString|stringValue|prompt) = )(?:[ \\t]{0,4}\\n[ \\t]{0,40})?[^\\n]{0,200}(?:'|\\\\\"))"
     match_kinds: [string]
     message: "Use the curly apostrophe and quotes (’ “ ”) in UI text, not ' or \\\" (CODING_STANDARDS.md, User-facing text 13)."
     severity: error
@@ -211,14 +211,14 @@ custom_rules:
   ui_text_key_names:
     name: "UI text: keys as symbols"
     included: ["App/.*\\.swift"]
-    regex: "(?i:\\b(?:Ctrl|Control|Opt|Option|Alt|Cmd|Command|Shift|Fn)[-+ ](?:Ctrl|Control|Opt|Option|Alt|Cmd|Command|Shift|Fn|Enter|Return|Escape|Esc|Tab|Space|Delete|Backspace|F\\d{1,2}|[A-Z0-9])\\b)(?<=(?:\\b(?:Text|Button|Toggle|Section|Label|Picker|LabeledContent|Link|Menu|TextField|SecureField|GroupBox|NSMenuItem|NSButton|NSTextField|NSAlert|MenuChoice|StepHeading|PageRow|PageHeader|ChartHeadline|PageSheet|PageToggle|ChoiceRow|CleanupSample|PageSearchField|help|navigationTitle|confirmationDialog|alert)\\(|\\.(?:title|subtitle|toolTip|messageText|informativeText|placeholderString|stringValue|prompt) = )(?:[ \\t]{0,4}\\n[ \\t]{0,40})?[^\\n]{0,200}(?i:\\b(?:Ctrl|Control|Opt|Option|Alt|Cmd|Command|Shift|Fn)[-+ ](?:Ctrl|Control|Opt|Option|Alt|Cmd|Command|Shift|Fn|Enter|Return|Escape|Esc|Tab|Space|Delete|Backspace|F\\d{1,2}|[A-Z0-9])\\b))"
+    regex: "(?i:\\b(?:Ctrl|Control|Opt|Option|Alt|Cmd|Command|Shift|Fn)[-+ ](?:Ctrl|Control|Opt|Option|Alt|Cmd|Command|Shift|Fn|Enter|Return|Escape|Esc|Tab|Space|Delete|Backspace|F\\d{1,2}|[A-Z0-9])\\b)(?<=(?:\\b(?:Text|Button|Toggle|Section|Label|Picker|LabeledContent|Link|Menu|TextField|SecureField|GroupBox|NSMenuItem|NSButton|NSTextField|NSAlert|MenuChoice|StepHeading|StatusLine|Point|PageRow|PageHeader|ChartHeadline|PageSheet|PageToggle|ChoiceRow|CleanupSample|PageSearchField|help|navigationTitle|confirmationDialog|alert)\\(|\\.(?:title|subtitle|toolTip|messageText|informativeText|placeholderString|stringValue|prompt) = )(?:[ \\t]{0,4}\\n[ \\t]{0,40})?[^\\n]{0,200}(?i:\\b(?:Ctrl|Control|Opt|Option|Alt|Cmd|Command|Shift|Fn)[-+ ](?:Ctrl|Control|Opt|Option|Alt|Cmd|Command|Shift|Fn|Enter|Return|Escape|Esc|Tab|Space|Delete|Backspace|F\\d{1,2}|[A-Z0-9])\\b))"
     match_kinds: [string]
     message: "Write keys as symbols in UI text: ⌃ ⌥ ⌘ ⇧ fn, ⌘V, never \"Control-Option-Command\" or \"Cmd+V\" (CODING_STANDARDS.md, User-facing text 4)."
     severity: error
   ui_text_plain_words:
     name: "UI text: plain words"
     included: ["App/.*\\.swift"]
-    regex: "(?i:\\b(?:we|our|(?-i:us)|please|(?:en|dis)abl(?:e|ed|es|ing)|toggl(?:e|ed|es|ing)|oops|whoops|uh-oh|sorry|yay|hooray|woohoo)\\b)(?<=(?:\\b(?:Text|Button|Toggle|Section|Label|Picker|LabeledContent|Link|Menu|TextField|SecureField|GroupBox|NSMenuItem|NSButton|NSTextField|NSAlert|MenuChoice|StepHeading|PageRow|PageHeader|ChartHeadline|PageSheet|PageToggle|ChoiceRow|CleanupSample|PageSearchField|help|navigationTitle|confirmationDialog|alert)\\(|\\.(?:title|subtitle|toolTip|messageText|informativeText|placeholderString|stringValue|prompt) = )(?:[ \\t]{0,4}\\n[ \\t]{0,40})?[^\\n]{0,200}(?i:\\b(?:we|our|(?-i:us)|please|(?:en|dis)abl(?:e|ed|es|ing)|toggl(?:e|ed|es|ing)|oops|whoops|uh-oh|sorry|yay|hooray|woohoo)\\b))"
+    regex: "(?i:\\b(?:we|our|(?-i:us)|please|(?:en|dis)abl(?:e|ed|es|ing)|toggl(?:e|ed|es|ing)|oops|whoops|uh-oh|sorry|yay|hooray|woohoo)\\b)(?<=(?:\\b(?:Text|Button|Toggle|Section|Label|Picker|LabeledContent|Link|Menu|TextField|SecureField|GroupBox|NSMenuItem|NSButton|NSTextField|NSAlert|MenuChoice|StepHeading|StatusLine|Point|PageRow|PageHeader|ChartHeadline|PageSheet|PageToggle|ChoiceRow|CleanupSample|PageSearchField|help|navigationTitle|confirmationDialog|alert)\\(|\\.(?:title|subtitle|toolTip|messageText|informativeText|placeholderString|stringValue|prompt) = )(?:[ \\t]{0,4}\\n[ \\t]{0,40})?[^\\n]{0,200}(?i:\\b(?:we|our|(?-i:us)|please|(?:en|dis)abl(?:e|ed|es|ing)|toggl(?:e|ed|es|ing)|oops|whoops|uh-oh|sorry|yay|hooray|woohoo)\\b))"
     match_kinds: [string]
     message: "Plain words in UI text: no \"we\", no \"please\", no \"enable\", \"disable\" or \"toggle\" (name what is on: \"Keep filler words\"), no interjections such as \"oops\" or \"sorry\"; \"our\" and \"us\" also go (CODING_STANDARDS.md, User-facing text 14)."
     severity: error

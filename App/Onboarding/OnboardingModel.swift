@@ -54,10 +54,9 @@ final class OnboardingModel {
     }
     /// What keeps the launch-at-login choice from taking effect, shown under its toggle.
     private(set) var loginProblem: LaunchAtLogin.Problem?
-    /// The Done step offers the Wispr Flow import: Wispr Flow is on this Mac (`checkWispr()` reads it when the window
-    /// opens) and kotoba's dictionary is open to import into (it is read at launch, maybe after the window opened).
+    /// The Done step offers the Wispr Flow import (`OnboardingFlow.offersWisprImport`).
     private(set) var offersWisprImport = false
-    /// Wispr Flow is on this Mac.
+    /// Wispr Flow is on this Mac: `checkWispr()` reads it when the window opens.
     private var isWisprInstalled = false
     /// What the Wispr Flow row imported; empty when Wispr Flow had nothing new. Nil until the owner answers.
     private(set) var wisprImported: DictionaryImport?
@@ -117,7 +116,8 @@ final class OnboardingModel {
 
     /// The dictionary was read at launch, after the window opened (first launch opens onboarding first).
     func dictionaryOpened() {
-        offersWisprImport = isWisprInstalled && dictionary != nil
+        offersWisprImport = OnboardingFlow.offersWisprImport(
+            isWisprInstalled: isWisprInstalled, isDictionaryOpen: dictionary != nil)
     }
 
     func goBack() {

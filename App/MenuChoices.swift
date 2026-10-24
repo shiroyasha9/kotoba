@@ -42,14 +42,4 @@ extension NSMenuItem {
         item.target = target
         return item
     }
-
-    /// An on/off item.
-    @MainActor
-    static func toggle(
-        _ title: String, isOn: Bool, target: AnyObject?, action: Selector
-    ) -> NSMenuItem {
-        let item = Self.action(title, target: target, action: action)
-        item.state = isOn ? .on : .off
-        return item
-    }
 }
