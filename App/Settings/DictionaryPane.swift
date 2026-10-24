@@ -1,5 +1,4 @@
-// 0.5.0 ratchet: the Dictionary page's rollout puts this file on the page system and removes the next line.
-// swiftlint:disable ui_layout_literal ui_layout_constant ui_divider
+import AppKit
 import KotobaCore
 import KotobaStorage
 import SwiftUI
@@ -12,15 +11,20 @@ extension Pane {
     }
 }
 
+extension DictionaryModel.Row: Identifiable {
+    var id: Self { self }
+}
+
+/// The owner's words and replacements, the switch that learns them from edits, and the suggestions it learned; the
+/// stars and the hint limit are in "Advanced…" (docs/research/ui-redesign.md, "Page map").
 private struct DictionaryPane: View {
     @Bindable var model: DictionaryModel
     @State private var search = ""
-    @FocusState private var isSearchFocused: Bool
     @Environment(\.findRequests) private var findRequests
     @Environment(\.addWordRequest) private var addWordRequest
-    @State private var selection: Set<DictionaryModel.Row> = []
     /// The sheet: nil row adds a new entry.
     @State private var editing: Editing?
+    @State private var isAdvancedShown = false
 
     private struct Editing: Identifiable {
         let id = UUID()
@@ -29,21 +33,20 @@ private struct DictionaryPane: View {
     }
 
     var body: some View {
-        // A list in a group box with Add and Delete at its foot, as in System Settings > General > Login Items: a list
-        // this long needs the list's own selection and lazy rows, which a grouped form has not.
-        VStack(alignment: .leading) {
-            // The pane's own switch sits in a box above the list, as the Bluetooth switch does in System Settings.
-            GroupBox {
+        PageForm {
+            Section {
+                PageHeader(
+                    page: .dictionary,
+                    summary: "Names and terms kotoba spells your way, and words it replaces with others.")
+            }
+            Section {
                 LearnFromEditsToggle()
-                    .frame(maxWidth: .infinity, alignment: .leading)
-                    .padding(.horizontal, Self.groupBoxToFormInset)
+            }
+            if !model.suggestions.isEmpty {
+                SuggestionsSection(model: model)
             }
             words
         }
-        .groupedFormLayout()
-        .searchable(text: $search, placement: .toolbar, prompt: "Search words")
-        .searchFocused($isSearchFocused)
-        .onChange(of: findRequests) { isSearchFocused = true }
         .onChange(of: addWordRequest.wrappedValue, initial: true) { _, isRequested in
             guard isRequested else { return }
             addWordRequest.wrappedValue = false
@@ -53,121 +56,61 @@ private struct DictionaryPane: View {
         .sheet(item: $editing) { editing in
             EntryEditor(draft: editing.draft, isNew: editing.row == nil) { draft throws(DictionaryError) in
                 try model.save(draft, replacing: editing.row)
-                selection = []
             }
+        }
+        .sheet(isPresented: $isAdvancedShown) {
+            DictionaryAdvanced(model: model)
         }
     }
 
     private var words: some View {
-        VStack(alignment: .leading) {
-            GroupBox {
-                list
-                Divider()
-                editButtons
+        Section {
+            if !model.rows.isEmpty {
+                PageSearchField(text: $search, prompt: "Search words", focusRequests: findRequests)
             }
-            footer
-                .padding(.horizontal, Self.formFooterInset)
-        }
-    }
-
-    /// A grouped Form draws its row text 10 pt in from the box and its footer 10 pt in from the box's edge; a group box
-    /// insets its content 5 pt. These line the pane's switch and footer up with every other pane's (measured offscreen,
-    /// 2026-10-17). Not a Form section: a Form above the list grows the window past the screen (`LearnFromEditsToggle`).
-    private static let groupBoxToFormInset: CGFloat = 5
-    private static let formFooterInset: CGFloat = 10
-
-    private var list: some View {
-        let rows = visibleRows
-        return List(selection: $selection) {
-            if !model.suggestions.isEmpty, search.isEmpty {
-                SuggestionsSection(model: model)
-            }
-            Section {
-                ForEach(rows, id: \.self) { row in
-                    DictionaryRowView(
-                        draft: model.draft(for: row), sendsKeyterm: model.keyterm(for: row) != nil,
-                        isPinned: model.isPinned(row), isNotSent: model.isNotSent(row)
-                    ) { model.setPinned(row, $0) }
+            EditableList(
+                rows: visibleRows, emptyText: emptyText, addTitle: "Add Word", addHelp: "Add a word or a replacement",
+                removeTitle: "Delete", remove: model.delete, add: add, edit: edit
+            ) { row in
+                DictionaryRowView(draft: model.draft(for: row))
+            } accessory: {
+                if isReading {
+                    ProgressView().controlSize(.small)
                 }
-            } header: {
-                if !model.suggestions.isEmpty, search.isEmpty, !rows.isEmpty {
-                    Text("Words and Replacements")
+                if model.isWisprInstalled {
+                    Button("Import from Wispr Flow…") { model.previewWisprImport() }
+                        .buttonStyle(.automatic)
+                        .disabled(model.wisprImport != nil)
                 }
             }
-        }
-        .listStyle(.plain)
-        .scrollContentBackground(.hidden)
-        .contextMenu(forSelectionType: DictionaryModel.Row.self) { rows in
-            if rows.count == 1, let row = rows.first {
-                Button("Edit…") { edit(row) }
-            }
-            Button("Delete", role: .destructive) {
-                // Rows are positions, so a kept selection would point at other words after the delete.
-                model.delete(rows)
-                selection = []
-            }
-        } primaryAction: { rows in
-            if rows.count == 1, let row = rows.first {
-                edit(row)
-            }
-        }
-        .onDeleteCommand { delete() }
-        .overlay {
-            if rows.isEmpty, model.suggestions.isEmpty || !search.isEmpty {
-                emptyState
-            }
-        }
-    }
-
-    @ViewBuilder private var emptyState: some View {
-        if search.isEmpty {
-            EmptyState(
-                title: "No Words Yet", systemImage: "character.book.closed",
-                description: "Add names and terms the speech model should know, or fix a word it always gets wrong. "
-                    + "You can also import from Wispr Flow."
-            ) {
-                Button("Add Word…", action: add)
-            }
-        } else {
-            NoSearchResults(search: search)
-        }
-    }
-
-    private var editButtons: some View {
-        HStack {
-            Button("Add", systemImage: "plus", action: add)
-            Button("Delete", systemImage: "minus") { delete() }
-                .disabled(selection.isEmpty)
-            Spacer()
-        }
-        .buttonStyle(.borderless)
-        .labelStyle(.iconOnly)
-    }
-
-    /// The counts, a save error, and the import from Wispr Flow, under the box.
-    private var footer: some View {
-        HStack {
+        } header: {
+            Text("Words")
+        } footer: {
             VStack(alignment: .leading) {
-                // An empty dictionary shows its own message in the box; "0 words" adds nothing.
-                if !model.rows.isEmpty {
-                    Text(summary)
+                HStack(alignment: .firstTextBaseline) {
+                    // An empty dictionary says so in the list; "0 words" adds nothing.
+                    if !model.rows.isEmpty {
+                        Text(summary)
+                    }
+                    Spacer()
+                    // Alone at the trailing edge under the last group, as Activity's and Battery's "Options…". Its
+                    // stars need words.
+                    if !model.rows.isEmpty {
+                        Button("Advanced…") { isAdvancedShown = true }
+                    }
                 }
                 if let saveError = model.saveError {
                     Text(saveError).foregroundStyle(.red)
                 }
             }
-            .font(.callout)
-            .foregroundStyle(.secondary)
-            Spacer()
-            if isReading {
-                ProgressView().controlSize(.small)
-            }
-            if model.isWisprInstalled {
-                Button("Import from Wispr Flow…") { model.previewWisprImport() }
-                    .disabled(model.wisprImport != nil)
-            }
         }
         .task { await model.checkWisprInstalled() }
+    }
+
+    private var emptyText: String {
+        if !search.isEmpty { return "No words match “\(search)”." }
+        let wispr = model.isWisprInstalled ? " Or import them from Wispr Flow." : ""
+        return "No words yet. Add names and terms kotoba spells wrong, and it spells them right next time.\(wispr)"
     }
 
     private var visibleRows: [DictionaryModel.Row] {
@@ -182,14 +125,9 @@ private struct DictionaryPane: View {
 
     private var summary: String {
         let dictionary = model.dictionary
-        let hints =
-            dictionary.keyterms.count <= PersonalDictionary.maxKeyterms
-            ? "The speech model gets up to \(PersonalDictionary.maxKeyterms) words as hints."
-            : "The speech model gets \(PersonalDictionary.maxKeyterms) words as hints: starred words first, then the "
-                + "words you use most."
         let words = StatusText.counted(dictionary.terms.count, "word")
         let replacements = StatusText.counted(dictionary.rules.count, "replacement")
-        return "\(words), \(replacements). " + hints
+        return "\(words), \(replacements)."
     }
 
     private var isReading: Bool { model.wisprImport?.isReading == true }
@@ -201,11 +139,53 @@ private struct DictionaryPane: View {
     private func edit(_ row: DictionaryModel.Row) {
         editing = Editing(row: row, draft: model.draft(for: row))
     }
+}
 
-    private func delete() {
-        guard !selection.isEmpty else { return }
-        model.delete(selection)
-        selection = []
+/// The Dictionary page's "Advanced…": the hint limit, and the star that always sends a word to the speech model.
+struct DictionaryAdvanced: View {
+    let model: DictionaryModel
+
+    /// The rows that send a hint, then the ones too long to send. A replacement that deletes its word sends none and has
+    /// no row.
+    private var rows: [DictionaryModel.Row] {
+        let sent = model.rows.filter { model.keyterm(for: $0) != nil }
+        let tooLong = model.rows.filter { row in
+            let draft = model.draft(for: row)
+            return model.keyterm(for: row) == nil && !(draft.isReplacing && draft.replacement.isEmpty)
+        }
+        return sent + tooLong
+    }
+
+    /// The hint a row sends, or the text too long to send.
+    private func hint(of row: DictionaryModel.Row) -> String {
+        let draft = model.draft(for: row)
+        return model.keyterm(for: row) ?? (draft.isReplacing ? draft.replacement : draft.word)
+    }
+
+    var body: some View {
+        PageSheet(title: "Advanced Dictionary Settings") {
+            Section {
+                // On top, not in the footer: the limit is why the stars exist, and a long list scrolls a footer away.
+                Text(hints)
+                ForEach(rows) { row in
+                    StarRow(
+                        word: hint(of: row),
+                        sendsKeyterm: model.keyterm(for: row) != nil, isPinned: model.isPinned(row),
+                        isNotSent: model.isNotSent(row)
+                    ) { model.setPinned(row, $0) }
+                }
+            } header: {
+                Text("Hints for the Speech Model")
+            }
+        }
+    }
+
+    private var hints: String {
+        let limit = PersonalDictionary.maxKeyterms
+        return model.dictionary.keyterms.count <= limit
+            ? "kotoba sends up to \(limit) of your words as hints with each dictation. Star a word to send it first."
+            : "kotoba sends \(limit) of your words as hints with each dictation: starred words first, then the words "
+                + "you use most."
     }
 }
 
@@ -296,18 +276,6 @@ extension DictionaryPane {
     }
 }
 
-extension View {
-    /// Lays out a pane that cannot be a grouped `Form` (Dictionary: its word list needs a list's lazy rows and
-    /// selection) at a grouped Form's margins and width, so it lines up with every other pane: 20 pt from each edge,
-    /// at most 704 pt wide, centred. SwiftUI has no API that reads these; measured offscreen on macOS 27 (2026-10-16)
-    /// at pane widths from 360 to 1300 pt.
-    func groupedFormLayout() -> some View {
-        frame(maxWidth: 704)
-            .padding(20)
-            .frame(maxWidth: .infinity)
-    }
-}
-
 // MARK: - Snapshots
 
 @MainActor
@@ -316,8 +284,13 @@ extension Pane {
         let sample = sampleDictionary
         let (incoming, contents) = sampleWisprImport
         return [
-            MainWindow.snapshot(of: .dictionary(sampleModel(sample)), named: "settings-dictionary"),
-            MainWindow.snapshot(of: .dictionary(sampleOverCapModel), named: "settings-dictionary-over-cap"),
+            MainWindow.snapshot(of: .dictionary(sampleModel(sample)), named: "settings-dictionary", height: 1_000),
+            MainWindow.snapshot(
+                of: .dictionary(sampleModel(sample, suggestions: sampleSuggestions)),
+                named: "settings-dictionary-suggestions", height: 1_200),
+            Snapshot(name: "settings-dictionary-advanced") {
+                NSHostingView(rootView: DictionaryAdvanced(model: sampleOverCapModel))
+            },
             MainWindow.snapshot(
                 of: .dictionary(sampleModel(PersonalDictionary())), named: "settings-dictionary-empty"),
             importAlert(.preview(sample.importPreview(of: incoming), contents), named: "settings-dictionary-import"),

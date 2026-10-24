@@ -1,10 +1,8 @@
-// 0.5.0 ratchet: the Cleanup page's rollout puts this file on the page system and removes the next line.
-// swiftlint:disable ui_layout_literal
 import KotobaCore
 import SwiftUI
 
 extension AppMode {
-    /// The mode's name in the pane's pickers.
+    /// The style's name in the page's pickers.
     var title: String {
         switch self {
         case .code: "Code"
@@ -12,16 +10,16 @@ extension AppMode {
         }
     }
 
-    /// What the mode's apps are and what its cleanup does, under its toggle.
-    var summary: String {
+    /// Which apps the style is for, under its switch.
+    var apps: String {
         switch self {
-        case .code: "Terminals, editors and coding agents. Cleanup keeps commands, paths and flags as you said them."
-        case .writing: "Messages, mail and notes. Cleanup writes clear sentences in your words."
+        case .code: "Terminals, editors and coding agents"
+        case .writing: "Messages, mail and notes"
         }
     }
 
-    /// What the owner says and what the mode's cleanup pastes: the first example in the mode's prompt
-    /// (`OpenRouterCleaner`), so the pane shows what the model was taught.
+    /// What the owner says and what the style's cleanup pastes: the first example in the style's prompt
+    /// (`OpenRouterCleaner`), so the page shows what the model was taught.
     var sample: (spoken: String, cleaned: String) {
         switch self {
         case .code:
@@ -40,35 +38,30 @@ extension AppMode {
     }
 }
 
-// Custom: no native control shows a before and after. A group box clips its text inside a grouped form row.
-/// One mode's sample, as Wispr Flow's cleanup cards show one: what the owner says and what the cleanup pastes, side by
-/// side on the system's fill.
+// Custom: no native control shows a before and after.
+/// An example on the Cleanup page, in the row under the line that says what the feature does: what goes in and what
+/// kotoba pastes in two columns, the input in the secondary colour and the result in the primary one.
 struct CleanupSample: View {
-    let mode: AppMode
+    let before: (title: String, text: String)
+    let after: (title: String, text: String)
 
     var body: some View {
-        VStack(alignment: .leading) {
-            Text("\(mode.title) apps")
-            HStack(alignment: .top) {
-                card("You say", mode.sample.spoken, style: .secondary)
-                card("kotoba pastes", mode.sample.cleaned, style: .primary)
-            }
+        HStack(alignment: .top) {
+            column(before, style: .secondary)
+            column(after, style: .primary)
         }
         .accessibilityElement(children: .combine)
     }
 
-    private func card(_ title: String, _ text: String, style: HierarchicalShapeStyle) -> some View {
-        VStack(alignment: .leading, spacing: 4) {
-            Text(title)
-                .font(.caption)
+    private func column(_ part: (title: String, text: String), style: HierarchicalShapeStyle) -> some View {
+        VStack(alignment: .leading) {
+            Text(part.title)
+                .font(.subheadline)
                 .foregroundStyle(.secondary)
-            Text(text)
+            Text("“\(part.text)”")
                 .foregroundStyle(style)
-                .frame(maxWidth: .infinity, alignment: .leading)
                 .fixedSize(horizontal: false, vertical: true)
         }
-        .padding(8)
-        .frame(maxHeight: .infinity, alignment: .top)
-        .background(.quaternary, in: .rect(cornerRadius: 8))
+        .frame(maxWidth: .infinity, alignment: .topLeading)
     }
 }

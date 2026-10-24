@@ -1,10 +1,8 @@
-// 0.5.0 ratchet: the Dictionary page's rollout puts this file on the page system and removes the next line.
-// swiftlint:disable ui_layout_literal
 import AppKit
 import KotobaCore
 import SwiftUI
 
-/// Suggestions learned from corrections, at the top of the Dictionary pane: the owner adds or dismisses each one
+/// Suggestions learned from corrections, above the Dictionary page's words: the owner adds or dismisses each one
 /// (docs/research/auto-learning.md 4.2). Strong corrections kotoba reads back after a paste skip this list: they are
 /// added at once, with Undo on the pill (docs/spec.md, Owner round 2026-10-16).
 struct SuggestionsSection: View {
@@ -18,7 +16,6 @@ struct SuggestionsSection: View {
                 } dismiss: {
                     model.dismissSuggestions([suggestion.id])
                 }
-                .selectionDisabled()
             }
         } header: {
             HStack {
@@ -33,32 +30,18 @@ struct SuggestionsSection: View {
     }
 }
 
-/// "Learn from my edits", in the Dictionary pane's header box: a pane-level setting, as System Settings places them.
-/// Off, kotoba never observes another app's field (`AXFieldWatcher`).
+/// "Learn from my edits", at the top of the Dictionary page: a page-level setting, as System Settings places them. Off,
+/// kotoba never observes another app's field (`AXFieldWatcher`).
 struct LearnFromEditsToggle: View {
     // The registered default applies; the initial value here is only what @AppStorage requires.
     @AppStorage(AppDefaults.Key.learnsFromEdits.rawValue)
     private var isLearningFromEdits = AppDefaults.isLearningFromEdits
 
-    // Custom row: outside a Form a switch sits next to its label, and this row puts it at the trailing edge, as a Form
-    // row does. A grouped Form above the word list cannot hold it: a fixed-height Form makes the pane's ideal height
-    // the list's full height, and the main window then grows past the screen (spike, docs/research/native-ui.md).
-    // The subtitle font and the mini switch are what a grouped Form row draws (spike, 2026-10-16), so the row matches
-    // the switches of the other panes.
     var body: some View {
-        HStack {
-            VStack(alignment: .leading) {
-                Text("Learn from my edits")
-                Text("When you fix a word after kotoba pastes it, the word goes into your dictionary.")
-                    .font(.subheadline)
-                    .foregroundStyle(.secondary)
-            }
-            Spacer()
-            Toggle("Learn from my edits", isOn: $isLearningFromEdits)
-                .labelsHidden()
-                .toggleStyle(.switch)
-                .controlSize(.mini)
-        }
+        SwitchRow(
+            "Learn from my edits",
+            subtitle: "When you fix a word after kotoba pastes it, the word goes into your dictionary.",
+            isOn: $isLearningFromEdits)
     }
 }
 
@@ -69,11 +52,13 @@ private struct SuggestionRow: View {
 
     var body: some View {
         let candidate = suggestion.candidate
-        HStack(spacing: 8) {
-            VStack(alignment: .leading, spacing: 2) {
+        // Not a `PageRow`: the title is a correction ("versel → Vercel"), not one string. Its subtitle takes a row's
+        // subtitle style.
+        HStack {
+            VStack(alignment: .leading) {
                 SuggestionCandidateLabel(candidate: candidate)
                 if !detail.isEmpty {
-                    Text(detail).font(.caption).foregroundStyle(.secondary)
+                    Text(detail).font(.subheadline).foregroundStyle(.secondary)
                 }
             }
             Spacer()
@@ -84,7 +69,6 @@ private struct SuggestionRow: View {
                 .help("Dismiss")
             Button("Add", action: add)
         }
-        .controlSize(.small)
     }
 
     /// "Cursor · Seen 3 times"
@@ -110,7 +94,7 @@ struct SuggestionCandidateLabel: View {
     let candidate: SuggestionCandidate
 
     var body: some View {
-        HStack(spacing: 6) {
+        HStack {
             if candidate.proposes == .termAndRule {
                 Text(candidate.heard)
                 Image(systemName: "arrow.right").foregroundStyle(.secondary)

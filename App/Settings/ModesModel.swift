@@ -1,5 +1,3 @@
-// 0.5.0 ratchet: the Cleanup page's rollout puts this file on the page system and removes the next line.
-// swiftlint:disable ui_layout_literal row_is_page_row page_form
 import AppKit
 import KotobaCore
 import KotobaProviders
@@ -8,17 +6,10 @@ import Observation
 import SwiftUI
 import UniformTypeIdentifiers
 
-extension Pane {
-    static func modes(_ model: ModesModel) -> Self {
-        Pane(id: .modes) {
-            AnyView(ModesPane(model: model))
-        }
-    }
-}
-
-/// The per-app modes as the Modes pane shows them (story 29): which modes clean every dictation, the installed apps
-/// that have a mode, and the mode of every other app. Each change saves the rules and sends them to the pipeline, so the
-/// next dictation uses them. A rule for an app that is not installed (a seed app) stays, with no row.
+/// The Cleanup page's settings: the per-app modes (story 29; "App styles" on the page): which modes clean every
+/// dictation, the installed apps that have a mode, and the mode of every other app; and the cleanup model. Each rules
+/// change saves the rules and sends them to the pipeline, so the next dictation uses them. A rule for an app that is not
+/// installed (a seed app) stays, with no row.
 @MainActor
 @Observable
 final class ModesModel {
@@ -45,6 +36,9 @@ final class ModesModel {
         var hasCleanupKey: @MainActor () -> Bool = { true }
         /// Opens the pane where the owner adds that key.
         var addKey: @MainActor () -> Void = {}
+        /// The cleanup model (`TranscriptionSettings.cleanupModel`).
+        var cleanupModel: @MainActor () -> CleanupModel = { .geminiFlashLite }
+        var saveCleanupModel: @MainActor (CleanupModel) -> Void = { _ in }
 
         /// Messages, Mail and Notes in Writing, Terminal in Code, and a seed app that is not installed; TextEdit and
         /// Safari as recent apps. All are system apps, so their icons render on any Mac.
@@ -55,13 +49,15 @@ final class ModesModel {
                 "com.apple.MobileSMS": "Messages", "com.apple.mail": "Mail", "com.apple.Notes": "Notes",
                 "com.apple.Terminal": "Terminal", "com.apple.TextEdit": "TextEdit", "com.apple.Safari": "Safari",
             ]
+            var cleanupModel = CleanupModel.geminiFlashLite
             return Self(
                 rules: { rules }, save: { rules = $0 }, name: { names[$0] }, icon: InstalledApp.icon(of:),
                 recentApps: {
                     ["com.apple.TextEdit", "com.apple.Terminal", "com.apple.Safari"].map {
                         DictationApp(bundleID: $0, name: names[$0])
                     }
-                })
+                },
+                cleanupModel: { cleanupModel }, saveCleanupModel: { cleanupModel = $0 })
         }
 
         static let sampleRules = ModeRules(
@@ -77,9 +73,15 @@ final class ModesModel {
     private(set) var rows: [Row] = []
     /// Installed recent apps with no mode yet, for the Add menu, with their names.
     private(set) var recent: [DictationApp] = []
-    /// Each shown app's icon, looked up once per app, not at each draw or change.
+    /// Each listed app's icon, looked up once per app, not at each draw or change.
     private(set) var icons: [String: NSImage] = [:]
     private(set) var isCleanupKeyMissing = false
+    var cleanupModel: CleanupModel {
+        didSet { source.saveCleanupModel(cleanupModel) }
+    }
+    var isAdvancedShown = false
+    /// Observable itself: the shortcut rows follow a new recording.
+    @ObservationIgnored let chords: HotkeyChords
     @ObservationIgnored private var recentApps: [DictationApp] = []
     /// Each app's installed name, or nil when it is not installed, looked up once per app.
     @ObservationIgnored private var names: [String: String?] = [:]
@@ -87,9 +89,11 @@ final class ModesModel {
 
     /// Reads only the rules: the window builds every pane's model when it opens, and the app lookups (3-9 ms for the
     /// standard lists, measured 2026-10-16) wait until this pane shows (`show()`).
-    init(source: Source) {
+    init(source: Source, chords: HotkeyChords) {
         self.source = source
+        self.chords = chords
         rules = source.rules()
+        cleanupModel = source.cleanupModel()
     }
 
     var otherApps: AppMode {
@@ -176,7 +180,7 @@ final class ModesModel {
         recent = recentApps.filter { rules.apps[$0.bundleID] == nil && $0.bundleID != own }.compactMap { app in
             name(of: app.bundleID).map { DictationApp(bundleID: app.bundleID, name: $0) }
         }
-        for id in rows.map(\.bundleID) + recent.map(\.bundleID) where icons[id] == nil {
+        for id in rows.map(\.bundleID) where icons[id] == nil {
             icons[id] = source.icon(id)
         }
     }
@@ -193,8 +197,8 @@ extension ModesModel.Source {
     /// The rules in UserDefaults, the installed apps, the apps of the last 30 days in the usage ledger, and an open
     /// panel. `send` gives saved rules to the pipeline.
     static func live(
-        history: HistoryStore?, hasCleanupKey: @escaping @MainActor () -> Bool, addKey: @escaping @MainActor () -> Void,
-        send: @escaping @MainActor (ModeRules) -> Void
+        history: HistoryStore?, settings: TranscriptionSettings, hasCleanupKey: @escaping @MainActor () -> Bool,
+        addKey: @escaping @MainActor () -> Void, send: @escaping @MainActor (ModeRules) -> Void
     ) -> Self {
         Self(
             rules: { AppDefaults.modeRules },
@@ -217,7 +221,9 @@ extension ModesModel.Source {
             },
             chooseApp: chooseFromDisk,
             hasCleanupKey: hasCleanupKey,
-            addKey: addKey)
+            addKey: addKey,
+            cleanupModel: { settings.cleanupModel },
+            saveCleanupModel: { settings.cleanupModel = $0 })
     }
 
     /// The system's open panel in /Applications, for apps the owner has not dictated into yet.
@@ -227,145 +233,10 @@ extension ModesModel.Source {
         panel.allowedContentTypes = [.application]
         panel.directoryURL = URL(filePath: "/Applications", directoryHint: .isDirectory)
         panel.prompt = "Add"
-        panel.message = "Choose an app to give it a mode."
+        panel.message = "Choose an app to give it a style."
         guard panel.runModal() == .OK, let url = panel.url, let id = Bundle(url: url)?.bundleIdentifier else {
             return nil
         }
         return DictationApp(bundleID: id, name: InstalledApp.name(of: id))
-    }
-}
-
-private struct ModesPane: View {
-    @Bindable var model: ModesModel
-
-    var body: some View {
-        Form {
-            Section {
-                if model.isCleanupKeyMissing {
-                    LabeledContent {
-                        Button("Add Key…", action: model.addKey)
-                    } label: {
-                        Label {
-                            Text("Cleanup needs your \(ProviderAccount.openRouter.title) key")
-                            Text("Without it, kotoba pastes the text as spoken.")
-                        } icon: {
-                            Image(systemName: "exclamationmark.triangle.fill").symbolRenderingMode(.multicolor)
-                        }
-                    }
-                }
-                ForEach(AppMode.allCases, id: \.self) { mode in
-                    Toggle(isOn: cleansEveryDictation(mode)) {
-                        Text("\(mode.title) apps")
-                        Text(mode.summary)
-                    }
-                }
-            } header: {
-                Text("Clean Up Every Dictation")
-            } footer: {
-                Text(
-                    "When off, kotoba cleans up only the dictations you start with the cleanup shortcut. "
-                        + "Each cleanup takes a second or two longer.")
-            }
-            Section("Examples") {
-                ForEach(AppMode.allCases, id: \.self) { CleanupSample(mode: $0) }
-            }
-            Section {
-                EditableList(
-                    rows: model.rows, emptyText: "No apps in the list: every app uses the mode below.",
-                    addTitle: "Add App", addHelp: "Give an app its own mode", removeTitle: "Remove from List",
-                    remove: model.remove
-                ) { row in
-                    LabeledContent {
-                        Picker(row.name, selection: mode(of: row)) {
-                            modeChoices
-                        }
-                        .labelsHidden()
-                        .fixedSize()
-                    } label: {
-                        Label {
-                            Text(row.name)
-                        } icon: {
-                            icon(of: row.bundleID)
-                        }
-                    }
-                } addItems: {
-                    if !model.recent.isEmpty {
-                        Section("Recent Apps") {
-                            ForEach(model.recent, id: \.bundleID) { app in
-                                Button {
-                                    model.add(app)
-                                } label: {
-                                    Label {
-                                        Text(app.name ?? app.bundleID)
-                                    } icon: {
-                                        icon(of: app.bundleID)
-                                    }
-                                }
-                            }
-                        }
-                    }
-                    Button("Choose App…", action: model.chooseApp)
-                }
-            } header: {
-                Text("Apps")
-            } footer: {
-                Text("kotoba uses the mode of the app in front when you stop a dictation.")
-            }
-            Section {
-                Picker("Other apps", selection: $model.otherApps) {
-                    modeChoices
-                }
-            } footer: {
-                Text("Apps not in the list use this mode.")
-            }
-        }
-        .formStyle(.grouped)
-        .onAppear(perform: model.show)
-        .task { await model.readRecentApps() }
-    }
-
-    private var modeChoices: some View {
-        ForEach(AppMode.allCases, id: \.self) { Text($0.title).tag($0) }
-    }
-
-    /// Decoration: the row's name says which app it is (as in the History pane).
-    private func icon(of bundleID: String) -> some View {
-        Group {
-            if let image = model.icons[bundleID] {
-                Image(nsImage: image).resizable()
-            } else {
-                Color.clear
-            }
-        }
-        .frame(width: 20, height: 20)
-        .accessibilityHidden(true)
-    }
-
-    private func mode(of row: ModesModel.Row) -> Binding<AppMode> {
-        Binding(get: { row.mode }, set: { model.setMode($0, of: row.bundleID) })
-    }
-
-    private func cleansEveryDictation(_ mode: AppMode) -> Binding<Bool> {
-        Binding(get: { model.cleansEveryDictation(mode) }, set: { model.setCleansEveryDictation(mode, $0) })
-    }
-}
-
-@MainActor
-extension Pane {
-    /// No OpenRouter key: the cleanup section says so, with the fix on a button.
-    private static var noKeyModel: ModesModel {
-        var source = ModesModel.Source.sample()
-        source.hasCleanupKey = { false }
-        return ModesModel(source: source)
-    }
-
-    static func modesSnapshots() -> [Snapshot] {
-        [
-            MainWindow.snapshot(of: .modes(ModesModel(source: .sample())), named: "settings-modes", height: 960),
-            MainWindow.snapshot(
-                of: .modes(ModesModel(source: .sample(rules: ModeRules()))), named: "settings-modes-empty",
-                height: 860),
-            MainWindow.snapshot(of: .modes(noKeyModel), named: "settings-modes-no-key", height: 1020),
-        ]
     }
 }

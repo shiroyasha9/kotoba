@@ -1,5 +1,3 @@
-// 0.5.0 ratchet: the Speech page's rollout puts this file on the page system and removes the next line.
-// swiftlint:disable ui_layout_literal page_form
 import KotobaProviders
 import Observation
 import SwiftUI
@@ -103,40 +101,39 @@ final class SpeechSettingsModel {
     }
 }
 
+/// The speech service and its key; the direct routes, the Azure endpoint, other keys and the Grok switches are in
+/// "Advanced…" (docs/research/ui-redesign.md, "Page map").
 private struct SpeechPane: View {
     @Bindable var model: SpeechSettingsModel
+    @State private var isAdvancedShown = false
 
     private var account: ProviderAccount { model.route.account }
-    /// The saved keys the pane shows nowhere else: OpenRouter's has its own section while another provider transcribes.
-    private var otherSavedKeys: [ProviderAccount] {
-        ProviderAccount.allCases.filter { $0 != account && $0 != .openRouter && model.keyChecks.isSaved($0) }
+
+    /// The OpenRouter models, and a direct one while it is in use, so the page always shows the model that transcribes.
+    private var routes: [TranscriptionRoute] {
+        TranscriptionRoute.allCases.filter { !$0.isAdvanced || $0 == model.route }
     }
 
     var body: some View {
-        Form {
+        PageForm {
             Section {
-                Picker("Speech model", selection: $model.route) {
-                    ForEach(TranscriptionRoute.allCases.filter { !$0.isAdvanced }, id: \.self) { route in
-                        Text(route.title).tag(route)
-                    }
-                    Section("Advanced") {
-                        ForEach(TranscriptionRoute.allCases.filter(\.isAdvanced), id: \.self) { route in
-                            Text(route.title).tag(route)
-                        }
-                    }
-                }
-                if model.route.isGrok {
-                    Toggle("Format numbers and units", isOn: $model.isGrokFormatOn)
-                    Toggle("Keep filler words", isOn: $model.keepsGrokFillerWords)
-                }
-            } footer: {
-                if model.route == .openRouterGrok {
-                    Text("OpenRouter may keep this audio. With MAI-Transcribe-2 it keeps none.")
-                }
+                PageHeader(page: .speech, summary: "The service that turns your speech into text, and your key for it.")
+            }
+            Section("Speech Model") {
+                ForEach(routes, id: \.self) { RouteRow(model: model, route: $0) }
             }
             Section {
                 // The section header names the provider, so the row says only "Key".
                 KeyRow(account: account, label: "Key", model: model)
+                // The endpoint is in "Advanced…", where Azure is chosen; without it no dictation reaches Azure.
+                if model.route == .azureMAI && model.azureEndpoint.isEmpty {
+                    PageRow(title: "Azure needs your endpoint", subtitle: "Until you add it, dictations wait.") {
+                        SymbolTile(
+                            systemImage: "exclamationmark.triangle", tint: .orange, side: PageMetrics.rowTileSide)
+                    } trailing: {
+                        Button("Add Endpoint…") { isAdvancedShown = true }
+                    }
+                }
             } header: {
                 Text("\(account.title) Key")
             } footer: {
@@ -146,12 +143,68 @@ private struct SpeechPane: View {
                     if let price = PriceLine.text(for: model.route) {
                         Text(price)
                     }
-                    HStack(spacing: 16) {
+                    HStack {
                         Button("Get a Key…") { NSWorkspace.shared.open(account.keysPage) }
                         Button("See Pricing…") { NSWorkspace.shared.open(account.pricingPage) }
+                        Spacer()
+                        if account == .openRouter {
+                            advancedButton
+                        }
                     }
                     .buttonStyle(.link)
                 }
+            }
+            // Cleanup and Rewrite run on OpenRouter whatever the speech model, so its key always has a place here: the
+            // pill's “Add Key…” for a rewrite opens this page.
+            if account != .openRouter {
+                Section {
+                    KeyRow(account: .openRouter, label: "Key", model: model)
+                } header: {
+                    Text("\(ProviderAccount.openRouter.title) Key for Cleanup and Rewrite")
+                } footer: {
+                    HStack {
+                        Button("Get a Key…") { NSWorkspace.shared.open(ProviderAccount.openRouter.keysPage) }
+                            .buttonStyle(.link)
+                        Spacer()
+                        advancedButton
+                    }
+                }
+            }
+        }
+        .sheet(isPresented: $isAdvancedShown) {
+            SpeechAdvanced(model: model)
+        }
+    }
+
+    /// Alone at the trailing edge under the last group, as Activity's and Battery's "Options…".
+    private var advancedButton: some View {
+        Button("Advanced…") { isAdvancedShown = true }
+            .buttonStyle(.automatic)
+    }
+}
+
+/// The speech page's "Advanced…": the direct routes with their own keys, the Azure endpoint, the Grok switches and
+/// the keys the page shows nowhere else.
+struct SpeechAdvanced: View {
+    @Bindable var model: SpeechSettingsModel
+
+    /// The saved keys the page shows nowhere else: OpenRouter's has its own group while another service transcribes.
+    private var otherSavedKeys: [ProviderAccount] {
+        ProviderAccount.allCases.filter {
+            $0 != model.route.account && $0 != .openRouter && model.keyChecks.isSaved($0)
+        }
+    }
+
+    var body: some View {
+        PageSheet(title: "Advanced Speech Settings") {
+            Section {
+                ForEach(TranscriptionRoute.allCases.filter(\.isAdvanced), id: \.self) {
+                    RouteRow(model: model, route: $0)
+                }
+            } header: {
+                Text("Other Services")
+            } footer: {
+                Text("Your own xAI or Azure account, in place of OpenRouter. Its key goes on the Speech page.")
             }
             if model.route == .azureMAI {
                 Section {
@@ -162,29 +215,48 @@ private struct SpeechPane: View {
                     Text("Use a Speech resource in the region nearest to you.")
                 }
             }
-            // Cleanup and Polish run on OpenRouter whatever the speech model, so its key always has a place here: the
-            // pill's “Add Key…” for Polish opens this pane.
-            if account != .openRouter {
-                Section {
-                    KeyRow(account: .openRouter, label: "Key", model: model)
-                } header: {
-                    Text("\(ProviderAccount.openRouter.title) Key for Cleanup and Polish")
-                } footer: {
-                    Button("Get a Key…") { NSWorkspace.shared.open(ProviderAccount.openRouter.keysPage) }
-                        .buttonStyle(.link)
+            if model.route.isGrok {
+                Section("Grok") {
+                    SwitchRow(
+                        "Format numbers and units", subtitle: "Writes “twenty dollars” as “$20”.",
+                        isOn: $model.isGrokFormatOn)
+                    SwitchRow(
+                        "Keep filler words", subtitle: "Pastes “um” and “uh” as you said them.",
+                        isOn: $model.keepsGrokFillerWords)
                 }
             }
             if !otherSavedKeys.isEmpty {
-                Section {
-                    DisclosureGroup("Other Keys") {
-                        ForEach(otherSavedKeys, id: \.self) { other in
-                            KeyRow(account: other, label: other.title, model: model)
-                        }
+                Section("Other Keys") {
+                    ForEach(otherSavedKeys, id: \.self) { other in
+                        KeyRow(account: other, label: other.title, model: model)
                     }
                 }
             }
         }
-        .formStyle(.grouped)
+    }
+}
+
+/// A speech model: its name as the title and what it is in plain words under it (plan, Copy: model names stay visible).
+private struct RouteRow: View {
+    @Bindable var model: SpeechSettingsModel
+    let route: TranscriptionRoute
+
+    var body: some View {
+        ChoiceRow(title: route.menuTitle, subtitle: route.summary, isChosen: model.route == route) {
+            model.route = route
+        }
+    }
+}
+
+extension TranscriptionRoute {
+    /// What the model is, in plain words: the line under its name on the Speech page.
+    var summary: String {
+        switch self {
+        case .openRouterMAI: "Recommended: the most accurate in kotoba’s tests. OpenRouter keeps none of your audio."
+        case .openRouterGrok: "Grok from xAI. OpenRouter may keep your audio."
+        case .xaiGrok: "Grok straight from xAI, with your own xAI key."
+        case .azureMAI: "MAI-Transcribe-2 from your own Azure Speech resource."
+        }
     }
 }
 
@@ -236,7 +308,9 @@ private struct KeyRow: View {
                     StatusLabel("Saved", systemImage: "checkmark.circle.fill", color: .green)
                 }
             }
-            .font(.callout)
+            // A row's subtitle style (`RowText`); only the symbol keeps the status colour.
+            .font(.subheadline)
+            .foregroundStyle(.secondary)
             .controlSize(.small)
         }
     }
@@ -265,6 +339,18 @@ extension Pane {
                         route: .azureMAI, azureEndpoint: "", savedKeys: [.azure],
                         keyStatus: [.azure: .checked(.invalid)])),
                 named: "settings-speech-azure"),
+            Snapshot(name: "settings-speech-advanced") {
+                NSHostingView(
+                    rootView: SpeechAdvanced(
+                        model: .sample(route: .openRouterGrok, azureEndpoint: "", savedKeys: [.openRouter, .xai])))
+            },
+            Snapshot(name: "settings-speech-advanced-azure") {
+                NSHostingView(
+                    rootView: SpeechAdvanced(
+                        model: .sample(
+                            route: .azureMAI, azureEndpoint: "https://example.cognitiveservices.azure.com/",
+                            savedKeys: [.openRouter, .azure])))
+            },
             removeKeyAlert,
         ]
     }

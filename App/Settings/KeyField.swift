@@ -1,5 +1,3 @@
-// 0.5.0 ratchet: the Speech page's rollout puts this file on the page system and removes the next line.
-// swiftlint:disable ui_layout_constant
 import KotobaProviders
 import SwiftUI
 
@@ -10,7 +8,8 @@ import SwiftUI
 struct KeyField: View {
     let account: ProviderAccount
     let keyChecks: KeyChecks
-    var fieldWidth: CGFloat = 220
+    /// Nil: the field takes the room its row leaves (the Speech page). Onboarding sets a width.
+    var fieldWidth: CGFloat?
     /// The owner clicked Change…: the field shows over the saved key until Save or Cancel.
     @State private var isChanging = false
     @State private var draft = ""

@@ -133,7 +133,7 @@ extension Pane {
             .history(history),
             .general(.sample()),
             .dictionary(sampleModel(sampleDictionary, suggestions: suggestions)),
-            .modes(ModesModel(source: .sample())),
+            .modes(ModesModel(source: .sample(), chords: HotkeyChords(defaults: nil))),
             .microphones(MicrophoneModel(source: .sample()) {}),
             .speech(.sample(route: .openRouterMAI, azureEndpoint: "")),
             .activity(.sample()),
@@ -160,7 +160,7 @@ extension Pane {
             .history(HistoryModel(rows: [])),
             .general(.sample()),
             .dictionary(sampleModel(PersonalDictionary())),
-            .modes(ModesModel(source: .sample())),
+            .modes(ModesModel(source: .sample(), chords: HotkeyChords(defaults: nil))),
             .microphones(MicrophoneModel(source: .sample()) {}),
             .speech(.sample(route: .openRouterMAI, azureEndpoint: "")),
             .activity(.empty),
@@ -170,7 +170,7 @@ extension Pane {
     /// The pages that still have a toolbar (History and Dictionary: search and row actions). A page has no toolbar
     /// (docs/research/ui-redesign.md, "Window"), so the title bar keeps one height; their rollout moves these into the
     /// page and empties this list. `scripts/ratchet-done.sh` fails the release while it has a page.
-    static let pagesWithToolbar: [PaneID] = [.history, .dictionary]
+    static let pagesWithToolbar: [PaneID] = [.history]
 
     /// One window switched through every page without a toolbar in turn, drawn at each step: the title bar, traffic
     /// lights and window frame stay where they were on Home.

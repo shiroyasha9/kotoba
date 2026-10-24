@@ -143,9 +143,11 @@ final class MainWindowController {
             .modes(
                 ModesModel(
                     source: .live(
-                        history: history, hasCleanupKey: { [vault] in vault.hasKey(for: .openRouter) },
+                        history: history, settings: routeSettings,
+                        hasCleanupKey: { [vault] in vault.hasKey(for: .openRouter) },
                         addKey: { [weak self] in self?.show(selecting: .speech) },
-                        send: { [weak self] in self?.send($0) }))))
+                        send: { [weak self] in self?.send($0) }),
+                    chords: .shared)))
         let audio = audio
         panes.append(
             .microphones(
