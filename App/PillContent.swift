@@ -92,9 +92,6 @@ extension PillContent {
 
 /// What the pill shows for each dictation state, for the panel and the snapshots.
 extension IndicatorPanel {
-    /// In place of a dictation's symbol while Polish rewrites the last dictation (History's row reads it too).
-    nonisolated static let polishSymbol = "text.badge.star"
-
     /// What the pill shows for `state`; nil hides it. `timedFrom`: the instant the recording's time counts from, read
     /// once it passes the 10-minute mark.
     static func content(

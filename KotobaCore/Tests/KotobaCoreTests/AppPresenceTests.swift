@@ -134,6 +134,17 @@ struct AppPresenceTests {
                 == .onboarding)
     }
 
+    /// Audit 1, A2: "Settings…" (⌘,) during onboarding opened the main window on General beside it. It asks the reopen
+    /// rule too, and then shows the main window on a settings page.
+    @Test func settingsDuringOnboardingBringsBackOnboarding() {
+        #expect(
+            AppPresence.reopenWindow(needsOnboarding: false, isOnboardingOpen: true, isOnboardingDone: false)
+                == .onboarding)
+        #expect(
+            AppPresence.reopenWindow(needsOnboarding: true, isOnboardingOpen: false, isOnboardingDone: false)
+                == .onboarding)
+    }
+
     /// Closed once setup was done but before Done: a launch would open the main window, and so does a reopen.
     @Test func aReopenAfterOnboardingClosedWhenSetUpShowsTheMainWindow() {
         #expect(

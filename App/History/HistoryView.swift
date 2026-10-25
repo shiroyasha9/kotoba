@@ -267,7 +267,8 @@ struct HistoryStatus {
         switch record.status {
         case .pasted, .copied:
             guard record.polishedText != nil else { return nil }
-            (title, systemImage, isProblem) = ("Rewritten", IndicatorPanel.polishSymbol, false)
+            // A row whose text Rewrite replaced.
+            (title, systemImage, isProblem) = ("Rewritten", "text.badge.star", false)
         // Text the owner did not get at its stop: a retry's, or one that came while kotoba quit.
         case .recovered, .notPasted:
             (title, systemImage, isProblem) =

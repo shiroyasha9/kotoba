@@ -124,8 +124,12 @@ struct ActivityPage: View {
         } header: {
             Text("This Month")
         } footer: {
-            PageFooter(advanced: month.models.isEmpty ? nil : { model.isAdvancedShown = true })
+            PageFooter(advanced: month.models.isEmpty ? nil : showAdvanced)
         }
+    }
+
+    private func showAdvanced() {
+        model.isAdvancedShown = true
     }
 
     /// The page's spend in cents, as a bill shows it (chief of staff, 2026-10-25); "Less than $0.01" for a spend that

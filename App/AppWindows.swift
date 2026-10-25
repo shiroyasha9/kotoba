@@ -32,10 +32,12 @@ extension AppDelegate {
         return false
     }
 
-    /// A reopen and "Open kotoba…" (the menu bar and Dock menus).
-    func showApp() {
+    /// A reopen, "Open kotoba…" (the menu bar and Dock menus) and "Settings…" (`settings`, the app menu): onboarding
+    /// while it goes on (owner QA 2, R5), else the main window.
+    func showApp(settings: Bool = false) {
         switch setup.reopenWindow {
         case .onboarding: setup.showOnboarding()
+        case .main where settings: mainWindow.showSettings()
         case .main: mainWindow.show()
         }
     }
