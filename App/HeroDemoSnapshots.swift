@@ -192,17 +192,7 @@ enum HeroDemo {
         let place = CGRect(
             x: windowFrame.minX * scale, y: windowFrame.minY * scale, width: windowFrame.width * scale,
             height: windowFrame.height * scale)
-        // The capture of a window that was never on screen has no shadow, also with a shadow margin (measured
-        // 2026-10-25: the margin came back clear): the demo draws an active window's, wide and soft under it and close
-        // at its edge, from the window's own shape.
-        for (drop, blur, alpha) in [(18.0, 50.0, isDark ? 0.55 : 0.24), (0.0, 2.0, isDark ? 0.7 : 0.2)] {
-            context.saveGState()
-            context.setShadow(
-                offset: CGSize(width: 0, height: -drop * scale), blur: blur * scale,
-                color: CGColor(gray: 0, alpha: alpha))
-            context.draw(capture, in: place)
-            context.restoreGState()
-        }
+        Showcase.drawWindow(capture, in: place, of: context, scale: scale, isDark: isDark)
         guard let image = context.makeImage() else { throw DemoError.noBitmap }
         return image
     }

@@ -2,9 +2,8 @@ import AppKit
 
 /// The README's and the site's images (`make readme-images`, `--showcase <folder>`): the main window as macOS draws it
 /// (title bar, glass toolbar, rounded corners) and the pill's main looks, on a colourful stage, light and dark, at 2x.
-/// The window is the real one, captured and put on the stage, with no shadow: the window server leaves it out of a
-/// window that was never on screen (the hero demo draws one, `HeroDemo.onStage`). The pill's glass refracts the stage
-/// drawn in its own window. macOS 27 draws the sidebar edge to edge, over the page's background: no Apple app has
+/// The window is the real one, captured and put on the stage with an active window's shadow (`drawWindow`). The pill's
+/// glass refracts the stage drawn in its own window. macOS 27 draws the sidebar edge to edge, over the page's background: no Apple app has
 /// a floating sidebar there (sidebar spike, 2026-10-24), so the images show it as it is.
 @MainActor
 enum Showcase {
@@ -15,57 +14,43 @@ enum Showcase {
     /// The stage around the window, on each side.
     private static let windowMargin: CGFloat = 64
 
-    /// The window in the middle of a stage `windowMargin` larger on each side.
+    /// The window in the middle of a stage `windowMargin` larger on each side, with its shadow (`drawWindow`).
     static func windowOnStage(_ window: NSWindow, scale: CGFloat, appearance: NSAppearance) throws -> CGImage {
-        let capture = try SnapshotCapture.image(of: window, scale: scale, shadowMargin: windowMargin)
-        let size = window.frame.size
-        let width = Int(((size.width + 2 * windowMargin) * scale).rounded())
-        let height = Int(((size.height + 2 * windowMargin) * scale).rounded())
+        let capture = try SnapshotCapture.image(of: window, scale: scale)
+        let margin = Int((windowMargin * scale).rounded())
+        let width = capture.width + 2 * margin
+        let height = capture.height + 2 * margin
         guard let space = CGColorSpace(name: CGColorSpace.sRGB),
             let context = CGContext(
                 data: nil, width: width, height: height, bitsPerComponent: 8, bytesPerRow: 0, space: space,
-                bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue),
-            let corner = windowCorner(in: capture)
-        else { throw ShowcaseError.noWindow }
+                bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue)
+        else { throw ShowcaseError.noBitmap }
         Stage.draw(in: context, size: CGSize(width: width, height: height), isDark: isDark(appearance))
-        // The capture's top left goes where the window lands `windowMargin` from the stage's top left.
-        let left = windowMargin * scale - corner.x
-        let top = windowMargin * scale - corner.y
-        context.draw(
+        drawWindow(
             capture,
-            in: CGRect(
-                x: left, y: CGFloat(height) - top - CGFloat(capture.height), width: CGFloat(capture.width),
-                height: CGFloat(capture.height)))
-        guard let image = context.makeImage() else { throw ShowcaseError.noWindow }
+            in: CGRect(x: margin, y: margin, width: capture.width, height: capture.height), of: context, scale: scale,
+            isDark: isDark(appearance))
+        guard let image = context.makeImage() else { throw ShowcaseError.noBitmap }
         return image
     }
 
-    /// Where the window starts in its capture, in pixels from the top left: the first opaque pixel along the middle
-    /// row and the middle column (the shadow around it is translucent).
-    private static func windowCorner(in capture: CGImage) -> CGPoint? {
-        let width = capture.width
-        let height = capture.height
-        var pixels = [UInt8](repeating: 0, count: width * height * 4)
-        let isDrawn = pixels.withUnsafeMutableBytes { buffer in
-            guard let space = CGColorSpace(name: CGColorSpace.sRGB),
-                let context = CGContext(
-                    data: buffer.baseAddress, width: width, height: height, bitsPerComponent: 8, bytesPerRow: width * 4,
-                    space: space, bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue)
-            else { return false }
-            context.draw(capture, in: CGRect(x: 0, y: 0, width: width, height: height))
-            return true
+    /// Draws `capture`, a window as `SnapshotCapture` has it, in `rect` of `context`, with the shadow macOS gives an
+    /// active window. The window server leaves the shadow out of a window that was never on screen (2026-10-25: the
+    /// pixels around the window matched the stage), so it is drawn here from the window's own shape (its alpha): wide
+    /// and soft under it, and close at its edge. `scale` is pixels per point.
+    static func drawWindow(_ capture: CGImage, in rect: CGRect, of context: CGContext, scale: CGFloat, isDark: Bool) {
+        for (drop, blur, alpha) in [(18.0, 50.0, isDark ? 0.55 : 0.24), (0.0, 2.0, isDark ? 0.7 : 0.2)] {
+            context.saveGState()
+            context.setShadow(
+                offset: CGSize(width: 0, height: -drop * scale), blur: blur * scale,
+                color: CGColor(gray: 0, alpha: alpha))
+            context.draw(capture, in: rect)
+            context.restoreGState()
         }
-        // Rows from the top: a bitmap context's memory starts at the image's top row.
-        func isOpaque(_ x: Int, _ y: Int) -> Bool { pixels[(y * width + x) * 4 + 3] == 255 }
-        guard isDrawn, let x = (0..<width).first(where: { isOpaque($0, height / 3) }),
-            let y = (0..<height).first(where: { isOpaque(width / 3, $0) })
-        else { return nil }
-        return CGPoint(x: x, y: y)
     }
 
     private enum ShowcaseError: Error {
-        /// The capture has no opaque window in it.
-        case noWindow
+        case noBitmap
     }
 }
 
