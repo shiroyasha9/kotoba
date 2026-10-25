@@ -138,10 +138,10 @@ extension OnboardingController {
                 return model
             },
             window("onboarding-done-ready") { model(.done, ready) },
-            // The owner turned the login switch and macOS refused: the footnote under it.
+            // The owner turned the login switch on and macOS refused: the switch goes back off, the footnote under it.
             window("onboarding-done-login-problem") {
-                let model = model(.done, ready, loginProblem: .failed)
-                model.setOpensAtLogin(false)
+                let model = model(.done, ready, opensAtLogin: false, loginProblem: .failed)
+                model.setOpensAtLogin(true)
                 return model
             },
             window("onboarding-done-imported") {
@@ -178,15 +178,15 @@ extension OnboardingController {
     /// made-up shortcuts.
     private static func model(
         _ step: OnboardingStep, _ readiness: Readiness, keys: [ProviderAccount: KeyStatus] = [:], hasKey: Bool = false,
-        loginProblem: LaunchAtLogin.Problem? = nil,
+        opensAtLogin: Bool = true, loginProblem: LaunchAtLogin.Problem? = nil,
         wisprKeys: [String: String]? = OnboardingModel.Source.sampleWisprKeys,
         wisprRuns: Bool = false, isWisprInstalled: Bool = true
     ) -> OnboardingModel {
         let model = OnboardingModel(
             step: step, readiness: readiness, keyChecks: .sample(keys, savedKeys: hasKey ? [.openRouter] : []),
             source: .sample(
-                dictionary: isWisprInstalled ? Pane.sampleModel(PersonalDictionary()) : nil, loginProblem: loginProblem,
-                wisprKeys: wisprKeys,
+                dictionary: isWisprInstalled ? Pane.sampleModel(PersonalDictionary()) : nil,
+                opensAtLogin: opensAtLogin, loginProblem: loginProblem, wisprKeys: wisprKeys,
                 wisprRuns: wisprRuns),
             openOtherSpeechServices: {})
         if isWisprInstalled {

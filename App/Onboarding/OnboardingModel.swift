@@ -218,10 +218,6 @@ final class OnboardingModel {
         loginChoice.ownerTurned(systemIsOn: source.isLaunchAtLoginOn())
     }
 
-    func openLoginItemsSettings() {
-        LaunchAtLogin.openLoginItemsSettings()
-    }
-
     /// The Done button. It applies the launch-at-login default the owner left as it was (on for a release build); a
     /// switch the owner turned took effect then, and is not applied again. A problem with the default shows on the
     /// General page.
@@ -237,14 +233,14 @@ final class OnboardingModel {
 
 extension OnboardingModel.Source {
     /// No Keychain, network or setting behind it. `dictionary` stands for the one Wispr Flow imports into.
-    /// `loginProblem` is what turning the login switch answers; `wisprKeys` are Wispr Flow's shortcuts; `wisprRuns`
+    /// `opensAtLogin` is the login switch's first value, and `loginProblem` what turning it answers; `wisprKeys` are Wispr Flow's shortcuts; `wisprRuns`
     /// says Wispr Flow is open.
     @MainActor static func sample(
-        dictionary: DictionaryModel? = nil, loginProblem: LaunchAtLogin.Problem? = nil,
+        dictionary: DictionaryModel? = nil, opensAtLogin: Bool = true, loginProblem: LaunchAtLogin.Problem? = nil,
         wisprKeys: [String: String]? = sampleWisprKeys, wisprRuns: Bool = false
     ) -> Self {
         // What the system holds: a change it refuses leaves it as it was.
-        let loginItem = SampleLoginItem()
+        let loginItem = SampleLoginItem(isOn: opensAtLogin)
         return Self(
             route: { .openRouterMAI },
             opensAtLogin: { loginItem.isOn },
@@ -265,7 +261,11 @@ extension OnboardingModel.Source {
     }
 
     @MainActor private final class SampleLoginItem {
-        var isOn = true
+        var isOn: Bool
+
+        init(isOn: Bool) {
+            self.isOn = isOn
+        }
     }
 
     /// Made-up Wispr Flow shortcuts, not anyone's file: hands-free on right ⌥, push to talk on ⌥ and a double fn

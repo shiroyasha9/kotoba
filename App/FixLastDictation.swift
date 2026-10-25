@@ -240,15 +240,21 @@ struct FixLastDictationView: View {
                         found(corrections)
                     }
                 }
-                // A form takes all the height it is offered; this gives it its content's, so the window (sized by its
-                // content) has no empty half and grows when Learn adds words.
-                .onScrollGeometryChange(for: CGFloat.self, of: \.contentSize.height) { _, height in
+                // Under the form, its edges in line with the cards'. A bar of the form: past the tallest the words
+                // scroll under it, and its hard edge ends them there, as a System Settings sheet's buttons, so a word
+                // cut at the edge does not read as the list's end (qa1-review 5).
+                .safeAreaBar(edge: .bottom) {
+                    buttons
+                        .padding([.horizontal, .bottom], PageMetrics.formInset)
+                        .padding(.top)
+                }
+                .scrollEdgeEffectStyle(.hard, for: .bottom)
+                // A form takes all the height it is offered; this gives it its content's and the bar's, so the window
+                // (sized by its content) has no empty half and grows when Learn adds words.
+                .onScrollGeometryChange(for: CGFloat.self, of: Self.heightWithBar) { _, height in
                     formHeight = height
                 }
                 .frame(height: min(formHeight, PageMetrics.fixFormMaxHeight))
-                // Under the form, its edges in line with the cards'.
-                buttons
-                    .padding([.horizontal, .bottom], PageMetrics.formInset)
             }
         }
         .frame(width: PageMetrics.fixWindowWidth)
@@ -256,19 +262,41 @@ struct FixLastDictationView: View {
 
     private var footer: some View {
         VStack(alignment: .leading) {
-            if model.canLearn {
-                Text(
-                    "Fix the wrong words, then click Learn. To add a word that is right, select it and click Add "
-                        + "Selected Word.")
-            } else {
-                Text("Fix the wrong words, then click Copy.")
-            }
+            Text(help)
             if !model.addedWords.isEmpty {
+                // A paragraph apart, so it does not read as a third help line.
                 StatusLine(
                     "Added \(model.addedWords.map { "“\($0)”" }.formatted(.list(type: .and))) to your dictionary.",
-                    .good)
+                    .good
+                )
+                .padding(.top)
             }
         }
+    }
+
+    /// What to do next, naming the button on screen (`copyTitle`) in each step (qa1-review 5).
+    private var help: String {
+        guard model.canLearn else { return "Fix the wrong words, then click Copy." }
+        guard let corrections = model.corrections else {
+            return "Fix the wrong words, then click Learn. To add a word that is right, select it and click Add "
+                + "Selected Word."
+        }
+        if corrections.isEmpty {
+            return "No new words found. Click Copy to put the fixed text on the clipboard."
+        }
+        return model.checked.isEmpty
+            ? "Check the words to add to your dictionary, or click Copy to put the fixed text on the clipboard."
+            : "Click Add and Copy to add the checked words to your dictionary and put the fixed text on the clipboard."
+    }
+
+    /// The form's content and the button bar under it (the bar is the scroll view's bottom inset).
+    private static func heightWithBar(_ geometry: ScrollGeometry) -> CGFloat {
+        geometry.contentSize.height + geometry.contentInsets.bottom
+    }
+
+    /// After Learn, or with no dictionary: Copy alone, or Add and Copy when a word is checked.
+    private var copyTitle: String {
+        model.checked.isEmpty ? "Copy" : "Add and Copy"
     }
 
     private var empty: some View {
@@ -287,12 +315,8 @@ struct FixLastDictationView: View {
     }
 
     @ViewBuilder private func found(_ corrections: [DetectedCorrection]) -> some View {
-        if corrections.isEmpty {
-            Section {
-                Text("No new words found. Copy puts the fixed text on the clipboard.")
-                    .foregroundStyle(.secondary)
-            }
-        } else {
+        // Nothing found: the help line says so.
+        if !corrections.isEmpty {
             Section("Words to Add") {
                 ForEach(corrections, id: \.candidate.pair) { correction in
                     Toggle(isOn: binding(for: correction.candidate.pair)) {
@@ -316,7 +340,7 @@ struct FixLastDictationView: View {
                     .keyboardShortcut(.defaultAction)
                     .disabled(!model.isEdited)
             } else {
-                Button(model.checked.isEmpty ? "Copy" : "Add and Copy") {
+                Button(copyTitle) {
                     Task {
                         await model.addAndCopy()
                         close()

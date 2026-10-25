@@ -173,16 +173,16 @@ private struct GeneralPane: View {
                     .fixedSize()
                 }
             }
+            // Titled, as every other group of the page: untitled, it read as part of Indicator (qa1-review, General).
             Section {
                 Toggle(
                     "Open at login",
                     isOn: Binding(get: { model.isLaunchAtLoginOn }, set: { model.setLaunchAtLogin($0) }))
+            } header: {
+                Text("Login")
+            } footer: {
                 if let problem = model.loginProblem {
-                    LabeledContent {
-                        Button("Open Login Items…", action: LaunchAtLogin.openLoginItemsSettings)
-                    } label: {
-                        Text(problem.text).foregroundStyle(.secondary)
-                    }
+                    LoginItemFootnote(problem: problem)
                 }
             }
             Section {
@@ -195,7 +195,7 @@ private struct GeneralPane: View {
                 Toggle("Show in menu bar", isOn: $model.showsMenuBarIcon)
                     .disabled(!model.presence.canHideMenuBarIcon)
             } header: {
-                Text("Dock and Menu Bar")
+                Text("Dock & Menu Bar")
             } footer: {
                 if !model.presence.canHideDockIcon || !model.presence.canHideMenuBarIcon {
                     Text("kotoba keeps the Dock icon or the menu bar icon, so you can always open it.")
