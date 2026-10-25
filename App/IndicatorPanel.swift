@@ -8,7 +8,6 @@ import KotobaCore
 /// kotoba or move focus from the app the owner types in, so the paste goes to that app.
 @MainActor
 final class IndicatorPanel {
-    private static let anchorKey = AppDefaults.Key.indicatorAnchor.rawValue
     private static let visibilityKey = AppDefaults.Key.indicatorVisibility.rawValue
 
     /// Called when the owner clicks the pill's fix or Undo button.
@@ -22,13 +21,14 @@ final class IndicatorPanel {
     /// passes this on.
     var onUndoHoldChanged: ((Bool) -> Void)?
 
-    /// Saved in UserDefaults; setting it moves a visible pill there.
+    /// Where the pill sits, observed: General's picker reads it, so a drop shows there at once.
+    let position = IndicatorPosition()
+
+    /// Saved in UserDefaults; setting it moves a visible pill there. A drop and General's picker both set it.
     var anchor: IndicatorAnchor {
-        get {
-            UserDefaults.standard.string(forKey: Self.anchorKey).flatMap(IndicatorAnchor.init) ?? .bottomCenter
-        }
+        get { position.anchor }
         set {
-            UserDefaults.standard.set(newValue.rawValue, forKey: Self.anchorKey)
+            position.anchor = newValue
             place(animated: true)
         }
     }

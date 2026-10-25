@@ -89,8 +89,11 @@ final class GeneralModel {
         didSet { backing.cueVoice.write(cueVoice) }
     }
 
+    /// Read from the indicator each time, not kept here: a drop of the pill changes it too, and the indicator's
+    /// position is observed, so the picker follows (audit-1 A1).
     var indicatorAnchor: IndicatorAnchor {
-        didSet { backing.indicatorAnchor.write(indicatorAnchor) }
+        get { backing.indicatorAnchor.read() }
+        set { backing.indicatorAnchor.write(newValue) }
     }
 
     var indicatorVisibility: IndicatorVisibility {
@@ -119,7 +122,6 @@ final class GeneralModel {
         showsMenuBarIcon = backing.showsMenuBarIcon.read()
         areSoundsOn = backing.soundCues.read()
         cueVoice = backing.cueVoice.read()
-        indicatorAnchor = backing.indicatorAnchor.read()
         indicatorVisibility = backing.indicatorVisibility.read()
         checksForUpdates = backing.checksForUpdates?.read() ?? false
     }
@@ -134,12 +136,13 @@ final class GeneralModel {
     /// Fixed values for snapshots: no UserDefaults, Login Items, indicator or updater is read. `loginItem` stands
     /// in for the system.
     static func sample(
-        loginItem: LoginItem = .init(isOn: { true }, problem: { nil }, change: { _ in nil }), showsInDock: Bool = true
+        loginItem: LoginItem = .init(isOn: { true }, problem: { nil }, change: { _ in nil }), showsInDock: Bool = true,
+        indicatorAnchor: Setting<IndicatorAnchor> = .fixed(.bottomCenter)
     ) -> GeneralModel {
         GeneralModel(
             backing: Backing(
                 loginItem: loginItem, showsInDock: .fixed(showsInDock), showsMenuBarIcon: .fixed(true),
-                soundCues: .fixed(true), cueVoice: .fixed(.nylon), indicatorAnchor: .fixed(.bottomCenter),
+                soundCues: .fixed(true), cueVoice: .fixed(.nylon), indicatorAnchor: indicatorAnchor,
                 indicatorVisibility: .fixed(.whileDictating), checksForUpdates: .fixed(true)))
     }
 }

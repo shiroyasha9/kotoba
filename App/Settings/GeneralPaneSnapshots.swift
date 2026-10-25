@@ -10,6 +10,7 @@ extension Pane {
             MainWindow.snapshot(
                 of: .general(.sample(showsInDock: false)), named: "settings-general-dock-off", height: 1_240),
             loginFailureSnapshot(),
+            positionCheck(),
         ]
     }
 
@@ -32,6 +33,22 @@ extension Pane {
                 return "A failed launch-at-login change made \(changes) calls and kept no note"
             }
             return nil
+        }
+        return snapshot
+    }
+
+    /// Audit-1 A1: the Position picker shows the indicator's position as it is now. A drop of the pill writes the
+    /// position, not the page, so a page that kept its own copy said "Bottom Center" after a drop to Left.
+    private static func positionCheck() -> Snapshot {
+        let position = IndicatorPosition(sample: .bottomCenter)
+        let model = GeneralModel.sample(
+            indicatorAnchor: Setting(read: { position.anchor }, write: { position.anchor = $0 }))
+        var snapshot = MainWindow.snapshot(of: .general(model), named: "settings-general-position", height: 1_200)
+        snapshot.hasImage = false
+        snapshot.check = { _ in
+            position.anchor = .left
+            return model.indicatorAnchor == .left
+                ? nil : "General's Position says \(model.indicatorAnchor.title) after a drop to Left"
         }
         return snapshot
     }
