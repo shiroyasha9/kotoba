@@ -252,7 +252,7 @@ extension OnboardingController {
 
     /// The frames `keycapsBesideButtonSnapshot` lays out, by name, in its form's coordinates.
     @MainActor final class KeycapFrames {
-        static let space = "keycaps-rows"
+        nonisolated static let space = "keycaps-rows"
         var rects: [String: CGRect] = [:]
         /// Each shown row's keycaps and their names, left to right.
         var parts: [String: (keys: [CGRect], names: [CGRect])] = [:]

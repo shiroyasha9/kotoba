@@ -10,6 +10,8 @@ struct NamedKeycaps: View {
 
     var body: some View {
         let keys = keys.map(Self.legendAndName)
+        // Read here on the main actor: the guides' closures are Sendable.
+        let keysCentre = Self.keysCentre
         KeyColumns {
             ForEach(Array(keys.enumerated()), id: \.offset) { _, key in
                 Keycaps(keys: [key.legend])
@@ -26,8 +28,8 @@ struct NamedKeycaps: View {
         }
         // At its own width beside Change…: the row's text wraps instead of the key names.
         .fixedSize()
-        .alignmentGuide(VerticalAlignment.center) { $0[.top] + Self.keysCentre }
-        .alignmentGuide(.titleLine) { $0[.top] + Self.keysCentre }
+        .alignmentGuide(VerticalAlignment.center) { $0[.top] + keysCentre }
+        .alignmentGuide(.titleLine) { $0[.top] + keysCentre }
         .accessibilityElement(children: .ignore)
         .accessibilityLabel(keys.map { $0.name ?? $0.legend }.joined(separator: " "))
     }
