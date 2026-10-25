@@ -2,10 +2,11 @@ import AppKit
 import KotobaCore
 import SwiftUI
 
-/// The site's hero demo (`make hero-demo`, `--hero-demo <folder>`): one dictation into a message window, frame by
-/// frame, light and dark, at 2x, as PNG frames that `make hero-demo` encodes into a short looping video. Everything in a
-/// frame is real AppKit as the window server draws it (`SnapshotCapture`): the window's title bar, toolbar, text and
-/// caret, and the pill's glass, which refracts the frame under it. Offscreen the pill takes each look at once
+/// The site's hero demo (`make hero-demo`, `--hero-demo <folder>`): a dictation into a chat, into a coding agent in a
+/// terminal and into a message, one after the other, frame by frame, light and dark, at 2x, as PNG frames that `make
+/// hero-demo` encodes into a looping video. Everything in a frame is real AppKit as the window server draws it
+/// (`SnapshotCapture`): each window's title bar, toolbar, text and caret (`DemoWindow`), and the pill's glass, which
+/// refracts the frame under it. Offscreen the pill takes each look at once
 /// (`PillView.morph`), so the demo moves the glass with the pill's own spring and fades its items with the pill's
 /// timings, and steps the pill's Core Animation clock (the bars settling, the sweep, the check drawing on) with the
 /// frames. Nothing shows on screen.
@@ -17,22 +18,65 @@ enum HeroDemo {
     static let scale: CGFloat = 2
     private static let windowFrame = NSRect(x: 90, y: 104, width: 500, height: 336)
 
-    /// The scene, in seconds. The video loops, and its first frame is the finished message, so the poster (that frame)
-    /// leads into the playback with no jump.
-    private static let clearAt = 1.2
-    private static let clearLength = 0.5
-    /// The shortcut: the pill shows, recording.
-    private static let pressAt = 2.6
-    /// The stop tap: the bars sweep while the text is on its way.
-    private static let stopAt = pressAt + Speech.length
-    /// The stop tap to the paste: 0.4.6's measured median (README, "Benchmarks"), as the site claims it.
-    private static let pasteAt = stopAt + 0.987
-    /// The check shows for its time, then the pill hides.
-    private static let hideAt = pasteAt + PillTimer.done.duration / .seconds(1)
-    private static let length = 11.0
+    /// The scenes, in turn: a chat reply, a prompt for a coding agent, an email.
+    private static let scenes = [
+        Scene(
+            kind: .chat, dictation: "Almost. I fixed the copy on step two. Give me ten minutes.",
+            speech: Speech([Speech.Phrase(0.3, 0.85, 2), Speech.Phrase(1.1, 2.75, 8), Speech.Phrase(3.0, 3.9, 5)])),
+        Scene(
+            kind: .terminal, dictation: "Rename useAuthStore to useSession in src/auth/store.ts, then run the tests.",
+            speech: Speech([Speech.Phrase(0.3, 3.0, 14), Speech.Phrase(3.3, 4.4, 5)])),
+        Scene(
+            kind: .message, dictation: "Sounds good. Let’s move the review to Friday at three. I’ll bring the slides.",
+            speech: Speech([Speech.Phrase(0.3, 0.9, 2), Speech.Phrase(1.2, 3.1, 10), Speech.Phrase(3.4, 4.3, 5)])),
+    ]
 
-    static let greeting = "Hi Maya,\n\n"
-    static let dictation = "Sounds good. Let’s move the review to Friday at three. I’ll bring the slides."
+    private struct Scene {
+        let kind: DemoWindow.Kind
+        let dictation: String
+        let speech: Speech
+    }
+
+    private struct LookChange {
+        let at: Double
+        let look: PillLook
+        let isAnimated: Bool
+    }
+
+    /// A scene's times, in seconds from the video's start.
+    private struct Beat {
+        /// The last scene's finished window fades out to the bare stage, and this one's, empty, fades in.
+        let fade: Double
+        /// The shortcut: the pill shows, recording.
+        let press: Double
+        /// The stop tap: the bars sweep while the text is on its way.
+        let stop: Double
+        /// The text lands and the check shows.
+        let paste: Double
+        /// The check's time is up: the pill hides.
+        let hide: Double
+        /// The finished window stays this long, then the next scene fades in.
+        let end: Double
+
+        static let fadeLength = 0.8
+
+        init(after start: Double, speech: Speech) {
+            fade = start
+            press = start + Self.fadeLength + 0.9
+            stop = press + speech.length
+            // From the stop tap to the paste: 0.4.6's measured median (README, "Benchmarks"), as the site claims it.
+            paste = stop + 0.987
+            hide = paste + PillTimer.done.duration / .seconds(1)
+            end = hide + 1.6
+        }
+    }
+
+    /// The video starts on the last scene's finished window, so the poster (its first frame) leads into the playback
+    /// and the loop has no jump.
+    private static let beats = scenes.reduce(into: [Beat]()) { beats, scene in
+        beats.append(Beat(after: beats.last?.end ?? 1.2, speech: scene.speech))
+    }
+    private static let length = beats.last?.end ?? 0
 
     /// Renders every frame to `<folder>/light/0000.png` and `<folder>/dark/0000.png` on, and exits.
     static func run(writingTo folder: URL) -> Never {
@@ -59,33 +103,31 @@ enum HeroDemo {
     }
 
     private static func render(in appearance: NSAppearance, to folder: URL) throws {
-        let message = MessageWindow(frame: windowFrame, appearance: appearance)
+        let windows = scenes.map {
+            DemoWindow($0.kind, dictation: $0.dictation, frame: windowFrame, appearance: appearance)
+        }
         let pill = DemoPill(on: stage, appearance: appearance)
-        var looks: [(at: Double, look: PillLook)] = [
-            (pressAt, look(.init(.recording(isLong: false)))), (stopAt, look(.init(.transcribing))),
-            (pasteAt, look(.init(.idle, isPasted: true))),
-        ]
+        let isDark = appearance.bestMatch(from: [.aqua, .darkAqua]) == .darkAqua
+        let bareStage = try stageImage(isDark: isDark)
+        // The pill appears recording; from there its glass flows to each next look.
+        var looks = beats.flatMap { beat in
+            [
+                LookChange(at: beat.press, look: look(.init(.recording(isLong: false))), isAnimated: false),
+                LookChange(at: beat.stop, look: look(.init(.transcribing)), isAnimated: true),
+                LookChange(at: beat.paste, look: look(.init(.idle, isPasted: true)), isAnimated: true),
+            ]
+        }
         func renderFrame(_ index: Int) throws {
             let time = Double(index) / fps
-            var image: CGImage
-            if time < clearAt + clearLength {
-                // The last frame's message, then the empty one fading in over it.
-                let done = try message.onStage(isPasted: true, showsCaret: Caret.isShown(at: time + length - pasteAt))
-                let empty = try message.onStage(isPasted: false, showsCaret: true)
-                let fade = UnitCurve.easeInOut.value(at: min(1, max(0, (time - clearAt) / clearLength)))
-                image = try blend(done, into: empty, opacity: 1 - fade)
-            } else {
-                let isPasted = time >= pasteAt
-                let since = isPasted ? time - pasteAt : time - clearAt - clearLength
-                image = try message.onStage(isPasted: isPasted, showsCaret: Caret.isShown(at: since))
-            }
-            if time >= pressAt, time < hideAt {
+            var image = try desktop(at: time, in: windows, isDark: isDark, bareStage: bareStage)
+            if let scene = beats.lastIndex(where: { $0.press <= time }), time < beats[scene].hide {
+                let beat = beats[scene]
                 while let next = looks.first, next.at <= time {
-                    pill.show(next.look, at: next.at, isAnimated: next.at > pressAt)
+                    pill.show(next.look, at: next.at, isAnimated: next.isAnimated)
                     looks.removeFirst()
                 }
-                if time < stopAt {
-                    pill.view.level = Speech.level(at: time - pressAt)
+                if time < beat.stop {
+                    pill.view.level = scenes[scene].speech.level(at: time - beat.press)
                 }
                 pill.step(to: time)
                 image = try pill.drawn(over: image)
@@ -100,6 +142,39 @@ enum HeroDemo {
             // Each frame's images and bitmap data go at its end, not at the end of the pass.
             try autoreleasepool { try renderFrame(index) }
         }
+    }
+
+    /// The windows at `time`, with no pill: the scene's window as it is then, or the change from one scene to the next.
+    private static func desktop(
+        at time: Double, in windows: [DemoWindow], isDark: Bool, bareStage: CGImage
+    ) throws -> CGImage {
+        /// Scene `index` finished at `time`, the caret blinking since the paste.
+        func finished(_ index: Int, at time: Double) throws -> CGImage {
+            try windows[index].onStage(
+                isPasted: true, showsCaret: Caret.isShown(at: time - beats[index].paste), isDark: isDark)
+        }
+        guard let scene = beats.lastIndex(where: { $0.fade <= time }) else {
+            return try finished(scenes.count - 1, at: time + length)
+        }
+        let beat = beats[scene]
+        let window = windows[scene]
+        if time >= beat.paste {
+            return try finished(scene, at: time)
+        }
+        guard time < beat.fade + Beat.fadeLength else {
+            let since = time - beat.fade - Beat.fadeLength
+            return try window.onStage(isPasted: false, showsCaret: Caret.isShown(at: since), isDark: isDark)
+        }
+        // The scene before's finished window fades out, then this one's empty window fades in: one window at a time,
+        // never two over each other.
+        let progress = (time - beat.fade) / (Beat.fadeLength / 2)
+        guard progress >= 1 else {
+            let before =
+                scene > 0 ? try finished(scene - 1, at: time) : try finished(scenes.count - 1, at: time + length)
+            return try blend(before, into: bareStage, opacity: 1 - UnitCurve.easeIn.value(at: progress))
+        }
+        let empty = try window.onStage(isPasted: false, showsCaret: true, isDark: isDark)
+        return try blend(empty, into: bareStage, opacity: UnitCurve.easeOut.value(at: progress - 1))
     }
 
     /// The pill's look for `state`, as the panel maps it.
@@ -127,6 +202,14 @@ enum HeroDemo {
             context.draw(capture, in: place)
             context.restoreGState()
         }
+        guard let image = context.makeImage() else { throw DemoError.noBitmap }
+        return image
+    }
+
+    /// The stage with no window on it.
+    private static func stageImage(isDark: Bool) throws -> CGImage {
+        let context = try bitmap()
+        Stage.draw(in: context, size: CGSize(width: context.width, height: context.height), isDark: isDark)
         guard let image = context.makeImage() else { throw DemoError.noBitmap }
         return image
     }
@@ -164,34 +247,43 @@ private enum Caret {
     }
 }
 
-/// What the microphone hears: "Sounds good. Let’s move the review to Friday at three. I’ll bring the slides.", one
-/// bump of loudness per syllable, phrases apart by short pauses. The capture measures a level every 100 ms
-/// (`CaptureWriter.measureLevel`) and the bars glide to each one in 0.2 s (`PillBars`), so the bars show these levels
-/// eased, as on screen.
-private enum Speech {
+/// What the microphone hears: one bump of loudness per syllable, phrases apart by short pauses. The capture measures
+/// a level every 100 ms (`CaptureWriter.measureLevel`) and the bars glide to each one in 0.2 s (`PillBars`), so the bars
+/// show these levels eased, as on screen.
+private struct Speech {
     /// A phrase: its start and end after the press, and its syllables.
-    private struct Phrase {
+    struct Phrase {
         let start: Double
         let end: Double
         let syllables: Int
+
+        init(_ start: Double, _ end: Double, _ syllables: Int) {
+            self.start = start
+            self.end = end
+            self.syllables = syllables
+        }
     }
 
-    private static let phrases = [
-        Phrase(start: 0.3, end: 0.9, syllables: 2), Phrase(start: 1.2, end: 3.1, syllables: 10),
-        Phrase(start: 3.4, end: 4.3, syllables: 5),
-    ]
-    static let length = 4.6
+    private let phrases: [Phrase]
+    /// From the press to the stop tap: a short silence after the last phrase.
+    let length: Double
+
+    init(_ phrases: [Phrase]) {
+        self.phrases = phrases
+        length = (phrases.last?.end ?? 0) + 0.3
+    }
+
     /// The syllables' loudness, in turn: stressed ones louder.
     private static let loudness: [Double] = [0.62, 0.78, 0.5, 0.72, 0.45, 0.66, 0.8, 0.55, 0.7, 0.48, 0.75, 0.6]
     private static let interval = 0.1
 
     /// The level the bars show `time` after the press.
-    static func level(at time: Double) -> CGFloat {
-        let last = Int((time / interval).rounded(.down))
+    func level(at time: Double) -> CGFloat {
+        let last = Int((time / Self.interval).rounded(.down))
         // The level measured over the 100 ms that ended at each event, and the tween each one still runs.
         var shown = measured(last)
         for event in max(0, last - 2)...max(0, last) {
-            let progress = (time - Double(event) * interval) / PillBars.tween
+            let progress = (time - Double(event) * Self.interval) / PillBars.tween
             guard progress < 1 else { continue }
             shown += (measured(event - 1) - measured(event)) * (1 - UnitCurve.easeInOut.value(at: progress))
         }
@@ -199,16 +291,16 @@ private enum Speech {
     }
 
     /// The level measured over the window that ends at event `index` (the first ends 100 ms after the press).
-    private static func measured(_ index: Int) -> Double {
+    private func measured(_ index: Int) -> Double {
         guard index > 0 else { return 0 }
-        let start = Double(index - 1) * interval
+        let start = Double(index - 1) * Self.interval
         let samples = 10
-        return (0..<samples).map { loudness(at: start + interval * Double($0) / Double(samples)) }.reduce(0, +)
+        return (0..<samples).map { loudness(at: start + Self.interval * Double($0) / Double(samples)) }.reduce(0, +)
             / Double(samples)
     }
 
     /// The voice's loudness at `time`: a raised cosine per syllable.
-    private static func loudness(at time: Double) -> Double {
+    private func loudness(at time: Double) -> Double {
         var syllable = 0
         for phrase in phrases {
             defer { syllable += phrase.syllables }
@@ -216,142 +308,9 @@ private enum Speech {
             let slot = (phrase.end - phrase.start) / Double(phrase.syllables)
             let index = Int((time - phrase.start) / slot)
             let within = (time - phrase.start) / slot - Double(index)
-            let peak = loudness[(syllable + index) % loudness.count]
+            let peak = Self.loudness[(syllable + index) % Self.loudness.count]
             return peak * (0.55 + 0.45 * sin(.pi * within))
         }
         return 0
     }
-}
-
-/// A plain message window of the demo's own: a title, a glass toolbar with three tools, To and Subject, and the body
-/// with its caret.
-@MainActor
-private final class MessageWindow {
-    let window: NSWindow
-    private let body = NSTextView()
-    private let caret = NSTextInsertionIndicator()
-    private let toolbarTools = MessageToolbar()
-    /// The message on the stage, one capture for each text and caret.
-    private var images: [State: CGImage] = [:]
-
-    private struct State: Hashable {
-        let isPasted: Bool
-        let showsCaret: Bool
-    }
-
-    init(frame: NSRect, appearance: NSAppearance) {
-        window = NSWindow(
-            contentRect: NSRect(origin: .zero, size: frame.size),
-            styleMask: [.titled, .closable, .miniaturizable, .resizable, .fullSizeContentView], backing: .buffered,
-            defer: false)
-        window.isReleasedWhenClosed = false
-        window.appearance = appearance
-        window.title = "Re: Friday review"
-        let toolbar = NSToolbar(identifier: "message")
-        toolbar.delegate = toolbarTools
-        toolbar.displayMode = .iconOnly
-        window.toolbar = toolbar
-        window.toolbarStyle = .unified
-        window.setFrame(NSRect(origin: .zero, size: frame.size), display: false)
-
-        let paper = Paper(frame: NSRect(origin: .zero, size: frame.size))
-        window.contentView = paper
-        let top = paper.bounds.height - window.contentLayoutRect.maxY
-        let width = paper.bounds.width
-        var y = top
-        for (name, value) in [("To:", "Maya Chen"), ("Subject:", "Re: Friday review")] {
-            let label = NSTextField(labelWithString: name)
-            label.font = .systemFont(ofSize: 14)
-            label.textColor = .secondaryLabelColor
-            let field = NSTextField(labelWithString: value)
-            field.font = .systemFont(ofSize: 14)
-            label.sizeToFit()
-            field.sizeToFit()
-            label.setFrameOrigin(NSPoint(x: 20, y: y + (36 - label.frame.height) / 2))
-            field.setFrameOrigin(NSPoint(x: label.frame.maxX + 6, y: y + (36 - field.frame.height) / 2))
-            let line = NSBox(frame: NSRect(x: 20, y: y + 36, width: width - 20, height: 1))
-            line.boxType = .separator
-            paper.addSubview(label)
-            paper.addSubview(field)
-            paper.addSubview(line)
-            y += 37
-        }
-        body.frame = NSRect(x: 0, y: y + 6, width: width, height: paper.bounds.height - y - 6)
-        body.textContainerInset = NSSize(width: 15, height: 8)
-        body.font = .systemFont(ofSize: 16)
-        body.textColor = .labelColor
-        body.drawsBackground = false
-        paper.addSubview(body)
-        caret.displayMode = .hidden
-        caret.color = .controlAccentColor
-        body.addSubview(caret)
-        window.makeFirstResponder(body)
-    }
-
-    /// The message before or after the paste on the stage, with the caret at its end, shown or not.
-    func onStage(isPasted: Bool, showsCaret: Bool) throws -> CGImage {
-        let state = State(isPasted: isPasted, showsCaret: showsCaret)
-        if let image = images[state] { return image }
-        show(isPasted: isPasted, showsCaret: showsCaret)
-        let image = try HeroDemo.onStage(
-            window, isDark: window.effectiveAppearance.bestMatch(from: [.aqua, .darkAqua]) == .darkAqua)
-        images[state] = image
-        return image
-    }
-
-    private func show(isPasted: Bool, showsCaret: Bool) {
-        body.string = HeroDemo.greeting + (isPasted ? HeroDemo.dictation : "")
-        let end = body.string.utf16.count
-        body.setSelectedRange(NSRange(location: end, length: 0))
-        body.layoutManager?.ensureLayout(for: body.textContainer ?? NSTextContainer())
-        let screen = body.firstRect(forCharacterRange: NSRange(location: end, length: 0), actualRange: nil)
-        let rect = body.convert(window.convertFromScreen(screen), from: nil)
-        caret.frame = NSRect(x: rect.minX, y: rect.minY, width: 2, height: rect.height)
-        caret.displayMode = showsCaret ? .visible : .hidden
-        window.layoutIfNeeded()
-        // The caret fades in and out on screen; a frame shows it on or off.
-        SnapshotCapture.endAnimations(in: window)
-    }
-}
-
-/// The message's background: the text background, edge to edge under the glass toolbar.
-private final class Paper: NSView {
-    override var isFlipped: Bool { true }
-
-    override func draw(_ dirtyRect: NSRect) {
-        NSColor.textBackgroundColor.setFill()
-        dirtyRect.fill()
-    }
-}
-
-/// Send at the leading end, Attach and Format at the trailing end.
-private final class MessageToolbar: NSObject, NSToolbarDelegate {
-    private static let tools = [
-        "send": ("paperplane", "Send"), "attach": ("paperclip", "Attach"), "format": ("textformat", "Format"),
-    ]
-
-    func toolbarDefaultItemIdentifiers(_ toolbar: NSToolbar) -> [NSToolbarItem.Identifier] {
-        [.init("send"), .flexibleSpace, .init("attach"), .init("format")]
-    }
-
-    func toolbarAllowedItemIdentifiers(_ toolbar: NSToolbar) -> [NSToolbarItem.Identifier] {
-        toolbarDefaultItemIdentifiers(toolbar)
-    }
-
-    func toolbar(
-        _ toolbar: NSToolbar, itemForItemIdentifier identifier: NSToolbarItem.Identifier,
-        willBeInsertedIntoToolbar flag: Bool
-    ) -> NSToolbarItem? {
-        guard let (symbol, label) = Self.tools[identifier.rawValue] else { return nil }
-        let item = NSToolbarItem(itemIdentifier: identifier)
-        item.image = NSImage(systemSymbolName: symbol, accessibilityDescription: label)
-        item.label = label
-        item.isBordered = true
-        // A tool with an action draws enabled.
-        item.target = self
-        item.action = #selector(use)
-        return item
-    }
-
-    @objc private func use(_ sender: Any?) {}
 }

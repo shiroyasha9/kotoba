@@ -23,7 +23,7 @@ final class PillBars: NSView {
     private static let floor: CGFloat = 0.02
     /// The capture sends a level every 100 ms (`CaptureWriter.measureLevel`). A tween lasts two of them, so the next
     /// level's tween starts while this one runs; the tweens add, and the bars glide from level to level with no step.
-    static let tween: CFTimeInterval = 0.2
+    nonisolated static let tween: CFTimeInterval = 0.2
 
     private let bars = (0..<count).map { _ in CALayer() }
     /// The level the bars show: 0 under `floor`.

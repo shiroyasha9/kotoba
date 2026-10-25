@@ -52,7 +52,11 @@ final class DemoPill {
         // The animations the look adds start at its time.
         view.layer?.timeOffset = clock + time
         view.look = look
-        drawOn?.mask.removeFromSuperlayer()
+        // An item that faded out in an earlier change shows in full when a look takes it back.
+        for item in view.stack.arrangedSubviews {
+            item.alphaValue = 1
+        }
+        view.check.layer?.mask = nil
         drawOn = nil
         if look == .done {
             // The check's draw-on effect does not run in a window that is not on screen; this mask stands in for it.

@@ -1,8 +1,8 @@
 #!/bin/zsh
 # Encodes the hero demo's frames (`kotoba --hero-demo <folder>`, App/HeroDemoSnapshots.swift) for the site: for light
 # and dark, a looping H.264 MP4 (every browser) and an AV1 WebM (smaller, where supported), muted, and the first frame as
-# the poster (the finished message, which the video starts and ends on). Text stays sharp at CRF 20 (H.264) and 30 (AV1);
-# the frames change only around the pill and the text, so each video is about 0.2 MB.
+# the poster (the finished message, which the video starts and ends on). Text stays sharp at CRF 23 (H.264) and 30 (AV1);
+# the frames change only around the pill and the text, so each video is under 1 MB (three scenes, about 29 s).
 # Usage: scripts/hero-demo.sh <folder with light/ and dark/ frames>
 set -euo pipefail
 
@@ -11,7 +11,7 @@ folder=${1:?usage: hero-demo.sh <folder>}
 color=(-vf "scale=out_color_matrix=bt709:out_range=tv,format=yuv420p" -colorspace bt709 -color_primaries bt709 -color_trc bt709)
 for appearance in light dark; do
   frames=$folder/$appearance/%04d.png
-  ffmpeg -v error -y -framerate 30 -i $frames $color -c:v libx264 -preset veryslow -crf 20 -movflags +faststart -an \
+  ffmpeg -v error -y -framerate 30 -i $frames $color -c:v libx264 -preset veryslow -crf 23 -movflags +faststart -an \
     $folder/hero-demo-$appearance.mp4
   ffmpeg -v error -y -framerate 30 -i $frames $color -c:v libsvtav1 -preset 4 -crf 30 -svtav1-params progress=0 -an \
     $folder/hero-demo-$appearance.webm 2>/dev/null
