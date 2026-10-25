@@ -12,6 +12,7 @@ final class OnboardingController: NSObject, NSWindowDelegate {
     private enum Key {
         static let isComplete = "onboarding.completed"
         static let step = "onboarding.step"
+        static let hasTakenWisprShortcuts = "onboarding.wisprShortcutsTaken"
     }
 
     /// The owner clicked Done once. Setup can still be incomplete (a permission turned off later); the app checks
@@ -19,6 +20,12 @@ final class OnboardingController: NSObject, NSWindowDelegate {
     static var isComplete: Bool {
         get { UserDefaults.standard.bool(forKey: Key.isComplete) }
         set { UserDefaults.standard.set(newValue, forKey: Key.isComplete) }
+    }
+
+    /// Welcome took Wispr Flow's shortcuts once (`OnboardingFlow.takesWisprShortcuts`).
+    static var hasTakenWisprShortcuts: Bool {
+        get { UserDefaults.standard.bool(forKey: Key.hasTakenWisprShortcuts) }
+        set { UserDefaults.standard.set(newValue, forKey: Key.hasTakenWisprShortcuts) }
     }
 
     private let readiness: Readiness
@@ -156,19 +163,24 @@ extension OnboardingController {
         ] + welcomeSnapshots(ready)
     }
 
-    /// Welcome after "Use Your Wispr Flow Shortcuts" while Wispr Flow runs (its push to talk is one kotoba cannot
-    /// take), Welcome with no Wispr Flow shortcuts, and Change…'s sheet.
+    /// Welcome as it takes Wispr Flow's shortcuts: one mode (the other is one kotoba cannot take), both, one equal to
+    /// kotoba's default, none; while Wispr Flow runs; after the owner changed a taken chord; with no Wispr Flow; and
+    /// Change…'s sheet.
     private static func welcomeSnapshots(_ ready: Readiness) -> [Snapshot] {
-        [
-            window("onboarding-welcome-wispr-in-use") {
-                let model = model(.welcome, ready, wisprRuns: true)
-                model.useWisprShortcuts()
-                return model
-            },
+        let both = ["62+61": "popo", "49+58": "ptt"]
+        return [
+            window("onboarding-welcome-wispr-running") { model(.welcome, ready, wisprRuns: true) },
             window("onboarding-welcome-no-wispr-shortcuts") { model(.welcome, ready, wisprKeys: nil) },
-            // Both ways to dictate come from Wispr Flow: the button goes under the chords.
-            window("onboarding-welcome-wispr-both") {
-                model(.welcome, ready, wisprKeys: ["62+61": "popo", "49+58": "ptt"])
+            window("onboarding-welcome-wispr-both") { model(.welcome, ready, wisprKeys: both) },
+            // The tallest Welcome: the Wispr Flow row, a line under each shortcut row and the footnote.
+            window("onboarding-welcome-wispr-both-running") {
+                model(.welcome, ready, wisprKeys: both, wisprRuns: true)
+            },
+            window("onboarding-welcome-wispr-default") { model(.welcome, ready, wisprKeys: ["55+58+59": "popo"]) },
+            window("onboarding-welcome-wispr-changed") {
+                let model = model(.welcome, ready, wisprKeys: both, wisprRuns: true)
+                _ = model.chords.save(Chord(modifiers: .function), as: .handsFree)
+                return model
             },
             window("onboarding-welcome-no-wispr") { model(.welcome, ready, isWisprInstalled: false) },
             MainWindow.sheetSnapshot(named: "onboarding-change-shortcut") {

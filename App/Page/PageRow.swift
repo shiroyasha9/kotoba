@@ -5,12 +5,14 @@ import SwiftUI
 /// the subtitle fits on one line (Notifications' app rows) and sits on the title line once the text wraps (Keyboard's
 /// "Keyboard navigation"). `ViewThatFits` tries the one-line layout first, so the rule needs no measured offset.
 /// VoiceOver reads the title, subtitle and icon as one element and the trailing content as its own elements, as System
-/// Settings' rows read "title, subtitle", then the control: a row's buttons stay buttons.
-struct PageRow<Icon: View, Trailing: View>: View {
+/// Settings' rows read "title, subtitle", then the control: a row's buttons stay buttons. A short note on the row
+/// (Welcome's "Imported from Wispr Flow") goes in `extra`, under the subtitle in the row's text column.
+struct PageRow<Icon: View, Trailing: View, Extra: View>: View {
     let title: String
     var subtitle: String?
     @ViewBuilder let icon: Icon
     @ViewBuilder let trailing: Trailing
+    @ViewBuilder let extra: Extra
 
     var body: some View {
         ViewThatFits(in: .horizontal) {
@@ -22,10 +24,14 @@ struct PageRow<Icon: View, Trailing: View>: View {
     private func line(isOneLine: Bool) -> some View {
         HStack(alignment: isOneLine ? .center : .titleLine) {
             if Icon.self == EmptyView.self {
-                RowText(title: title, subtitle: subtitle, isOneLine: isOneLine)
+                RowText(title: title, subtitle: subtitle, isOneLine: isOneLine) { extra }
                     .accessibilityElement(children: .combine)
             } else {
-                TileLabel(title: title, subtitle: subtitle, isOneLine: isOneLine) { icon }
+                TileLabel(title: title, subtitle: subtitle, isOneLine: isOneLine) {
+                    icon
+                } extra: {
+                    extra
+                }
             }
             Spacer(minLength: PageMetrics.rowTrailingGap)
             trailing
@@ -34,9 +40,21 @@ struct PageRow<Icon: View, Trailing: View>: View {
     }
 }
 
+extension PageRow where Extra == EmptyView {
+    init(title: String, subtitle: String?, @ViewBuilder icon: () -> Icon, @ViewBuilder trailing: () -> Trailing) {
+        self.init(title: title, subtitle: subtitle, icon: icon, trailing: trailing, extra: { EmptyView() })
+    }
+}
+
 extension PageRow where Icon == EmptyView {
+    init(title: String, subtitle: String?, @ViewBuilder trailing: () -> Trailing, @ViewBuilder extra: () -> Extra) {
+        self.init(title: title, subtitle: subtitle, icon: { EmptyView() }, trailing: trailing, extra: extra)
+    }
+}
+
+extension PageRow where Icon == EmptyView, Extra == EmptyView {
     init(title: String, subtitle: String?, @ViewBuilder trailing: () -> Trailing) {
-        self.init(title: title, subtitle: subtitle, icon: { EmptyView() }, trailing: trailing)
+        self.init(title: title, subtitle: subtitle, icon: { EmptyView() }, trailing: trailing, extra: { EmptyView() })
     }
 }
 

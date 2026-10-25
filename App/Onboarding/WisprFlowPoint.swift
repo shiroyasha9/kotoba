@@ -1,88 +1,42 @@
 import AppKit
-import KotobaCore
 import KotobaStorage
 import SwiftUI
 
-/// Welcome's one row for a Wispr Flow user (owner QA 1, Q1 and Q2): what comes along. The dictionary comes on the last
-/// step; the shortcuts come here, Wispr Flow's chords for the two ways to dictate as keycaps, set with one click by
-/// "Use Shortcuts". A mode whose Wispr Flow chord kotoba cannot take keeps kotoba's own, which its row's Change… sets.
-/// kotoba does not quit Wispr Flow: a line says so when it runs. Laid out as the rows around it (qa1-review 10): the
-/// tile beside the title and one line of text, the button on the title line, and under them one line with each way to
-/// dictate in the shortcut rows' keycaps.
-struct WisprFlowPoint: View {
-    let model: OnboardingModel
-    /// nil: Wispr Flow has no shortcut for either way to dictate, or its file could not be read.
-    let shortcuts: WisprShortcuts?
+/// Welcome's words for a Wispr Flow user (owner QA 2, R1), in one place for a copy pass, and what kotoba reads of
+/// Wispr Flow. Welcome took Wispr Flow's shortcuts as it showed, so its "Coming from Wispr Flow" row has no keycaps and
+/// no button: the shortcut rows show the keys, and a line under each says which came from Wispr Flow. The dictionary
+/// comes on the last step.
+enum WisprFlowPoint {
+    static let title = "Coming from Wispr Flow"
 
-    var body: some View {
-        let hasShortcuts = !(shortcuts?.chords ?? []).isEmpty
-        VStack(alignment: .leading) {
-            PageRow(title: "From Wispr Flow", subtitle: text(hasShortcuts: hasShortcuts)) {
-                SymbolTile(systemImage: "square.and.arrow.down", tint: .indigo, side: PageMetrics.rowTileSide)
-            } trailing: {
-                if hasShortcuts {
-                    action
-                }
-            }
-            if let shortcuts, hasShortcuts {
-                HStack(alignment: .firstTextBaseline) {
-                    mode(.handsFree, shortcuts.handsFree)
-                    mode(.pushToTalk, shortcuts.pushToTalk)
-                }
-                .inRowTextColumn()
-            }
+    /// What comes along: the shortcuts kotoba took (`hasImportedShortcuts`: a way to dictate has Wispr Flow's chord),
+    /// and the dictionary when the last step can import it. Nil when neither: Welcome shows no row.
+    static func text(hasImportedShortcuts: Bool, offersDictionary: Bool) -> String? {
+        switch (hasImportedShortcuts, offersDictionary) {
+        case (true, true): "Your shortcuts are set. Import your dictionary on the last step."
+        case (true, false): "Your shortcuts are set."
+        case (false, true): "Import your dictionary on the last step."
+        case (false, false): nil
         }
     }
 
-    /// A way to dictate with Wispr Flow's chord after its name (a chord never shows alone), or the word that kotoba
-    /// keeps its own when it cannot take Wispr Flow's.
-    @ViewBuilder private func mode(_ role: ChordRole, _ found: WisprShortcuts.Found?) -> some View {
-        switch found {
-        case .usable(let chord):
-            HStack(alignment: .firstTextBaseline) {
-                Text(StatusText.shortcutTitle(role))
-                    .font(.subheadline)
-                    .foregroundStyle(.secondary)
-                NamedKeycaps(keys: chord.keycaps)
-            }
-            .accessibilityElement(children: .combine)
-        case .unusable:
-            Text("\(StatusText.shortcutTitle(role)) keeps kotoba’s keys")
-                .font(.subheadline)
+    /// The footnote under the shortcut rows while Wispr Flow runs: kotoba does not quit it.
+    static let runningText = "Quit Wispr Flow, or both apps start when you press these keys."
+
+    /// Under the subtitle of a shortcut row whose chord is Wispr Flow's, also when it equals kotoba's own. The symbol
+    /// inline, a space from its words, as a label in a form row puts it in the row's icon column.
+    struct ImportedLine: View {
+        var body: some View {
+            Text("\(Image(systemName: "sparkles")) Imported from Wispr Flow")
+                .font(.caption)
                 .foregroundStyle(.secondary)
-        case nil:
-            EmptyView()
+                // Not "Sparkles, Imported…".
+                .accessibilityLabel("Imported from Wispr Flow")
         }
-    }
-
-    @ViewBuilder private var action: some View {
-        if model.usesWisprShortcuts {
-            StatusLine("In use", .good)
-        } else {
-            Button("Use Shortcuts", action: model.useWisprShortcuts)
-                .accessibilityLabel("Use Your Wispr Flow Shortcuts")
-        }
-    }
-
-    /// What comes along: the dictionary when the last step can import it (the shortcuts show under it), and the line
-    /// when Wispr Flow runs on the same keys.
-    private func text(hasShortcuts: Bool) -> String {
-        let text =
-            switch (model.offersWisprImport, hasShortcuts) {
-            case (true, true): "Import your dictionary on the last step."
-            case (true, false): "Import your Wispr Flow dictionary on the last step."
-            case (false, _): "Use the shortcuts you know from Wispr Flow."
-            }
-        guard hasShortcuts, model.usesWisprShortcuts, model.wisprRunsWithSameKeys else { return text }
-        return text + " Wispr Flow uses these keys too. Quit it, or both apps start dictating."
     }
 
     /// Wispr Flow's bundle id, as `NSRunningApplication` lists it.
-    private static let wisprBundleID = "com.electron.wispr-flow"
-
-    static var isWisprRunning: Bool {
-        !NSRunningApplication.runningApplications(withBundleIdentifier: wisprBundleID).isEmpty
-    }
+    static let bundleID = "com.electron.wispr-flow"
 
     /// `prefs.user.shortcuts` of Wispr Flow's `config.json`, next to the database the Ready step imports from
     /// (`WisprFlowImport.locate`): virtual key codes joined by "+", each mapped to an action. Only that key path is kept;
