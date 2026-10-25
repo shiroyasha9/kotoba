@@ -99,9 +99,7 @@ private struct ListSample: View {
 
     var body: some View {
         PageList(selection: $selection, hasRows: true) {
-            Section("Today") {
-                ForEach(1...6, id: \.self) { Text("Dictation \($0)") }
-            }
+            PageListSection(title: "Today", rows: (1...6).map(SampleRow.init)) { Text("Dictation \($0.id)") }
         } unavailable: {
         } pinned: {
             Section {
@@ -125,4 +123,8 @@ private struct ListSample: View {
         }
         .pageSearch(text: $search, prompt: "Search")
     }
+}
+
+private struct SampleRow: Identifiable {
+    let id: Int
 }

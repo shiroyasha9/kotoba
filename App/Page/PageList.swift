@@ -13,6 +13,9 @@ import SwiftUI
 /// the sections that came in later: on the first open after launch, History's rows drew as one cut line until a page
 /// switch built the list again (owner QA 1, Q8; `Pane.historyArrivalChecks`). A list built with its rows measures them.
 ///
+/// One set of edges for the cards and the rows (qa1-review 1): the selection runs from card edge to card edge, and the
+/// rows' content and the day titles start in the cards' text column. A day is a `PageListSection`.
+///
 /// Full width, not in the page column (chief of staff, 2026-10-25, option A): SwiftUI's List ignores scroll content
 /// margins, and a list narrowed by safe-area padding narrows its scroll view, so the title bar took its tint over the
 /// column only (dark mode, ui-history).
@@ -40,8 +43,16 @@ struct PageList<SelectionValue: Hashable, Content: View, Unavailable: View, Pinn
             if hasRows {
                 List(selection: $selection) {
                     content
+                        // A row's content in the cards' text column, and its line ending where the content column
+                        // ends, as a card's lines do.
+                        .listRowInsets(.horizontal, PageMetrics.listRowInset)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                        .alignmentGuide(.listRowSeparatorTrailing) { $0[.trailing] }
                 }
                 .listStyle(.inset)
+                // The selection at the cards' edges (qa1-review 1). Safe-area padding moves the rows only: the scroll
+                // view, its bar and the title bar's tint keep the full width.
+                .safeAreaPadding(.horizontal, PageMetrics.listSideInset)
                 // The rows take the height left under the cards; a list's own ideal height is all its rows.
                 .frame(minHeight: 0, idealHeight: 0, maxHeight: .infinity)
             } else {
@@ -58,5 +69,29 @@ extension PageList where Pinned == EmptyView {
         @ViewBuilder unavailable: () -> Unavailable
     ) {
         self.init(selection: selection, hasRows: hasRows, content: content, unavailable: unavailable) { EmptyView() }
+    }
+}
+
+/// A group of a `PageList`'s rows under its title ("Today"): the title is the group's first row, in the form's section
+/// title type, so it scrolls with the rows and draws no band. A section header floats in an inset list, and a floating
+/// header drew its own fill (a grey band in dark mode, none in light) and a full-width line (qa1-review 2). No line
+/// under the title or under the group's last row: the space between groups separates them, as a form's sections.
+struct PageListSection<Row: Identifiable, RowView: View>: View {
+    let title: String
+    let rows: [Row]
+    @ViewBuilder let row: (Row) -> RowView
+
+    var body: some View {
+        Section {
+            Text(title)
+                .font(.headline)
+                .accessibilityAddTraits(.isHeader)
+                .selectionDisabled()
+                .listRowSeparator(.hidden)
+            ForEach(rows) { item in
+                row(item)
+                    .listRowSeparator(.hidden, edges: item.id == rows.last?.id ? .bottom : [])
+            }
+        }
     }
 }
