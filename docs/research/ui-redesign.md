@@ -58,7 +58,7 @@ Cause (research): the code, not a missing library. No MIT or Apache-2.0 library 
   - **Microphone**.
   - **General**: sounds, indicator, login, Dock and menu bar, updates.
 - Each page opens with a header card: icon tile, title, one line on what the page does, and a link when there is more to learn.
-- Advanced controls go in an "Advanced…" sheet at the foot of their page: the xAI and Azure routes, the Azure endpoint, other keys, the Grok switches, the cleanup model, spend by model, dictionary stars and the hint limit. History's "Transcribe Again With" and "Show Audio in Finder" act on rows, so they are in its context menu and the Dictation menu instead (chief of staff, 2026-10-25).
+- Advanced controls go in an "Advanced…" sheet at the foot of their page: the xAI and Azure routes, the Azure endpoint, other keys, the Grok switches, the cleanup model, spend by model. Dictionary has no Advanced… (owner QA 1, Q13): each row has its star inline (shown on hover, always shown when starred), and the hint limit is a sentence in the list's footer. History's "Transcribe Again With" and "Show Audio in Finder" act on rows, so they are in its context menu and the Dictation menu instead (chief of staff, 2026-10-25).
 - Remove: the Grok switches from the menu; the competitor name in the "Use ⌃⌘V" help tag.
 
 ### Microphone
