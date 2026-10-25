@@ -57,6 +57,7 @@ enum Snapshots {
         MainWindow.tileSnapshots,
         MainWindow.pageSystemSnapshots,
         MainWindow.frameChecks,
+        MainWindow.pageToolbarSnapshots,
     ]
 
     private static let padding: CGFloat = 16

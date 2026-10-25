@@ -177,3 +177,35 @@ extension MainWindow {
         return [snapshot]
     }
 }
+
+extension MainWindow {
+    /// A page with toolbar items (`pageSearch`, `pageToolbar`) beside one without: the title bar keeps one height
+    /// (`switchSnapshot` fails on a move). The second image shows the toolbar.
+    static func pageToolbarSnapshots() -> [Snapshot] {
+        let panes = [
+            Pane.home(.sample),
+            Pane(id: .dictionary) { AnyView(ToolbarSample()) },
+        ]
+        return [
+            switchSnapshot(of: panes, through: [.home, .dictionary, .home], named: "page-toolbar-switch"),
+            windowSnapshot(of: panes, selecting: .dictionary, named: "page-toolbar", isFramed: true),
+        ]
+    }
+}
+
+private struct ToolbarSample: View {
+    @State private var search = ""
+
+    var body: some View {
+        PageForm {
+            Section {
+                PageHeader(page: .dictionary, summary: "Words kotoba spells your way.")
+            }
+        }
+        .pageSearch(text: $search, prompt: "Search Words")
+        .pageToolbar {
+            Button("Import from Wispr Flow", systemImage: "square.and.arrow.down") {}
+            Button("Add Word", systemImage: "plus") {}
+        }
+    }
+}
