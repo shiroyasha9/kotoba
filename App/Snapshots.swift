@@ -50,6 +50,7 @@ enum Snapshots {
         FixLastDictationController.snapshots,
         Pane.homeSnapshots,
         Pane.historySnapshots,
+        Pane.historyArrivalChecks,
         Pane.windowSnapshots,
         Pane.switchSnapshots,
         Pane.emptyWindowSnapshots,

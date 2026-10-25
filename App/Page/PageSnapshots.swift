@@ -97,10 +97,11 @@ private struct ListSample: View {
     @State private var search = ""
 
     var body: some View {
-        PageList(selection: $selection) {
+        PageList(selection: $selection, hasRows: true) {
             Section("Today") {
                 ForEach(1...6, id: \.self) { Text("Dictation \($0)") }
             }
+        } unavailable: {
         } pinned: {
             Section {
                 PageHeader(page: .history, summary: "Every dictation, newest first.")
