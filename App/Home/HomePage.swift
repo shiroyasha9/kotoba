@@ -50,7 +50,11 @@ private struct HomePage: View {
                     earlier(Array(figures.recent.dropFirst().prefix(Self.earlierCount)), retryable: figures.retryable)
                 } else {
                     Section {
-                        PageRow(title: "No dictations yet", subtitle: StatusText.howToDictate(model.chords) + ".") {
+                        // The chords are on the rows above, so the text does not spell them again (qa1-review).
+                        EmptyRow(
+                            title: StatusText.noDictationsTitle, systemImage: PaneID.history.systemImage,
+                            description: "Your last dictation appears here."
+                        ) {
                             // Only once kotoba can dictate: before, the fix above comes first.
                             if model.readiness.firstMissing == nil {
                                 Button("Try It…", action: model.tryIt)

@@ -108,7 +108,7 @@ struct HistoryView: View {
         if model.isLoaded, !model.isLoadFailed {
             if model.search.isEmpty {
                 EmptyState(
-                    "No Dictations Yet", systemImage: PaneID.history.systemImage,
+                    StatusText.noDictationsTitle, systemImage: PaneID.history.systemImage,
                     description: "\(StatusText.howToDictate(.shared)). Each dictation appears here.")
             } else {
                 EmptyState(

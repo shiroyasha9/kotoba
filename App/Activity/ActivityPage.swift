@@ -19,10 +19,10 @@ struct ActivityPage: View {
             } else if let figures = model.reader.value {
                 if figures.insights.dictations == 0 && figures.month.cost == 0 {
                     Section {
-                        PageRow(
-                            title: "No dictations yet",
-                            subtitle: "Your words per day, speaking speed and top apps appear here after you dictate."
-                        ) {}
+                        EmptyRow(
+                            StatusText.noDictationsTitle, systemImage: PaneID.history.systemImage,
+                            description:
+                                "Your words per day, speaking speed and top apps appear here after you dictate.")
                     }
                 } else {
                     chart(figures.insights)
