@@ -21,6 +21,19 @@ struct WordDiffTests {
         #expect(runs.filter { $0.kind != .removed }.map(\.text).joined() == after)
     }
 
+    /// The Cleanup page's examples: what was said, in its own spelling, with the words the cleanup dropped. A word kept
+    /// with another case or punctuation ("so" as "So,") counts as kept.
+    @Test func droppedWordsKeepTheSpokenSpelling() {
+        let runs = WordDiff.dropped(
+            from: "um so can you open it, no, the auth file", to: "So, can you open the auth file?")
+        #expect(
+            runs == [
+                .init(.removed, "um ", words: 1), .init(.kept, "so can you open ", words: 4),
+                .init(.removed, "it, no, ", words: 2), .init(.kept, "the auth file", words: 3),
+            ])
+        #expect(runs.map(\.text).joined() == "um so can you open it, no, the auth file")
+    }
+
     @Test func theSameTextIsOneKeptRun() {
         let text = "Ship it on Friday."
         #expect(WordDiff.runs(from: text, to: text) == [.init(.kept, text, words: 4)])

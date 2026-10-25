@@ -39,29 +39,42 @@ extension AppMode {
 }
 
 // Custom: no native control shows a before and after.
-/// An example on the Cleanup page, in the row under the line that says what the feature does: what goes in and what
-/// kotoba pastes in two columns, the input in the secondary colour and the result in the primary one.
+/// An example on the Cleanup page, in the row under the line that says what the feature does: what goes in, with the
+/// words kotoba drops struck through in History's View Changes look (`ChangesView.marked`), then what kotoba pastes
+/// under it in the primary colour (owner QA 1, Q14: two columns side by side did not read as before and after).
 struct CleanupSample: View {
     let before: (title: String, text: String)
     let after: (title: String, text: String)
+    /// `before` with the words `after` drops (`WordDiff.dropped`): the pasted text below shows the rest.
+    private let kept: [WordDiff.Run]
 
-    var body: some View {
-        HStack(alignment: .top) {
-            column(before, style: .secondary)
-            column(after, style: .primary)
-        }
-        .accessibilityElement(children: .combine)
+    init(before: (title: String, text: String), after: (title: String, text: String)) {
+        self.before = before
+        self.after = after
+        kept = WordDiff.dropped(from: before.text, to: after.text)
     }
 
-    private func column(_ part: (title: String, text: String), style: HierarchicalShapeStyle) -> some View {
+    var body: some View {
         VStack(alignment: .leading) {
-            Text(part.title)
+            // The struck words keep their own colour; the rest is secondary, as the input was before.
+            part(before.title, Text(AttributedString("“") + ChangesView.marked(kept) + AttributedString("”")))
+                .foregroundStyle(.secondary)
+                // The system's spacing between the two parts, so each title starts its own block.
+                .padding(.bottom)
+                .accessibilityLabel("\(before.title): \(ChangesView.spoken(kept))")
+            part(after.title, Text("“\(after.text)”"))
+        }
+    }
+
+    private func part(_ title: String, _ text: Text) -> some View {
+        VStack(alignment: .leading) {
+            Text(title)
                 .font(.subheadline)
                 .foregroundStyle(.secondary)
-            Text("“\(part.text)”")
-                .foregroundStyle(style)
+            text
                 .fixedSize(horizontal: false, vertical: true)
         }
-        .frame(maxWidth: .infinity, alignment: .topLeading)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .accessibilityElement(children: .combine)
     }
 }

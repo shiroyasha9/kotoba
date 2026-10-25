@@ -38,30 +38,50 @@ public enum WordDiff {
             }
         }
         var runs: [Run] = []
-        func append(_ kind: Kind, _ token: Token) {
-            if let last = runs.last, last.kind == kind {
-                runs[runs.count - 1].text += token.text
-                runs[runs.count - 1].words += 1
-            } else {
-                runs.append(Run(kind, String(token.text), words: 1))
-            }
-        }
         var (oldIndex, newIndex) = (0, 0)
         while oldIndex < old.count || newIndex < new.count {
             if oldIndex < old.count, removed.contains(oldIndex) {
-                append(.removed, old[oldIndex])
+                append(.removed, old[oldIndex], to: &runs)
                 oldIndex += 1
             } else if newIndex < new.count, inserted.contains(newIndex) {
-                append(.added, new[newIndex])
+                append(.added, new[newIndex], to: &runs)
                 newIndex += 1
             } else {
                 // The same word in both: the later text's spacing.
-                append(.kept, new[newIndex])
+                append(.kept, new[newIndex], to: &runs)
                 oldIndex += 1
                 newIndex += 1
             }
         }
         return runs
+    }
+
+    /// `before` alone, in its own spelling, as kept and removed runs: the words `after` does not keep, for the Cleanup
+    /// page's examples of what a cleanup drops. Words match ignoring case and the punctuation around them, so a spoken
+    /// "so" that the cleanup writes "So," is kept, not dropped.
+    public static func dropped(from before: String, to after: String) -> [Run] {
+        let old = tokens(of: before)
+        let new = tokens(of: after)
+        let spoken = { (token: Token) in token.word.lowercased().trimmingCharacters(in: .punctuationCharacters) }
+        var removed: Set<Int> = []
+        for case .remove(let offset, _, _) in new.map(spoken).difference(from: old.map(spoken)) {
+            removed.insert(offset)
+        }
+        var runs: [Run] = []
+        for (index, token) in old.enumerated() {
+            append(removed.contains(index) ? .removed : .kept, token, to: &runs)
+        }
+        return runs
+    }
+
+    /// Adds `token` to the last run when it has the same kind, else starts a run.
+    private static func append(_ kind: Kind, _ token: Token, to runs: inout [Run]) {
+        if let last = runs.last, last.kind == kind {
+            runs[runs.count - 1].text += token.text
+            runs[runs.count - 1].words += 1
+        } else {
+            runs.append(Run(kind, String(token.text), words: 1))
+        }
     }
 
     private struct Token {
