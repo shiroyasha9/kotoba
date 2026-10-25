@@ -162,15 +162,10 @@ extension Pane {
         ]
     }
 
-    /// The pages that still have a toolbar: none, since History and Dictionary moved their search and row actions into
-    /// the page. A page has no toolbar (docs/research/ui-redesign.md, "Window"), so the title bar keeps one height;
-    /// `scripts/ratchet-done.sh` fails the release while this list has a page.
-    static let pagesWithToolbar: [PaneID] = []
-
-    /// One window switched through every page without a toolbar in turn, drawn at each step: the title bar, traffic
-    /// lights and window frame stay where they were on Home.
+    /// One window switched through every page in turn, drawn at each step: the title bar, traffic lights and window
+    /// frame stay where they were on Home, also on a page with toolbar items.
     static func switchSnapshots() -> [Snapshot] {
-        let path = PaneID.allCases.filter { !pagesWithToolbar.contains($0) }
+        let path = PaneID.allCases
         return path.indices.map { end in
             MainWindow.switchSnapshot(
                 of: samplePanes(), through: Array(path[...end]), named: "window-switch-\(path[end].rawValue)")

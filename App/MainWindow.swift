@@ -232,6 +232,10 @@ struct MainView: View {
         // view ignore `navigationSplitViewColumnWidth` (the sidebar was 144 pt, not the width asked; sidebar-spike,
         // 2026-10-24).
         .toolbar(removing: .sidebarToggle)
+        // The window toolbar on every page, as System Settings', so a page with toolbar items (`pageSearch`,
+        // `pageToolbar`; owner QA 1, Q12) does not change the title bar's height: without an item SwiftUI drops the
+        // toolbar, and the title bar shrinks from 52 to 32 pt. A flexible spacer is an item that draws nothing.
+        .toolbar { ToolbarSpacer(.flexible) }
         // A wider window would leave the page column floating in blank space (`PageMetrics.maximumWindowWidth`).
         .frame(
             minWidth: PageMetrics.minimumWindowSize.width, maxWidth: PageMetrics.maximumWindowWidth,
