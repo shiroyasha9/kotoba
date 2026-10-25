@@ -42,7 +42,7 @@ extension MainWindow {
     }
 
     /// A showcase image (`Pane.showcaseSnapshots`, `make readme-images`): the real window at the default size, title
-    /// bar, toolbar and shadow included, with the release's name and icon, on the showcase stage. The page's scroll
+    /// bar and toolbar included, with the release's name and icon, on the showcase stage. The page's scroll
     /// bar is not in the image (an overlay scroll bar shows as the page appears).
     static func showcaseSnapshot(of panes: [Pane], selecting id: Pane.ID, named name: String) -> Snapshot {
         var snapshot = Snapshots.window(named: name, contentSize: PageMetrics.defaultWindowSize) {

@@ -135,9 +135,9 @@ enum SnapshotCapture {
 
     /// The window as the window server composites it. A window that is never ordered in is captured on its own
     /// (`desktopIndependentWindow`), so nothing shows on screen. With a `shadowMargin`, the image is that much wider
-    /// and taller on each side and has the window's shadow: the capture puts the window and its shadow at the image's
-    /// top left, the window at `scale` (measured 2026-10-25: a 900 x 560 pt window, its shadow 21 pt on each side,
-    /// 16 pt above and 28 pt under it).
+    /// and taller on each side, the window at `scale` near its top left. The window server leaves the shadow out of a
+    /// window that was never on screen: the margin comes back clear (2026-10-25, the showcase images' pixels around the
+    /// window match the stage).
     static func image(of window: NSWindow, scale: CGFloat, shadowMargin: CGFloat = 0) throws -> CGImage {
         #if DEBUG
             do {

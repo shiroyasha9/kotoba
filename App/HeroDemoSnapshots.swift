@@ -24,8 +24,9 @@ enum HeroDemo {
             kind: .chat, dictation: "Almost. I fixed the copy on step two. Give me ten minutes.",
             speech: Speech([Speech.Phrase(0.3, 0.85, 2), Speech.Phrase(1.1, 2.75, 8), Speech.Phrase(3.0, 3.9, 5)])),
         Scene(
-            kind: .terminal, dictation: "Rename useAuthStore to useSession in src/auth/store.ts, then run the tests.",
-            speech: Speech([Speech.Phrase(0.3, 3.0, 14), Speech.Phrase(3.3, 4.4, 5)])),
+            kind: .terminal,
+            dictation: "Rename useAuthStore to useSession in src/auth/store.ts, then run the tests with --coverage.",
+            speech: Speech([Speech.Phrase(0.3, 3.0, 14), Speech.Phrase(3.3, 5.6, 11)])),
         Scene(
             kind: .message, dictation: "Sounds good. Let’s move the review to Friday at three. I’ll bring the slides.",
             speech: Speech([Speech.Phrase(0.3, 0.9, 2), Speech.Phrase(1.2, 3.1, 10), Speech.Phrase(3.4, 4.3, 5)])),
