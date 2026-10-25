@@ -5,55 +5,6 @@ import SwiftUI
 // The onboarding steps, each a `PageForm`'s sections with its `StepHeading` over the first card. `OnboardingView`
 // shows one at a time. Welcome is in `WelcomeStep.swift`.
 
-/// A chord as keycaps with each key's name in small text under it, as a Mac keyboard prints "control" under ⌃
-/// (docs/research/ui-redesign.md, "Onboarding"): the first time the owner meets the symbols, the names teach them. A
-/// one-side modifier ("right ⌥", from Wispr Flow's keys) draws its symbol, and its name says the side. Its vertical
-/// centre is the keycaps' centre, with the names hanging below, so the keycaps centre on a button or a row's title
-/// beside them (owner QA 3, S1: centred as a whole, the keycaps sat above Change…).
-struct NamedKeycaps: View {
-    let keys: [String]
-
-    var body: some View {
-        // Every column as wide as the widest name (“command”), each centred on its key, so the keys sit evenly as on a
-        // keyboard: under each key, the chord's names lie hidden in one stack, which takes the widest one's width.
-        let keys = keys.map(Self.legendAndName)
-        let names = keys.compactMap(\.name)
-        HStack(alignment: .top) {
-            ForEach(Array(keys.enumerated()), id: \.offset) { _, key in
-                VStack {
-                    Keycaps(keys: [key.legend])
-                    ZStack {
-                        ForEach(names, id: \.self) { Text($0).hidden() }
-                        if let name = key.name {
-                            Text(name)
-                        }
-                    }
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
-                }
-            }
-        }
-        // At its own width beside Change…: the row's text wraps instead of the key names.
-        .fixedSize()
-        .alignmentGuide(VerticalAlignment.center) { $0[.top] + Self.keysCentre }
-        .alignmentGuide(.titleLine) { $0[.top] + Self.keysCentre }
-        .accessibilityElement(children: .ignore)
-        .accessibilityLabel(keys.map { $0.name ?? $0.legend }.joined(separator: " "))
-    }
-
-    /// The keycaps' centre below the view's top: the names hang under it.
-    static var keysCentre: CGFloat { PageMetrics.keycapSide / 2 }
-
-    /// What a key's cap draws, and the name under it: "right ⌥" draws ⌥ over "right option".
-    private static func legendAndName(_ key: String) -> (legend: String, name: String?) {
-        for side in ["left ", "right "] where key.hasPrefix(side) {
-            let legend = String(key.dropFirst(side.count))
-            if let name = Keycaps.names[legend] { return (legend, side + name) }
-        }
-        return (key, Keycaps.names[key])
-    }
-}
-
 /// The microphone and Accessibility, one row each with its own Allow button. kotoba cannot work without either, so
 /// Continue waits for both (`OnboardingFlow.footer`).
 struct PermissionsStep: View {
@@ -158,22 +109,24 @@ struct KeyStep: View {
     }
 
     /// The shared check result after a save here; with none, what `Readiness` knows about a key saved before.
-    /// In the row's text column, under the key's name.
+    /// A row of its own, so it starts at the row's leading edge under the key's icon, as every row of the card does
+    /// (owner QA 4, U1: in the text column it read as part of the key's row).
     @ViewBuilder private var result: some View {
         if let status = model.keyChecks.status[model.account] {
-            KeyCheckLine(status: status, account: model.account).inRowTextColumn()
+            KeyCheckLine(status: status, account: model.account)
         } else if model.readiness.missingSetup?.item == .endpoint {
-            StatusLine("Key saved. Add your Azure endpoint to check it.", .neutral).inRowTextColumn()
+            StatusLine("Key saved. Add your Azure endpoint to check it.", .neutral)
         } else if model.readiness.missingSetup == nil {
-            StatusLine("Key saved", .good).inRowTextColumn()
+            StatusLine("Key saved", .good)
         }
     }
 }
 
 /// Both ways to dictate with their keys drawn as keycaps (docs/research/ui-redesign.md, "Onboarding": keys as keycaps
 /// with their names, never a chord in a sentence), each with Change…, and the field the words arrive in (owner QA 3, S2:
-/// the rows moved here from Welcome, so the owner sets the keys where they first use them). A line under a row whose
-/// chord Welcome took from Wispr Flow says so, and a footnote asks to quit Wispr Flow while it runs on the same keys.
+/// the rows moved here from Welcome, so the owner sets the keys where they first use them). A mark beside the title of
+/// a row whose chord Welcome took from Wispr Flow says so, and a footnote asks to quit Wispr Flow while it runs on the
+/// same keys.
 struct TryItStep: View {
     @Bindable var model: OnboardingModel
     @FocusState private var isFieldFocused: Bool
@@ -228,8 +181,8 @@ struct TryItStep: View {
         isFieldFocused = true
     }
 
-    /// A way to dictate: its keycaps and Change… with the Shortcuts page's recorder, and under its subtitle the line
-    /// that says its chord came from Wispr Flow.
+    /// A way to dictate: its keycaps and Change… with the Shortcuts page's recorder, and beside its title the mark that
+    /// says its chord came from Wispr Flow.
     private func shortcutRow(_ role: ChordRole, subtitle: String, chord: Chord, isFromWispr: Bool) -> some View {
         PageRow(title: StatusText.shortcutTitle(role), subtitle: subtitle) {
             HStack {
@@ -237,9 +190,9 @@ struct TryItStep: View {
                 Button("Change…") { changing = role }
                     .accessibilityLabel("Change \(StatusText.shortcutTitle(role)) Shortcut")
             }
-        } extra: {
+        } badge: {
             if isFromWispr {
-                WisprFlowPoint.ImportedLine()
+                WisprFlowPoint.ImportedMark()
             }
         }
     }

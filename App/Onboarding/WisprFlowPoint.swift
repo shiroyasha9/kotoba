@@ -4,8 +4,8 @@ import SwiftUI
 
 /// Welcome's and Try It's words for a Wispr Flow user (owner QA 2, R1), in one place for a copy pass, and what kotoba
 /// reads of Wispr Flow. Welcome took Wispr Flow's shortcuts as it showed, so its "Familiar" row has no keycaps and no
-/// button: Try It's shortcut rows show the keys, and a line under each says which came from Wispr Flow. The dictionary
-/// comes on the last step.
+/// button: Try It's shortcut rows show the keys, and a mark beside each title says which came from Wispr Flow. The
+/// dictionary comes on the last step.
 enum WisprFlowPoint {
     /// Parallel with Fast, Accurate and Private (owner QA 3, S3).
     static let title = "Familiar"
@@ -24,15 +24,14 @@ enum WisprFlowPoint {
     /// The footnote under Try It's shortcut rows while Wispr Flow runs: kotoba does not quit it.
     static let runningText = "Quit Wispr Flow, or both apps start when you press these keys."
 
-    /// Under the subtitle of a shortcut row whose chord is Wispr Flow's, also when it equals kotoba's own. The symbol
-    /// inline, a space from its words, as a label in a form row puts it in the row's icon column.
-    struct ImportedLine: View {
+    /// Beside the title of a shortcut row whose chord is Wispr Flow's, also when it equals kotoba's own: the symbol
+    /// alone, its words in its tooltip and for VoiceOver (owner QA 4, U2b: a line of its own was too much for a note).
+    struct ImportedMark: View {
         var body: some View {
-            Text("\(Image(systemName: "sparkles")) Imported from Wispr Flow")
-                .font(.caption)
+            Label("Imported from Wispr Flow", systemImage: "sparkles")
+                .labelStyle(.iconOnly)
                 .foregroundStyle(.secondary)
-                // Not "Sparkles, Imported…".
-                .accessibilityLabel("Imported from Wispr Flow")
+                .help("Imported from Wispr Flow")
         }
     }
 
