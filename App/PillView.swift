@@ -5,7 +5,8 @@ import SwiftUI
 /// The indicator pill (docs/research/ui-redesign.md, "Pill"): one `NSGlassEffectView` capsule that changes shape, no
 /// status words, words only when the owner must know something or can act. The view covers the pill window's room
 /// (`IndicatorPlacement.room`), so the capsule changes shape inside it and the window does not move. Nothing in it has
-/// glass of its own. At idle it does no work: no timer, display link or animation; hover is a tracking area.
+/// glass of its own. A look change flows the glass to its new shape with one spring (`morph`). At idle it does no work:
+/// no timer, display link or animation; hover is a tracking area.
 final class PillView: NSView {
     enum Action {
         /// A click on the capsule, not on a button.
@@ -44,13 +45,15 @@ final class PillView: NSView {
 
     /// The capsule, the pill's one glass: the navigation layer, and nothing in it has glass of its own. Its frame is
     /// the look's shape in the room.
-    let glass = NSGlassEffectView()  // swiftlint:disable:this glass_on_navigation_layer_only
+    let glass = CapsuleGlass()
     /// The content, along the capsule.
     let stack = NSStackView()
+    /// The glass's content view: the stack, the lone check, and an item fading out where it was after its look ended.
+    let glassContent = NSView()
     private let bars = PillBars()
     private let wand = PillView.symbolView("wand.and.sparkles", color: .labelColor)
     private let warning = PillView.symbolView("exclamationmark.triangle.fill", color: .systemOrange)
-    private let check = PillView.symbolView("checkmark", color: .systemGreen, weight: .semibold)
+    let check = PillView.symbolView("checkmark", color: .systemGreen, weight: .semibold)
     private let label = NSTextField(labelWithString: "")
     private let elapsed = NSTextField(labelWithString: "")
     private let keycaps = NSHostingView(rootView: PillKeycaps())
@@ -79,6 +82,11 @@ final class PillView: NSView {
         for view in [label, elapsed] {
             view.setAccessibilityElement(false)
         }
+        // Each item keeps its own layer while it is out of the glass, so its fade-in (`fade`) has a layer to run on
+        // when it comes back.
+        for view in [label, elapsed, keycaps, wand, warning, cancel, stop, button] as [NSView] {
+            view.wantsLayer = true
+        }
         keycaps.sizingOptions = .intrinsicContentSize
         keycaps.setAccessibilityElement(false)
         // A button and the keycaps keep their full width; only the words give way, so a message too long for the pill
@@ -96,21 +104,20 @@ final class PillView: NSView {
         button.rootView.onClick = { [weak self] in self?.onAction?(.button) }
         stack.spacing = PillGeometry.gap
         stack.translatesAutoresizingMaskIntoConstraints = false
-        let container = NSView()
-        container.addSubview(stack)
+        glassContent.addSubview(stack)
         // The content keeps the size of the look's capsule, centred, so it never reflows while the glass morphs (a
         // reflow cut the words to "No sound fro…" mid-morph, owner trial 2026-10-24).
         NSLayoutConstraint.activate([
-            stack.centerXAnchor.constraint(equalTo: container.centerXAnchor),
-            stack.centerYAnchor.constraint(equalTo: container.centerYAnchor), stackWidth, stackHeight,
+            stack.centerXAnchor.constraint(equalTo: glassContent.centerXAnchor),
+            stack.centerYAnchor.constraint(equalTo: glassContent.centerYAnchor), stackWidth, stackHeight,
         ])
         // The lone check is centred by its image's frame, not through the stack: the stack centres a symbol's
         // alignment rect, which sits off its drawn centre.
-        check.frame = container.bounds
+        check.frame = glassContent.bounds
         check.autoresizingMask = [.width, .height]
         check.imageAlignment = .alignCenter
-        container.addSubview(check)
-        glass.contentView = container
+        glassContent.addSubview(check)
+        glass.contentView = glassContent
         addSubview(glass)
         apply(from: look)
     }
@@ -164,18 +171,22 @@ final class PillView: NSView {
                 in: ScreenRect(bounds)))
     }
 
-    /// The glass frame's one owner: the look's capsule in the view's bounds now. A new room (an anchor change, a drop,
-    /// a screen change) lays the view out again, so the capsule is in the right place mid-morph too; a look change runs
-    /// it inside the morph's animation (`morph`).
+    /// The room the glass was last placed in.
+    private var placedRoom: NSRect?
+
+    /// A new room (an anchor change, a drop, a screen change) puts the capsule at its place at once, mid-morph too. A
+    /// look change moves it with the morph's spring, which a layout pass in the same room must not cut short.
     override func layout() {
         super.layout()
-        placeGlass()
+        if bounds != placedRoom {
+            placeGlass()
+        }
     }
 
-    private func placeGlass() {
-        let frame = capsuleFrame
-        glass.frame = frame
-        glass.cornerRadius = min(frame.width, frame.height) / 2
+    /// The glass frame's one owner: the look's capsule in the view's bounds now.
+    func placeGlass() {
+        placedRoom = bounds
+        glass.frame = capsuleFrame
     }
 
     /// Shows the views the look needs, in order, and moves the capsule to its new shape: animated on screen, at once
@@ -183,8 +194,18 @@ final class PillView: NSView {
     private func apply(from old: PillLook) {
         bars.isVertical = isVertical
         bars.isSweeping = look.isProcessing
+        let before = stack.arrangedSubviews
+        let places = before.map { (view: $0, offset: offset(of: $0), frame: stack.convert($0.frame, to: glassContent)) }
+        let (text, face) = (label.stringValue, button.rootView.face)
         let views = views(for: look)
-        let isNewContent = views != stack.arrangedSubviews
+        // The words or the button's title changed: new content, though the view is the same.
+        let renewed = [label: label.stringValue != text, button: button.rootView.face != face]
+        // An item fading out after an earlier change, wanted again: back into the stack, fading in from where it is.
+        let returning = views.filter { $0.superview === glassContent }
+        for view in returning {
+            view.removeFromSuperview()
+            view.translatesAutoresizingMaskIntoConstraints = false
+        }
         stack.orientation = isVertical ? .vertical : .horizontal
         stack.alignment = isVertical ? .centerX : .centerY
         stack.setViews(views, in: .center)
@@ -197,7 +218,14 @@ final class PillView: NSView {
         drawCheck(isShown: look == .done && old != .done)
         runClock()
         updateAccessibility()
-        morph(fadesContentIn: isNewContent)
+        morph(
+            Change(
+                staying: places.filter { views.contains($0.view) && renewed[$0.view] != true }.map {
+                    ($0.view, $0.offset)
+                },
+                entering: views.filter { !before.contains($0) || renewed[$0] == true },
+                returning: returning,
+                leaving: places.filter { !views.contains($0.view) }.map { ($0.view, $0.frame) }))
         // Last: the hover it finds can change the look (the idle bar's keys), and that change runs its own apply.
         trackHover()
     }
@@ -209,35 +237,6 @@ final class PillView: NSView {
         defer { NSLayoutConstraint.activate([stackWidth, stackHeight]) }
         let fitting = stack.fittingSize
         return isVertical ? fitting.height : fitting.width
-    }
-
-    /// The glass moves to the new shape with one animation per change; offscreen it jumps. New content fades in once
-    /// the glass has its shape, so no item shows outside the glass mid-morph; the same content (a new level, the
-    /// timer's next second) does not fade.
-    private func morph(fadesContentIn: Bool) {
-        guard window?.isVisible == true else {
-            needsLayout = true
-            return
-        }
-        // The new content takes its place first, so only the glass animates.
-        layoutSubtreeIfNeeded()
-        if fadesContentIn {
-            stack.alphaValue = 0
-        }
-        NSAnimationContext.runAnimationGroup { context in
-            context.duration = 0.3
-            context.timingFunction = CAMediaTimingFunction(controlPoints: 0.2, 0.9, 0.3, 1)
-            context.allowsImplicitAnimation = true
-            placeGlass()
-        } completionHandler: { [weak self] in
-            MainActor.assumeIsolated {
-                guard let stack = self?.stack, stack.alphaValue < 1 else { return }
-                NSAnimationContext.runAnimationGroup { context in
-                    context.duration = 0.15
-                    stack.animator().alphaValue = 1
-                }
-            }
-        }
     }
 }
 
