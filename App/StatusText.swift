@@ -114,12 +114,17 @@ enum StatusText {
         "Added “\(word)”"
     }
 
-    /// What the owner adds for a dictation that waits: "Add your OpenRouter key".
+    /// The account a dictation waits on has no credit: Home's card, the menu and Rewrite's pill say so.
+    static func outOfCredit(_ account: ProviderAccount) -> String {
+        "\(account.title) is out of credit"
+    }
+
+    /// What the owner adds for a dictation that waits: "Add your OpenRouter key"; for credit, what ran out.
     static func add(_ item: SetupItem, for account: ProviderAccount) -> String {
         switch item {
         case .key: "Add your \(account.title) key"
         case .endpoint: "Add your \(account.title) endpoint"
-        case .credit: "Add credit at \(account.title)"
+        case .credit: Self.outOfCredit(account)
         }
     }
 
@@ -318,7 +323,7 @@ extension ShellStatus.MenuStatus where Missing == Readiness.Missing {
         case .historyUnavailable: .text(StatusText.historyUnavailable)
         case .yieldsToRelease: .text(StatusText.yieldsToRelease)
         case .dictation(let state): .text(state.statusText(context) ?? "")
-        case .finishSetup(let missing): .finishSetup(missing.setupText)
+        case .finishSetup(let missing): .finishSetup(title: missing.setupTitle, subtitle: missing.setupText)
         case .ready: .ready
         }
     }
@@ -343,7 +348,6 @@ extension PolishFailure {
         case .nothingToPolish: "Nothing to rewrite yet"
         case .cutOff: "Rewrite cut off. Nothing changed."
         case .tooSlow: "Rewrite too slow. Nothing changed."
-        case .needsSetup(.credit): "\(ProviderAccount.openRouter.title) is out of credit"
         case .needsSetup(let item): StatusText.add(item, for: .openRouter)
         case .failed: "Couldn’t rewrite. Nothing changed."
         }
@@ -361,7 +365,16 @@ extension RejectReason {
 }
 
 extension Readiness.Missing {
-    /// The subtitle of "Finish Setting Up kotoba…": the first thing to do.
+    /// The menu item that fixes it. Credit is added on the provider's site, so its item says so.
+    var setupTitle: String {
+        switch self {
+        case .microphone, .accessibility, .setup(.key, _), .setup(.endpoint, _):
+            "Finish Setting Up \(Install.displayName)…"
+        case .setup(.credit, _): SetupItem.credit.pillAction.title
+        }
+    }
+
+    /// The subtitle of `setupTitle`: the first thing to do, or for credit, what ran out.
     var setupText: String {
         switch self {
         case .microphone: "Allow the microphone"
@@ -377,7 +390,7 @@ extension Readiness.Missing {
         case .accessibility: "kotoba can’t hear your shortcut or paste yet."
         case .setup(.key, let account): "kotoba has no \(account.title) key yet."
         case .setup(.endpoint, let account): "kotoba has no \(account.title) endpoint yet."
-        case .setup(.credit, let account): "\(account.title) is out of credit."
+        case .setup(.credit, let account): StatusText.outOfCredit(account) + "."
         }
     }
 }

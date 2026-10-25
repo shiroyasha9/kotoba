@@ -27,8 +27,9 @@ import KotobaProviders
 @MainActor
 struct MenuModel {
     enum Status {
-        /// Setup is not complete: an enabled "Finish Setting Up kotoba…" with the first thing to do.
-        case finishSetup(String)
+        /// Setup is not complete: an enabled item that fixes the first thing ("Finish Setting Up kotoba…", "Add
+        /// Credit…"), with what it is.
+        case finishSetup(title: String, subtitle: String)
         /// Ready to dictate: both ways to dictate, each with its chord.
         case ready
         /// A disabled line: the dictation state.
@@ -112,11 +113,9 @@ struct MenuModel {
     private func topItems(target: StatusMenuActions?) -> [NSMenuItem] {
         var items: [NSMenuItem] = []
         switch status {
-        case .finishSetup(let missing):
-            let item = NSMenuItem.action(
-                "Finish Setting Up \(Install.displayName)…", target: target,
-                action: #selector(StatusMenuActions.finishSetup))
-            item.subtitle = missing
+        case .finishSetup(let title, let subtitle):
+            let item = NSMenuItem.action(title, target: target, action: #selector(StatusMenuActions.finishSetup))
+            item.subtitle = subtitle
             items.append(item)
         case .ready:
             // Both ways to dictate with their chords, as lines to read, not to click (owner QA, 2026-10-25: the menu
@@ -216,8 +215,8 @@ struct MenuModel {
 
     /// Menus for the snapshot run's `menu-<name>.txt`: ready (a cleaned-up last dictation, Rewrite set up, Copy's
     /// default chord), ready with chords of their own for push to talk, Paste and Rewrite, setup not complete (a Debug
-    /// build: no update item), recording (with Sparkle busy), failed with a retry and an update waiting, a Bluetooth
-    /// mic, and kotoba Dev while the release app runs.
+    /// build: no update item), out of credit with dictations saved, recording (with Sparkle busy), failed with a retry
+    /// and an update waiting, a Bluetooth mic, and kotoba Dev while the release app runs.
     static func samples() -> [(name: String, model: Self)] {
         let mics = [MenuChoice(title: "MacBook Pro Microphone", value: "builtin")]
         // Each status line comes from the shell, as the running app's does, so a sample shows its priorities.
@@ -233,6 +232,9 @@ struct MenuModel {
         var setup = ready
         setup.updates = nil
         setup.status = status(.idle, .init(firstMissing: .setup(.key, .openRouter)))
+        var noCredit = ready
+        noCredit.status = status(.idle, .init(firstMissing: .setup(.credit, .openRouter)))
+        noCredit.pendingCount = 3
         var listening = ready
         listening.status = status(.init(.recording(isLong: false)))
         listening.updates?.canCheck = false
@@ -255,7 +257,8 @@ struct MenuModel {
         bluetooth.microphoneInUse = ("airpods", "AirPods Pro")
         bluetooth.microphoneWarning = .bluetoothMic(interruptsPlayback: true)
         return [
-            ("ready", ready), ("own-chords", ownChords), ("setup", setup), ("listening", listening), ("failed", failed),
+            ("ready", ready), ("own-chords", ownChords), ("setup", setup), ("no-credit", noCredit),
+            ("listening", listening), ("failed", failed),
             ("bluetooth", bluetooth),
             ("yielding", yielding),
         ]

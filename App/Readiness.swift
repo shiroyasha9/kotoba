@@ -4,9 +4,10 @@ import KotobaCore
 import KotobaProviders
 import Observation
 
-/// What kotoba still needs before a dictation works end to end: the mic, Accessibility, and the key or endpoint
-/// of the current speech model. One value for the menu status line, the menu bar icon and onboarding.
-/// `refresh()` reads everything again; each read is cheap (`KeyVault` caches `hasKey`), so call it freely.
+/// What kotoba still needs before a dictation works end to end: the mic, Accessibility, the key or endpoint of the
+/// current speech model, and credit on its account. One value for the menu status line, the menu bar icon, Home and
+/// onboarding. `refresh()` reads everything again; each read is cheap (`KeyVault` caches `hasKey`, `AccountCredit` is
+/// in memory), so call it freely.
 @MainActor
 @Observable
 final class Readiness {
@@ -38,12 +39,20 @@ final class Readiness {
         var microphone: @MainActor () -> Microphone
         var isAccessibilityAllowed: @MainActor () -> Bool
         var missingSetup: @MainActor () -> (item: SetupItem, account: ProviderAccount)?
+        /// The current speech model's account, when its last request found no credit.
+        var outOfCredit: @MainActor () -> ProviderAccount?
 
-        static func live(settings: TranscriptionSettings, vault: KeyVault) -> Self {
+        static func live(settings: TranscriptionSettings, vault: KeyVault, credit: AccountCredit) -> Self {
             Self(
                 microphone: { .current },
                 isAccessibilityAllowed: { AXIsProcessTrusted() },
-                missingSetup: { settings.missingSetup(hasKey: vault.hasKey(for:)).map { ($0, settings.route.account) } }
+                missingSetup: {
+                    settings.missingSetup(hasKey: vault.hasKey(for:)).map { ($0, settings.route.account) }
+                },
+                outOfCredit: {
+                    let account = settings.route.account
+                    return credit.isOut(account) ? account : nil
+                }
             )
         }
     }
@@ -52,6 +61,9 @@ final class Readiness {
     private(set) var isAccessibilityAllowed: Bool
     /// The key or endpoint the current speech model still needs, and whose.
     private(set) var missingSetup: (item: SetupItem, account: ProviderAccount)?
+    /// The current speech model's account, when its last request found no credit. Apart from `missingSetup`: the
+    /// shortcut still records and saves, and onboarding's key step is done with a key saved.
+    private var outOfCredit: ProviderAccount?
 
     @ObservationIgnored private let reader: Reader
 
@@ -59,7 +71,8 @@ final class Readiness {
     var firstMissing: Missing? {
         if microphone != .allowed { return .microphone }
         if !isAccessibilityAllowed { return .accessibility }
-        return missingSetup.map { .setup($0.item, $0.account) }
+        if let missingSetup { return .setup(missingSetup.item, missingSetup.account) }
+        return outOfCredit.map { .setup(.credit, $0) }
     }
 
     var isComplete: Bool { firstMissing == nil }
@@ -69,21 +82,22 @@ final class Readiness {
         microphone = reader.microphone()
         isAccessibilityAllowed = reader.isAccessibilityAllowed()
         missingSetup = reader.missingSetup()
+        outOfCredit = reader.outOfCredit()
     }
 
-    convenience init(settings: TranscriptionSettings, vault: KeyVault) {
-        self.init(reader: .live(settings: settings, vault: vault))
+    convenience init(settings: TranscriptionSettings, vault: KeyVault, credit: AccountCredit) {
+        self.init(reader: .live(settings: settings, vault: vault, credit: credit))
     }
 
     /// Fixed values, for snapshots: reads no permission, Keychain or setting.
     static func sample(
         microphone: Microphone = .allowed, isAccessibilityAllowed: Bool = true,
-        missingSetup: (item: SetupItem, account: ProviderAccount)? = nil
+        missingSetup: (item: SetupItem, account: ProviderAccount)? = nil, outOfCredit: ProviderAccount? = nil
     ) -> Readiness {
         Readiness(
             reader: Reader(
                 microphone: { microphone }, isAccessibilityAllowed: { isAccessibilityAllowed },
-                missingSetup: { missingSetup }))
+                missingSetup: { missingSetup }, outOfCredit: { outOfCredit }))
     }
 
     /// Reads every check again. Only a changed value is set, so observers wake only on a change.
@@ -98,6 +112,8 @@ final class Readiness {
         if missingSetup?.item != self.missingSetup?.item || missingSetup?.account != self.missingSetup?.account {
             self.missingSetup = missingSetup
         }
+        let outOfCredit = reader.outOfCredit()
+        if outOfCredit != self.outOfCredit { self.outOfCredit = outOfCredit }
     }
 
     /// Shows the system Microphone prompt when macOS has not asked yet, then refreshes.
@@ -130,8 +146,6 @@ final class Readiness {
 
 /// The main window's places that setup opens, each a closure, so the setup flow and onboarding never hold the window.
 struct SetupLinks {
-    /// The Speech page: the credit fix.
-    var speech: @MainActor () -> Void
     /// The Speech page with its "Advanced…" sheet: the xAI and Azure routes and the Azure endpoint.
     var otherSpeechServices: @MainActor () -> Void
     /// Home: where onboarding's Done leads.
@@ -154,6 +168,7 @@ final class SetupFlow {
     /// The dictionary onboarding's Wispr Flow step imports into; nil until it is read at launch.
     private let dictionary: @MainActor () -> DictionaryModel?
     private var activations: Task<Void, Never>?
+    private var creditChanges: Task<Void, Never>?
     private var accessibilityChanges: Task<Void, Never>?
     /// Makes the hotkey tap again after Accessibility comes back (`startHotkeys`).
     private var regrants: Task<Void, Never>?
@@ -193,14 +208,15 @@ final class SetupFlow {
         onboarding.dictionaryOpened()
     }
 
-    /// "Finish Setting Up kotoba…" and Home's fix: onboarding on the first missing step. The Azure endpoint is set in the
-    /// Speech page's "Advanced…" sheet, credit from the Speech page.
+    /// "Finish Setting Up kotoba…", the menu's and Home's "Add Credit…", and Home's fix: onboarding on the first
+    /// missing step. The Azure endpoint is set in the Speech page's "Advanced…" sheet, credit on the provider's site,
+    /// as the pill's "Add Credit…".
     func finishSetup() {
         switch readiness.firstMissing {
         case .microphone, .accessibility: onboarding.show(step: .permissions)
         case .setup(.key, _): onboarding.show(step: .key)
         case .setup(.endpoint, _): links.otherSpeechServices()
-        case .setup(.credit, _): links.speech()
+        case .setup(.credit, let account): NSWorkspace.shared.open(account.creditsPage)
         case nil: onboarding.show()
         }
     }
@@ -218,8 +234,14 @@ final class SetupFlow {
     /// A grant made in System Settings shows without a click: Readiness reads again when the menu opens (the menu
     /// does that), when kotoba becomes active, and when macOS announces an Accessibility change, so onboarding sees
     /// the grant while System Settings is in front. macOS announces no Microphone change; returning to kotoba (an
-    /// activation) reads it. Nothing runs at idle.
+    /// activation) reads it. Credit is read again when a request marks or clears it (`AccountCredit.changes`). Nothing
+    /// runs at idle.
     func watchGrants() {
+        creditChanges = Task { [weak self, changes = router.credit.changes] in
+            for await _ in changes {
+                self?.readiness.refresh()
+            }
+        }
         activations = Task { [weak self] in
             for await _ in NotificationCenter.default.notifications(named: NSApplication.didBecomeActiveNotification) {
                 self?.readiness.refresh()

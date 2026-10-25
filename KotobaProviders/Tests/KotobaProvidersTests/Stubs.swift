@@ -85,6 +85,11 @@ final class StubHost {
         StubURLProtocol.routes.withLock { $0[host] = StubURLProtocol.Route(reply: reply) }
     }
 
+    /// The reply to the requests from now on.
+    func reply(_ reply: StubReply) {
+        StubURLProtocol.routes.withLock { $0[host]?.reply = reply }
+    }
+
     func onRequest(_ action: @escaping @Sendable () -> Void) {
         StubURLProtocol.routes.withLock { $0[host]?.onRequest = action }
     }
