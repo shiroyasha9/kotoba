@@ -135,6 +135,7 @@ struct PipelineHistoryChangeTests {
         await pipeline.tap(world)
         await pipeline.tap(world)
         #expect(await eventually { await gate.hasWaiters })
+        #expect(await world.store.waitForRecords(1))
         let id = try #require(await world.store.records.first?.id)
 
         _ = await pipeline.delete([id])
@@ -153,6 +154,7 @@ struct PipelineHistoryChangeTests {
         await pipeline.tap(world)
         await pipeline.tap(world)
         #expect(await eventually { await gate.hasWaiters })
+        #expect(await world.store.waitForRecords(1))
         let id = try #require(await world.store.records.first?.id)
 
         #expect(await activity.next() == PipelineActivity(isQuiet: false, inFlight: [id]))
@@ -186,11 +188,13 @@ struct PipelineHistoryChangeTests {
         await pipeline.tap(world)
         await pipeline.tap(world)
         #expect(await eventually { await first.hasWaiters })
+        #expect(await world.store.waitForRecords(1))
         let second = Gate()
         await world.provider.hold(at: second)
         await pipeline.tap(world)
         await pipeline.tap(world)
         #expect(await eventually { await second.hasWaiters })
+        #expect(await world.store.waitForRecords(2))
         let ids = await world.store.records.map(\.id)
         try #require(ids.count == 2)
 
