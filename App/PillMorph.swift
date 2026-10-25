@@ -150,6 +150,16 @@ struct GlassSpring: CustomAnimation {
 /// The pill's one glass, a capsule at every size: the radius follows the size at each step of a morph. The spring that
 /// moves the frame in process does not move `cornerRadius` (a done circle shrank to the idle bar as a rounded square).
 final class CapsuleGlass: NSGlassEffectView {
+    override init(frame: NSRect) {
+        super.init(frame: frame)
+        cornerRadius = min(frame.width, frame.height) / 2
+    }
+
+    @available(*, unavailable)
+    required init?(coder: NSCoder) {
+        fatalError("CapsuleGlass is built in code")
+    }
+
     override func setFrameSize(_ newSize: NSSize) {
         super.setFrameSize(newSize)
         cornerRadius = min(newSize.width, newSize.height) / 2
