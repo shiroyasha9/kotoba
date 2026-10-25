@@ -992,3 +992,4 @@ One glass capsule that changes shape (docs/research/ui-redesign.md, "Pill"). Sna
 | 1211 | In a hands-free recording, mute the mic | Orange dots, “No sound from the mic”, Choose Mic… and Stop; × is gone (Esc still cancels) | |
 | 1212 | Dictate, fix a word in the pasted text, then dictate again | “Added “word”” with Undo shows after the second paste and stays for its time; the check does not replace it | |
 | 1213 | Dictate for more than 10 minutes; open the menu bar menu | From 10:00 the time shows after the bars and counts up once a second; the menu's status line says “Still recording · 10 minutes” | |
+| 1214 | With VoiceOver on, move to a word on **Dictionary** (pointer away from it) and open the actions menu (VO-⌘-Space) | VoiceOver reads the word (and “starred” for a starred one); the menu has **Star** or **Unstar**, and it works while the star is hidden | |
