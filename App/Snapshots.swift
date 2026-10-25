@@ -243,6 +243,8 @@ enum Snapshots {
     private static func render(_ snapshot: Snapshot, in appearance: NSAppearance) throws -> Data {
         let window = try layOut(snapshot, in: appearance, isCaptured: true)
         SnapshotCapture.focusSidebar(in: window)
+        SnapshotCapture.endAnimations(in: window)
+        // An animation that the end above did not stop (one added again at once) would be captured at its current frame.
         if let animation = SnapshotCapture.runningAnimation(in: window) {
             throw SnapshotError.layout(snapshot.name, "an animation still runs at the capture (\(animation))")
         }
