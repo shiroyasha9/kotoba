@@ -6,17 +6,9 @@ import KotobaProviders
 enum StatusText {
     /// How to dictate with the owner's chords: "Press ⌃⌥⌘ to dictate", or "Press ⌃⌥⌘ or hold ⌥ to dictate" while push to
     /// talk has a chord of its own. Every text that names the chords reads them, so it follows a new recording.
-    @MainActor static var ready: String { howToDictate(.shared) }
-
     @MainActor static func howToDictate(_ chords: HotkeyChords) -> String {
         guard let pushToTalk = chords.separatePushToTalk else { return "Press \(chords.handsFree.title) to dictate" }
         return "Press \(chords.handsFree.title) or hold \(pushToTalk.title) to dictate"
-    }
-
-    /// The dictation chords as a list: "⌃⌥⌘", or "⌃⌥⌘ and ⌥" while push to talk has a chord of its own.
-    @MainActor static func dictationChords(_ chords: HotkeyChords) -> String {
-        guard let pushToTalk = chords.separatePushToTalk else { return chords.handsFree.title }
-        return "\(chords.handsFree.title) and \(pushToTalk.title)"
     }
 
     /// The history database cannot be read: the panes' failure state (title and message) and the menu status line.
