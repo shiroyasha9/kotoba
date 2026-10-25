@@ -90,8 +90,9 @@ extension AppDelegate: StatusMenuActions {
         showApp()
     }
 
+    /// "Settings…" (⌘,): onboarding while it goes on, as a Dock click.
     func openSettings() {
-        mainWindow.showSettings()
+        showApp(settings: true)
     }
 
     func showAbout() {
