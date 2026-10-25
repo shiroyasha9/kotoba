@@ -87,16 +87,21 @@ struct DayBars: ChartContent {
     }
 }
 
-/// A day bar's shape, in Activity's chart and Home's week: all four corners rounded, continuous.
+/// A day bar's shape, in Activity's chart and Home's week: all four corners rounded, continuous, at most a quarter of
+/// the bar's width, so Home's narrower bar keeps Activity's shape.
 struct DayBarShape: Shape {
     func path(in rect: CGRect) -> Path {
-        RoundedRectangle(cornerRadius: PageMetrics.barCornerRadius, style: .continuous).path(in: rect)
+        RoundedRectangle(
+            cornerRadius: min(PageMetrics.barCornerRadius, rect.width * PageMetrics.barCornerShare), style: .continuous
+        )
+        .path(in: rect)
     }
 }
 
-/// The week's words on Home's today card, as Screen Time's week: Activity's bar (`DayBarShape`) with today in the brand
-/// colour, the other days muted, an empty day after the first dictation as a stub on the base line so the week does not
-/// look broken, the day initials under them and no word counts. It takes the height of the headline beside it.
+/// The week's words on Home's today card, as Screen Time's week: Activity's bar (`DayBarShape`) in the same colour,
+/// the day initials under them and no word counts; a day with no words has no bar, as on Activity (qa1-review 3: faded
+/// past days and a stub for an empty day gave the same data two looks). It takes the height of the headline beside it,
+/// and a bar's width follows that height (`PageMetrics.weekBarShare`), so a bar reads as a bar in a short card.
 /// Plain shapes, not Swift Charts: the window opens on Home, and its first chart cost about 108 MB of footprint
 /// (measured with `make window-memory`, 2026-10-25), which Activity's axes and average line need and seven bars do not.
 struct WeekBars: View {
@@ -105,10 +110,14 @@ struct WeekBars: View {
     var body: some View {
         VStack(spacing: PageMetrics.weekLabelGap) {
             GeometryReader { plot in
+                let barWidth = min(
+                    plot.size.width / CGFloat(days.slots.count) * PageMetrics.barWidthRatio,
+                    plot.size.height * PageMetrics.weekBarShare)
                 HStack(alignment: .bottom, spacing: 0) {
                     ForEach(days.slots, id: \.start) { day in
-                        bar(day, plotHeight: plot.size.height)
-                            .frame(width: plot.size.width / CGFloat(days.slots.count) * PageMetrics.barWidthRatio)
+                        DayBarShape()
+                            .fill(Color.brand)
+                            .frame(width: barWidth, height: plot.size.height * CGFloat(day.words) / CGFloat(days.top))
                             .frame(maxWidth: .infinity)
                     }
                 }
@@ -129,23 +138,5 @@ struct WeekBars: View {
         .frame(maxWidth: .infinity, minHeight: 0, idealHeight: 0, maxHeight: .infinity)
         .accessibilityElement(children: .ignore)
         .accessibilityLabel("Words per day this week")
-    }
-
-    @ViewBuilder private func bar(_ day: DictationInsights.Day, plotHeight: CGFloat) -> some View {
-        if !days.started.contains(day) {
-            // A blank slot before the first dictation.
-            Color.clear.frame(height: 0)
-        } else if day.words == 0 {
-            Capsule()
-                .fill(Color.brand.secondary)
-                .frame(height: PageMetrics.barStubHeight)
-        } else {
-            DayBarShape()
-                .fill(
-                    day.start == days.slots.last?.start
-                        ? AnyShapeStyle(Color.brand) : AnyShapeStyle(Color.brand.secondary)
-                )
-                .frame(height: plotHeight * CGFloat(day.words) / CGFloat(days.top))
-        }
     }
 }

@@ -50,10 +50,14 @@ enum PageMetrics {
     /// framed History snapshot, 2026-10-25).
     static let listSideInset: CGFloat = 10
 
+    /// A grouped form's row inset on each side: the text column of a card with no icons is this far in from the card's
+    /// edge (measured in the Microphone snapshot, 2026-10-25). A list that fills its row puts the row lines here.
+    static let formRowInset: CGFloat = 10
+
     /// A `PageList` row's content in from its selection, so it starts in the cards' text column: a card's row padding
-    /// (10 pt) less the 6 pt an inset list row keeps. Measured: a row's text and a card's text start 0.5 pt apart in the
+    /// (`formRowInset`) less the 6 pt an inset list row keeps. Measured: a row's text and a card's text start 0.5 pt apart in the
     /// framed History snapshot.
-    static let listRowInset: CGFloat = 4
+    static let listRowInset = formRowInset - 6
 
     /// The widest the content column gets; a wider window adds margin on both sides. The form keeps its own inset
     /// inside it, so sections are 520 pt wide at most: about 80 characters of body text per line (measured in the
@@ -125,12 +129,15 @@ enum PageMetrics {
     /// A bar's width as a share of its day's slot, as Screen Time's bars (0.57 in the owner's capture).
     static let barWidthRatio: CGFloat = 0.6
 
-    /// A bar's corner, all four as Screen Time's (review-window.md T6): about a quarter of a week bar's width. Charts
-    /// takes only a fixed radius, so a month's thin bar keeps it too.
+    /// A bar's corner, all four as Screen Time's (review-window.md T6): about a quarter of a week bar's width
+    /// (`barCornerShare`), and never more.
     static let barCornerRadius: CGFloat = 4
+    static let barCornerShare: CGFloat = 0.25
 
-    /// Home's stub for an empty day: as tall as a bar's corner, standing on the base line.
-    static let barStubHeight = barCornerRadius
+    /// Home's week bar at most this share of its plot's height wide: the plot beside the today headline is about 30 pt
+    /// tall, and a bar 0.6 of its day wide (24 pt) read as a square (qa1-review 3). A third keeps the tallest day at least three
+    /// times as tall as wide, as Activity's tallest bars are.
+    static let weekBarShare: CGFloat = 1 / 3
 
     /// Home's week: from the bars' base line to the top of a day initial's capitals, as Swift Charts drew it (14 px at 2x
     /// in the 0.5.0 Home snapshot), less the space the text frame keeps above its capitals.

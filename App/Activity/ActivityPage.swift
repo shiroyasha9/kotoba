@@ -40,21 +40,18 @@ struct ActivityPage: View {
         }
     }
 
+    /// The period switch at the top of the chart card, full width, as Battery's "Last 24 Hours / Last 10 Days" (qa1-review
+    /// 4: above the card, it read as an orphan). One row with the chart, so no line runs under it, as in Battery.
     private func chart(_ insights: DictationInsights) -> some View {
         Section {
-            DailyWordsChart(days: ChartDays(insights.days, last: model.period.dayCount), period: model.period)
-        } header: {
-            // Above the chart card, outside it, so the card holds no control (owner, 2026-10-24); Battery puts its
-            // period switch at the top of its charts. Centred: a segmented control does not stretch.
-            HStack {
-                Spacer()
+            VStack(alignment: .leading) {
                 Picker("Period", selection: $model.period) {
                     ForEach(ActivityPeriod.allCases, id: \.self) { Text($0.title).tag($0) }
                 }
                 .pickerStyle(.segmented)
                 .labelsHidden()
-                .fixedSize()
-                Spacer()
+                .buttonSizing(.flexible)
+                DailyWordsChart(days: ChartDays(insights.days, last: model.period.dayCount), period: model.period)
             }
         }
     }
