@@ -16,13 +16,13 @@ struct WelcomeStep: View {
         Section {
             Point(
                 "Fast", systemImage: "bolt", tint: .green,
-                text: "Your words usually appear about a second after you stop.")
+                text: "Pastes your words a second after you stop.")
             Point(
                 "Accurate", page: .dictionary,
-                text: "Add names and terms to your dictionary, and kotoba spells them your way.")
+                text: "Learns your names and technical terms.")
             Point(
                 "Private", systemImage: "hand.raised", tint: .blue,
-                text: "No account. Audio goes only to the speech service you choose, with your key.")
+                text: "Needs no kotoba account and sends no analytics.")
             // A reason to switch for a Wispr Flow user: what comes along, the shortcuts (taken here) and the dictionary
             // (imported on the last step).
             if let text = WisprFlowPoint.text(
@@ -33,7 +33,7 @@ struct WelcomeStep: View {
         } header: {
             StepHeading(
                 title: "Welcome to kotoba",
-                text: Text("Speak in any app, and kotoba types your words where your cursor is."), isCentred: true
+                text: Text("Speak anywhere you can type."), isCentred: true
             ) {
                 AppIconView(icon: NSApp.applicationIconImage, side: PageMetrics.welcomeIconSide)
             }

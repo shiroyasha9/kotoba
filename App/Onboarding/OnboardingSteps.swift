@@ -70,7 +70,7 @@ struct PermissionsStep: View {
                     Button("Allow…") { Task { await model.allowMicrophone() } }
                 }
             }
-            PageRow(title: "Accessibility", subtitle: "So your shortcut works in every app, and kotoba can paste.") {
+            PageRow(title: "Accessibility", subtitle: "For your shortcut and the paste, in any app.") {
                 SymbolTile(systemImage: "accessibility", tint: .blue, side: PageMetrics.rowTileSide)
             } trailing: {
                 if model.readiness.isAccessibilityAllowed {
@@ -82,22 +82,12 @@ struct PermissionsStep: View {
         } header: {
             StepHeading(
                 title: "Allow Access",
-                text: Text(
-                    "kotoba needs the microphone to hear you, and Accessibility for your shortcut and to type your "
-                        + "words."))
+                text: Text("kotoba needs both to work in every app."))
         } footer: {
-            VStack(alignment: .leading) {
-                Text(
-                    "To learn your corrections, kotoba reads only the text field it pasted into, and only while "
-                        + "“Learn from edits” is on in Dictionary. It never reads your screen.")
-                if !model.readiness.isAccessibilityAllowed {
-                    // A paragraph apart: with no gap the two read as one (qa1-review, Onboarding).
-                    Text(
-                        "If kotoba is on in the Accessibility list already and this step stays open, turn it off "
-                            + "and on again."
-                    )
-                    .padding(.top)
-                }
+            // What Learn from edits reads is said on its switch in Dictionary, where it is turned on
+            // (docs/research/copywriting.md, Onboarding steps).
+            if !model.readiness.isAccessibilityAllowed {
+                Text("Already on in the Accessibility list? Turn kotoba off and on again.")
             }
         }
     }
@@ -105,7 +95,7 @@ struct PermissionsStep: View {
     private var microphoneText: String {
         switch model.readiness.microphone {
         case .denied: "Access is off. Turn on kotoba in the Microphone list."
-        case .allowed, .notAsked: "Used only while you dictate, with an orange dot in the menu bar."
+        case .allowed, .notAsked: "To hear you while you dictate."
         }
     }
 }
@@ -121,17 +111,15 @@ struct KeyStep: View {
             result
         } header: {
             StepHeading(
-                title: "Connect a Speech Service",
-                text: Text(
-                    "kotoba sends your audio to \(provider), which turns it into text. Get a key there and paste it "
-                        + "here."))
+                title: "Connect \(provider)",
+                text: Text("Your audio goes straight to \(provider), with your own key."))
         } footer: {
             PriceLine(route: model.route)
         }
         // The other services in a group of their own, clear of the key's links (owner QA, 2026-10-25: three links in
         // one line looked crammed).
         Section {
-            PageRow(title: "xAI or Azure", subtitle: "Use another speech service, with your own key.") {
+            PageRow(title: "xAI or Azure", subtitle: "Use another speech service.") {
                 Button("Open Speech Settings…", action: model.openOtherSpeechServices)
             }
         }
@@ -192,7 +180,7 @@ struct TryItStep: View {
                 NamedKeycaps(keys: chords.pushToTalk.keycaps)
             }
         } header: {
-            StepHeading(title: "Try It", text: Text("Say “Hello from kotoba” with either way to dictate."))
+            StepHeading(title: "Try It", text: Text("Say “Hello from kotoba.”"))
         }
         Section {
             TextField("Try It", text: $model.tryItText, prompt: Text("Your words appear here"), axis: .vertical)
@@ -232,7 +220,7 @@ struct DoneStep: View {
             }
         }
         Section {
-            Toggle("Play sounds when a dictation starts and stops", isOn: $model.playsSounds)
+            Toggle("Start and stop sounds", isOn: $model.playsSounds)
             // Turning it takes effect at once; the default (on for a release build) applies at Done.
             Toggle(
                 "Open at login",
@@ -269,15 +257,16 @@ struct DoneStep: View {
     private func heading(isReady: Bool) -> some View {
         StepHeading(
             title: isReady ? "You’re Ready" : "Almost Ready",
-            text: Text("Open kotoba from the menu bar or the Dock to change your microphone or settings."))
+            text: Text(
+                isReady ? "Dictate in any app. kotoba stays in the menu bar." : "Fix this, then dictate in any app."))
     }
 
     /// What the row says before and after the import.
     private var wisprText: String {
         guard let added = model.wisprImported else {
-            return "Add your words and replacements from Wispr Flow, so kotoba spells them right from the start."
+            return "Bring your words and replacements."
         }
-        return added.isEmpty ? "Your dictionary already has every word from Wispr Flow." : "Added \(added.countsText)."
+        return added.isEmpty ? "Every word is already in your dictionary." : "Added \(added.countsText)."
     }
 
     private static func fixTitle(_ step: OnboardingStep) -> String {

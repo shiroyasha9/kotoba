@@ -119,7 +119,7 @@ private struct SpeechPane: View {
     var body: some View {
         PageForm {
             Section {
-                PageHeader(page: .speech, summary: "The service that turns your speech into text, and your key for it.")
+                PageHeader(page: .speech, summary: "Your speech model and its key.")
             }
             Section("Speech Model") {
                 ForEach(routes, id: \.self) { RouteRow(model: model, route: $0) }

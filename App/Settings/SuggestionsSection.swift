@@ -40,7 +40,7 @@ struct LearnFromEditsToggle: View {
     var body: some View {
         PageToggle(
             title: "Learn from edits",
-            subtitle: "When you fix a word after kotoba pastes it, the word goes into your dictionary.",
+            subtitle: "Adds a word to your dictionary when you fix it after a paste.",
             isOn: $isLearningFromEdits)
     }
 }

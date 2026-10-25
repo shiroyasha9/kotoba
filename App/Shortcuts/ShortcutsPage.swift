@@ -72,7 +72,7 @@ private struct ShortcutsPage: View {
         PageForm {
             Section {
                 PageHeader(
-                    page: .shortcuts, summary: "Start a dictation in any app with a shortcut, and press keys by voice.")
+                    page: .shortcuts, summary: "Dictate in any app, and press keys by voice.")
             }
             Section("Dictate") {
                 recorder(.handsFree, StatusText.shortcutHelp(.handsFree))

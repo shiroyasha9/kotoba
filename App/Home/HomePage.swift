@@ -53,7 +53,7 @@ private struct HomePage: View {
                         // The chords are on the rows above, so the text does not spell them again (qa1-review).
                         EmptyRow(
                             title: StatusText.noDictationsTitle, systemImage: PaneID.history.systemImage,
-                            description: "Your last dictation appears here."
+                            description: "Dictate in any app, and your words show up here."
                         ) {
                             // Only once kotoba can dictate: before, the fix above comes first.
                             if model.readiness.firstMissing == nil {
@@ -106,11 +106,11 @@ private struct HomePage: View {
         .accessibilityHint("Shows Activity")
     }
 
-    /// "About 11m saved · 5-day streak"; a part with nothing to say is left out.
+    /// "11m saved · 5-day streak"; a part with nothing to say is left out.
     private static func todaySummary(_ insights: DictationInsights) -> String {
         let saved = insights.savedToday
         return [
-            saved >= .seconds(60) ? "About \(saved.pageText) saved" : nil,
+            saved >= .seconds(60) ? "\(saved.pageText) saved" : nil,
             insights.streak > 0 ? "\(insights.streak.formatted())-day streak" : nil,
         ]
         .compactMap(\.self).joined(separator: " · ")

@@ -36,6 +36,9 @@ private struct DictionaryPane: View {
             }
             Section {
                 LearnFromEditsToggle()
+            } footer: {
+                // Said here, where it is turned on, not in onboarding (docs/research/copywriting.md, Onboarding steps).
+                Text("kotoba reads only the text field it pasted into. It never reads a password field or your screen.")
             }
             // Not while a search runs: the matches come first, as in 0.4.
             if !model.suggestions.isEmpty && search.isEmpty {
@@ -92,7 +95,7 @@ private struct DictionaryPane: View {
     private var emptyText: String {
         if !search.isEmpty { return "No words match “\(search)”." }
         let wispr = model.isWisprInstalled ? " Or import them from Wispr Flow." : ""
-        return "No words yet. Add names and terms kotoba spells wrong, and it spells them right next time.\(wispr)"
+        return "No words yet. Add the names and terms kotoba should know.\(wispr)"
     }
 
     private var visibleRows: [DictionaryModel.Row] {

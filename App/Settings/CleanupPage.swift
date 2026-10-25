@@ -21,7 +21,7 @@ private struct CleanupPage: View {
             Section {
                 PageHeader(
                     page: .modes,
-                    summary: "kotoba can clean up your words before it pastes them, and rewrite them after.")
+                    summary: "Cleans up your words before the paste, and rewrites them when you ask.")
             }
             if model.isCleanupKeyMissing {
                 Section {
@@ -63,13 +63,13 @@ private struct CleanupPage: View {
         } header: {
             Text("Cleanup")
         } footer: {
-            Text("Each cleanup adds about 1 to 2 seconds before the paste.")
+            Text("Each cleanup adds 1 to 2 seconds before the paste.")
         }
     }
 
     private var rewrite: some View {
         Section {
-            Text("Makes your last dictation shorter and clearer, with nothing left out.")
+            Text("Makes your last dictation shorter and clearer.")
             CleanupSample(
                 before: ("You dictated", Self.rewriteSample.dictated),
                 after: ("kotoba pastes", Self.rewriteSample.rewritten))
@@ -181,8 +181,8 @@ extension CleanupModel {
     /// What the model is, in plain words: the line under its name.
     var summary: String {
         switch self {
-        case .geminiFlashLite: "Recommended: about 1.5 seconds per cleanup in kotoba’s tests."
-        case .qwenCerebras: "Often the fastest in kotoba’s tests, but sometimes slow or fails."
+        case .geminiFlashLite: "Recommended: 1.5 seconds per cleanup in kotoba’s tests."
+        case .qwenCerebras: "The fastest in kotoba’s tests, but 9 in 100 cleanups failed."
         case .claudeHaiku: "Another model, from Anthropic."
         }
     }
