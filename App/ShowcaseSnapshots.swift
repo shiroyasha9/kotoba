@@ -1,9 +1,10 @@
 import AppKit
 
 /// The README's and the site's images (`make readme-images`, `--showcase <folder>`): the main window as macOS draws it
-/// (title bar, glass toolbar, rounded corners, shadow) and the pill's main looks, on a colourful stage, light and dark,
-/// at 2x. The window is the real one, captured with its shadow and put on the stage; the pill's glass refracts the
-/// stage drawn in its own window. macOS 27 draws the sidebar edge to edge, over the page's background: no Apple app has
+/// (title bar, glass toolbar, rounded corners) and the pill's main looks, on a colourful stage, light and dark, at 2x.
+/// The window is the real one, captured and put on the stage, with no shadow: the window server leaves it out of a
+/// window that was never on screen (the hero demo draws one, `HeroDemo.onStage`). The pill's glass refracts the stage
+/// drawn in its own window. macOS 27 draws the sidebar edge to edge, over the page's background: no Apple app has
 /// a floating sidebar there (sidebar spike, 2026-10-24), so the images show it as it is.
 @MainActor
 enum Showcase {
@@ -11,10 +12,10 @@ enum Showcase {
         Pane.showcaseSnapshots() + IndicatorPanel.showcaseSnapshots()
     }
 
-    /// The stage around the window: room for its shadow (up to 28 pt under it) and some air.
+    /// The stage around the window, on each side.
     private static let windowMargin: CGFloat = 64
 
-    /// The window with its shadow, in the middle of a stage `windowMargin` larger on each side.
+    /// The window in the middle of a stage `windowMargin` larger on each side.
     static func windowOnStage(_ window: NSWindow, scale: CGFloat, appearance: NSAppearance) throws -> CGImage {
         let capture = try SnapshotCapture.image(of: window, scale: scale, shadowMargin: windowMargin)
         let size = window.frame.size

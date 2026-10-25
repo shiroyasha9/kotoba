@@ -19,7 +19,7 @@ struct Snapshot {
     /// Off, it sits on the window background, as a pane in its window.
     var floatsOverDesktop = false
     /// On for a showcase image (`make readme-images`, `Showcase`): a view sits on the colourful stage instead, and a real
-    /// window is captured with its shadow and put on the stage.
+    /// window is captured and put on the stage.
     var isOnStage = false
     /// Off for a view whose image cannot be trusted: the run lays it out and runs its check, and writes no PNG.
     var hasImage = true
