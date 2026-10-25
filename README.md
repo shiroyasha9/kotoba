@@ -51,7 +51,7 @@ A native, open-source alternative to Wispr Flow, made for people who dictate to 
 | Stop press to paste in the app, p50 / p90 | 987 ms / 2,047 ms | not compared |
 | Speech round trip, p50 / p90 | 902 ms / 1,083 ms | not compared |
 | Price | **$0.10 per hour of audio** | $12-15 per month for Pro |
-| Download | 6.5 MB DMG | |
+| Download | 7.0 MB DMG | |
 
 62 real dictations from one developer, mostly coding prompts. Methods, sources and limits: [docs/benchmarks.md](docs/benchmarks.md).
 
