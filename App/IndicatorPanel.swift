@@ -328,17 +328,19 @@ extension IndicatorPanel {
 
 extension IndicatorPanel {
     /// Moves the pill's room to its anchor on `screen`; the capsule changes shape inside the room. The same room at
-    /// another place (a drop at the anchor it had, another screen) slides there, and the pill in it does not change. A
-    /// room of another size (a new anchor) is taken at once, before the pill takes the anchor in it, so the capsule's
-    /// place is worked out in the room it ends in: a room that grew in an animation left the glass where the old room
-    /// put it, cut off at the window's edge (owner QA 4, U3).
+    /// another place (a drop at the anchor it had, another screen) slides there, and the pill in it does not change;
+    /// with Reduce Motion it is there at once, as the pill's own changes have no slide (audit-1 A3). A room of another
+    /// size (a new anchor) is taken at once, before the pill takes the anchor in it, so the capsule's place is worked
+    /// out in the room it ends in: a room that grew in an animation left the glass where the old room put it, cut off
+    /// at the window's edge (owner QA 4, U3).
     private func place(animated: Bool) {
         guard let built, drag == nil, let screen = screen ?? NSScreen.focused else { return }
         let anchor = anchor
         let room = IndicatorPlacement.room(
             at: anchor, thickness: Double(PillGeometry.height), in: ScreenRect(screen.visibleFrame))
         let frame = Self.windowFrame(around: NSRect(room))
-        guard animated, built.panel.isVisible, built.pill.anchor == anchor, built.panel.frame.size == frame.size
+        guard animated, built.panel.isVisible, built.pill.anchor == anchor, built.panel.frame.size == frame.size,
+            !NSWorkspace.shared.accessibilityDisplayShouldReduceMotion
         else {
             built.panel.setFrame(frame, display: true)
             built.pill.anchor = anchor
@@ -347,11 +349,14 @@ extension IndicatorPanel {
             return
         }
         NSAnimationContext.runAnimationGroup { context in
-            context.duration = 0.2
+            context.duration = Self.slideDuration
             context.timingFunction = CAMediaTimingFunction(name: .easeOut)
             built.panel.animator().setFrame(frame, display: true)
         }
     }
+
+    /// The window's slide to the same room at another place.
+    private static let slideDuration = 0.2
 
     private func screenParametersChanged() {
         guard built?.panel.isVisible == true else { return }
