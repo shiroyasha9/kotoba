@@ -9,6 +9,10 @@ extension Color {
     /// bars, always. Selection, buttons and switches keep the user's accent; the asset is also the app's accent colour
     /// (`NSAccentColorName`), which macOS uses only while the user's accent is Multicolor.
     static let brand = Color("Brand")
+
+    /// A chart's average line and its "avg", in their own colour as Screen Time's, so the line does not read as a grid
+    /// line (owner QA 1, Q10). The system green, apart from the brand coral of the bars.
+    static let chartAverage = Color.green
 }
 
 /// The sizes the system gives no value for (Apple publishes no tile, keycap or column size: HIG Sidebars, WWDC25 310),
