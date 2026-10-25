@@ -15,6 +15,9 @@ struct OnboardingView: View {
             PageForm {
                 content
             }
+            // Welcome is shorter than the window: centred in the space above the footer, as Apple's first-run screens
+            // (owner QA 3, S2). The other steps start under the title bar, where the owner reads first.
+            .defaultScrollAnchor(model.step == .welcome ? .center : .top, for: .alignment)
             footer
                 .padding([.horizontal, .bottom], PageMetrics.formInset)
         }

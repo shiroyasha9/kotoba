@@ -328,4 +328,22 @@ extension HotkeyClassifierTests {
         #expect(keyboard.press(Self.spaceUp) == .pass)
         #expect(keyboard.press(Self.spaceDown) == HotkeyDecision(event: .chordDown(.tapOrHold), isSwallowed: true))
     }
+
+    /// Onboarding's Try It (owner QA 3, S2): a modifier-only chord is recorded as its last key goes up, while the tap is
+    /// paused, so that press starts nothing, and the next press of the new chord dictates.
+    @Test
+    func aModifierChordRecordedWhilePausedStartsNothingThenDictates() {
+        let rightOption = Chord(modifiers: .rightOption)
+        var keyboard = Keyboard(classifier: HotkeyClassifier(cleanupChord: .defaultCleanup))
+        var capture = ChordCapture()
+        keyboard.classifier.isPaused = true
+        #expect(keyboard.press(Self.rightOption) == .pass)
+        #expect(capture.handle(Self.rightOption) == nil)
+        #expect(keyboard.press(Self.none) == .pass)
+        #expect(capture.handle(Self.none) == .recorded(rightOption))
+        keyboard.classifier.handsFreeChord = rightOption
+        keyboard.classifier.isPaused = false
+        #expect(keyboard.press(Self.rightOption) == HotkeyDecision(event: .chordDown(.tapOrHold)))
+        #expect(keyboard.press(Self.none) == HotkeyDecision(event: .chordUp))
+    }
 }

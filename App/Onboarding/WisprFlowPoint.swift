@@ -2,25 +2,26 @@ import AppKit
 import KotobaStorage
 import SwiftUI
 
-/// Welcome's words for a Wispr Flow user (owner QA 2, R1), in one place for a copy pass, and what kotoba reads of
-/// Wispr Flow. Welcome took Wispr Flow's shortcuts as it showed, so its "Coming from Wispr Flow" row has no keycaps and
-/// no button: the shortcut rows show the keys, and a line under each says which came from Wispr Flow. The dictionary
+/// Welcome's and Try It's words for a Wispr Flow user (owner QA 2, R1), in one place for a copy pass, and what kotoba
+/// reads of Wispr Flow. Welcome took Wispr Flow's shortcuts as it showed, so its "Familiar" row has no keycaps and no
+/// button: Try It's shortcut rows show the keys, and a line under each says which came from Wispr Flow. The dictionary
 /// comes on the last step.
 enum WisprFlowPoint {
-    static let title = "Coming from Wispr Flow"
+    /// Parallel with Fast, Accurate and Private (owner QA 3, S3).
+    static let title = "Familiar"
 
     /// What comes along: the shortcuts kotoba took (`hasImportedShortcuts`: a way to dictate has Wispr Flow's chord),
     /// and the dictionary when the last step can import it. Nil when neither: Welcome shows no row.
     static func text(hasImportedShortcuts: Bool, offersDictionary: Bool) -> String? {
         switch (hasImportedShortcuts, offersDictionary) {
-        case (true, true): "Your shortcuts are set. Import your dictionary on the last step."
-        case (true, false): "Your shortcuts are set."
-        case (false, true): "Import your dictionary on the last step."
+        case (true, true): "Keeps your Wispr Flow shortcuts and dictionary."
+        case (true, false): "Keeps your Wispr Flow shortcuts."
+        case (false, true): "Keeps your Wispr Flow dictionary."
         case (false, false): nil
         }
     }
 
-    /// The footnote under the shortcut rows while Wispr Flow runs: kotoba does not quit it.
+    /// The footnote under Try It's shortcut rows while Wispr Flow runs: kotoba does not quit it.
     static let runningText = "Quit Wispr Flow, or both apps start when you press these keys."
 
     /// Under the subtitle of a shortcut row whose chord is Wispr Flow's, also when it equals kotoba's own. The symbol

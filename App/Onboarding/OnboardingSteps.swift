@@ -163,37 +163,77 @@ struct KeyStep: View {
     }
 }
 
-/// Both ways to dictate with their keys drawn as keycaps, as on Welcome (docs/research/ui-redesign.md, "Onboarding":
-/// keys as keycaps with their names, never a chord in a sentence), and the field the words arrive in.
+/// Both ways to dictate with their keys drawn as keycaps (docs/research/ui-redesign.md, "Onboarding": keys as keycaps
+/// with their names, never a chord in a sentence), each with Change…, and the field the words arrive in (owner QA 3, S2:
+/// the rows moved here from Welcome, so the owner sets the keys where they first use them). A line under a row whose
+/// chord Welcome took from Wispr Flow says so, and a footnote asks to quit Wispr Flow while it runs on the same keys.
 struct TryItStep: View {
     @Bindable var model: OnboardingModel
     @FocusState private var isFieldFocused: Bool
+    /// The way to dictate whose Change… sheet is open.
+    @State private var changing: ChordRole?
 
     var body: some View {
         let chords = model.chords
+        let wisprRoles = model.wisprShortcutRoles
         // Both ways to dictate sit together above the field, so the result line below never moves them.
         Section {
-            PageRow(title: StatusText.shortcutTitle(.handsFree), subtitle: StatusText.shortcutHelp(.handsFree)) {
-                NamedKeycaps(keys: chords.handsFree.keycaps)
-            }
-            PageRow(title: StatusText.shortcutTitle(.pushToTalk), subtitle: StatusText.pushToTalkHelp(chords)) {
-                NamedKeycaps(keys: chords.pushToTalk.keycaps)
-            }
+            shortcutRow(
+                .handsFree, subtitle: StatusText.shortcutHelp(.handsFree), chord: chords.handsFree,
+                isFromWispr: wisprRoles.contains(.handsFree))
+            shortcutRow(
+                .pushToTalk, subtitle: StatusText.pushToTalkHelp(chords), chord: chords.pushToTalk,
+                isFromWispr: wisprRoles.contains(.pushToTalk))
         } header: {
             StepHeading(title: "Try It", text: Text("Say “Hello from kotoba.”"))
+        } footer: {
+            // kotoba does not quit Wispr Flow: while it runs on a chord kotoba took, one press starts both apps.
+            if model.isWisprRunning, !wisprRoles.isEmpty {
+                Text(WisprFlowPoint.runningText)
+            }
         }
         Section {
             TextField("Try It", text: $model.tryItText, prompt: Text("Your words appear here"), axis: .vertical)
                 .labelsHidden()
                 .lineLimit(3...5)
                 .focused($isFieldFocused)
-                .onAppear { isFieldFocused = true }
+                .onAppear(perform: focusField)
         } footer: {
             // Always laid out, so the step does not move when the dictation works.
             let works = model.isDone(.tryIt)
             StatusLine("It works.", .good)
                 .opacity(works ? 1 : 0)
                 .accessibilityHidden(!works)
+        }
+        // The recorder pauses the hotkey tap while it listens (`HotkeyChords.isRecording`), so the press it records
+        // starts no dictation; the new chord applies at once. Back in the field, the next press pastes there.
+        .sheet(
+            isPresented: Binding(get: { changing != nil }, set: { if !$0 { changing = nil } }),
+            onDismiss: focusField
+        ) {
+            if let changing {
+                ShortcutSheet(chords: chords, role: changing)
+            }
+        }
+    }
+
+    private func focusField() {
+        isFieldFocused = true
+    }
+
+    /// A way to dictate: its keycaps and Change… with the Shortcuts page's recorder, and under its subtitle the line
+    /// that says its chord came from Wispr Flow.
+    private func shortcutRow(_ role: ChordRole, subtitle: String, chord: Chord, isFromWispr: Bool) -> some View {
+        PageRow(title: StatusText.shortcutTitle(role), subtitle: subtitle) {
+            HStack {
+                NamedKeycaps(keys: chord.keycaps)
+                Button("Change…") { changing = role }
+                    .accessibilityLabel("Change \(StatusText.shortcutTitle(role)) Shortcut")
+            }
+        } extra: {
+            if isFromWispr {
+                WisprFlowPoint.ImportedLine()
+            }
         }
     }
 }
@@ -274,7 +314,7 @@ struct DoneStep: View {
     }
 }
 
-/// One way to dictate with the Shortcuts page's recorder (`ChordRecorder`), from Welcome's Change….
+/// One way to dictate with the Shortcuts page's recorder (`ChordRecorder`), from Try It's Change….
 struct ShortcutSheet: View {
     let chords: HotkeyChords
     let role: ChordRole

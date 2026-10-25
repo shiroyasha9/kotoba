@@ -73,7 +73,7 @@ Cause (research): the code, not a missing library. No MIT or Apache-2.0 library 
 Status line; Paste, Copy and Fix last dictation; Microphone; "Open kotoba…"; Quit. Remove the Speech Model submenu, "Add Word…" and the word suggestion item; suggestions show as a badge on Dictionary.
 
 ### Onboarding
-5 steps: Welcome (keycaps with each key's name in small text under it), Permissions (Microphone and Accessibility as two rows, each with its own Allow button), Key, Try It, Done (the Wispr Flow import is a row here when Wispr Flow is installed). Text is bold and left-aligned (macOS 26).
+5 steps: Welcome (the icon, the welcome and the feature rows, centred in the window; owner QA 3, S2), Permissions (Microphone and Accessibility as two rows, each with its own Allow button), Key, Try It (both ways to dictate as keycaps with each key's name in small text under it, each with Change…), Done (the Wispr Flow import is a row here when Wispr Flow is installed). Text is bold and left-aligned (macOS 26).
 
 ### Fix Last Dictation
 Stays a separate window (the status menu opens it while another app is in front). Restyled.

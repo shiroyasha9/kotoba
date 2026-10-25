@@ -163,30 +163,39 @@ extension OnboardingController {
         ] + welcomeSnapshots(ready)
     }
 
-    /// Welcome as it takes Wispr Flow's shortcuts: one mode (the other is one kotoba cannot take), both, one equal to
-    /// kotoba's default, none; while Wispr Flow runs; after the owner changed a taken chord; with no Wispr Flow; and
-    /// Change…'s sheet.
+    /// Welcome with Wispr Flow's shortcuts usable (the sample's hands-free), unusable and absent; then Try It with the
+    /// shortcuts Welcome took: one mode (the other is one kotoba cannot take), both, one equal to kotoba's default; while
+    /// Wispr Flow runs; after the owner changed a taken chord; and Change…'s sheet.
     private static func welcomeSnapshots(_ ready: Readiness) -> [Snapshot] {
         let both = ["62+61": "popo", "49+58": "ptt"]
         return [
-            window("onboarding-welcome-wispr-running") { model(.welcome, ready, wisprRuns: true) },
             window("onboarding-welcome-no-wispr-shortcuts") { model(.welcome, ready, wisprKeys: nil) },
-            window("onboarding-welcome-wispr-both") { model(.welcome, ready, wisprKeys: both) },
-            // The tallest Welcome: the Wispr Flow row, a line under each shortcut row and the footnote.
-            window("onboarding-welcome-wispr-both-running") {
-                model(.welcome, ready, wisprKeys: both, wisprRuns: true)
+            window("onboarding-welcome-no-wispr") { model(.welcome, ready, isWisprInstalled: false) },
+            window("onboarding-tryIt-wispr") { tookWispr(model(.welcome, ready)) },
+            window("onboarding-tryIt-wispr-running") { tookWispr(model(.welcome, ready, wisprRuns: true)) },
+            window("onboarding-tryIt-wispr-both") { tookWispr(model(.welcome, ready, wisprKeys: both)) },
+            // The tallest Try It: a line under each shortcut row and the footnote.
+            window("onboarding-tryIt-wispr-both-running") {
+                tookWispr(model(.welcome, ready, wisprKeys: both, wisprRuns: true))
             },
-            window("onboarding-welcome-wispr-default") { model(.welcome, ready, wisprKeys: ["55+58+59": "popo"]) },
-            window("onboarding-welcome-wispr-changed") {
-                let model = model(.welcome, ready, wisprKeys: both, wisprRuns: true)
+            window("onboarding-tryIt-wispr-default") {
+                tookWispr(model(.welcome, ready, wisprKeys: ["55+58+59": "popo"]))
+            },
+            window("onboarding-tryIt-wispr-changed") {
+                let model = tookWispr(model(.welcome, ready, wisprKeys: both, wisprRuns: true))
                 _ = model.chords.save(Chord(modifiers: .function), as: .handsFree)
                 return model
             },
-            window("onboarding-welcome-no-wispr") { model(.welcome, ready, isWisprInstalled: false) },
             MainWindow.sheetSnapshot(named: "onboarding-change-shortcut") {
                 ShortcutSheet(chords: HotkeyChords(defaults: nil), role: .handsFree)
             },
         ]
+    }
+
+    /// Try It after Welcome took Wispr Flow's shortcuts: only Welcome takes them.
+    private static func tookWispr(_ model: OnboardingModel) -> OnboardingModel {
+        model.step = .tryIt
+        return model
     }
 
     /// `hasKey`: an OpenRouter key is saved; `wisprRuns`: Wispr Flow is open. Wispr Flow shows as installed, with

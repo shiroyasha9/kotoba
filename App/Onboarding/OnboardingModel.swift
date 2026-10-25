@@ -32,7 +32,7 @@ final class OnboardingModel {
         var tookWisprShortcuts: @MainActor () -> Void
         /// The owner clicked Done in an earlier setup (`OnboardingController.isComplete`).
         var isComplete: @MainActor () -> Bool
-        /// The chords Welcome shows and changes.
+        /// The chords Try It shows and changes.
         var chords: HotkeyChords
         /// The dictionary that the Done step's Wispr Flow row imports into; nil until it is read at launch, or when it
         /// did not open.
@@ -84,9 +84,9 @@ final class OnboardingModel {
     /// Wispr Flow is on this Mac: `checkWispr()` reads it when the window opens.
     private var isWisprInstalled = false
     /// Wispr Flow's shortcuts as it keeps them, read with the install check; kotoba's chords are measured against them
-    /// each time Welcome draws, so a chord changed with Change… counts.
+    /// each time Try It draws, so a chord changed with Change… counts.
     private var wisprShortcutKeys: [String: String]?
-    /// Wispr Flow's running processes: while there is one, Welcome's footnote asks to quit it. Followed while the
+    /// Wispr Flow's running processes: while there is one, Try It's footnote asks to quit it. Followed while the
     /// window is open (`wisprWatch`).
     private var wisprProcesses: Set<Int32> = []
     /// What the Wispr Flow row imported; empty when Wispr Flow had nothing new. Nil until the owner answers.
@@ -195,7 +195,7 @@ final class OnboardingModel {
         source.tookWisprShortcuts()
     }
 
-    /// The ways to dictate whose chord is Wispr Flow's now: Welcome says each was imported.
+    /// The ways to dictate whose chord is Wispr Flow's now: Try It says each was imported.
     var wisprShortcutRoles: Set<ChordRole> {
         guard let found = wisprShortcuts else { return [] }
         return Set([ChordRole.handsFree, .pushToTalk].filter { found.isImported($0, chord: chords.chord($0)) })
