@@ -83,6 +83,11 @@ struct MenuModel {
     func build(into menu: NSMenu, target: StatusMenuActions?, for place: Place = .menuBar) {
         menu.removeAllItems()
         var items = topItems(target: target)
+        // Saved dictations are a group of their own, apart from the status and the ways to dictate above them.
+        let saved = savedItems(target: target)
+        if !saved.isEmpty {
+            items += [.separator()] + saved
+        }
         if hasLastDictation {
             items += [.separator()] + lastDictationItems(target: target, for: place)
         }
@@ -124,6 +129,12 @@ struct MenuModel {
             item.isEnabled = false
             items.append(item)
         }
+        return items
+    }
+
+    /// Dictations that wait for a retry, and retried ones to copy.
+    private func savedItems(target: StatusMenuActions?) -> [NSMenuItem] {
+        var items: [NSMenuItem] = []
         if pendingCount > 0 {
             items.append(
                 .action(
