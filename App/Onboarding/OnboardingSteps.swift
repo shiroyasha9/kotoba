@@ -179,9 +179,12 @@ struct PermissionsStep: View {
                     "To learn your corrections, kotoba reads only the text field it pasted into, and only while "
                         + "“Learn from edits” is on in Dictionary. It never reads your screen.")
                 if !model.readiness.isAccessibilityAllowed {
+                    // A paragraph apart: with no gap the two read as one (qa1-review, Onboarding).
                     Text(
                         "If kotoba is on in the Accessibility list already and this step stays open, turn it off "
-                            + "and on again.")
+                            + "and on again."
+                    )
+                    .padding(.top)
                 }
             }
         }
@@ -260,24 +263,31 @@ struct KeyStep: View {
     }
 }
 
+/// Both ways to dictate with their keys drawn as keycaps, as on Welcome (docs/research/ui-redesign.md, "Onboarding":
+/// keys as keycaps with their names, never a chord in a sentence), and the field the words arrive in.
 struct TryItStep: View {
     @Bindable var model: OnboardingModel
     @FocusState private var isFieldFocused: Bool
 
     var body: some View {
-        let chord = HotkeyChords.shared.handsFree.title
-        let hold = StatusText.holdToDictate(.shared)
+        let chords = model.chords
+        // Both ways to dictate sit together above the field, so the result line below never moves them.
+        Section {
+            PageRow(title: StatusText.shortcutTitle(.handsFree), subtitle: StatusText.shortcutHelp(.handsFree)) {
+                NamedKeycaps(keys: chords.handsFree.keycaps)
+            }
+            PageRow(title: StatusText.shortcutTitle(.pushToTalk), subtitle: StatusText.pushToTalkHelp(chords)) {
+                NamedKeycaps(keys: chords.pushToTalk.keycaps)
+            }
+        } header: {
+            StepHeading(title: "Try It", text: Text("Say “Hello from kotoba” with either way to dictate."))
+        }
         Section {
             TextField("Try It", text: $model.tryItText, prompt: Text("Your words appear here"), axis: .vertical)
                 .labelsHidden()
                 .lineLimit(3...5)
                 .focused($isFieldFocused)
                 .onAppear { isFieldFocused = true }
-        } header: {
-            // Both ways to dictate sit together above the field, so the result line below never moves them.
-            StepHeading(
-                title: "Try It",
-                text: Text("Press \(chord), say “Hello from kotoba”, then press \(chord) again. \(hold)"))
         } footer: {
             // Always laid out, so the step does not move when the dictation works.
             let works = model.isDone(.tryIt)
