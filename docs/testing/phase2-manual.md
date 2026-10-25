@@ -226,9 +226,9 @@ Rows from each agent's phase 2.5 work. The numbers continue the list above.
 | 135 | Speech > **Speech model** | "MAI-Transcribe-2 via OpenRouter (Recommended)" and "Grok via OpenRouter"; under "Advanced": "Grok via xAI" and "MAI-Transcribe-2 via Azure"; no "Untested" text | |
 | 136 | Pick **Grok via OpenRouter** | Footer: "OpenRouter may keep this audio. With MAI-Transcribe-2 it keeps none."; the toggles "Format numbers and units" and "Keep filler words" show; no "a few cents per hour" line | |
 | 137 | Pick **MAI-Transcribe-2 via OpenRouter (Recommended)** | Only the "OpenRouter Key" section shows, with "You pay OpenRouter directly, a few cents per hour of speech."; no Azure section; no toggles | |
-| 138 | Look under the key row | **Get a Key…** and **See Pricing…** | |
+| 138 | Remove the key; look at the key row and under its group | **Get a Key…** (a blue link) under “Key” while no key is saved; under the group “OpenRouter bills you for what you use.” with **See Pricing…** at the same text size; **Advanced…** alone on the next line, at the right | |
 | 139 | Click **Get a Key…**, then **See Pricing…** | The browser opens OpenRouter's keys page, then the MAI-Transcribe-2 price page | |
-| 140 | Pick each speech model in turn and click **Get a Key…** and **See Pricing…** | OpenRouter, the xAI console and the Azure portal (keys), and each provider's price page open (sign in if asked) | |
+| 140 | Pick each speech model in turn, with no key saved for it, and click **Get a Key…** and **See Pricing…** | OpenRouter, the xAI console and the Azure portal (keys), and each provider's price page open (sign in if asked) | |
 | 141 | Paste a valid key, press **Save** | "Checking the key…", then a green "Connected" | |
 | 142 | Paste a wrong key (for example "sk-or-wrong"), press **Save** | "OpenRouter didn’t accept this key." in red, under "Key" | |
 | 143 | Save a key with no credit | "This key has no credit." with **Add Credit…**, which opens OpenRouter's credits page | |
@@ -1000,3 +1000,4 @@ One glass capsule that changes shape (docs/research/ui-redesign.md, "Pill"). Sna
 | 1214 | With VoiceOver on, move to a word on **Dictionary** (pointer away from it) and open the actions menu (VO-⌘-Space) | VoiceOver reads the word (and “starred” for a starred one); the menu has **Star** or **Unstar**, and it works while the star is hidden | |
 | 1215 | On **Dictionary** with more words than the window shows, scroll to the end of the list | **+**, **Import from Wispr Flow…** (when Wispr Flow is installed) and **Search words** stay in the window toolbar; the list has no **+** or **−** under it; pointing at each toolbar button shows its name | |
 | 1216 | On **Dictionary**, click **Import from Wispr Flow…** in the toolbar, then switch to **Home** and back | The import alert shows as before; on Home the toolbar has no Dictionary buttons and the title bar keeps its height | |
+| 1250 | On **Speech**, look at the status under “Key” with a key that works, then with a key that has no credit | The green or orange symbol sits next to its words with a normal gap (as in System Settings); with no credit, **Add Credit…** is a blue link on the line under the status and opens OpenRouter's credits page | |

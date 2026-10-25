@@ -115,12 +115,9 @@ private struct CleanupPage: View {
         } header: {
             Text("App Styles")
         } footer: {
-            HStack(alignment: .firstTextBaseline) {
-                Text("kotoba uses the style of the app in front when you stop a dictation.")
-                Spacer()
-                // Alone at the trailing edge under the last group, as Activity's and Battery's "Options…".
-                Button("Advanced…") { model.isAdvancedShown = true }
-            }
+            PageFooter(
+                advanced: { model.isAdvancedShown = true },
+                note: { Text("kotoba uses the style of the app in front when you stop a dictation.") })
         }
     }
 

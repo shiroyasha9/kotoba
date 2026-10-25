@@ -139,18 +139,9 @@ private struct SpeechPane: View {
             } header: {
                 Text("\(account.title) Key")
             } footer: {
-                // The links sit with the price under the box, as "Learn More" links do in System Settings.
-                VStack(alignment: .leading) {
-                    Text(PriceLine.text(for: model.route))
-                    HStack {
-                        Button("Get a Key…") { NSWorkspace.shared.open(account.keysPage) }
-                        Button("See Pricing…") { NSWorkspace.shared.open(account.pricingPage) }
-                        Spacer()
-                        if account == .openRouter {
-                            advancedButton
-                        }
-                    }
-                    .buttonStyle(.link)
+                // The price with its link, as onboarding's; "Get a Key…" is in the key row while no key is saved.
+                PageFooter(advanced: account == .openRouter ? showAdvanced : nil) {
+                    PriceLine(route: model.route)
                 }
             }
             // Cleanup and Rewrite run on OpenRouter whatever the speech model, so its key always has a place here: the
@@ -161,12 +152,7 @@ private struct SpeechPane: View {
                 } header: {
                     Text("\(ProviderAccount.openRouter.title) Key for Cleanup and Rewrite")
                 } footer: {
-                    HStack {
-                        Button("Get a Key…") { NSWorkspace.shared.open(ProviderAccount.openRouter.keysPage) }
-                            .buttonStyle(.link)
-                        Spacer()
-                        advancedButton
-                    }
+                    PageFooter(advanced: showAdvanced)
                 }
             }
         }
@@ -175,10 +161,8 @@ private struct SpeechPane: View {
         }
     }
 
-    /// Alone at the trailing edge under the last group, as Activity's and Battery's "Options…".
-    private var advancedButton: some View {
-        Button("Advanced…") { model.isAdvancedShown = true }
-            .buttonStyle(.automatic)
+    private func showAdvanced() {
+        model.isAdvancedShown = true
     }
 }
 
@@ -308,6 +292,12 @@ private struct KeyRow: View {
                     KeyCheckLine(status: status, account: account)
                 } else if model.keyChecks.isSaved(account) {
                     StatusLabel("Saved", systemImage: "checkmark.circle.fill", color: .green)
+                } else {
+                    // Where the owner pastes the key, as onboarding's Connect step (owner QA 1, Q3).
+                    Button("Get a Key…") { NSWorkspace.shared.open(account.keysPage) }
+                        .buttonStyle(.link)
+                        // A subtitle's grey would take the link's colour.
+                        .foregroundStyle(.link)
                 }
             }
             // A row's subtitle style (`RowText`); only the symbol keeps the status colour.
