@@ -13,14 +13,13 @@ extension DictionaryModel.Row: Identifiable {
     var id: Self { self }
 }
 
-/// The owner's words and replacements, the switch that learns them from edits, and the suggestions it learned; the
-/// stars and the hint limit are in "Advanced…" (docs/research/ui-redesign.md, "Page map").
+/// The owner's words and replacements, each with its star, the switch that learns them from edits, and the suggestions
+/// it learned; the hint limit is in the list's footer (owner QA 1, Q13: starring needs no sheet).
 private struct DictionaryPane: View {
     @Bindable var model: DictionaryModel
     @State private var search = ""
     /// The sheet: nil row adds a new entry.
     @State private var editing: Editing?
-    @State private var isAdvancedShown = false
 
     private struct Editing: Identifiable {
         let id = UUID()
@@ -52,9 +51,6 @@ private struct DictionaryPane: View {
                 if editing.row == nil { search = "" }
             }
         }
-        .sheet(isPresented: $isAdvancedShown) {
-            DictionaryAdvanced(model: model)
-        }
     }
 
     private var words: some View {
@@ -63,7 +59,10 @@ private struct DictionaryPane: View {
                 rows: visibleRows, emptyText: emptyText, addTitle: "Add Word", addHelp: "Add a word or a replacement",
                 removeTitle: "Delete", remove: model.delete, add: add, edit: edit
             ) { row in
-                DictionaryRowView(draft: model.draft(for: row))
+                DictionaryRowView(
+                    draft: model.draft(for: row), sendsKeyterm: model.keyterm(for: row) != nil,
+                    isPinned: model.isPinned(row), isNotSent: model.isNotSent(row)
+                ) { model.setPinned(row, $0) }
             } accessory: {
                 if isReading {
                     ProgressView().controlSize(.small)
@@ -84,17 +83,9 @@ private struct DictionaryPane: View {
             }
         } footer: {
             VStack(alignment: .leading) {
-                HStack(alignment: .firstTextBaseline) {
-                    // An empty dictionary says so in the list; "0 words" adds nothing.
-                    if !model.rows.isEmpty {
-                        Text(summary)
-                    }
-                    Spacer()
-                    // Alone at the trailing edge under the last group, as Activity's and Battery's "Options…". Its
-                    // stars need words.
-                    if !model.rows.isEmpty {
-                        Button("Advanced…") { isAdvancedShown = true }
-                    }
+                // An empty dictionary says so in the list; "0 words" adds nothing.
+                if !model.rows.isEmpty {
+                    Text(summary)
                 }
                 if let saveError = model.saveError {
                     Text(saveError).foregroundStyle(.red)
@@ -124,7 +115,13 @@ private struct DictionaryPane: View {
         let dictionary = model.dictionary
         let words = StatusText.counted(dictionary.terms.count, "word")
         let replacements = StatusText.counted(dictionary.rules.count, "replacement")
-        return "\(words), \(replacements)."
+        let limit = PersonalDictionary.maxKeyterms
+        let hints =
+            dictionary.keyterms.count <= limit
+            ? "kotoba sends up to \(limit) words as hints with each dictation; star a word to send it first."
+            : "kotoba sends \(limit) words as hints with each dictation: starred words first, then the words you use "
+                + "most."
+        return "\(words), \(replacements). " + hints
     }
 
     private var isReading: Bool { model.wisprImport?.isReading == true }
@@ -135,59 +132,6 @@ private struct DictionaryPane: View {
 
     private func edit(_ row: DictionaryModel.Row) {
         editing = Editing(row: row, draft: model.draft(for: row))
-    }
-}
-
-/// The Dictionary page's "Advanced…": the hint limit, and the star that always sends a word to the speech model.
-struct DictionaryAdvanced: View {
-    let model: DictionaryModel
-
-    /// The rows that send a hint, then the ones too long to send. A replacement that deletes its word sends none and has
-    /// no row.
-    /// A hint two rows send (the word "Vercel" and the replacement "versel → Vercel") has one row: they share one star.
-    private var rows: [DictionaryModel.Row] {
-        var seen: Set<String> = []
-        let sent = model.rows.filter { row in
-            guard let keyterm = model.keyterm(for: row) else { return false }
-            return seen.insert(TermUse.key(for: keyterm)).inserted
-        }
-        let tooLong = model.rows.filter { row in
-            let draft = model.draft(for: row)
-            return model.keyterm(for: row) == nil && !(draft.isReplacing && draft.replacement.isEmpty)
-        }
-        return sent + tooLong
-    }
-
-    /// The hint a row sends, or the text too long to send.
-    private func hint(of row: DictionaryModel.Row) -> String {
-        let draft = model.draft(for: row)
-        return model.keyterm(for: row) ?? (draft.isReplacing ? draft.replacement : draft.word)
-    }
-
-    var body: some View {
-        PageSheet(title: "Advanced Dictionary Settings") {
-            Section {
-                // On top, not in the footer: the limit is why the stars exist, and a long list scrolls a footer away.
-                Text(hints)
-                ForEach(rows) { row in
-                    StarRow(
-                        word: hint(of: row),
-                        sendsKeyterm: model.keyterm(for: row) != nil, isPinned: model.isPinned(row),
-                        isNotSent: model.isNotSent(row)
-                    ) { model.setPinned(row, $0) }
-                }
-            } header: {
-                Text("Hints for the Speech Model")
-            }
-        }
-    }
-
-    private var hints: String {
-        let limit = PersonalDictionary.maxKeyterms
-        return model.dictionary.keyterms.count <= limit
-            ? "kotoba sends up to \(limit) of your words as hints with each dictation. Star a word to send it first."
-            : "kotoba sends \(limit) of your words as hints with each dictation: starred words first, then the words "
-                + "you use most."
     }
 }
 
@@ -290,9 +234,8 @@ extension Pane {
             MainWindow.snapshot(
                 of: .dictionary(sampleModel(sample, suggestions: sampleSuggestions)),
                 named: "settings-dictionary-suggestions", height: 1_200),
-            MainWindow.sheetSnapshot(named: "settings-dictionary-advanced") {
-                DictionaryAdvanced(model: sampleOverCapModel)
-            },
+            MainWindow.snapshot(
+                of: .dictionary(sampleOverCapModel), named: "settings-dictionary-over-cap", height: 1_000),
             MainWindow.snapshot(
                 of: .dictionary(sampleModel(PersonalDictionary())), named: "settings-dictionary-empty"),
             importAlert(.preview(sample.importPreview(of: incoming), contents), named: "settings-dictionary-import"),
