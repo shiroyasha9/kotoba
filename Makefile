@@ -105,9 +105,10 @@ readme-images: build-check
 	cp $(README_SHOTS)/showcase-*.png docs/images/
 
 # The site's hero demo (App/HeroDemoSnapshots.swift): a dictation into a chat, a terminal and a message in turn, from
-# real AppKit and the real pill with its glass, frame by frame, light and dark, at 2x, encoded to a 10 s looping H.264
-# MP4 and 10-bit AV1 WebM (under 0.65 MB each) with the first frame as the poster (scripts/hero-demo.sh). Needs Screen Recording
-# for the terminal, as snapshots; about 1 min after the build. Copy build/hero-demo/hero-demo-* to the site.
+# real AppKit and the real pill with its glass, frame by frame, light and dark, at 2x, encoded to a 10 s loop as a
+# 10-bit AV1 WebM, a 10-bit HEVC MP4 and an H.264 MP4 (under 0.65 MB each) with the first frame as the poster
+# (scripts/hero-demo.sh). Needs Screen Recording for the terminal, as snapshots; about 1.5 min after the build. Copy
+# build/hero-demo/hero-demo-* to the site.
 HERO_DEMO := build/hero-demo$(if $(AGENT),-$(AGENT))
 hero-demo: build-check
 	@command -v ffmpeg >/dev/null && command -v pngquant >/dev/null && command -v oxipng >/dev/null \
