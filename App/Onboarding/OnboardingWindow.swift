@@ -150,19 +150,40 @@ extension OnboardingController {
                 model.wisprImportAnswered(PersonalDictionary().importPreview(of: incoming))
                 return model
             },
+        ] + welcomeSnapshots(ready)
+    }
+
+    /// Welcome after "Use Your Wispr Flow Shortcuts" while Wispr Flow runs (its push to talk is one kotoba cannot
+    /// take), Welcome with no Wispr Flow shortcuts, and Change…'s sheet.
+    private static func welcomeSnapshots(_ ready: Readiness) -> [Snapshot] {
+        [
+            window("onboarding-welcome-wispr-in-use") {
+                let model = model(.welcome, ready, wisprRuns: true)
+                model.useWisprShortcuts()
+                return model
+            },
+            window("onboarding-welcome-no-wispr") { model(.welcome, ready, wisprKeys: nil) },
+            MainWindow.sheetSnapshot(named: "onboarding-change-shortcut") {
+                ShortcutSheet(chords: HotkeyChords(defaults: nil), role: .handsFree)
+            },
         ]
     }
 
-    /// `hasKey`: an OpenRouter key is saved. Wispr Flow shows as installed.
+    /// `hasKey`: an OpenRouter key is saved; `wisprRuns`: Wispr Flow is open. Wispr Flow shows as installed, with
+    /// made-up shortcuts.
     private static func model(
         _ step: OnboardingStep, _ readiness: Readiness, keys: [ProviderAccount: KeyStatus] = [:], hasKey: Bool = false,
-        loginProblem: LaunchAtLogin.Problem? = nil
+        loginProblem: LaunchAtLogin.Problem? = nil,
+        wisprKeys: [String: String]? = OnboardingModel.Source.sampleWisprKeys,
+        wisprRuns: Bool = false
     ) -> OnboardingModel {
         let model = OnboardingModel(
             step: step, readiness: readiness, keyChecks: .sample(keys, savedKeys: hasKey ? [.openRouter] : []),
-            source: .sample(dictionary: Pane.sampleModel(PersonalDictionary()), loginProblem: loginProblem),
+            source: .sample(
+                dictionary: Pane.sampleModel(PersonalDictionary()), loginProblem: loginProblem, wisprKeys: wisprKeys,
+                wisprRuns: wisprRuns),
             openOtherSpeechServices: {})
-        model.showsWisprInstalled()
+        model.showsWisprInstalled(keys: wisprKeys)
         return model
     }
 

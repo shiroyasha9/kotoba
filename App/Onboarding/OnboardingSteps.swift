@@ -6,12 +6,14 @@ import SwiftUI
 // shows one at a time.
 
 /// What kotoba is good at, in three rows (four when Wispr Flow is on this Mac), and both ways to dictate with their keys
-/// drawn as keycaps.
+/// drawn as keycaps, each with Change… (owner QA 1, Q1), and Wispr Flow's own shortcuts when it is on this Mac.
 struct WelcomeStep: View {
     let model: OnboardingModel
+    /// The way to dictate whose Change… sheet is open.
+    @State private var changing: ChordRole?
 
     var body: some View {
-        let chords = HotkeyChords.shared
+        let chords = model.chords
         Section {
             Point(
                 "Fast", systemImage: "bolt", tint: .green,
@@ -38,11 +40,28 @@ struct WelcomeStep: View {
         }
         Section {
             PageRow(title: StatusText.shortcutTitle(.handsFree), subtitle: StatusText.shortcutHelp(.handsFree)) {
-                NamedKeycaps(keys: chords.handsFree.keycaps)
+                shortcut(.handsFree, chords.handsFree)
             }
             PageRow(title: StatusText.shortcutTitle(.pushToTalk), subtitle: StatusText.pushToTalkHelp(chords)) {
-                NamedKeycaps(keys: chords.pushToTalk.keycaps)
+                shortcut(.pushToTalk, chords.pushToTalk)
             }
+            if let wispr = model.wisprShortcuts {
+                WisprShortcutsRow(model: model, shortcuts: wispr)
+            }
+        }
+        .sheet(isPresented: Binding(get: { changing != nil }, set: { if !$0 { changing = nil } })) {
+            if let changing {
+                ShortcutSheet(chords: chords, role: changing)
+            }
+        }
+    }
+
+    /// A way to dictate's keycaps, and Change… with the Shortcuts page's recorder.
+    private func shortcut(_ role: ChordRole, _ chord: Chord) -> some View {
+        HStack {
+            NamedKeycaps(keys: chord.keycaps)
+            Button("Change…") { changing = role }
+                .accessibilityLabel("Change \(StatusText.shortcutTitle(role)) Shortcut")
         }
     }
 
@@ -99,6 +118,8 @@ struct NamedKeycaps: View {
                 }
             }
         }
+        // At its own width beside Change…: the row's text wraps instead of the key names.
+        .fixedSize()
         .accessibilityElement(children: .ignore)
         .accessibilityLabel(Keycaps.spoken(keys))
     }
@@ -338,5 +359,27 @@ struct DoneStep: View {
 
     private static func fixTitle(_ step: OnboardingStep) -> String {
         step == .permissions ? "Allow Access" : "Add Your Key"
+    }
+}
+
+/// One way to dictate with the Shortcuts page's recorder (`ChordRecorder`), from Welcome's Change….
+struct ShortcutSheet: View {
+    let chords: HotkeyChords
+    let role: ChordRole
+
+    var body: some View {
+        PageSheet(title: "Change Shortcut") {
+            Section {
+                PageRow(title: StatusText.shortcutTitle(role), subtitle: help) {
+                    ChordRecorder(chords: chords, role: role)
+                }
+            } footer: {
+                Text("You can change every shortcut later on kotoba’s Shortcuts page.")
+            }
+        }
+    }
+
+    private var help: String {
+        role == .pushToTalk ? StatusText.pushToTalkHelp(chords) : StatusText.shortcutHelp(role)
     }
 }

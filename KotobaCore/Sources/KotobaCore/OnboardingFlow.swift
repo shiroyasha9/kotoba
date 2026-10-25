@@ -78,3 +78,28 @@ public enum OnboardingFlow {
         }
     }
 }
+
+/// The Done step's "Open at login" switch (owner QA 1, Q5). The switch shows what the system holds after each turn: a
+/// change that failed puts it back, as System Settings does. Done applies the choice it shows only when the owner did not
+/// turn it: a turn took effect then, and registering again would only fail.
+public struct LoginItemChoice: Sendable, Equatable {
+    public private(set) var isOn: Bool
+    private var isTurnedByOwner = false
+
+    /// `isOn` is the switch's first value: on for a release build until setup is done, else what the system holds.
+    public init(isOn: Bool) {
+        self.isOn = isOn
+    }
+
+    /// The owner turned the switch, and the change was tried; `systemIsOn` is what the system holds now (on, or waiting
+    /// for approval).
+    public mutating func ownerTurned(systemIsOn: Bool) {
+        isTurnedByOwner = true
+        isOn = systemIsOn
+    }
+
+    /// Done applies `isOn`: the owner did not turn the switch.
+    public var isAppliedAtDone: Bool {
+        !isTurnedByOwner
+    }
+}
