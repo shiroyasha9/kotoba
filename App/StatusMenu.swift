@@ -114,7 +114,8 @@ struct MenuModel {
         switch status {
         case .finishSetup(let missing):
             let item = NSMenuItem.action(
-                "Finish Setting Up kotoba…", target: target, action: #selector(StatusMenuActions.finishSetup))
+                "Finish Setting Up \(Install.displayName)…", target: target,
+                action: #selector(StatusMenuActions.finishSetup))
             item.subtitle = missing
             items.append(item)
         case .ready:
