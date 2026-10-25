@@ -10,18 +10,28 @@ final class OpenRouterProvider: RouteClient {
         return url
     }()
 
+    /// "Multipart uploads are limited to 25 MB [...] On other providers, base64 JSON past the multipart cap is
+    /// rejected" (the STT guide, read 2026-10-25): every route here is another provider's. The guide does not say
+    /// which bytes it counts, so the whole body counts, in decimal megabytes, the smaller reading.
+    static let bodyLimit = 25_000_000
+
     let connection: ProviderConnection
     let baseURL: URL
     /// The primers' request bodies (`OpenRouterPrimer.swift`).
     let primerBodies = PrimerBodies()
+    private let copies: any UploadCopyEncoder
 
     init(
         apiKey: any APIKeySource,
+        copies: any UploadCopyEncoder,
         baseURL: URL = defaultBaseURL,
         configuration: URLSessionConfiguration = ProviderHTTP.sessionConfiguration(
-            resourceTimeout: ProviderHTTP.transcriptionResourceTimeout)
+            resourceTimeout: ProviderHTTP.transcriptionResourceTimeout),
+        bodyLimit: Int = OpenRouterProvider.bodyLimit
     ) {
-        connection = ProviderConnection(account: .openRouter, apiKey: apiKey, configuration: configuration)
+        connection = ProviderConnection(
+            account: .openRouter, apiKey: apiKey, bodyLimit: bodyLimit, configuration: configuration)
+        self.copies = copies
         self.baseURL = baseURL
     }
 
@@ -48,9 +58,8 @@ final class OpenRouterProvider: RouteClient {
         let label = options.route.rawValue
         let fields = Self.fields(terms: request.dictionaryTerms, language: request.language, options: options)
         let rest = try ProviderHTTP.encode(fields)
-        // The Opus copy when the route takes it and it is still there (a launch empties the copies' folder); opened now,
-        // so a delete during the upload cannot cut it. Else the FLAC.
-        let opus = options.route.takesOggOpus ? request.upload.flatMap { try? FileHandle(forReadingFrom: $0) } : nil
+        // The Opus copy when the route takes it, else the FLAC.
+        let opus = options.route.takesOggOpus ? try await opusCopy(for: request, label: label) : nil
         defer { try? opus?.close() }  // Read-only: closing cannot lose data.
         let reply = try await connection.send(
             baseURL.appending(path: "audio/transcriptions"), contentType: "application/json", label: label,
@@ -71,6 +80,28 @@ final class OpenRouterProvider: RouteClient {
             audio: answer.usage?.seconds.map { .seconds($0) }, cost: answer.usage?.charged, recorded: request.duration,
             on: options.route)
         return Transcript(text: answer.text ?? "", usage: usage, model: label, network: reply.network)
+    }
+
+    /// The recording's Ogg Opus copy while it is there (only the first request has one, and a launch empties the
+    /// copies' folder), else one made from the FLAC now: a retry, History's Transcribe Again and a segment upload's
+    /// fallback to the whole recording send the form the route was measured with, and a long recording stays under
+    /// `bodyLimit` (24 kbps Opus is about a fifth of the FLAC). Opened now, so a delete during the upload cannot cut
+    /// it; a copy made here is unlinked at once, and the open handle keeps its bytes until it closes. Nil when no copy
+    /// can be made: the FLAC goes, as on every route.
+    private func opusCopy(for request: TranscriptionRequest, label: String) async throws -> FileHandle? {
+        if let copy = request.upload.flatMap({ try? FileHandle(forReadingFrom: $0) }) { return copy }
+        let made = FileManager.default.temporaryDirectory.appending(path: "kotoba-opus-\(UUID().uuidString).ogg")
+        // A copy left by a failed delete costs only temp space.
+        defer { try? FileManager.default.removeItem(at: made) }
+        do {
+            try await copies.encodeCopy(of: request.audio, to: made)
+            return try FileHandle(forReadingFrom: made)
+        } catch let error as CancellationError {
+            throw error
+        } catch {
+            ProviderHTTP.log.error("\(label, privacy: .public): no Opus copy, the FLAC goes: \(error)")
+            return nil
+        }
     }
 
     /// Every body field except `input_audio`. The dictionary terms come within the route limits
@@ -103,6 +134,13 @@ final class OpenRouterProvider: RouteClient {
             provider: .init(zdr: route.hasZeroDataRetention, options: upstream)
         )
     }
+}
+
+/// Makes the Ogg Opus upload copy of a kept FLAC (`TranscriptionRequest.upload`) for a request that has none: the app's
+/// encoder, as KotobaProviders imports no audio framework.
+public protocol UploadCopyEncoder: Sendable {
+    /// Writes the audio of `flac` to a new file at `copy`, in the form of the capture's copy. Throws when it cannot.
+    func encodeCopy(of flac: URL, to copy: URL) async throws
 }
 
 /// Every body field except `input_audio`, which the body writer streams in before them.

@@ -18,6 +18,7 @@ struct TranscriptionProviderTests {
         (.noAudio, .permanent),
         (.unreadableAnswer(status: 200), .permanent),
         (.audioMissing, .permanent),
+        (.tooLong(bytes: 25_000_001, limit: 25_000_000), .permanent),
         (.connectionBlocked, .transient),
         (.hostNotFound(host: "x.cognitiveservices.azure.com"), .transient),
     ])
@@ -34,6 +35,7 @@ struct TranscriptionProviderTests {
         (.auth(status: 401), nil),
         (.unreadableAnswer(status: 200), .other),
         (.audioMissing, .audioMissing),
+        (.tooLong(bytes: 25_000_001, limit: 25_000_000), .tooLong),
         (.connectionBlocked, nil),
     ])
     func onlyAPermanentErrorHasARejectReason(error: ProviderError, reason: RejectReason?) {
@@ -52,6 +54,8 @@ struct TranscriptionProviderTests {
         (.keyUnavailable, false),
         (.noAudio, false),
         (.audioMissing, false),
+        // Refused before any upload.
+        (.tooLong(bytes: 25_000_001, limit: 25_000_000), false),
         (.connectionBlocked, false),
         (.hostNotFound(host: "x.cognitiveservices.azure.com"), false),
     ])

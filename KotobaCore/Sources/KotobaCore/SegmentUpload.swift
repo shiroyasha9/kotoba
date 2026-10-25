@@ -52,15 +52,16 @@ struct SegmentUpload: Sendable {
     /// with the last segment too). Not cut: one request, as before segments. Cut: the copy after the last cut goes now,
     /// beside the segments still on their way, and their texts join in order with one space, as the model wrote them;
     /// one speech answer with the costs added up and the recording's length. At the first failure the others are
-    /// cancelled and the whole recording goes as the FLAC; the answers not used are billed to `id` with no audio and
-    /// no words, so minutes and words stay what the owner dictated.
+    /// cancelled and the whole recording goes from the FLAC (MAI's route makes its Opus copy first, about 7 ms per
+    /// second of audio); the answers not used are billed to `id` with no audio and no words, so minutes and words stay
+    /// what the owner dictated.
     func answer(
         to request: TranscriptionRequest, of audio: RecordedAudio, through steps: TranscriptionSteps,
         billingTo id: DictationID, app: DictationApp?
     ) async throws -> (Transcript, Use) {
         var whole = request
         guard audio.uploadStart > .zero || !isEmpty else { return (try await steps.answer(to: whole), .one) }
-        // After a cut the copy holds only the audio after it: the whole recording goes as the FLAC.
+        // After a cut the copy holds only the audio after it: the whole recording goes from the FLAC.
         whole.upload = nil
         guard !isBroken, !answers.isEmpty, let upload = audio.upload, audio.uploadStart > .zero,
             steps.provider.sendsUploadCopy

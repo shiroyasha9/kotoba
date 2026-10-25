@@ -123,7 +123,7 @@ extension IndicatorPanel {
             case .needsSetup, .hostNotFound:
                 setupSamples(id)
             case .rejected:
-                [RejectReason.emptyTranscript, .audioMissing, .other].map {
+                [RejectReason.emptyTranscript, .audioMissing, .tooLong, .other].map {
                     sample("rejected-\($0.rawValue)", .init(.idle, notice: .rejected(id, $0)))
                 }
             case .copied:

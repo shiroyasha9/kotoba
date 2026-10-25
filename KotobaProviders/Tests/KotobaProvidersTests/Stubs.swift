@@ -22,6 +22,31 @@ struct FakeAPIKey: APIKeySource {
     }
 }
 
+/// Makes a recording's Opus copy (`UploadCopyEncoder`): `StubHost.madeOpusBytes`, shorter than the FLAC, after it
+/// read the FLAC (a FLAC that is gone throws), or it throws `failure`. Keeps each (FLAC, copy) it was asked for.
+final class FakeCopyEncoder: UploadCopyEncoder {
+    struct Failed: Error {}
+
+    private let state = Mutex<(failure: (any Error)?, made: [(flac: URL, copy: URL)])>((nil, []))
+
+    var failure: (any Error)? {
+        get { state.withLock(\.failure) }
+        set { state.withLock { $0.failure = newValue } }
+    }
+
+    var made: [(flac: URL, copy: URL)] { state.withLock(\.made) }
+
+    func encodeCopy(of flac: URL, to copy: URL) async throws {
+        let failure = state.withLock { state in
+            state.made.append((flac, copy))
+            return state.failure
+        }
+        _ = try Data(contentsOf: flac)
+        if let failure { throw failure }
+        try StubHost.madeOpusBytes.write(to: copy)
+    }
+}
+
 enum StubReply: Sendable {
     case raw(status: Int, headers: [String: String] = [:], body: String)
     case failure(URLError.Code)
@@ -75,6 +100,8 @@ final class StubHost {
     static let key = "sk-or-test"
     static let audioBytes = Data("fLaC\u{0}\u{0}\u{0}\"stub audio".utf8)
     static let opusBytes = Data("OggS\u{0}\u{2}stub opus".utf8)
+    /// The copy `FakeCopyEncoder` makes from the FLAC.
+    static let madeOpusBytes = Data("OggS made".utf8)
 
     let host = "openrouter-\(UUID().uuidString.lowercased()).test"
     var baseURL: URL { url("/api/v1") }
@@ -115,6 +142,8 @@ final class StubHost {
     /// Route settings in memory; the router reads the same storage, as the app's menu and router share
     /// UserDefaults.
     let settings = TranscriptionSettings.inMemory()
+    /// Makes the Opus copy of a recording that has none.
+    let copies = FakeCopyEncoder()
 
     /// An Azure Speech endpoint that routes to this test's host: `<host>.cognitiveservices.azure.com`.
     var azureEndpoint: String { "https://\(host).cognitiveservices.azure.com/" }
@@ -127,11 +156,16 @@ final class StubHost {
 
     /// The router with every route pointed at this test's host: OpenRouter at /api/v1, xAI at /v1/stt; Azure takes
     /// its endpoint from the settings (`useAzure`).
-    func provider(key: String? = StubHost.key, isKeyLocked: Bool = false) -> TranscriptionRouter {
+    /// `bodyLimit` is OpenRouter's upload cap.
+    func provider(
+        key: String? = StubHost.key, isKeyLocked: Bool = false, bodyLimit: Int = OpenRouterProvider.bodyLimit
+    ) -> TranscriptionRouter {
         let apiKey = FakeAPIKey(key: key, isLocked: isKeyLocked)
         return TranscriptionRouter(
             settings: settings,
-            openRouter: OpenRouterProvider(apiKey: apiKey, baseURL: baseURL, configuration: Self.configuration()),
+            openRouter: OpenRouterProvider(
+                apiKey: apiKey, copies: copies, baseURL: baseURL, configuration: Self.configuration(),
+                bodyLimit: bodyLimit),
             xai: XAIProvider(
                 apiKey: apiKey, endpoint: url("/v1/stt"),
                 configuration: Self.configuration(), makeBoundary: { Self.boundary }),

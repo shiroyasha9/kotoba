@@ -162,7 +162,7 @@ enum ChatFallback {
         case .rejected(let status, _): status == 404
         case .rateLimited: true
         case .timedOut, .unreadableAnswer, .offline, .connectionBlocked, .hostNotFound, .auth, .needsSetup,
-            .keyUnavailable, .noCredit, .emptyTranscript, .noAudio, .audioMissing:
+            .keyUnavailable, .noCredit, .emptyTranscript, .noAudio, .audioMissing, .tooLong:
             false
         }
     }

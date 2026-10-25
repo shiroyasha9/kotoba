@@ -359,6 +359,7 @@ extension RejectReason {
         switch self {
         case .emptyTranscript: "No speech heard"
         case .audioMissing: "Audio file is missing. Can’t retry."
+        case .tooLong: "Too long for \(provider). Audio kept."
         case .other: "Refused by \(provider). Audio kept."
         }
     }

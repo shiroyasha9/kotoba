@@ -49,7 +49,8 @@ struct TranscriptionSteps: Sendable {
     ) async throws -> Transcribed {
         guard record.audio.hasAudio else { throw ProviderError.noAudio }
         var request = settings.request(for: record.audio, at: clock.date)
-        // The upload copy serves this request only: a retry, and History, send the FLAC.
+        // The capture's upload copy serves this request only: a retry, and History, send the FLAC, or a copy the
+        // route makes from it.
         defer {
             AudioCapture.removeUploadCopy(request.upload)
             record.audio.upload = nil

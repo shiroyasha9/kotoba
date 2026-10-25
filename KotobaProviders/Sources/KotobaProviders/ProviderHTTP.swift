@@ -26,6 +26,8 @@ final class ProviderConnection: Sendable {
     /// The owner typed the host (Azure's resource endpoint): a host that does not resolve may be a typo, so the pill
     /// names it instead of saying offline.
     private let isHostSetByOwner: Bool
+    /// The route's upload cap: a streamed body that passes it is not sent (`ProviderError.tooLong`).
+    private let bodyLimit: Int?
     private let session: URLSession
     private let interfaces = InterfaceMemo()
 
@@ -34,9 +36,11 @@ final class ProviderConnection: Sendable {
         apiKey: any APIKeySource,
         keyHeader: KeyHeader = .bearer,
         isHostSetByOwner: Bool = false,
+        bodyLimit: Int? = nil,
         configuration: URLSessionConfiguration = ProviderHTTP.sessionConfiguration()
     ) {
         self.account = account
+        self.bodyLimit = bodyLimit
         self.apiKey = apiKey
         self.keyHeader = keyHeader
         self.isHostSetByOwner = isHostSetByOwner
@@ -65,7 +69,8 @@ final class ProviderConnection: Sendable {
 
     /// POSTs `body` to `url` with the key, mapping a timeout to `ProviderError.timedOut`, a host the owner typed that
     /// does not resolve to `.hostNotFound`, and other transport failures to `.offline`. `idleTimeout`
-    /// replaces the session's idle limit for this request only.
+    /// replaces the session's idle limit for this request only. A streamed body that passes `bodyLimit` stops at that
+    /// write and is not sent: `ProviderError.tooLong`.
     func send(
         _ url: URL, contentType: String, label: String, body: Body, idleTimeout: TimeInterval? = nil
     ) async throws -> Reply {
@@ -85,7 +90,13 @@ final class ProviderConnection: Sendable {
                 let file = FileManager.default.temporaryDirectory.appending(path: "kotoba-upload-\(UUID().uuidString)")
                 // The body is a copy of the kept FLAC; losing it to a failed delete costs only temp space.
                 defer { try? FileManager.default.removeItem(at: file) }
-                try write(BodyWriter(file: file))
+                do {
+                    try write(BodyWriter(file: file, limit: bodyLimit))
+                } catch ProviderError.tooLong(let bytes, let limit) {
+                    ProviderHTTP.log.error(
+                        "\(label, privacy: .public) not sent: its body passed \(limit) bytes at \(bytes)")
+                    throw ProviderError.tooLong(bytes: bytes, limit: limit)
+                }
                 // Splits the body build from the network time in Instruments and the latency report.
                 Log.signposter.emitEvent("bodyReady")
                 (data, response) = try await session.upload(for: request, fromFile: file, delegate: metrics)
@@ -293,79 +304,6 @@ struct MAIEnhancedMode: Encodable, Equatable {
     init(keepsFillerWords: Bool) {
         modelOptions = ModelOptions(transcribeStyle: keepsFillerWords ? .verbatim : .clean)
     }
-}
-
-/// Writes a request body to a file piece by piece, so the audio is copied in chunks and never held whole in memory.
-final class BodyWriter {
-    /// Base64 turns 3 bytes into 4 characters, so chunks of a multiple of 3 bytes encode to pieces that join
-    /// without padding in the middle.
-    static let chunk = 48 * 1024
-
-    private let output: FileHandle
-
-    init(file: URL) throws {
-        guard FileManager.default.createFile(atPath: file.path, contents: nil) else {
-            throw CocoaError(.fileWriteUnknown, userInfo: [NSFilePathErrorKey: file.path])
-        }
-        output = try FileHandle(forWritingTo: file)
-    }
-
-    deinit {
-        // Every write throws its own error first; closing a file that is already complete cannot lose data.
-        try? output.close()
-    }
-
-    func write(_ text: String) throws {
-        try output.write(contentsOf: Data(text.utf8))
-    }
-
-    func write(_ data: Data) throws {
-        try output.write(contentsOf: data)
-    }
-
-    /// Copies `file` as is, or as base64 text. A file that is gone (the kept recording deleted outside kotoba) throws
-    /// `ProviderError.audioMissing`.
-    func write(contentsOf file: URL, base64: Bool = false) throws {
-        let input: FileHandle
-        do {
-            input = try FileHandle(forReadingFrom: file)
-        } catch let error as CocoaError where [.fileNoSuchFile, .fileReadNoSuchFile].contains(error.code) {
-            throw ProviderError.audioMissing
-        }
-        defer { try? input.close() }  // Read-only: closing cannot lose data.
-        try write(contentsOf: input, base64: base64)
-    }
-
-    /// Copies the rest of `input`, as is or as base64 text.
-    func write(contentsOf input: FileHandle, base64: Bool = false) throws {
-        // FileHandle's autoreleased read buffers must drain per chunk, not after the whole upload body.
-        while try autoreleasepool(invoking: {
-            guard let chunk = try input.read(upToCount: Self.chunk), !chunk.isEmpty else { return false }
-            try output.write(contentsOf: base64 ? chunk.base64EncodedData() : chunk)
-            return true
-        }) {}
-    }
-}
-
-/// `multipart/form-data` framing (RFC 7578) for the direct routes. The file part goes last: xAI requires it.
-struct Multipart {
-    let boundary: String
-
-    var contentType: String { "multipart/form-data; boundary=\(boundary)" }
-
-    func field(_ name: String, _ value: String, contentType: String? = nil) -> String {
-        let type = contentType.map { "Content-Type: \($0)\r\n" } ?? ""
-        return "--\(boundary)\r\nContent-Disposition: form-data; name=\"\(name)\"\r\n\(type)\r\n\(value)\r\n"
-    }
-
-    func fileHeader(_ name: String, filename: String, contentType: String) -> String {
-        "--\(boundary)\r\nContent-Disposition: form-data; name=\"\(name)\"; filename=\"\(filename)\"\r\n"
-            + "Content-Type: \(contentType)\r\n\r\n"
-    }
-
-    var end: String { "\r\n--\(boundary)--\r\n" }
-
-    static func randomBoundary() -> String { "kotoba-\(UUID().uuidString)" }
 }
 
 private struct ErrorBody: Decodable {

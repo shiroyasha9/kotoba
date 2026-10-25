@@ -20,7 +20,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     let vault = KeyVault()
     lazy var readiness = Readiness(settings: routeSettings, vault: vault, credit: router.credit)
     /// The provider; onboarding uses it to check a key, and Readiness reads which accounts it found out of credit.
-    private lazy var router = TranscriptionRouter(settings: routeSettings, keys: vault.source(for:))
+    private lazy var router = TranscriptionRouter(
+        settings: routeSettings, keys: vault.source(for:), copies: OpusCopyEncoder())
     lazy var setup = SetupFlow(
         readiness: readiness, routeSettings: routeSettings, vault: vault, router: router,
         dictionary: { [weak self] in self?.mainWindow.dictionary },

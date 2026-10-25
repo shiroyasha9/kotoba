@@ -76,8 +76,8 @@ public struct TranscriptionRequest: Sendable, Equatable {
     /// 16 kHz mono FLAC.
     public var audio: URL
     /// The same audio as Ogg Opus at 24 kbps, about a fifth of the FLAC's bytes, written during the recording, for the
-    /// first request only (`RecordedAudio.upload`); nil, or a copy that is gone, sends `audio`. Only a route measured
-    /// with it sends it (docs/research/latency-pass-2.md).
+    /// first request only (`RecordedAudio.upload`). Only a route measured with it sends it
+    /// (docs/research/latency-pass-2.md); for nil, or a copy that is gone, that route makes one from `audio`.
     public var upload: URL?
     /// The recording's length: the audio count and the cost estimate for a route whose answer has neither.
     public var duration: Duration
@@ -185,6 +185,9 @@ public enum ProviderError: Error, Sendable, Equatable {
     case noAudio
     /// The kept audio file is gone (deleted outside kotoba): the provider throws it before any request.
     case audioMissing
+    /// The request body passes the route's upload cap (`bytes` over `limit`): the provider throws it before any
+    /// upload. The same recording on the same route always passes it.
+    case tooLong(bytes: Int, limit: Int)
     /// The network refused a secure connection (a captive portal, a filtering proxy): it is up, but no route can be
     /// reached until the owner deals with it.
     case connectionBlocked
@@ -215,7 +218,7 @@ public enum ProviderError: Error, Sendable, Equatable {
         switch self {
         case .offline, .connectionBlocked, .hostNotFound, .timedOut, .keyUnavailable, .rateLimited, .server: .transient
         case .auth, .needsSetup, .noCredit: .needsSetup
-        case .rejected, .unreadableAnswer, .emptyTranscript, .noAudio, .audioMissing: .permanent
+        case .rejected, .unreadableAnswer, .emptyTranscript, .noAudio, .audioMissing, .tooLong: .permanent
         }
     }
 
@@ -227,7 +230,7 @@ public enum ProviderError: Error, Sendable, Equatable {
         switch self {
         case .offline, .connectionBlocked, .hostNotFound, .rateLimited, .keyUnavailable: true
         case .timedOut, .auth, .needsSetup, .noCredit, .server, .unreadableAnswer, .rejected, .emptyTranscript,
-            .noAudio, .audioMissing:
+            .noAudio, .audioMissing, .tooLong:
             false
         }
     }
@@ -243,7 +246,7 @@ public enum ProviderError: Error, Sendable, Equatable {
         switch self {
         case .server, .timedOut, .unreadableAnswer, .rejected, .emptyTranscript: true
         case .offline, .connectionBlocked, .hostNotFound, .auth, .needsSetup, .keyUnavailable, .rateLimited, .noCredit,
-            .noAudio, .audioMissing:
+            .noAudio, .audioMissing, .tooLong:
             false
         }
     }
@@ -253,6 +256,7 @@ public enum ProviderError: Error, Sendable, Equatable {
         switch self {
         case .emptyTranscript, .noAudio: .emptyTranscript
         case .audioMissing: .audioMissing
+        case .tooLong: .tooLong
         case .rejected, .unreadableAnswer: .other
         case .offline, .connectionBlocked, .hostNotFound, .timedOut, .auth, .needsSetup, .noCredit, .keyUnavailable,
             .rateLimited, .server:
@@ -267,6 +271,8 @@ public enum RejectReason: String, Sendable {
     case emptyTranscript
     /// The kept audio file is gone, so there is nothing to send.
     case audioMissing
+    /// The recording is longer than the route takes in one request (`ProviderError.tooLong`).
+    case tooLong
     case other
 }
 

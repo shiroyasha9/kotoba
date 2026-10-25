@@ -280,12 +280,19 @@ struct HistoryStatus {
             (title, systemImage, isProblem) = ("Transcribing", "ellipsis.circle", false)
         case .pending, .failed:
             (title, systemImage, isProblem) = ("Waiting for retry", "exclamationmark.triangle.fill", true)
-        case .rejected where record.rejectReason == .emptyTranscript:
-            (title, systemImage, isProblem) = ("No speech heard", "waveform.slash", true)
-        case .rejected where record.rejectReason == .audioMissing:
-            (title, systemImage, isProblem) = ("Audio missing", "questionmark.folder", true)
         case .rejected:
-            (title, systemImage, isProblem) = ("Can’t transcribe", "exclamationmark.triangle.fill", true)
+            (title, systemImage) = Self.rejected(record.rejectReason)
+            isProblem = true
+        }
+    }
+
+    /// A rejected row's title and symbol, by why the route refused it.
+    private static func rejected(_ reason: RejectReason?) -> (title: String, systemImage: String) {
+        switch reason {
+        case .emptyTranscript: ("No speech heard", "waveform.slash")
+        case .audioMissing: ("Audio missing", "questionmark.folder")
+        case .tooLong: ("Too long to send", "clock.badge.xmark")
+        case .other, nil: ("Can’t transcribe", "exclamationmark.triangle.fill")
         }
     }
 }

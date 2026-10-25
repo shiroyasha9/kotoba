@@ -52,4 +52,21 @@ struct PipelineNetworkErrorTests {
         #expect(await world.provider.requests.count == 1)
         #expect(await pipeline.state.notice == .rejected(record.id, .audioMissing))
     }
+
+    /// The recording is longer than the route takes in one request: it is refused before any upload, kept, and not
+    /// sent again, as the same send fails the same way. History's Transcribe Again With can send it on another route.
+    @Test func aRecordingTooLongForTheRouteIsRejectedAndNotRetried() async throws {
+        let world = FakeWorld(transcript: "unused")
+        let pipeline = world.makePipeline()
+        await world.provider.fail(with: ProviderError.tooLong(bytes: 30_000_000, limit: 25_000_000))
+        await pipeline.dictate(world)
+
+        await pipeline.retryAtLaunch()
+
+        let record = try #require(await world.store.records.first)
+        #expect(record.status == .rejected)
+        #expect(record.attempts == 0)
+        #expect(await world.provider.requests.count == 1)
+        #expect(await pipeline.state.notice == .rejected(record.id, .tooLong))
+    }
 }

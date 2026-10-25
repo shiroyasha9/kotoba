@@ -14,11 +14,14 @@ public final class TranscriptionRouter: TranscriptionProvider {
     public let credit = AccountCredit()
 
     /// `keys` gives the key source for each provider account; the app passes its `KeyVault`'s sources. It is called
-    /// once per account here, so each source keeps its cache.
-    public convenience init(settings: TranscriptionSettings, keys: (ProviderAccount) -> any APIKeySource) {
+    /// once per account here, so each source keeps its cache. `copies` makes the Ogg Opus upload copy of a recording
+    /// that has none (`OpenRouterProvider`).
+    public convenience init(
+        settings: TranscriptionSettings, keys: (ProviderAccount) -> any APIKeySource, copies: any UploadCopyEncoder
+    ) {
         self.init(
             settings: settings,
-            openRouter: OpenRouterProvider(apiKey: keys(.openRouter)),
+            openRouter: OpenRouterProvider(apiKey: keys(.openRouter), copies: copies),
             xai: XAIProvider(apiKey: keys(.xai)),
             azure: AzureProvider(apiKey: keys(.azure))
         )

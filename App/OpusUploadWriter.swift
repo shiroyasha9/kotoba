@@ -95,3 +95,32 @@ final class OpusUploadWriter {
         }
     }
 }
+
+/// Makes the upload copy of a kept FLAC for a request whose recording has none (a retry, History, a segment upload's
+/// fallback): the FLAC read back through the same writer, at about 145x real time, so an hour costs about 25 s of one
+/// core. Only a FLAC in the capture's format is read; another throws, and the FLAC goes.
+struct OpusCopyEncoder: UploadCopyEncoder {
+    /// 0.3 s at 16 kHz: the Ogg pages follow the encoder's packets, so any read size gives the same copy.
+    private static let chunk: AVAudioFrameCount = 4_800
+
+    func encodeCopy(of flac: URL, to copy: URL) async throws {
+        let format = CaptureWriter.outputFormat
+        let file = try AVAudioFile(forReading: flac, commonFormat: format.commonFormat, interleaved: true)
+        guard file.processingFormat.sampleRate == format.sampleRate,
+            file.processingFormat.channelCount == format.channelCount,
+            let buffer = AVAudioPCMBuffer(pcmFormat: file.processingFormat, frameCapacity: Self.chunk)
+        else { throw CocoaError(.featureUnsupported) }
+        let writer = try OpusUploadWriter(file: copy, format: file.processingFormat)
+        while file.framePosition < file.length {
+            // A cancelled request stops here; the provider removes the part written.
+            try Task.checkCancellation()
+            // The reads' autoreleased objects drain per chunk, not after the whole recording.
+            try autoreleasepool {
+                try file.read(into: buffer, frameCount: Self.chunk)
+                try writer.write(buffer)
+            }
+            await Task.yield()
+        }
+        _ = try writer.close()
+    }
+}
