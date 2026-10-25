@@ -105,3 +105,63 @@ struct AccountCreditTests {
         #expect(router.credit.changeCount == 1)
     }
 }
+
+/// Cleanup and Rewrite run on OpenRouter whatever the speech model, so their answers mark the OpenRouter account too.
+struct ChatCreditTests {
+    @Test func aCleanupRefusedForNoCreditMarksOpenRouter() async {
+        let stub = StubHost(reply: .fixture("error-402", status: 402))
+        let credit = AccountCredit()
+
+        _ = try? await stub.cleaner(credit: credit).clean("fix the login bug", vocabulary: [], mode: .code)
+
+        #expect(credit.isOut(.openRouter))
+        #expect(!credit.isOut(.xai))
+    }
+
+    @Test func aRewriteRefusedForNoCreditMarksOpenRouter() async {
+        let stub = StubHost(reply: .fixture("error-402", status: 402))
+        let credit = AccountCredit()
+
+        _ = try? await stub.cleaner(credit: credit).polisher().polish("fix the login bug")
+
+        #expect(credit.isOut(.openRouter))
+    }
+
+    @Test func aCleanupAnswerClearsTheMark() async throws {
+        let stub = StubHost(reply: .fixture("error-402", status: 402))
+        let credit = AccountCredit()
+        let cleaner = stub.cleaner(credit: credit)
+        _ = try? await cleaner.clean("fix the login bug", vocabulary: [], mode: .code)
+
+        stub.reply(.fixture("cleanup-success"))
+        _ = try await cleaner.clean("fix the login bug", vocabulary: [], mode: .code)
+
+        #expect(!credit.isOut(.openRouter))
+    }
+
+    @Test func aRewriteAnswerClearsTheMark() async throws {
+        let stub = StubHost(reply: .fixture("error-402", status: 402))
+        let credit = AccountCredit()
+        let polisher = stub.cleaner(credit: credit).polisher()
+        _ = try? await polisher.polish("fix the login bug")
+
+        stub.reply(.fixture("polish-success"))
+        _ = try await polisher.polish("fix the login bug")
+
+        #expect(!credit.isOut(.openRouter))
+    }
+
+    /// A cleanup that fails for another reason says nothing about credit.
+    @Test(arguments: [StubReply.failure(.notConnectedToInternet), .raw(status: 503, body: ""), .status(401)])
+    func otherChatFailuresKeepTheMark(reply: StubReply) async {
+        let stub = StubHost(reply: .fixture("error-402", status: 402))
+        let credit = AccountCredit()
+        let cleaner = stub.cleaner(credit: credit)
+        _ = try? await cleaner.clean("fix the login bug", vocabulary: [], mode: .code)
+
+        stub.reply(reply)
+        _ = try? await cleaner.clean("fix the login bug", vocabulary: [], mode: .code)
+
+        #expect(credit.isOut(.openRouter))
+    }
+}

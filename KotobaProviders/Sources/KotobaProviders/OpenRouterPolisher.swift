@@ -58,16 +58,20 @@ public enum PolishModel: String, CaseIterable, Sendable, ChatModel {
 public final class OpenRouterPolisher: TextPolisher {
     private let connection: ProviderConnection
     private let baseURL: URL
+    private let credit: AccountCredit
 
-    init(connection: ProviderConnection, baseURL: URL) {
+    init(connection: ProviderConnection, baseURL: URL, credit: AccountCredit) {
         self.connection = connection
         self.baseURL = baseURL
+        self.credit = credit
     }
 
     /// DeepSeek first, Gemini when its hosts fail (`ChatFallback`).
     public func polish(_ text: String) async throws -> RewrittenText {
-        try await ChatFallback.send(PolishModel.deepSeekFlash, step: "Polish") { model in
-            try await polish(text, with: model)
+        try await credit.tracking(connection.account) {
+            try await ChatFallback.send(PolishModel.deepSeekFlash, step: "Polish") { model in
+                try await polish(text, with: model)
+            }
         }
     }
 
@@ -164,6 +168,6 @@ extension OpenRouterUsage {
 extension OpenRouterCleaner {
     /// Polish on the cleanup connection: the same OpenRouter chat host and key, one URLSession.
     public func polisher() -> OpenRouterPolisher {
-        OpenRouterPolisher(connection: connection, baseURL: baseURL)
+        OpenRouterPolisher(connection: connection, baseURL: baseURL, credit: credit)
     }
 }

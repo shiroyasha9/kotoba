@@ -85,7 +85,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         statusItem = DockAndMenuBar.shared.attach(StatusBarItem(target: self) { [weak self] in self?.menuModel() })
         updater?.onWaitingUpdateChange = { [weak self] in self?.updateIcon() }
         guard let store = openHistory() else { return }
-        let cleaner = OpenRouterCleaner(apiKey: vault.source(for: .openRouter), settings: routeSettings)
+        let cleaner = router.cleaner(apiKey: vault.source(for: .openRouter))
         let pipeline = DictationPipeline(
             ports: .init(
                 audio: audio,

@@ -10,7 +10,7 @@ public final class TranscriptionRouter: TranscriptionProvider {
     private let openRouter: OpenRouterProvider
     private let xai: XAIProvider
     private let azure: AzureProvider
-    /// Which accounts are out of credit, as this router's requests found.
+    /// Which accounts are out of credit, as this router's requests and its cleaner's found.
     public let credit = AccountCredit()
 
     /// `keys` gives the key source for each provider account; the app passes its `KeyVault`'s sources. It is called
@@ -64,14 +64,7 @@ public final class TranscriptionRouter: TranscriptionProvider {
             options.route = route
         }
         let account = options.route.account
-        do {
-            let transcript = try await client(for: account).transcribe(request, options)
-            credit.worked(account)
-            return transcript
-        } catch ProviderError.noCredit {
-            credit.ranOut(account)
-            throw ProviderError.noCredit
-        }
+        return try await credit.tracking(account) { try await client(for: account).transcribe(request, options) }
     }
 
     /// Checks `key` for `account` with one free request on that provider's connection (no audio, no cost). Used
@@ -82,6 +75,12 @@ public final class TranscriptionRouter: TranscriptionProvider {
         let result = await client(for: account).checkKey(key, settings.routeOptions)
         if result == .noCredit { credit.ranOut(account) }
         return result
+    }
+
+    /// Cleanup and Polish on OpenRouter with `apiKey`, on this router's settings: their answers mark OpenRouter's credit
+    /// in `credit`, as a transcript does.
+    public func cleaner(apiKey: any APIKeySource) -> OpenRouterCleaner {
+        OpenRouterCleaner(apiKey: apiKey, settings: settings, credit: credit)
     }
 
     /// The one place that maps a provider to its client; a route reaches it through `TranscriptionRoute.account`.
@@ -111,12 +110,12 @@ protocol RouteClient: Sendable {
         -> Transcript?
 }
 
-/// Which provider accounts are out of credit, as the router's requests found: a dictation or a key check refused for
-/// no credit marks its account, and the next transcript from that account clears the mark. Only KotobaProviders knows
-/// the account of a request, so the fact lives here, beside the router that sends it. Kept in memory: launch's retry of
-/// the saved dictations finds it again, and a mark kept on disk would outlive credit added while kotoba was closed.
-/// Requests that overlap (segments, a retry run) mark in the order their answers come: a late transcript sent before a
-/// refusal clears the mark until the next request sets it again.
+/// Which provider accounts are out of credit, as the requests found: a dictation, a cleanup, a Polish or a key check
+/// refused for no credit marks its account, and the next answer from that account clears the mark. Only
+/// KotobaProviders knows the account of a request, so the fact lives here, beside the router that sends it. Kept in
+/// memory: launch's retry of the saved dictations finds it again, and a mark kept on disk would outlive credit added
+/// while kotoba was closed. Requests that overlap (segments, a retry run, a cleanup) mark in the order their answers
+/// come: a late answer to a request sent before a refusal clears the mark until the next request sets it again.
 public final class AccountCredit: Sendable {
     private let marked = Mutex<(accounts: Set<ProviderAccount>, changes: Int)>(([], 0))
     private let continuation: AsyncStream<Void>.Continuation
@@ -133,12 +132,25 @@ public final class AccountCredit: Sendable {
         marked.withLock { $0.accounts.contains(account) }
     }
 
+    /// Runs a billed request to `account` (a transcription, a cleanup, a Polish) and marks what its answer says: an
+    /// answer means credit, a refusal for no credit means none, any other failure says nothing.
+    func tracking<Answer>(_ account: ProviderAccount, _ request: () async throws -> Answer) async throws -> Answer {
+        do {
+            let answer = try await request()
+            worked(account)
+            return answer
+        } catch ProviderError.noCredit {
+            ranOut(account)
+            throw ProviderError.noCredit
+        }
+    }
+
     /// A request to `account` was refused for no credit.
     func ranOut(_ account: ProviderAccount) {
         update { $0.insert(account).inserted }
     }
 
-    /// `account` gave a transcript, so it has credit.
+    /// `account` answered a billed request, so it has credit.
     func worked(_ account: ProviderAccount) {
         update { $0.remove(account) != nil }
     }

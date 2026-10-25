@@ -134,9 +134,10 @@ final class StubHost {
         )
     }
 
-    func cleaner(key: String? = StubHost.key) -> OpenRouterCleaner {
+    func cleaner(key: String? = StubHost.key, credit: AccountCredit = AccountCredit()) -> OpenRouterCleaner {
         OpenRouterCleaner(
-            apiKey: FakeAPIKey(key: key), settings: settings, baseURL: baseURL, configuration: Self.configuration())
+            apiKey: FakeAPIKey(key: key), settings: settings, credit: credit, baseURL: baseURL,
+            configuration: Self.configuration())
     }
 
     private static func configuration() -> URLSessionConfiguration {

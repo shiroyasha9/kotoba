@@ -42,20 +42,22 @@ public final class OpenRouterCleaner: TextCleaner {
     let connection: ProviderConnection
     private let settings: TranscriptionSettings
     let baseURL: URL
+    /// The router's marks: a cleanup or Polish answer says whether the OpenRouter account has credit, as a transcript
+    /// does. Shared with Polish.
+    let credit: AccountCredit
 
-    /// `apiKey` is the OpenRouter key from the app's `KeyVault`, shared with transcription.
-    public convenience init(apiKey: any APIKeySource, settings: TranscriptionSettings) {
-        self.init(apiKey: apiKey, settings: settings, baseURL: OpenRouterProvider.defaultBaseURL)
-    }
-
+    /// `apiKey` is the OpenRouter key from the app's `KeyVault`, shared with transcription
+    /// (`TranscriptionRouter.cleaner(apiKey:)`).
     init(
         apiKey: any APIKeySource,
         settings: TranscriptionSettings,
-        baseURL: URL,
+        credit: AccountCredit,
+        baseURL: URL = OpenRouterProvider.defaultBaseURL,
         configuration: URLSessionConfiguration = ProviderHTTP.sessionConfiguration()
     ) {
         connection = ProviderConnection(account: .openRouter, apiKey: apiKey, configuration: configuration)
         self.settings = settings
+        self.credit = credit
         self.baseURL = baseURL
     }
 
@@ -65,8 +67,10 @@ public final class OpenRouterCleaner: TextCleaner {
 
     /// `vocabulary` comes within the route limits (`PersonalDictionary.keyterms`); `mode` picks the system prompt.
     public func clean(_ transcript: String, vocabulary: [String], mode: AppMode) async throws -> RewrittenText {
-        try await ChatFallback.send(settings.cleanupModel, step: "Cleanup") { model in
-            try await clean(transcript, vocabulary: vocabulary, mode: mode, with: model)
+        try await credit.tracking(connection.account) {
+            try await ChatFallback.send(settings.cleanupModel, step: "Cleanup") { model in
+                try await clean(transcript, vocabulary: vocabulary, mode: mode, with: model)
+            }
         }
     }
 
