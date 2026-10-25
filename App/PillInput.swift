@@ -121,7 +121,7 @@ extension PillView {
         if !isDragging {
             guard IndicatorPlacement.isDrag(from: ScreenPoint(pressStart), to: ScreenPoint(point)) else { return }
             isDragging = true
-            onDragBegan?()
+            onDragBegan?(pressStart)
         }
         onDragMoved?(point)
     }

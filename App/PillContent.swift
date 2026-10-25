@@ -29,7 +29,7 @@ enum PillRank: Comparable {
             switch content?.look {
             case nil, .idle, .hover: .quiet
             case .done: .check
-            case .recording, .processing, .message, .dragged: .dictation
+            case .recording, .processing, .message: .dictation
             }
     }
 

@@ -108,8 +108,6 @@ extension IndicatorPanel {
             + [
                 Sample(
                     name: "hover", content: PillContent(look: .hover(keys: ["⌃", "⌥", "⌘"]), click: .startsDictation)),
-                // Under the pointer during a drag: VoiceOver still reads the look under it.
-                Sample(name: "dragged", content: PillContent(look: .dragged(.recording(.init(isHandsFree: true))))),
                 // Auto-learn's notice; the longest word that fits.
                 Sample(name: "learned", content: PillContent(.learned("Kubernetes", id: UUID()))),
                 // A development build beside the release app.
@@ -239,6 +237,10 @@ extension IndicatorPanel {
 
     /// What is wrong with the pill as drawn, or nil.
     private static func problem(of pill: PillView, named name: String) -> String? {
+        // One shape: a capsule, the idle bar, or the check's circle; no other look is a circle or a dot (owner QA 4, U3).
+        if pill.shapeSize.width == pill.shapeSize.height, pill.look != .done {
+            return "the pill \(name) is a circle; only the check is"
+        }
         if pill.isTooLong { return "the content of \(name) needs more than the longest pill" }
         if pill.isTextTruncated { return "the pill words in \(name) are cut off" }
         if pill.isOverflowing { return "the content of \(name) is longer than its capsule" }

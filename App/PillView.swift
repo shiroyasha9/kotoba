@@ -44,7 +44,8 @@ final class PillView: NSView {
     var onAction: ((Action) -> Void)?
     /// The pointer entered (true) or left (false) the capsule.
     var onHoverChanged: ((Bool) -> Void)?
-    var onDragBegan: (() -> Void)?
+    /// A drag began from the press at this screen point.
+    var onDragBegan: ((NSPoint) -> Void)?
     var onDragMoved: ((NSPoint) -> Void)?
     var onDragEnded: ((NSPoint) -> Void)?
 
@@ -152,7 +153,7 @@ final class PillView: NSView {
     /// What the look's content needs along the capsule, ends included; set by `apply`.
     private(set) var contentLength: CGFloat = 0
 
-    /// The capsule's size for the look: idle is the bar, done and a drag a circle, the rest as long as the content.
+    /// The capsule's size for the look: idle is the bar, done a circle (the check), the rest as long as the content.
     var shapeSize: NSSize {
         let height = PillGeometry.height
         switch look {
@@ -160,7 +161,7 @@ final class PillView: NSView {
             return isVertical
                 ? NSSize(width: PillGeometry.idleThickness, height: PillGeometry.idleLength)
                 : NSSize(width: PillGeometry.idleLength, height: PillGeometry.idleThickness)
-        case .done, .dragged: return NSSize(width: height, height: height)
+        case .done: return NSSize(width: height, height: height)
         default:
             let length = min(PillGeometry.maxLength, max(height, contentLength))
             return isVertical ? NSSize(width: height, height: length) : NSSize(width: length, height: height)
@@ -257,7 +258,7 @@ extension PillView {
     /// The views `look` shows, in order, filled with its words.
     private func views(for look: PillLook) -> [NSView] {
         switch look {
-        case .idle, .done, .dragged: return []
+        case .idle, .done: return []
         case .processing:
             bars.color = PillBars.level
             return [bars]

@@ -78,7 +78,7 @@ extension PillView {
         switch look {
         case .processing: true
         case .recording(let recording): recording.words == nil && recording.timedFrom == nil
-        case .idle, .hover, .done, .message, .dragged: false
+        case .idle, .hover, .done, .message: false
         }
     }
 

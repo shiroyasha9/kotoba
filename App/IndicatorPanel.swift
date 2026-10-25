@@ -54,7 +54,8 @@ final class IndicatorPanel {
     var pill: PillView { build().pill }
     /// The screen the pill shows on; chosen each time it appears.
     var screen: NSScreen?
-    var dropTargets: DropTargets?
+    /// The owner's drag of the pill, while it lasts.
+    var drag: Drag?
     private var screenObserver: (any NSObjectProtocol)?
     private var spaceObserver: (any NSObjectProtocol)?
     /// The pill's timer. `task` waits for the deadline of a timer that hides the pill.
@@ -167,7 +168,7 @@ final class IndicatorPanel {
         self.content = content
         let wasVisible = panel.isVisible
         // The idle bar is not about a window, so it skips the window list and takes the pointer's screen.
-        if !wasVisible || (followsFocus && dropTargets == nil) {
+        if !wasVisible || (followsFocus && drag == nil) {
             let next = content.look == .idle ? NSScreen.withPointer : NSScreen.focused
             if !wasVisible || next != screen {
                 screen = next
@@ -176,9 +177,7 @@ final class IndicatorPanel {
         }
         pill.isClickable = content.click != nil
         pill.toolTip = content.toolTip
-        if dropTargets == nil {
-            pill.look = look(for: content)
-        }
+        pill.look = look(for: content)
         if !wasVisible {
             panel.orderFrontRegardless()
             Self.rejoinAllSpaces(panel)
@@ -250,7 +249,7 @@ final class IndicatorPanel {
         panel.hidesOnDeactivate = false
         pill.onAction = { [weak self] action in self?.perform(action) }
         pill.onHoverChanged = { [weak self] isInside in self?.hoverChanged(isInside: isInside) }
-        pill.onDragBegan = { [weak self] in self?.beginDrag() }
+        pill.onDragBegan = { [weak self] press in self?.beginDrag(from: press) }
         pill.onDragMoved = { [weak self] point in self?.moveDrag(to: point) }
         pill.onDragEnded = { [weak self] point in self?.endDrag(at: point) }
         screenObserver = NotificationCenter.default.addObserver(
@@ -308,7 +307,7 @@ extension IndicatorPanel {
     /// Hover holds the timer; leaving runs it on from the time that was left. On the idle bar it shows the chord.
     private func hoverChanged(isInside: Bool) {
         isHovering = isInside
-        if let content, dropTargets == nil {
+        if let content {
             pill.look = look(for: content)
         }
         guard var timer, timer.countdown.isHeld != isInside else { return }
@@ -328,29 +327,29 @@ extension IndicatorPanel {
 // MARK: Placement
 
 extension IndicatorPanel {
-    /// Moves the pill's room to its anchor on `screen`; the capsule changes shape inside the room.
+    /// Moves the pill's room to its anchor on `screen`; the capsule changes shape inside the room. The same room at
+    /// another place (a drop at the anchor it had, another screen) slides there, and the pill in it does not change. A
+    /// room of another size (a new anchor) is taken at once, before the pill takes the anchor in it, so the capsule's
+    /// place is worked out in the room it ends in: a room that grew in an animation left the glass where the old room
+    /// put it, cut off at the window's edge (owner QA 4, U3).
     private func place(animated: Bool) {
-        guard let built, dropTargets == nil, let screen = screen ?? NSScreen.focused else { return }
+        guard let built, drag == nil, let screen = screen ?? NSScreen.focused else { return }
         let anchor = anchor
         let room = IndicatorPlacement.room(
             at: anchor, thickness: Double(PillGeometry.height), in: ScreenRect(screen.visibleFrame))
         let frame = Self.windowFrame(around: NSRect(room))
-        built.pill.anchor = anchor
-        guard animated, built.panel.isVisible else {
+        guard animated, built.panel.isVisible, built.pill.anchor == anchor, built.panel.frame.size == frame.size
+        else {
             built.panel.setFrame(frame, display: true)
+            built.pill.anchor = anchor
+            // At its place in the new room now, not after a spring from where it was in the old one.
+            built.pill.placeGlass()
             return
         }
         NSAnimationContext.runAnimationGroup { context in
             context.duration = 0.2
             context.timingFunction = CAMediaTimingFunction(name: .easeOut)
             built.panel.animator().setFrame(frame, display: true)
-        }
-    }
-
-    /// After a drop (the anchor's setter placed the room): the pill's look again.
-    func dragEnded() {
-        if let content {
-            pill.look = look(for: content)
         }
     }
 

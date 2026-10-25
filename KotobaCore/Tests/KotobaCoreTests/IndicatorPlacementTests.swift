@@ -59,12 +59,11 @@ struct IndicatorPlacementTests {
         #expect(!IndicatorPlacement.isVertical(at: .right, hasWords: true))
     }
 
-    @Test func theDraggedPillIsACircleUnderThePointer() {
-        let room = IndicatorPlacement.dragRoom(centeredAt: ScreenPoint(x: 300, y: 200), thickness: 36)
-        #expect(room == ScreenRect(x: 282, y: 182, width: 36, height: 36))
-        for anchor in IndicatorAnchor.allCases {
-            #expect(IndicatorPlacement.capsule(width: 36, height: 36, at: anchor, thickness: 36, in: room) == room)
-        }
+    @Test func theDraggedPillKeepsItsRoomAndMovesWithThePointer() {
+        let room = ScreenRect(x: 576, y: 104, width: 360, height: 36)
+        let dragged = IndicatorPlacement.draggedRoom(
+            room, from: ScreenPoint(x: 760, y: 120), to: ScreenPoint(x: 700, y: 400))
+        #expect(dragged == ScreenRect(x: 516, y: 384, width: 360, height: 36))
     }
 
     struct DropRow: Sendable, CustomTestStringConvertible {

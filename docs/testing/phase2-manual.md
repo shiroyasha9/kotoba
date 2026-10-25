@@ -84,7 +84,7 @@ UI text in this list is the text in the code at the phase 2 gate (2026-10-15). I
 |---|---|---|---|
 | 43 | With no saved position, start a dictation | A horizontal pill at the bottom center of the screen with the focused window, just above the Dock; never under the Dock, the menu bar or the notch | |
 | 44 | Look at the "Listening" pill, then a state with longer text | "Listening" is about 170 pt wide; longer text makes the pill wider, up to 360 pt | |
-| 45 | While the pill shows, start to drag it | The pill becomes a small round waveform icon; three faint glass shapes show at bottom center, left mid-height and right mid-height; the nearest one is tinted | |
+| 45 | While the pill shows, start to drag it | The pill itself moves with the pointer, in its look (bars, Cancel and Stop, or its words), under the point you took it by; no circle, no empty capsule and no other shape shows anywhere | |
 | 46 | Drag it to the left edge and release | It snaps to the left edge with a short animation; "Listening" stands vertical (dot over a level bar) | |
 | 47 | Drag it to the right edge and release; stop the dictation | It snaps to the right edge; "Transcribing" stands vertical (dot over a spinner) | |
 | 48 | At a side edge, press Esc during a recording | "Canceled" + **Undo** shows as a horizontal pill at mid-height on that edge | |
@@ -279,7 +279,7 @@ Rows from each agent's phase 2.5 work. The numbers continue the list above.
 | 173 | Press Esc during a recording; hold the pointer on the pill for 2 s, move it away, wait | The bar runs on; the pill hides when the bar is empty (about 5 s in total, not counting the hold) | |
 | 174 | Settings > General > **Show indicator**: **Always** | A small round waveform pill shows at the saved position; it shows no level and no motion | |
 | 175 | Type in TextEdit, click the round pill, speak, click the pill again | The click starts a dictation like a chord tap; the second click stops it; the text pastes into TextEdit; TextEdit stays the active app and keeps its cursor | |
-| 176 | With **Always**, drag the round pill to another position | The pill moves; no dictation starts | |
+| 176 | With **Always**, drag the idle bar to another position | The bar moves with the pointer and snaps to the nearest anchor; no dictation starts | |
 | 177 | With **Always**, finish a dictation and wait for a message pill to end | The pill goes back to the small round pill, not hidden | |
 | 178 | Set **Show indicator** back to **While Dictating** | The round pill goes away at once | |
 | 179 | On macOS 27, with **Always**, move the pointer over the round pill and press | The glass shows a response to the pointer and the press (interactive glass) | |
@@ -1014,7 +1014,7 @@ One glass capsule that changes shape (docs/research/ui-redesign.md, "Pill"). Sna
 | 1206 | Point at a message (for example “Canceled”), then move away | It stays while the pointer is on it and goes after you move away | |
 | 1207 | Drag the pill to the left edge, then to the right edge; at each edge repeat rows 1203 and 1205 | It stands vertical at the edge, with the same looks turned 90° | |
 | 1208 | With Always on, change the indicator's place in General while the bar shows | The bar moves to the middle of that edge, not near its bottom | |
-| 1209 | During a recording, drag the pill to another place and drop it | It stays at the new place, centred there | |
+| 1209 | During a hands-free recording, drag the pill near the bottom center and drop it; then press Esc, then start a new dictation | The recording pill lands centred at the bottom with Cancel, bars and Stop; “Canceled” + **Undo** and the next recording show at the same place | |
 | 1210 | At a side edge, click and point in the clear area next to the pill | The clicks and the pointer reach the app below | |
 | 1211 | In a hands-free recording, mute the mic | Orange dots, “No sound from the mic”, Choose Mic… and Stop; × is gone (Esc still cancels) | |
 | 1212 | Dictate, fix a word in the pasted text, then dictate again | “Added “word”” with Undo shows after the second paste and stays for its time; the check does not replace it | |

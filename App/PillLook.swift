@@ -15,13 +15,11 @@ indirect enum PillLook: Equatable {
     case done
     /// Words with an optional fix button: a notice, Undo, an added word.
     case message(PillMessage)
-    /// Under the pointer while the owner drags the pill to another anchor: an empty circle, for the look under it.
-    case dragged(Self)
 
     /// Words, keys or the time show, so the pill stays horizontal at every anchor (`IndicatorPlacement.isVertical`).
     var hasWords: Bool {
         switch self {
-        case .idle, .processing, .done, .dragged: false
+        case .idle, .processing, .done: false
         case .hover, .message: true
         case .recording(let recording): recording.words != nil || recording.timedFrom != nil
         }
@@ -32,7 +30,6 @@ indirect enum PillLook: Equatable {
     func accessibilityLabel(at now: ContinuousClock.Instant, isClickable: Bool) -> String {
         switch self {
         case .idle, .hover: isClickable ? StatusText.pillClickLabel(.startsDictation) : StatusText.yieldsToRelease
-        case .dragged(let look): look.accessibilityLabel(at: now, isClickable: isClickable)
         case .recording(let recording):
             StatusText.recordingLabel(
                 isHandsFree: recording.isHandsFree, isCleaned: recording.isCleaned,
@@ -46,7 +43,7 @@ indirect enum PillLook: Equatable {
     /// The buttons the look shows, in order, as VoiceOver reads them.
     var buttonLabels: [String] {
         switch self {
-        case .idle, .hover, .processing, .done, .dragged: []
+        case .idle, .hover, .processing, .done: []
         case .recording(let recording):
             (recording.showsCancel ? [StatusText.cancelLabel] : [])
                 + (recording.words?.action.map { [$0.title] } ?? [])
@@ -96,7 +93,7 @@ extension PillLook {
         switch self {
         case .message(let message): message.action
         case .recording(let recording): recording.words?.action
-        case .idle, .hover, .processing, .done, .dragged: nil
+        case .idle, .hover, .processing, .done: nil
         }
     }
 }

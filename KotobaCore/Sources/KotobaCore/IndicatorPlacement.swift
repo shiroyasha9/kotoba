@@ -110,26 +110,21 @@ public enum IndicatorPlacement {
         return ScreenRect(x: x, y: y, width: width, height: height)
     }
 
-    /// The dragged pill's room: a circle `thickness` across, centred under the pointer.
-    public static func dragRoom(centeredAt point: ScreenPoint, thickness: Double) -> ScreenRect {
-        ScreenRect(x: point.x - thickness / 2, y: point.y - thickness / 2, width: thickness, height: thickness)
+    /// The pill's room while the owner drags it: the room it had, moved as far as the pointer moved since the press. The
+    /// pill keeps its look and its place under the pointer; nothing else shows.
+    public static func draggedRoom(_ room: ScreenRect, from press: ScreenPoint, to point: ScreenPoint) -> ScreenRect {
+        ScreenRect(x: room.x + point.x - press.x, y: room.y + point.y - press.y, width: room.width, height: room.height)
     }
 
-    /// The drop target at `anchor`: the circle the dragged pill is, where it lands there.
-    public static func dropTarget(at anchor: IndicatorAnchor, thickness: Double, in visibleFrame: ScreenRect)
-        -> ScreenRect
-    {
-        capsule(
-            width: thickness, height: thickness, at: anchor, thickness: thickness,
-            in: room(at: anchor, thickness: thickness, in: visibleFrame))
-    }
-
-    /// The anchor whose drop target center is nearest `point`.
+    /// The anchor nearest `point` (the dropped capsule's centre): the anchor whose pill centre line, a capsule
+    /// `thickness` across in its room, is nearest.
     public static func nearestAnchor(to point: ScreenPoint, thickness: Double, in visibleFrame: ScreenRect)
         -> IndicatorAnchor
     {
         func distance(to anchor: IndicatorAnchor) -> Double {
-            dropTarget(at: anchor, thickness: thickness, in: visibleFrame).mid.distance(to: point)
+            let room = room(at: anchor, thickness: thickness, in: visibleFrame)
+            return capsule(width: thickness, height: thickness, at: anchor, thickness: thickness, in: room).mid
+                .distance(to: point)
         }
         return IndicatorAnchor.allCases.min { distance(to: $0) < distance(to: $1) } ?? .bottomCenter
     }
