@@ -84,9 +84,10 @@ extension AppDelegate: StatusMenuActions {
         pasteSettingChanges.continuation.yield(change)
     }
 
-    /// "Open kotoba…": the window on the page it showed last, Home the first time.
+    /// "Open kotoba…": the window on the page it showed last, Home the first time; onboarding while it goes on, as a
+    /// Dock click.
     func openKotoba() {
-        mainWindow.show()
+        showApp()
     }
 
     func openSettings() {

@@ -147,12 +147,12 @@ struct PermissionsStep: View {
                 switch model.readiness.microphone {
                 case .allowed:
                     StatusLine("Allowed", .good)
+                // Plain, as System Settings' privacy rows: a default button draws in the accent colour, and the step's
+                // one prominent button is Continue once both grants arrive (owner QA 2, R2).
                 case .denied:
                     Button("Open System Settings…", action: model.openMicrophoneSettings)
-                        .keyboardShortcut(.defaultAction)
                 case .notAsked:
                     Button("Allow…") { Task { await model.allowMicrophone() } }
-                        .keyboardShortcut(.defaultAction)
                 }
             }
             PageRow(title: "Accessibility", subtitle: "So your shortcut works in every app, and kotoba can paste.") {
@@ -161,10 +161,7 @@ struct PermissionsStep: View {
                 if model.readiness.isAccessibilityAllowed {
                     StatusLine("Allowed", .good)
                 } else {
-                    // The default button once the microphone is done, so one button at a time stands out and Return goes
-                    // on to the next grant.
                     Button("Allow…", action: model.allowAccessibility)
-                        .keyboardShortcut(model.readiness.microphone == .allowed ? .defaultAction : nil)
                 }
             }
         } header: {

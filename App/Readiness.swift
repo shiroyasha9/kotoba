@@ -176,6 +176,13 @@ final class SetupFlow {
     /// Onboarding opens at launch until the owner clicks Done, unless kotoba is set up already (`AppPresence.window`).
     var needsOnboarding: Bool { !OnboardingController.isComplete && !readiness.isComplete }
 
+    /// The window a Dock click or "Open kotoba…" shows (`AppPresence.reopenWindow`): onboarding while it goes on.
+    var reopenWindow: AppPresence.LaunchWindow {
+        AppPresence.reopenWindow(
+            needsOnboarding: needsOnboarding, isOnboardingOpen: onboarding.isOpen,
+            isOnboardingDone: OnboardingController.isComplete)
+    }
+
     /// Onboarding where the owner left it, or at Welcome.
     func showOnboarding() {
         onboarding.show()

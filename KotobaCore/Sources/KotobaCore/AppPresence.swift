@@ -76,6 +76,16 @@ public struct AppPresence: Sendable, Equatable {
         return launch == .user ? .main : nil
     }
 
+    /// A Dock click, or opening kotoba again while it runs (Spotlight, `open -a`): onboarding while it goes on, also
+    /// minimised, so the main window never opens before it is done (owner QA 2, R5); else the main window. Onboarding
+    /// goes on while a launch would open it, and while its window is open and its Done was never clicked: on Try It
+    /// setup is complete, so a launch would not open it.
+    public static func reopenWindow(needsOnboarding: Bool, isOnboardingOpen: Bool, isOnboardingDone: Bool)
+        -> LaunchWindow
+    {
+        needsOnboarding || (isOnboardingOpen && !isOnboardingDone) ? .onboarding : .main
+    }
+
     /// The Dock badge: the number of dictations that wait for a retry; none at 0.
     public static func badge(waiting count: Int) -> String? {
         count > 0 ? String(count) : nil

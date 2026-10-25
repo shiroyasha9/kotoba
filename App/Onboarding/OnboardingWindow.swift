@@ -44,6 +44,9 @@ final class OnboardingController: NSObject, NSWindowDelegate {
         self.links = links
     }
 
+    /// The window is shown or minimised.
+    var isOpen: Bool { window != nil }
+
     /// Shows the window on `step`; nil resumes where the owner closed it, or starts at Welcome.
     func show(step: OnboardingStep? = nil) {
         WindowFront.activate()

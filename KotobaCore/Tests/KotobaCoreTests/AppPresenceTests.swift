@@ -114,6 +114,32 @@ struct AppPresenceTests {
         #expect(AppPresence.window(at: .login, needsOnboarding: true) == .onboarding)
     }
 
+    @Test func aReopenAfterOnboardingShowsTheMainWindow() {
+        #expect(
+            AppPresence.reopenWindow(needsOnboarding: false, isOnboardingOpen: false, isOnboardingDone: true) == .main)
+        // "Finish Setting Up kotoba…" opened onboarding again after its Done.
+        #expect(
+            AppPresence.reopenWindow(needsOnboarding: false, isOnboardingOpen: true, isOnboardingDone: true) == .main)
+    }
+
+    /// Owner QA 2, R5: onboarding was minimised on Try It (both grants and a key, so a launch would not open it) and a
+    /// Dock click opened the main window.
+    @Test func aReopenDuringOnboardingBringsBackOnboarding() {
+        #expect(
+            AppPresence.reopenWindow(needsOnboarding: false, isOnboardingOpen: true, isOnboardingDone: false)
+                == .onboarding)
+        // Closed before setup was done: a launch would open it, and so does a reopen.
+        #expect(
+            AppPresence.reopenWindow(needsOnboarding: true, isOnboardingOpen: false, isOnboardingDone: false)
+                == .onboarding)
+    }
+
+    /// Closed once setup was done but before Done: a launch would open the main window, and so does a reopen.
+    @Test func aReopenAfterOnboardingClosedWhenSetUpShowsTheMainWindow() {
+        #expect(
+            AppPresence.reopenWindow(needsOnboarding: false, isOnboardingOpen: false, isOnboardingDone: false) == .main)
+    }
+
     @Test func theBadgeCountsWaitingDictationsAndHidesAtZero() {
         #expect(AppPresence.badge(waiting: 0) == nil)
         #expect(AppPresence.badge(waiting: 1) == "1")

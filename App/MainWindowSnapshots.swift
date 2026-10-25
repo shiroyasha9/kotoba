@@ -35,10 +35,7 @@ extension MainWindow {
                 { MainView(panes: panes, selection: selection()) })
         }
         return Snapshots.window(named: name, contentSize: size) {
-            let window = window(showing: MainView(panes: panes, selection: selection()))
-            // Set here: the window sets it when the pane appears, and an offscreen window shows no view.
-            window.title = id.title
-            return window
+            window(showing: MainView(panes: panes, selection: selection()))
         } check: {
             overflow($0) ?? clipped(in: $0)
         }
@@ -185,7 +182,29 @@ extension MainWindow {
                 : nil
         }
         snapshot.hasImage = false
-        return [snapshot]
+        return [snapshot, titleCheck()]
+    }
+
+    /// The window is titled with the page it opens on, also when it opens again after a close (owner QA 2, R6: it
+    /// showed the app's name). History, not Home, so a title that only ever says Home fails too. No image.
+    private static func titleCheck() -> Snapshot {
+        var titles: [String] = []
+        var snapshot = Snapshot(name: "window-title") {
+            let panes = [Pane.home(.sample), Pane(id: .history) { AnyView(EmptyView()) }]
+            for _ in 0..<2 {
+                let window = window(
+                    showing: MainView(panes: panes, selection: Selection(panes: panes, showing: .history)))
+                Snapshots.settle()
+                titles.append(window.title)
+                window.close()
+            }
+            return NSView()
+        } check: { _ in
+            titles.allSatisfy { $0 == PaneID.history.title }
+                ? nil : "the window opened titled \(titles), not “\(PaneID.history.title)” each time"
+        }
+        snapshot.hasImage = false
+        return snapshot
     }
 }
 

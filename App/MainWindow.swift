@@ -127,7 +127,8 @@ final class MainWindow: NSObject, NSWindowDelegate, NSMenuItemValidation {
         self.selection = selection
         let window = Self.window(
             showing: MainView(panes: panes, selection: selection) { [weak self] pane in
-                // The window title follows the pane, as in System Settings; the next window opens at it.
+                // The window title follows the pane, as in System Settings (`window(showing:)` names the first); the
+                // next window opens at it.
                 self?.window?.title = pane.title
                 AppDefaults.lastPane = pane
             })
@@ -141,10 +142,13 @@ final class MainWindow: NSObject, NSWindowDelegate, NSMenuItemValidation {
         return window
     }
 
-    /// The window and its content, toolbar included; the snapshot run draws the same window.
+    /// The window and its content, toolbar included; the snapshot run draws the same window. Titled with the page it
+    /// opens on: the view's first `onShow` runs inside `NSWindow`'s init, before the caller holds the window to name it,
+    /// and the hosting controller does not take `navigationTitle` as the window title (owner QA 2, R6: every window
+    /// after the first opened titled with the app's name).
     static func window(showing view: MainView) -> NSWindow {
         let window = NSWindow(contentViewController: NSHostingController(rootView: view))
-        window.title = Install.displayName
+        window.title = view.selection.pane.current.title
         window.styleMask = [.titled, .closable, .miniaturizable, .resizable, .fullSizeContentView]
         window.toolbarStyle = .unified
         window.isReleasedWhenClosed = false

@@ -25,10 +25,19 @@ extension AppDelegate {
     }
 
     /// A Dock click or opening kotoba again while it runs (Spotlight, Raycast, Finder, `open -a`) shows the main window
-    /// in front. macOS sends the reopen with an activation, and with no window kotoba would be active and show nothing.
+    /// in front, or onboarding while it goes on, minimised too (`AppPresence.reopenWindow`). macOS sends the reopen with
+    /// an activation, and with no window kotoba would be active and show nothing.
     func applicationShouldHandleReopen(_ sender: NSApplication, hasVisibleWindows flag: Bool) -> Bool {
-        mainWindow.show()
+        showApp()
         return false
+    }
+
+    /// A reopen and "Open kotoba…" (the menu bar and Dock menus).
+    func showApp() {
+        switch setup.reopenWindow {
+        case .onboarding: setup.showOnboarding()
+        case .main: mainWindow.show()
+        }
     }
 
     /// The Dock icon's right-click menu: the menu bar menu's items, built from the same model on each click.
