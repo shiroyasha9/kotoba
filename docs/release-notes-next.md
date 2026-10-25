@@ -35,3 +35,4 @@
 - The sidebar is as wide as the one in System Settings. Before, it was narrower.
 - Quitting right after a paste now waits until your clipboard is back. Before, kotoba could quit with the dictation still on the clipboard in place of what you had copied.
 - When push to talk has its own shortcut, letting go just as the start sound plays no longer loses the recording. Before, the pill showed, then the recording was gone with nothing kept. Now it stops and pastes, as a longer hold does.
+- A long dictation with MAI-Transcribe-2 that goes again (a retry, or Transcribe Again in History) no longer fails past about 20 minutes. It now sends a small copy of the audio, as a first try does, so it fits up to about 105 minutes. A dictation still too long says “Too long for OpenRouter. Audio kept.”
