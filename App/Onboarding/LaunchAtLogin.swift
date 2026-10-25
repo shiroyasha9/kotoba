@@ -1,5 +1,6 @@
 import Foundation
 import ServiceManagement
+import SwiftUI
 
 /// Opens kotoba at login through `SMAppService.mainApp`. The onboarding Done step and the General pane read and set
 /// it. Linking ServiceManagement loads it at launch (measured +16-80 KB on a test binary; see memory-spike.md).
@@ -7,14 +8,16 @@ import ServiceManagement
 enum LaunchAtLogin {
     /// Why the setting is not in effect; the toggle shows `text` under it.
     enum Problem: Equatable {
-        /// Registered, but System Settings > General > Login Items still blocks it.
+        /// Registered, but System Settings > General > Login Items & Extensions (its name since macOS 26) still blocks
+        /// it.
         case needsApproval
         case failed
 
         var text: String {
             switch self {
-            case .needsApproval: "Allow kotoba in System Settings > General > Login Items."
-            case .failed: "Couldn’t change this setting. Try again in System Settings > General > Login Items."
+            case .needsApproval: "Allow kotoba in System Settings > General > Login Items & Extensions."
+            case .failed:
+                "Couldn’t change this setting. Try again in System Settings > General > Login Items & Extensions."
             }
         }
     }
@@ -56,5 +59,21 @@ enum LaunchAtLogin {
 
     static func openLoginItemsSettings() {
         SMAppService.openSystemSettingsLoginItems()
+    }
+}
+
+/// The footnote under the "Open at login" switch when its setting is not in effect: what is wrong, and a link to the
+/// pane that fixes it, in the footnote's own size, as System Settings' "Learn More…" under a group. General and
+/// onboarding's Ready show it the same way (qa1-review 6).
+struct LoginItemFootnote: View {
+    let problem: LaunchAtLogin.Problem
+
+    var body: some View {
+        VStack(alignment: .leading) {
+            Text(problem.text)
+            Button("Open Login Items & Extensions…", action: LaunchAtLogin.openLoginItemsSettings)
+                .buttonStyle(.link)
+        }
+        .font(.subheadline)
     }
 }
