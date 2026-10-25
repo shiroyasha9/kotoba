@@ -207,7 +207,8 @@ private struct HomePage: View {
             isTranscribingAgain: model.activity.transcribingAgain.contains(record.id))
     }
 
-    /// The dictation's time, after a warning when the owner should act (a retry, a silent mic), as History marks it.
+    /// When the dictation was (the time today, the day before), after a warning when the owner should act (a retry, a
+    /// silent mic), as History marks it. Home has no day titles, so a time alone would read as today's.
     private func time(of record: DictationRecord) -> some View {
         HStack {
             if let status = status(of: record), status.isProblem {
@@ -215,7 +216,7 @@ private struct HomePage: View {
                     .foregroundStyle(.orange)
                     .accessibilityLabel(status.title)
             }
-            Text(record.createdAt.formatted(date: .omitted, time: .shortened))
+            Text(model.when(record))
                 .monospacedDigit()
         }
     }

@@ -50,7 +50,7 @@ final class HomeModel {
     private let source: Source?
     /// Nil for snapshots.
     private let reads: Reads?
-    /// Which chart day is today.
+    /// Which chart day is today, and what the rows' dates count from.
     private let now: @MainActor () -> Date
     /// The last Copy or Paste Again, which ends at once or within `PasteAgain`'s bound; the next one replaces it.
     @ObservationIgnored private var sending: Task<Void, Never>?
@@ -85,6 +85,12 @@ final class HomeModel {
         reader.value?.insights.days.last.flatMap {
             Calendar.current.isDate($0.start, inSameDayAs: now()) ? $0.words : nil
         } ?? 0
+    }
+
+    /// When a dictation was, as Mail dates its rows: the time today, "Yesterday", the weekday within the week, the
+    /// date before (`DayText.row`).
+    func when(_ record: DictationRecord) -> String {
+        DayText.row(of: record.createdAt, now: now())
     }
 
     /// The history was written: a shown Home reads again, the rows alone when the write left the figures as they were

@@ -33,8 +33,16 @@ extension HomeModel {
         sample(Array(HistoryController.sampleRows().drop(while: \.hasText)))
     }
 
+    /// How long before `Snapshots.sampleNow` each of the five was, so the Earlier rows show each kind of date: a time
+    /// today, "Yesterday", a weekday and a date.
+    private static let sampleMinutesAgo: [Double] = [3, 40, 60 * 26, 60 * 24 * 3, 60 * 24 * 15]
+
     private static func sample(_ rows: [DictationRecord] = HistoryController.sampleRows()) -> HomeModel {
-        let recent = Array(rows.prefix(recentCount))
+        let recent = zip(rows.prefix(recentCount), sampleMinutesAgo).map { row, minutesAgo in
+            var row = row
+            row.createdAt = Snapshots.sampleNow - minutesAgo * 60
+            return row
+        }
         return HomeModel(
             readiness: .sample(), chords: HotkeyChords(defaults: nil),
             figures: Figures(
