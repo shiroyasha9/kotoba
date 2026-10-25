@@ -27,10 +27,10 @@ extension HomeModel {
         sample(HistoryController.sampleRows().filter(\.hasText))
     }
 
-    /// The newest dictation was not transcribed: the card says so, and only what can still be done is on.
+    /// The newest dictation was not transcribed and waits for a retry: the card says so and offers Retry alone. The
+    /// rows from the first one with no text on, so they stay newest first, as the store reads them.
     static var sampleFailed: HomeModel {
-        let rows = HistoryController.sampleRows()
-        return sample(rows.filter { !$0.hasText } + rows.filter(\.hasText))
+        sample(Array(HistoryController.sampleRows().drop(while: \.hasText)))
     }
 
     private static func sample(_ rows: [DictationRecord] = HistoryController.sampleRows()) -> HomeModel {

@@ -29,6 +29,8 @@ final class HomeModel {
         var copy: @MainActor (String) async -> Void
         /// Paste Again (`PasteAgain`): false when nothing was pasted and the text is on the clipboard.
         var paste: @MainActor (String, DictationID) async -> Bool
+        /// Retry on a dictation whose audio waits for one, as History's (`DictationPipeline.retry`).
+        var retry: @MainActor (Set<DictationID>) async -> Void
         /// Opens the Fix window on the last dictation.
         var fixLast: @MainActor () -> Void
         /// "Finish Setting Up kotoba…": onboarding on the first missing step, or the Speech pane.
@@ -109,6 +111,16 @@ final class HomeModel {
                 isPasteFailureShown = true
             }
         }
+    }
+
+    /// A dictation whose audio waits for a retry, and that is not being sent now.
+    func canRetry(_ record: DictationRecord) -> Bool {
+        reader.value?.retryable.contains(record.id) == true && !activity.inFlight.contains(record.id)
+    }
+
+    func retry(_ record: DictationRecord) {
+        guard let source, canRetry(record) else { return }
+        sending = Task { await source.retry([record.id]) }
     }
 
     func fixLast() {

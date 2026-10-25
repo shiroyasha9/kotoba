@@ -138,17 +138,32 @@ private struct HomePage: View {
                         Text(status(of: record)?.title ?? "No text")
                             .foregroundStyle(.secondary)
                     }
-                    HStack {
-                        Button("Fix…", action: model.fixLast)
-                            .disabled(!isFixable)
-                        Spacer()
-                        Button("Copy") { model.copy(record) }
-                            .disabled(!record.hasText)
-                        Button("Paste Again") { model.pasteAgain(record) }
-                            .disabled(!model.canPasteAgain(record))
-                    }
+                    actions(for: record, isFixable: isFixable)
                 }
                 .inRowTextColumn()
+            }
+        }
+    }
+
+    /// Only what can be done with this dictation, as System Settings shows a disabled control only where its action
+    /// can come back (qa1-review 9): its text's actions (Paste Again waits while a dictation is sent), Retry when its
+    /// audio waits for one (off while it is sent), or none.
+    @ViewBuilder private func actions(for record: DictationRecord, isFixable: Bool) -> some View {
+        if record.hasText {
+            HStack {
+                if isFixable {
+                    Button("Fix…", action: model.fixLast)
+                }
+                Spacer()
+                Button("Copy") { model.copy(record) }
+                Button("Paste Again") { model.pasteAgain(record) }
+                    .disabled(!model.canPasteAgain(record))
+            }
+        } else if model.reader.value?.retryable.contains(record.id) == true {
+            HStack {
+                Spacer()
+                Button("Retry") { model.retry(record) }
+                    .disabled(!model.canRetry(record))
             }
         }
     }
