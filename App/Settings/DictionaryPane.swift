@@ -191,7 +191,8 @@ extension DictionaryPane {
             let learnedCount = preview.rules.count { learnedFinds.contains($0.find) }
             let learned =
                 learnedCount > 0
-                ? ", including \(StatusText.counted(learnedCount, "correction")) Wispr learned from your edits" : ""
+                ? ", including \(StatusText.counted(learnedCount, "correction")) Wispr Flow learned from your edits"
+                : ""
             var lines = [
                 preview.isEmpty
                     ? "Every word in Wispr Flow’s dictionary is already in kotoba."

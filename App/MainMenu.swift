@@ -102,3 +102,11 @@ final class MainMenu: NSObject, NSMenuDelegate {
         return edit
     }
 }
+
+extension MainMenu {
+    /// The main menu as text (`NSMenu.outline`), for snapshot runs: with the Dictation menu the app always has, its items
+    /// off while History is not shown.
+    static func outline(_ updates: MenuModel.Updates) -> String {
+        MainMenu(target: nil, dictation: HistoryMenu { nil }.menu) { updates }.menu.outline()
+    }
+}
