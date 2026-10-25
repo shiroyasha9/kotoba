@@ -123,7 +123,7 @@ struct PageSheet<Content: View>: View {
 /// Its one subview at the subview's own ideal height, kept within `range`, in the same layout pass: a form takes all the
 /// height it is offered, and a height measured after the first layout (`onScrollGeometryChange`) came a run loop turn
 /// late, so a sheet opened, and was drawn, at its smallest height. Custom: SwiftUI has no "ideal height, clamped" frame.
-private struct IdealHeight: Layout {
+struct IdealHeight: Layout {
     let range: ClosedRange<CGFloat>
 
     init(within range: ClosedRange<CGFloat>) {
