@@ -102,11 +102,15 @@ private struct ListSample: View {
                 ForEach(1...6, id: \.self) { Text("Dictation \($0)") }
             }
         } pinned: {
-            PageHeader(page: .history, summary: "Every dictation, newest first.")
-            PageRow(title: "Keep audio", subtitle: "For Retry and Play. The text always stays.") {
-                Text("7 Days").foregroundStyle(.secondary)
+            Section {
+                PageHeader(page: .history, summary: "Every dictation, newest first.")
             }
-            PageSearchField(text: $search, prompt: "Search")
+            Section {
+                PageRow(title: "Keep audio", subtitle: "For Retry and Play. The text always stays.") {
+                    Text("7 Days").foregroundStyle(.secondary)
+                }
+            }
         }
+        .pageSearch(text: $search, prompt: "Search")
     }
 }

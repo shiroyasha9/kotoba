@@ -42,6 +42,9 @@ enum PageMetrics {
 
     // MARK: Page
 
+    /// The most a `PageList`'s pinned cards take: half the smallest window, so its rows always have room.
+    static let pinnedMaxHeight = minimumWindowSize.height / 2
+
     /// The widest the content column gets; a wider window adds margin on both sides. The form keeps its own inset
     /// inside it, so sections are 520 pt wide at most: about 80 characters of body text per line (measured in the
     /// Home snapshot at 6.2 pt a character), near the usual 45-75 for reading. System Settings keeps its sections near
