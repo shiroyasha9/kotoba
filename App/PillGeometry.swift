@@ -30,7 +30,7 @@ enum PillGeometry {
     /// Room around the glass in its window, so the shadow the glass draws is not cut off at the window edge.
     static let shadowMargin: CGFloat = 16
 
-    /// The level's bars: the waveform's last 0.9 s, one bar per level event.
+    /// The level's bars: each shows the live level with its own drifting weight.
     static let barCount = 9
     /// A bar's thickness and its shortest length: a dot at silence.
     static let barThickness: CGFloat = 3
