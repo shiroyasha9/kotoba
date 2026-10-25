@@ -84,7 +84,7 @@ UI text in this list is the text in the code at the phase 2 gate (2026-10-15). I
 |---|---|---|---|
 | 43 | With no saved position, start a dictation | A horizontal pill at the bottom center of the screen with the focused window, just above the Dock; never under the Dock, the menu bar or the notch | |
 | 44 | Look at the "Listening" pill, then a state with longer text | "Listening" is about 170 pt wide; longer text makes the pill wider, up to 360 pt | |
-| 45 | While the pill shows, start to drag it | The pill itself moves with the pointer, in its look (bars, Cancel and Stop, or its words), under the point you took it by; no circle, no empty capsule and no other shape shows anywhere | |
+| 45 | While the pill shows, start to drag it | The pill itself moves with the pointer, in its look (bars, Cancel and Stop, or its words), under the point you took it by; no circle and no empty capsule. A faint glass bar shows at bottom center (40×8) and standing at the left and right edges (8×40), the one nearest the pill tinted; they go at the drop | |
 | 46 | Drag it to the left edge and release | It snaps to the left edge with a short animation; "Listening" stands vertical (dot over a level bar) | |
 | 47 | Drag it to the right edge and release; stop the dictation | It snaps to the right edge; "Transcribing" stands vertical (dot over a spinner) | |
 | 48 | At a side edge, press Esc during a recording | "Canceled" + **Undo** shows as a horizontal pill at mid-height on that edge | |

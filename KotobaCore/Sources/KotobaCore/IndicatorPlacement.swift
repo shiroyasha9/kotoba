@@ -116,15 +116,23 @@ public enum IndicatorPlacement {
         ScreenRect(x: room.x + point.x - press.x, y: room.y + point.y - press.y, width: room.width, height: room.height)
     }
 
-    /// The anchor nearest `point` (the dropped capsule's centre): the anchor whose pill centre line, a capsule
-    /// `thickness` across in its room, is nearest.
+    /// The guide at `anchor` while the owner drags the pill: the idle bar where it sits there, 8x40 at a side edge, a
+    /// capsule as every look but the check (owner QA 4, U3).
+    public static func guide(at anchor: IndicatorAnchor, thickness: Double, in visibleFrame: ScreenRect)
+        -> ScreenRect
+    {
+        let isVertical = isVertical(at: anchor, hasWords: false)
+        return capsule(
+            width: isVertical ? idleBarThickness : idleBarLength, height: isVertical ? idleBarLength : idleBarThickness,
+            at: anchor, thickness: thickness, in: room(at: anchor, thickness: thickness, in: visibleFrame))
+    }
+
+    /// The anchor whose guide's centre is nearest `point` (the dropped capsule's centre).
     public static func nearestAnchor(to point: ScreenPoint, thickness: Double, in visibleFrame: ScreenRect)
         -> IndicatorAnchor
     {
         func distance(to anchor: IndicatorAnchor) -> Double {
-            let room = room(at: anchor, thickness: thickness, in: visibleFrame)
-            return capsule(width: thickness, height: thickness, at: anchor, thickness: thickness, in: room).mid
-                .distance(to: point)
+            guide(at: anchor, thickness: thickness, in: visibleFrame).mid.distance(to: point)
         }
         return IndicatorAnchor.allCases.min { distance(to: $0) < distance(to: $1) } ?? .bottomCenter
     }

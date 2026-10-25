@@ -66,6 +66,15 @@ struct IndicatorPlacementTests {
         #expect(dragged == ScreenRect(x: 516, y: 384, width: 360, height: 36))
     }
 
+    @Test func eachGuideIsTheIdleBarAtItsAnchorNeverACircle() {
+        func guide(_ anchor: IndicatorAnchor) -> ScreenRect {
+            IndicatorPlacement.guide(at: anchor, thickness: Self.thickness, in: Self.visible)
+        }
+        #expect(guide(.bottomCenter) == ScreenRect(x: 736, y: 108.25, width: 40, height: 8))
+        #expect(guide(.left) == ScreenRect(x: 26.25, y: 472.5, width: 8, height: 40))
+        #expect(guide(.right) == ScreenRect(x: 1477.75, y: 472.5, width: 8, height: 40))
+    }
+
     struct DropRow: Sendable, CustomTestStringConvertible {
         let name: String
         let point: ScreenPoint

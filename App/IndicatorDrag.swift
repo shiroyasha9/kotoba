@@ -69,40 +69,123 @@ extension IndicatorPanel {
 
 // MARK: Drag
 
+/// The guides shown while the owner drags the pill: at each anchor the idle bar where it sits there, a faint clear
+/// glass capsule, the nearest one tinted (owner QA 4, U3: the guides match the pill's shape, never a circle). Each is
+/// its own panel, never on the pill's glass. They are made when a drag starts and closed when it ends, so idle holds
+/// none.
+@MainActor
+final class DropGuides {
+    let screen: NSScreen
+    private var guides: [IndicatorAnchor: (panel: NSPanel, glass: NSGlassEffectView)] = [:]
+    /// The tinted guide; a drag event that keeps it changes nothing.
+    private var nearest: IndicatorAnchor?
+
+    init(on screen: NSScreen, below pill: NSPanel) {
+        self.screen = screen
+        for anchor in IndicatorAnchor.allCases {
+            let frame = Self.frame(at: anchor, on: screen)
+            let glass = Self.glass(size: frame.size)
+            let panel = IndicatorPanel.makeFloatingPanel(holding: glass, frame: frame)
+            panel.ignoresMouseEvents = true
+            panel.alphaValue = Self.alpha(isNearest: false)
+            panel.orderFrontRegardless()
+            guides[anchor] = (panel, glass)
+        }
+        // The guides sit under the pill at the same window level.
+        pill.orderFrontRegardless()
+    }
+
+    /// The guide's frame at `anchor` on `screen`: the idle bar there.
+    static func frame(at anchor: IndicatorAnchor, on screen: NSScreen) -> NSRect {
+        NSRect(
+            IndicatorPlacement.guide(
+                at: anchor, thickness: Double(PillGeometry.height), in: ScreenRect(screen.visibleFrame)))
+    }
+
+    /// A guide's glass: the pill's capsule shape, clear.
+    static func glass(size: NSSize) -> NSGlassEffectView {
+        let glass = CapsuleGlass(frame: NSRect(origin: .zero, size: size))
+        glass.style = .clear
+        return glass
+    }
+
+    static func tint(_ glass: NSGlassEffectView, isNearest: Bool) {
+        glass.tintColor = isNearest ? .controlAccentColor : nil
+    }
+
+    static func alpha(isNearest: Bool) -> CGFloat {
+        isNearest ? 0.9 : 0.6
+    }
+
+    func highlight(_ nearest: IndicatorAnchor) {
+        guard nearest != self.nearest else { return }
+        self.nearest = nearest
+        for (anchor, guide) in guides {
+            let isNearest = anchor == nearest
+            Self.tint(guide.glass, isNearest: isNearest)
+            guide.panel.alphaValue = Self.alpha(isNearest: isNearest)
+        }
+    }
+
+    func close() {
+        for guide in guides.values {
+            guide.panel.close()
+        }
+        guides = [:]
+    }
+}
+
 extension IndicatorPanel {
-    /// A drag of the pill: the press it began from and the window's frame then.
+    /// A drag of the pill: the press it began from, the window's frame then, and the guides on the screen under the
+    /// pill now.
     struct Drag {
         let press: NSPoint
         let frame: NSRect
+        var guides: DropGuides
     }
 
-    /// The pill itself moves with the pointer, in its look: no other shape, window or marker shows.
+    /// The pill itself moves with the pointer, in its look; the guides show where it can land.
     func beginDrag(from press: NSPoint) {
-        drag = Drag(press: press, frame: panel.frame)
+        guard let screen = screen ?? NSScreen.focused else { return }
+        drag = Drag(press: press, frame: panel.frame, guides: DropGuides(on: screen, below: panel))
         moveDrag(to: NSEvent.mouseLocation)
     }
 
-    /// The window keeps its size, so the pill's layout and glass do not change while it moves.
+    /// The window keeps its size, so the pill's layout and glass do not change while it moves. The guides follow the
+    /// screen under the pill's centre, and the one it would snap to is tinted.
     func moveDrag(to point: NSPoint) {
-        guard let drag else { return }
+        guard var drag else { return }
         let room = IndicatorPlacement.draggedRoom(
             ScreenRect(drag.frame), from: ScreenPoint(drag.press), to: ScreenPoint(point))
         panel.setFrameOrigin(NSPoint(x: room.x, y: room.y))
+        let centre = capsuleCentre
+        if let under = NSScreen.screens.first(where: { $0.frame.contains(centre) }), under != drag.guides.screen {
+            drag.guides.close()
+            drag.guides = DropGuides(on: under, below: panel)
+            self.drag = drag
+        }
+        drag.guides.highlight(nearestAnchor(to: centre, on: drag.guides.screen))
     }
 
-    /// The pill snaps to the anchor nearest its capsule's centre, on the screen that holds that centre, and saves it;
-    /// every later pill shows there. Without a point (the pill hid during the drag) the drag only ends.
+    /// The pill snaps to the anchor nearest its capsule's centre, on the guides' screen, and saves it; every later pill
+    /// shows there. Without a point (the pill hid during the drag) the drag only ends. The guides close either way.
     func endDrag(at point: NSPoint? = nil) {
-        guard drag != nil else { return }
-        drag = nil
+        guard let drag else { return }
+        drag.guides.close()
+        self.drag = nil
         guard point != nil else { return }
+        screen = drag.guides.screen
+        anchor = nearestAnchor(to: capsuleCentre, on: drag.guides.screen)
+    }
+
+    /// The pill's capsule's centre on the screen.
+    private var capsuleCentre: NSPoint {
         let capsule = panel.convertToScreen(pill.convert(pill.capsuleFrame, to: nil))
-        let centre = NSPoint(x: capsule.midX, y: capsule.midY)
-        if let dropScreen = NSScreen.screens.first(where: { $0.frame.contains(centre) }) {
-            screen = dropScreen
-        }
-        guard let screen else { return }
-        anchor = IndicatorPlacement.nearestAnchor(
-            to: ScreenPoint(centre), thickness: Double(PillGeometry.height), in: ScreenRect(screen.visibleFrame))
+        return NSPoint(x: capsule.midX, y: capsule.midY)
+    }
+
+    private func nearestAnchor(to point: NSPoint, on screen: NSScreen) -> IndicatorAnchor {
+        IndicatorPlacement.nearestAnchor(
+            to: ScreenPoint(point), thickness: Double(PillGeometry.height), in: ScreenRect(screen.visibleFrame))
     }
 }
