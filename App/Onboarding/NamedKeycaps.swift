@@ -75,8 +75,9 @@ struct NamedKeycaps: View {
 /// column as wide as the chord's widest name, "command" spread ⌃⌥⌘ twice as wide as ⌥⇧S). The gap is the one at which
 /// the two widest modifier names ("control", "command") stay a text space apart under two neighbouring keys, so any
 /// two modifiers fit; a pair moves further apart only when its own names need it ("right control", "right option").
-/// The names may run past the last key by as much as the widest modifier name does, so the last key ends at one x
-/// before the button beside it in every row, and the first name never runs into the row's text.
+/// The names may run past the last key by as much as the widest modifier name does, and no further: a longer last name
+/// ("right option") moves left by the rest, so the last key ends at one x before the button beside it in every row
+/// (owner QA 4). The first name never runs into the row's text.
 struct KeyColumns: Layout {
     /// A keycap starts a column; a name under it follows it; a reference is a hidden modifier name.
     enum Kind {
@@ -121,27 +122,32 @@ struct KeyColumns: Layout {
         let widest = references.map { sizes[$0].width }.sorted(by: >)
         let keyGap = max(keySpacing, widest.count > 1 ? (widest[0] + widest[1]) / 2 + nameSpacing - side : 0)
         let nameWidth = { (column: (key: Int, name: Int?)) in column.name.map { sizes[$0].width } ?? 0 }
+        let last = columns[columns.count - 1]
+        // How far a name may run past the last key, and how far left the last name moves to stay within it.
+        let overhang = max((widest.first ?? 0) - side, 0) / 2
+        let lastShift = max((nameWidth(last) - sizes[last.key].width) / 2 - overhang, 0)
 
-        var centre = max(sizes[first.key].width, nameWidth(first)) / 2
+        // A one-key chord's name moves left too: the view starts where it does.
+        var centre = max(sizes[first.key].width / 2, nameWidth(first) / 2 + (columns.count == 1 ? lastShift : 0))
         var namesHeight: CGFloat = 0
         for (offset, column) in columns.enumerated() {
             if offset > 0 {
                 let previous = columns[offset - 1]
                 var step = (sizes[previous.key].width + sizes[column.key].width) / 2 + keyGap
                 if previous.name != nil, column.name != nil {
-                    step = max(step, (nameWidth(previous) + nameWidth(column)) / 2 + nameSpacing)
+                    let shift = offset == columns.count - 1 ? lastShift : 0
+                    step = max(step, (nameWidth(previous) + nameWidth(column)) / 2 + nameSpacing + shift)
                 }
                 centre += step
             }
             frames[column.key].origin = CGPoint(x: centre - sizes[column.key].width / 2, y: 0)
             if let name = column.name {
                 let top = side + spacing(subviews, column.key, name, .vertical)
-                frames[name].origin = CGPoint(x: centre - sizes[name].width / 2, y: top)
+                let shift = offset == columns.count - 1 ? lastShift : 0
+                frames[name].origin = CGPoint(x: centre - sizes[name].width / 2 - shift, y: top)
                 namesHeight = max(namesHeight, top + sizes[name].height)
             }
         }
-        let last = columns[columns.count - 1]
-        let overhang = max((widest.first ?? 0) - side, nameWidth(last) - sizes[last.key].width, 0) / 2
         let width = centre + sizes[last.key].width / 2 + overhang
         return (frames, CGSize(width: width, height: max(side, namesHeight)))
     }
