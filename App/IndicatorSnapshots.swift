@@ -212,13 +212,20 @@ extension IndicatorPanel {
     }
 
     /// The pill showing `sample` at `anchor`, in a view the size of its capsule (at least as thick as the capsule), after
-    /// half a second of speech levels, so the bars show their weights at a speaking level, not one flat row.
+    /// half a second of speech levels, so the bars show their weights at a speaking level, not one flat row. Its clock is
+    /// held a quarter into the loading light's loop, so a loading look shows the light under the middle dot
+    /// (`IndicatorMotion.light`), not at the loop's start against the rim's end.
     private static func pill(showing sample: Sample, at anchor: IndicatorAnchor) -> PillView {
         let pill = PillView(frame: .zero)
         pill.anchor = anchor
         pill.isClickable = sample.content.click != nil
         pill.toolTip = sample.content.toolTip
+        pill.wantsLayer = true
+        pill.layer?.speed = 0
+        let start = CACurrentMediaTime()
+        pill.layer?.timeOffset = start
         pill.look = timedNow(sample.content.look)
+        pill.layer?.timeOffset = start + IndicatorMotion.gather + IndicatorMotion.loop / 4
         for level in [0.3, 0.6, 0.9, 0.7, 0.8] where !sample.content.look.isProcessing {
             pill.level = sample.isSilent ? 0 : level
         }
