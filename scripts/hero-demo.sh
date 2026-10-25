@@ -1,8 +1,8 @@
 #!/bin/zsh
 # Encodes the hero demo's frames (`kotoba --hero-demo <folder>`, App/HeroDemoSnapshots.swift) for the site: for light
 # and dark, a looping H.264 MP4 (every browser) and an AV1 WebM (smaller, where supported), muted, and the first frame as
-# the poster (the finished message, which the video starts and ends on). Text stays sharp at CRF 23 (H.264) and 30 (AV1);
-# the frames change only around the pill and the text, so each video is under 1 MB (three scenes, about 29 s).
+# the poster (the chat's recording, which the video starts and ends on). Text stays sharp at CRF 23 (H.264) and 30 (AV1);
+# the frames change only around the pill and the text, so each video is under 0.5 MB (three scenes, about 10 s).
 # Usage: scripts/hero-demo.sh <folder with light/ and dark/ frames>
 set -euo pipefail
 

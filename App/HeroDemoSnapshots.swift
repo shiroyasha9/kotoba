@@ -18,18 +18,19 @@ enum HeroDemo {
     static let scale: CGFloat = 2
     private static let windowFrame = NSRect(x: 90, y: 104, width: 500, height: 336)
 
-    /// The scenes, in turn: a chat reply, a prompt for a coding agent, an email.
+    /// The scenes, in turn: a chat reply, a prompt for a coding agent, an email. Each records for a short beat, not as
+    /// long as its words take to say: the demo shows what kotoba does, not how long the owner speaks.
     private static let scenes = [
         Scene(
             kind: .chat, dictation: "Almost. I fixed the copy on step two. Give me ten minutes.",
-            speech: Speech([Speech.Phrase(0.3, 0.85, 2), Speech.Phrase(1.1, 2.75, 8), Speech.Phrase(3.0, 3.9, 5)])),
+            speech: Speech([Speech.Phrase(0.25, 0.65, 2), Speech.Phrase(0.75, 1.2, 3)])),
         Scene(
             kind: .terminal,
             dictation: "Rename useAuthStore to useSession in src/auth/store.ts, then run the tests with --coverage.",
-            speech: Speech([Speech.Phrase(0.3, 3.0, 14), Speech.Phrase(3.3, 5.6, 11)])),
+            speech: Speech([Speech.Phrase(0.25, 1.2, 5)])),
         Scene(
             kind: .message, dictation: "Sounds good. Let’s move the review to Friday at three. I’ll bring the slides.",
-            speech: Speech([Speech.Phrase(0.3, 0.9, 2), Speech.Phrase(1.2, 3.1, 10), Speech.Phrase(3.4, 4.3, 5)])),
+            speech: Speech([Speech.Phrase(0.25, 0.55, 2), Speech.Phrase(0.65, 1.2, 3)])),
     ]
 
     private struct Scene {
@@ -44,40 +45,43 @@ enum HeroDemo {
         let isAnimated: Bool
     }
 
-    /// A scene's times, in seconds from the video's start.
+    /// A scene's times, in seconds from the timeline's start. The pill shows from the first frame of a scene to its
+    /// last: the window and the pill fade in together, recording, and fade out together on the check.
     private struct Beat {
-        /// The last scene's finished window fades out to the bare stage, and this one's, empty, fades in.
-        let fade: Double
-        /// The shortcut: the pill shows, recording.
+        /// The shortcut: the window fades in from the bare stage with the pill recording on it.
         let press: Double
         /// The stop tap: the bars sweep while the text is on its way.
         let stop: Double
         /// The text lands and the check shows.
         let paste: Double
-        /// The check's time is up: the pill hides.
-        let hide: Double
-        /// The finished window stays this long, then the next scene fades in.
+        /// The window and the check fade out to the bare stage.
+        let fadeOut: Double
+        /// The check's time is up (`PillTimer.done`), the pill is gone, and the next scene starts.
         let end: Double
 
-        static let fadeLength = 0.8
+        static let fadeLength = 0.25
 
-        init(after start: Double, speech: Speech) {
-            fade = start
-            press = start + Self.fadeLength + 0.9
+        init(at start: Double, speech: Speech) {
+            press = start
             stop = press + speech.length
             // From the stop tap to the paste: 0.4.6's measured median (README, "Benchmarks"), as the site claims it.
             paste = stop + 0.987
-            hide = paste + PillTimer.done.duration / .seconds(1)
-            end = hide + 1.6
+            end = paste + PillTimer.done.duration / .seconds(1)
+            fadeOut = end - Self.fadeLength
         }
     }
 
-    /// The video starts on the last scene's finished window, so the poster (its first frame) leads into the playback
-    /// and the loop has no jump.
-    private static let beats = scenes.reduce(into: [Beat]()) { beats, scene in
-        beats.append(Beat(after: beats.last?.end ?? 1.2, speech: scene.speech))
+    /// The three scenes and the first again: the video starts in the first scene's recording (`poster`), so its first
+    /// frame, the poster, shows kotoba at work, and it ends at the same moment of the first scene's repeat, so the loop
+    /// has no jump. Each scene starts on a frame, so the repeat's frames are the first scene's.
+    private static let beats = (scenes + scenes.prefix(1)).reduce(into: [Beat]()) { beats, scene in
+        let start = ((beats.last?.end ?? 0) * fps).rounded(.up) / fps
+        beats.append(Beat(at: start, speech: scene.speech))
     }
-    private static let length = beats.last?.end ?? 0
+    /// The loop's length: from the first scene's start to its repeat's.
+    private static let length = beats.last?.press ?? 0
+    /// The video's first frame on the timeline: the first scene's bars up on a stressed syllable, the caret on.
+    private static let poster = Int((0.6 * fps).rounded())
 
     /// Renders every frame to `<folder>/light/0000.png` and `<folder>/dark/0000.png` on, and exits.
     static func run(writingTo folder: URL) -> Never {
@@ -107,11 +111,13 @@ enum HeroDemo {
         let windows = scenes.map {
             DemoWindow($0.kind, dictation: $0.dictation, frame: windowFrame, appearance: appearance)
         }
-        let pill = DemoPill(on: stage, appearance: appearance)
+        // A pill of its own for each scene, as each dictation shows the pill anew: the bars' drift starts over, so the
+        // first scene's repeat draws as the first scene did.
+        let pills = beats.map { _ in DemoPill(on: stage, appearance: appearance) }
         let isDark = appearance.bestMatch(from: [.aqua, .darkAqua]) == .darkAqua
         let bareStage = try stageImage(isDark: isDark)
         // The pill appears recording; from there its glass flows to each next look.
-        var looks = beats.flatMap { beat in
+        var looks = beats.map { beat in
             [
                 LookChange(at: beat.press, look: look(.init(.recording(isLong: false))), isAnimated: false),
                 LookChange(at: beat.stop, look: look(.init(.transcribing)), isAnimated: true),
@@ -120,62 +126,43 @@ enum HeroDemo {
         }
         func renderFrame(_ index: Int) throws {
             let time = Double(index) / fps
-            var image = try desktop(at: time, in: windows, isDark: isDark, bareStage: bareStage)
-            if let scene = beats.lastIndex(where: { $0.press <= time }), time < beats[scene].hide {
-                let beat = beats[scene]
-                while let next = looks.first, next.at <= time {
-                    pill.show(next.look, at: next.at, isAnimated: next.isAnimated)
-                    looks.removeFirst()
-                }
-                if time < beat.stop {
-                    pill.view.level = scenes[scene].speech.level(at: time - beat.press)
-                }
-                pill.step(to: time)
-                image = try pill.drawn(over: image)
+            let scene = beats.lastIndex { $0.press <= time } ?? 0
+            let beat = beats[scene]
+            let pill = pills[scene]
+            while let next = looks[scene].first, next.at <= time {
+                pill.show(next.look, at: next.at, isAnimated: next.isAnimated)
+                looks[scene].removeFirst()
             }
-            let file = folder.appending(path: String(format: "%04d.png", index))
+            if time < beat.stop {
+                pill.view.level = scenes[scene % scenes.count].speech.level(at: time - beat.press)
+            }
+            pill.step(to: time)
+            // The caret blinks from the window's fade-in end, and again from the paste.
+            let isPasted = time >= beat.paste
+            let window = try windows[scene % scenes.count].onStage(
+                isPasted: isPasted,
+                showsCaret: Caret.isShown(at: time - (isPasted ? beat.paste : beat.press + Beat.fadeLength)),
+                isDark: isDark)
+            var image = try pill.drawn(over: window)
+            if time < beat.press + Beat.fadeLength {
+                let progress = (time - beat.press) / Beat.fadeLength
+                image = try blend(image, into: bareStage, opacity: UnitCurve.easeOut.value(at: progress))
+            } else if time >= beat.fadeOut {
+                let progress = min(1, (time - beat.fadeOut) / Beat.fadeLength)
+                image = try blend(image, into: bareStage, opacity: 1 - UnitCurve.easeIn.value(at: progress))
+            }
+            // The frames before the poster only bring the first pill to its state there.
+            guard index >= poster else { return }
+            let file = folder.appending(path: String(format: "%04d.png", index - poster))
             guard let png = NSBitmapImageRep(cgImage: image).representation(using: .png, properties: [:]) else {
                 throw DemoError.noBitmap
             }
             try png.write(to: file)
         }
-        for index in 0..<Int((length * fps).rounded()) {
+        for index in 0..<(poster + Int((length * fps).rounded())) {
             // Each frame's images and bitmap data go at its end, not at the end of the pass.
             try autoreleasepool { try renderFrame(index) }
         }
-    }
-
-    /// The windows at `time`, with no pill: the scene's window as it is then, or the change from one scene to the next.
-    private static func desktop(
-        at time: Double, in windows: [DemoWindow], isDark: Bool, bareStage: CGImage
-    ) throws -> CGImage {
-        /// Scene `index` finished at `time`, the caret blinking since the paste.
-        func finished(_ index: Int, at time: Double) throws -> CGImage {
-            try windows[index].onStage(
-                isPasted: true, showsCaret: Caret.isShown(at: time - beats[index].paste), isDark: isDark)
-        }
-        guard let scene = beats.lastIndex(where: { $0.fade <= time }) else {
-            return try finished(scenes.count - 1, at: time + length)
-        }
-        let beat = beats[scene]
-        let window = windows[scene]
-        if time >= beat.paste {
-            return try finished(scene, at: time)
-        }
-        guard time < beat.fade + Beat.fadeLength else {
-            let since = time - beat.fade - Beat.fadeLength
-            return try window.onStage(isPasted: false, showsCaret: Caret.isShown(at: since), isDark: isDark)
-        }
-        // The scene before's finished window fades out, then this one's empty window fades in: one window at a time,
-        // never two over each other.
-        let progress = (time - beat.fade) / (Beat.fadeLength / 2)
-        guard progress >= 1 else {
-            let before =
-                scene > 0 ? try finished(scene - 1, at: time) : try finished(scenes.count - 1, at: time + length)
-            return try blend(before, into: bareStage, opacity: 1 - UnitCurve.easeIn.value(at: progress))
-        }
-        let empty = try window.onStage(isPasted: false, showsCaret: true, isDark: isDark)
-        return try blend(empty, into: bareStage, opacity: UnitCurve.easeOut.value(at: progress - 1))
     }
 
     /// The pill's look for `state`, as the panel maps it.
@@ -261,7 +248,7 @@ private struct Speech {
 
     init(_ phrases: [Phrase]) {
         self.phrases = phrases
-        length = (phrases.last?.end ?? 0) + 0.3
+        length = (phrases.last?.end ?? 0) + 0.15
     }
 
     /// The syllables' loudness, in turn: stressed ones louder.
