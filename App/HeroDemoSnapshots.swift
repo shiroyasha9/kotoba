@@ -6,10 +6,9 @@ import SwiftUI
 /// terminal and into a message, one after the other, frame by frame, light and dark, at 2x, as PNG frames that `make
 /// hero-demo` encodes into a looping video. Everything in a frame is real AppKit as the window server draws it
 /// (`SnapshotCapture`): each window's title bar, toolbar, text and caret (`DemoWindow`), and the pill's glass, which
-/// refracts the frame under it. Offscreen the pill takes each look at once
-/// (`PillView.morph`), so the demo moves the glass with the pill's own spring and fades its items with the pill's
-/// timings, and steps the pill's Core Animation clock (the bars settling, the loading dots, the check drawing on) with the
-/// frames. Nothing shows on screen.
+/// refracts the frame under it. The pill runs its own look changes (`PillView.morph`) on the frames' clock (`DemoPill`):
+/// its glass's spring, its items coming and going, the bars settling, the loading dots and the check drawing on.
+/// Nothing shows on screen.
 @MainActor
 enum HeroDemo {
     static let fps = 30.0

@@ -3,32 +3,27 @@ import KotobaCore
 import SwiftUI
 
 /// The pill in its own window, as the panel has it, over a copy of the frame under it, so its glass refracts the
-/// frame. The demo moves its glass and fades its items between looks, and steps its Core Animation clock.
+/// frame. The pill runs its own look changes (`PillView.morph`) on the demo's clock, as the pill's clips do
+/// (`PillClips`): its layers' time and its glass's spring step with the demo.
 @MainActor
 final class DemoPill {
     let view = PillView(frame: .zero)
-    private let window: NSWindow
+    private let window: DemoPillWindow
     private let backdrop = NSView()
     /// The window on the stage, in points from the stage's bottom left.
     private let frame: NSRect
     /// The pill's Core Animation time at the demo's start; the demo's time runs on from here (`step`).
     private let clock = CACurrentMediaTime()
-    /// The last look change, while its glass and items still move.
-    private var change: Change?
-
-    private struct Change {
-        let at: Double
-        let move: PillView.GlassMove
-        let isCheck: Bool
-        let entering: [NSView]
-        let leaving: [NSView]
-    }
+    /// The demo's time now.
+    private var time: Double = 0
+    /// The glass's way since the last look change, while it still moves.
+    private var move: (at: Double, move: PillView.GlassMove)?
 
     init(on stage: NSRect, appearance: NSAppearance) {
         let room = NSRect(
             IndicatorPlacement.room(at: .bottomCenter, thickness: PillGeometry.height, in: ScreenRect(stage)))
         frame = IndicatorPanel.windowFrame(around: room)
-        window = NSWindow(contentRect: frame, styleMask: .borderless, backing: .buffered, defer: false)
+        window = DemoPillWindow(contentRect: frame, styleMask: .borderless, backing: .buffered, defer: false)
         window.isReleasedWhenClosed = false
         window.appearance = appearance
         backdrop.frame = NSRect(origin: .zero, size: frame.size)
@@ -36,60 +31,49 @@ final class DemoPill {
         window.contentView = backdrop
         view.frame = backdrop.bounds.insetBy(dx: PillGeometry.shadowMargin, dy: PillGeometry.shadowMargin)
         backdrop.addSubview(view)
-        // The pill's animations (the bars settling, the loading dots) run on the demo's clock, not the wall clock.
+        // The pill's animations (the bars settling, the loading dots, a look change) run on the demo's clock, not the
+        // wall clock; so does its glass. The view has no layer until it asks for one.
+        view.wantsLayer = true
         view.layer?.speed = 0
         view.levelsPerSecond = HeroDemo.fps
+        view.glassClock = { [weak self] move in
+            guard let self else { return }
+            self.move = (self.time, move)
+        }
     }
 
-    /// The pill takes `look` at the demo's `time`; animated, its glass flows there with the pill's spring and its items
-    /// fade as `PillView.morph` fades them. No item stays and moves in this demo's changes (the bars keep the centre),
-    /// so there is no slide.
+    /// The pill takes `look` at the demo's `time`; animated, it changes as on screen (`PillView.morph`), else it takes
+    /// the look at once.
     func show(_ look: PillLook, at time: Double, isAnimated: Bool) {
-        let places = view.stack.arrangedSubviews.map { ($0, view.stack.convert($0.frame, to: view.glassContent)) }
-        let from = view.glass.frame
         // The animations the look adds start at its time.
-        view.layer?.timeOffset = clock + time
+        setTime(time)
+        window.isPlaying = isAnimated
         view.look = look
-        // An item that faded out in an earlier change shows in full when a look takes it back.
-        for item in view.stack.arrangedSubviews {
-            item.alphaValue = 1
+        window.isPlaying = true
+        if !isAnimated {
+            move = nil
         }
-        if look == .done {
-            // Offscreen the check shows whole at once; it draws itself on at the demo's time.
-            view.check.show(false, animated: false, at: view.now)
-            view.check.show(true, animated: true, at: view.now)
-        }
-        guard isAnimated else {
-            change = nil
-            return
-        }
-        let shown = view.stack.arrangedSubviews
-        let leaving = places.filter { !shown.contains($0.0) }
-        for (item, place) in leaving {
-            view.park(item, at: place)
-        }
-        let spring = IndicatorMotion.spring(
-            from: ScreenRect(from), to: ScreenRect(view.glass.frame), reducesMotion: false)
-        change = Change(
-            at: time, move: PillView.GlassMove(from: from, to: view.glass.frame, spring: spring),
-            isCheck: look == .done,
-            entering: shown.filter { item in !places.contains { $0.0 === item } }, leaving: leaving.map(\.0))
     }
 
-    /// The pill at the demo's `time`: its clock there, its glass on the spring's way, its items fading.
+    /// The pill at the demo's `time`: its clock there, its glass on the spring's way.
     func step(to time: Double) {
-        view.layer?.timeOffset = clock + time
-        guard let change else { return }
-        let elapsed = time - change.at
-        view.glass.frame = change.move.frame(at: elapsed)
-        for item in change.leaving {
-            let length = IndicatorMotion.leaveLength(beforeCheck: change.isCheck)
-            item.alphaValue = 1 - UnitCurve.linear.value(at: min(1, elapsed / length))
+        setTime(time)
+        guard let move else { return }
+        CATransaction.begin()
+        CATransaction.setDisableActions(true)
+        view.glass.frame = move.move.frame(at: time - move.at)
+        CATransaction.commit()
+        if time - move.at > move.move.spring.swiftUI.settlingDuration {
+            self.move = nil
         }
-        for item in change.entering {
-            let fadeIn = (elapsed - IndicatorMotion.enterDelay(isBars: item is PillBars)) / IndicatorMotion.enterLength
-            item.alphaValue = UnitCurve.easeOut.value(at: min(1, max(0, fadeIn)))
-        }
+    }
+
+    private func setTime(_ time: Double) {
+        self.time = max(self.time, time)
+        CATransaction.begin()
+        CATransaction.setDisableActions(true)
+        view.layer?.timeOffset = clock + self.time
+        CATransaction.commit()
     }
 
     /// `image` with the pill drawn over it at its place.
@@ -111,4 +95,11 @@ final class DemoPill {
         guard let drawn = context.makeImage() else { throw HeroDemo.DemoError.noBitmap }
         return drawn
     }
+}
+
+/// The pill's window, never ordered in: while the demo plays it, the pill takes it as on screen and runs its look
+/// changes; a look the pill takes at once comes while it is not.
+private final class DemoPillWindow: NSWindow {
+    var isPlaying = false
+    override var isVisible: Bool { isPlaying }
 }
