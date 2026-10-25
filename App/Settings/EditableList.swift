@@ -2,8 +2,8 @@ import SwiftUI
 
 /// A list the owner edits inside a grouped form's section, as in System Settings > Login Items: a native list (a form
 /// row cannot be selected or dragged, a list row can) as tall as its rows measure, so it never scrolls inside the form,
-/// with Add (a menu, or a button with `add`) and Remove under it. Remove, the context menu and the Delete key remove the
-/// selected rows; with `edit`, a double click and the context menu's "Edit…" edit one. With no rows, `emptyText` shows
+/// with Add (a menu, or a button with `add`) and Remove under it, or no buttons when the page's Add is in the window
+/// toolbar (Dictionary). Remove, the context menu and the Delete key remove the selected rows; with `edit`, a double click and the context menu's "Edit…" edit one. With no rows, `emptyText` shows
 /// in place of the list. The Microphone, Cleanup and Dictionary pages use it.
 struct EditableList<Row: Identifiable, RowView: View, AddItems: View, Accessory: View>: View {
     let rows: [Row]
@@ -25,6 +25,8 @@ struct EditableList<Row: Identifiable, RowView: View, AddItems: View, Accessory:
     let addItems: () -> AddItems
     /// After the buttons, at the trailing edge.
     let accessory: () -> Accessory
+    /// False: no Add and Remove under the list.
+    private let showsButtons: Bool
 
     @State private var selection: Set<Row.ID> = []
     /// The rows as tall as the system draws them; the list takes this height.
@@ -36,7 +38,7 @@ struct EditableList<Row: Identifiable, RowView: View, AddItems: View, Accessory:
         move: (@MainActor (IndexSet, Int) -> Void)? = nil, add: (@MainActor () -> Void)? = nil,
         edit: (@MainActor (Row.ID) -> Void)? = nil,
         @ViewBuilder row: @escaping (Row) -> RowView, @ViewBuilder addItems: @escaping () -> AddItems,
-        @ViewBuilder accessory: @escaping () -> Accessory
+        @ViewBuilder accessory: @escaping () -> Accessory, showsButtons: Bool = true
     ) {
         self.rows = rows
         self.emptyText = emptyText
@@ -51,6 +53,7 @@ struct EditableList<Row: Identifiable, RowView: View, AddItems: View, Accessory:
         self.row = row
         self.addItems = addItems
         self.accessory = accessory
+        self.showsButtons = showsButtons
     }
 
     var body: some View {
@@ -59,7 +62,9 @@ struct EditableList<Row: Identifiable, RowView: View, AddItems: View, Accessory:
         } else {
             list
         }
-        buttons
+        if showsButtons {
+            buttons
+        }
     }
 
     private var list: some View {
@@ -140,16 +145,15 @@ extension EditableList where Accessory == EmptyView {
     }
 }
 
-extension EditableList where AddItems == EmptyView {
-    /// Add is a plain button: `add` opens what adds a row (Dictionary's sheet).
+extension EditableList where AddItems == EmptyView, Accessory == EmptyView {
+    /// No buttons under the list: the page's Add is in the window toolbar, and the Delete key and the context menu
+    /// remove rows, as in Passwords (Dictionary; owner QA 1, Q12).
     init(
-        rows: [Row], emptyText: String, addTitle: String, addHelp: String, removeTitle: String,
-        remove: @escaping @MainActor (Set<Row.ID>) -> Void, add: @escaping @MainActor () -> Void,
-        edit: (@MainActor (Row.ID) -> Void)? = nil, @ViewBuilder row: @escaping (Row) -> RowView,
-        @ViewBuilder accessory: @escaping () -> Accessory
+        rows: [Row], emptyText: String, removeTitle: String, remove: @escaping @MainActor (Set<Row.ID>) -> Void,
+        edit: @escaping @MainActor (Row.ID) -> Void, @ViewBuilder row: @escaping (Row) -> RowView
     ) {
         self.init(
-            rows: rows, emptyText: emptyText, addTitle: addTitle, addHelp: addHelp, removeTitle: removeTitle,
-            remove: remove, add: add, edit: edit, row: row, addItems: { EmptyView() }, accessory: accessory)
+            rows: rows, emptyText: emptyText, addTitle: "", addHelp: "", removeTitle: removeTitle, remove: remove,
+            edit: edit, row: row, addItems: { EmptyView() }, accessory: { EmptyView() }, showsButtons: false)
     }
 }

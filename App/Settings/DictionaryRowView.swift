@@ -42,10 +42,32 @@ struct DictionaryRowView: View {
             }
         }
         .onHover { isHovered = $0 }
+        // One element, as a Mail row reads: the words, the warning, “starred”, and Star or Unstar in the actions menu
+        // also while the star is hidden: no documented rule keeps a view at opacity 0 in VoiceOver's reach.
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel(spoken)
+        .accessibilityValue(isPinned ? "Starred" : "")
+        .accessibilityActions {
+            if sendsKeyterm {
+                Button(isPinned ? "Unstar" : "Star") { onPin(!isPinned) }
+            }
+        }
     }
 
-    /// Hidden, not removed, while the row is not hovered or starred: the row keeps its height and VoiceOver keeps the
-    /// button.
+    private var spoken: String {
+        let words =
+            !draft.isReplacing
+            ? draft.word
+            : draft.replacement.isEmpty
+                ? "\(draft.word), deleted from text" : "\(draft.word), replaced with \(draft.replacement)"
+        let note =
+            !sendsKeyterm && !draft.isReplacing
+            ? "too long to send to the speech model" : isNotSent ? "not sent with the last dictation" : nil
+        return [words, note].compactMap(\.self).joined(separator: ", ")
+    }
+
+    /// Hidden, not removed, while the row is not hovered or starred: the row keeps its height. VoiceOver stars from the
+    /// row's actions.
     private var star: some View {
         Button {
             onPin(!isPinned)

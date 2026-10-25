@@ -202,7 +202,7 @@ Rows from each agent's phase 2.5 work. The numbers continue the list above.
 | 116 | Click it again | Privacy & Security > Accessibility opens | |
 | 117 | Turn kotoba Dev on there | The step turns green within 1 s and stays until you click **Continue** | |
 | 118 | Key step: press ⌘V in the key field, then ⌘A | The key pastes, then all of it is selected; no beep | |
-| 119 | Press Return | Same as **Save**: the field goes; "sk-or-v1-…" and the last four characters of the key show with **Change…** and **Remove**; the result line shows the key check ("Key works" for a good key) | |
+| 119 | Press Return | Same as **Save**: the field goes; "sk-or-v1-…" and the last four characters of the key show with **Change…** and **Remove**; the result line shows the key check ("Connected" for a good key) | |
 | 120 | Click **Get a Key at OpenRouter…** | openrouter.ai/settings/keys opens | |
 | 121 | Key step: click **See Pricing…** | The pricing page of the current speech model's provider opens (OpenRouter: openrouter.ai/microsoft/mai-transcribe-2) | |
 | 122 | Key step: save a key with no credit | "This key has no credit. Add credit at OpenRouter." with **Add Credit…** | |
@@ -229,7 +229,7 @@ Rows from each agent's phase 2.5 work. The numbers continue the list above.
 | 138 | Look under the key row | **Get a Key…** and **See Pricing…** | |
 | 139 | Click **Get a Key…**, then **See Pricing…** | The browser opens OpenRouter's keys page, then the MAI-Transcribe-2 price page | |
 | 140 | Pick each speech model in turn and click **Get a Key…** and **See Pricing…** | OpenRouter, the xAI console and the Azure portal (keys), and each provider's price page open (sign in if asked) | |
-| 141 | Paste a valid key, press **Save** | "Checking the key…", then a green "Key works" | |
+| 141 | Paste a valid key, press **Save** | "Checking the key…", then a green "Connected" | |
 | 142 | Paste a wrong key (for example "sk-or-wrong"), press **Save** | "OpenRouter didn’t accept this key." in red, under "Key" | |
 | 143 | Save a key with no credit | "This key has no credit." with **Add Credit…**, which opens OpenRouter's credits page | |
 | 144 | Turn Wi-Fi off, save a key | "Couldn’t reach OpenRouter. The key is saved; kotoba checks it at your first dictation." | |
@@ -373,7 +373,7 @@ Rows from each agent's phase 2.5 work. The numbers continue the list above.
 | 253 | Settings > Microphone: drag the second mic above the first | A drop line shows while you drag; the order changes and stays after you close and open Settings | |
 | 254 | Settings > Microphone: no mic selected | **−** is dimmed; with every connected mic in the order, **+** is dimmed | |
 | 255 | Settings > Dictionary > **Import from Wispr Flow…**, then press Esc; again, then press Return | An alert (not a panel in the pane): Esc cancels and adds nothing; Return imports | |
-| 256 | Settings > Dictionary: select a word, click **−**; click **+** | The word is deleted; **+** opens the Add Word sheet | |
+| 256 | Settings > Dictionary: select a word, press Delete; click **+** in the window toolbar | The word is deleted; **+** opens the Add Word sheet | |
 | 257 | Fix Last Dictation…: click into the text, press ⌘A then type | The whole text is replaced; the box has no separate border inside the grouped box | |
 | 258 | Onboarding Done step: click each switch | Each switch changes; the two switches sit in one grouped box | |
 | 259 | Settings window toolbar | No sidebar toggle button; the sidebar cannot be hidden | |
@@ -904,9 +904,9 @@ Home, Activity and the window shell on the 0.5.0 page system (docs/research/ui-r
 | 1112 | Show **Activity**, close the window; open kotoba Dev again from Spotlight. Then with 0.4 having left the window on Insights or Usage, open it | It opens at Activity; a pane saved as Insights or Usage opens Activity too | |
 | 1170 | On **Speech**, click the **Grok via OpenRouter** row, dictate into TextEdit, then click **MAI-Transcribe-2 via OpenRouter** and dictate again | The check moves to the clicked row; each dictation is transcribed (History shows both); VoiceOver reads the checked row as selected | |
 | 1171 | On **Speech**, click **Advanced…**, click **MAI-Transcribe-2 via Azure**, click **Done**; then **Add Endpoint…**, type “abc” in the endpoint field, then a real https endpoint, and click **Done** without pressing Return | The page shows the Azure row checked, an Azure Key group and “Azure needs your endpoint”; “abc” shows the red hint; after Done the endpoint is saved (open **Advanced…** again: it is there) and the warning row goes | |
-| 1172 | On **Speech** with no key saved, paste a key with ⌘V, select it with ⌘A, click **Save**; then **Change…**, **Cancel**; then **Remove** and confirm | ⌘V and ⌘A work in the field; the masked key shows with “Key works”; Cancel keeps the key; Remove asks first, then shows the empty field | |
-| 1173 | On **Dictionary**, choose Edit > Find… (⌘F), type part of a word, then a word that is not there; clear the field | The cursor goes into the page's search field; the list narrows; “No words match …” shows; clearing brings every word back | |
-| 1174 | On **Dictionary**, click **+**, type a word (⌘V and ⌘A work), click **Add**; double-click a row, change it, **Save**; Control-click a row > **Edit…**; select two rows and press Delete | Add Word and Edit Word sheets open and save; the context menu edits; Delete removes both rows | |
+| 1172 | On **Speech** with no key saved, paste a key with ⌘V, select it with ⌘A, click **Save**; then **Change…**, **Cancel**; then **Remove** and confirm | ⌘V and ⌘A work in the field; the masked key shows with “Connected”; Cancel keeps the key; Remove asks first, then shows the empty field | |
+| 1173 | On **Dictionary**, choose Edit > Find… (⌘F), type part of a word, then a word that is not there; clear the field | The cursor goes into the search field in the window toolbar; the list narrows; “No words match …” shows; clearing brings every word back | |
+| 1174 | On **Dictionary**, click **+** in the window toolbar, type a word (⌘V and ⌘A work), click **Add**; double-click a row, change it, **Save**; Control-click a row > **Edit…**; select two rows and press Delete | Add Word and Edit Word sheets open and save; the context menu edits; Delete removes both rows | |
 | 1175 | On **Dictionary**, move the pointer over a word, click its star; move the pointer away; click the star again | The star shows on hover; a starred word keeps its yellow star without hover; the footer says how many words kotoba sends as hints; there is no Advanced… button | |
 | 1176 | With word suggestions waiting, look at the Dictionary sidebar row, then on **Dictionary** click **Add** on one, the × on another, then **Add All** | The sidebar row shows the count; each suggestion leaves the list; the count goes down to none | |
 | 1177 | On **Cleanup**, turn on **Every dictation in writing apps**, dictate “um so I think, uh, yes” into Notes; turn it off and dictate again | With it on the pasted text has no “um” or “uh”; with it off the text is as spoken | |
@@ -927,7 +927,7 @@ The status menu, the five onboarding steps and the Fix Last Dictation window (do
 | 1134 | On Allow Access, click the Microphone row's **Allow…**; the owner clicks Allow in the system prompt | The prompt shows; the row turns to “Allowed”; the Accessibility row's **Allow…** becomes the default button (in the accent colour); the window stays on Allow Access and Continue stays dimmed | |
 | 1135 | Click the Accessibility row's **Allow…**, then **Allow…** again; the owner turns kotoba Dev on in System Settings | The first click shows the system prompt, the second opens System Settings > Accessibility; the row turns to “Allowed” within about a second; Continue becomes the default button and Return presses it | |
 | 1136 | Close onboarding on Allow Access, quit and reopen kotoba Dev. Then quit, run `defaults write tech.teensy.kotoba.dev onboarding.step microphone` (a 0.4 step), reopen | It opens on Allow Access both times | |
-| 1137 | On the key step, paste a key with ⌘V, select it with ⌘A first; on Try It, dictate, then ⌘A and ⌘V in the field | ⌘A and ⌘V work in both fields; the key row shows the masked key and “Key works” under its name; Try It shows “It works.” | |
+| 1137 | On the key step, paste a key with ⌘V, select it with ⌘A first; on Try It, dictate, then ⌘A and ⌘V in the field | ⌘A and ⌘V work in both fields; the key row shows the masked key and “Connected” under its name; Try It shows “It works.” | |
 | 1138 | With Wispr Flow installed, go to Done; click **Import…**, then **Import** | Done has a “Wispr Flow dictionary” row; the alert lists what it adds; the row then says what it added and “Imported”. Without Wispr Flow (rename its folder in Application Support) there is no row | |
 | 1139 | Turn kotoba Dev off in Accessibility; click the pill's **Allow Pasting…**, then Home's **Allow Accessibility…** | Each opens onboarding on Allow Access | |
 | 1140 | With TextEdit in front, menu > **Fix…** (under Last Dictation); select a word, click **Add Selected Word** | The window opens in front of TextEdit, as wide as in 0.4; a green check line says “Added “word” to your dictionary.” | |
@@ -997,3 +997,6 @@ One glass capsule that changes shape (docs/research/ui-redesign.md, "Pill"). Sna
 | 1211 | In a hands-free recording, mute the mic | Orange dots, “No sound from the mic”, Choose Mic… and Stop; × is gone (Esc still cancels) | |
 | 1212 | Dictate, fix a word in the pasted text, then dictate again | “Added “word”” with Undo shows after the second paste and stays for its time; the check does not replace it | |
 | 1213 | Dictate for more than 10 minutes; open the menu bar menu | From 10:00 the time shows after the bars and counts up once a second; the menu's status line says “Still recording · 10 minutes” | |
+| 1214 | With VoiceOver on, move to a word on **Dictionary** (pointer away from it) and open the actions menu (VO-⌘-Space) | VoiceOver reads the word (and “starred” for a starred one); the menu has **Star** or **Unstar**, and it works while the star is hidden | |
+| 1215 | On **Dictionary** with more words than the window shows, scroll to the end of the list | **+**, **Import from Wispr Flow…** (when Wispr Flow is installed) and **Search words** stay in the window toolbar; the list has no **+** or **−** under it; pointing at each toolbar button shows its name | |
+| 1216 | On **Dictionary**, click **Import from Wispr Flow…** in the toolbar, then switch to **Home** and back | The import alert shows as before; on Home the toolbar has no Dictionary buttons and the title bar keeps its height | |
