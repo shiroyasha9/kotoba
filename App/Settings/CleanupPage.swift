@@ -181,7 +181,8 @@ extension CleanupModel {
     /// What the model is, in plain words: the line under its name.
     var summary: String {
         switch self {
-        case .geminiFlashLite: "Recommended: 1.5 seconds per cleanup in kotoba’s tests."
+        case .deepSeekFlash: "Recommended: 0.6 seconds per cleanup in kotoba’s tests, with no words lost."
+        case .geminiFlashLite: "1 second per cleanup in kotoba’s tests."
         case .qwenCerebras: "The fastest in kotoba’s tests, but 9 in 100 cleanups failed."
         case .claudeHaiku: "Another model, from Anthropic."
         }

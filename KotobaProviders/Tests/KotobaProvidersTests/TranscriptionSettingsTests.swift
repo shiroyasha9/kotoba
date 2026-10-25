@@ -12,7 +12,7 @@ struct TranscriptionSettingsTests {
         #expect(settings.route == .openRouterMAI)
         #expect(settings.azureEndpoint == "")
         #expect(settings.routeOptions.azureEndpoint == nil)
-        #expect(settings.cleanupModel == .geminiFlashLite)
+        #expect(settings.cleanupModel == .deepSeekFlash)
     }
 
     @Test func phaseOneModelSettingStillSelectsItsRoute() {

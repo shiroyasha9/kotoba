@@ -232,7 +232,7 @@ public final class TranscriptionSettings: Sendable {
 
     /// The model the cleanup hotkey uses.
     public var cleanupModel: CleanupModel {
-        get { storage.string(forKey: Key.cleanupModel).flatMap(CleanupModel.init) ?? .geminiFlashLite }
+        get { storage.string(forKey: Key.cleanupModel).flatMap(CleanupModel.init) ?? .deepSeekFlash }
         set {
             storage.set(newValue.rawValue, forKey: Key.cleanupModel)
             post(.cleanupModel)

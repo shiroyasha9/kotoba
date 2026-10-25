@@ -58,6 +58,11 @@ extension DictionaryStore {
 
     /// The owner's star in the Dictionary pane: a pinned term is always sent.
     public func setPinned(_ term: String, _ isPinned: Bool) throws {
+        try Self.setPinned(term, isPinned, in: database)
+    }
+
+    /// Static for the migration (`addAppTerms`), as `writeTermUse` is.
+    static func setPinned(_ term: String, _ isPinned: Bool, in database: SQLiteDatabase) throws(SQLiteError) {
         try database.run(
             """
             INSERT INTO term_use (term_key, is_pinned) VALUES (?1, ?2)
@@ -68,7 +73,9 @@ extension DictionaryStore {
 
     /// In the save's transaction: a new keyterm is added at `now`; a keyterm the owner removed takes its count and
     /// pin with it, so the word added again later starts new.
-    func writeTermUse(of dictionary: PersonalDictionary, at now: Date) throws(SQLiteError) {
+    static func writeTermUse(of dictionary: PersonalDictionary, at now: Date, to database: SQLiteDatabase)
+        throws(SQLiteError)
+    {
         let keys = dictionary.keytermKeys
         let stored = Set(try database.query("SELECT term_key FROM term_use;").compactMap { $0[0].string })
         for key in stored.subtracting(keys) {

@@ -54,8 +54,10 @@ struct TermUseStoreTests {
         let store = try DictionaryStore(url: url)
         let dictionary = try await store.load()
 
-        #expect(dictionary.terms == ["PyTorch", "zshrc"])
-        #expect(try await store.termUse() == ["pytorch": TermUse(), "zshrc": TermUse(), "claude code": TermUse()])
+        #expect(dictionary.terms == ["PyTorch", "zshrc", "kotoba"])
+        var use = try await store.termUse()
+        #expect(use.removeValue(forKey: "kotoba")?.isPinned == true)
+        #expect(use == ["pytorch": TermUse(), "zshrc": TermUse(), "claude code": TermUse()])
         // The first save after the update adds only the new word.
         var updated = dictionary
         updated.terms.append("Vercel")
@@ -112,8 +114,11 @@ struct TermUseStoreTests {
 
     @Test func aHitOnAWordNotInTheDictionaryCountsNothing() async throws {
         let store = try DictionaryStore(url: url)
+        let before = try await store.termUse()
+
         try await store.recordUse(of: ["Gone"], at: now)
-        #expect(try await store.termUse().isEmpty)
+
+        #expect(try await store.termUse() == before)
     }
 
     @Test func unpinningKeepsTheCount() async throws {

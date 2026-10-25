@@ -3,13 +3,18 @@ import KotobaCore
 
 /// The cleanup models kotoba-bench-v1 measured, with the request switches each one needs (bench/cleanup.ts).
 public enum CleanupModel: String, CaseIterable, Sendable {
-    /// Default: the lowest WER of the three cleanup LLMs on the 100-clip sample (10.7%), Google endpoint.
+    /// Default: on 60 of the owner's real terminal dictations (2026-10-25, Code prompt v3) p50 559 ms and p90 1,152 ms
+    /// on Together, against 1,048 and 2,174 ms for Gemini; a judge found no lost content in 60 and a change of meaning
+    /// in 2 (Gemini: 3 lost, 6 changed). The same model and hosts as Polish.
+    case deepSeekFlash = "deepseek/deepseek-v4.1-flash"
+    /// The lowest WER of the three cleanup LLMs on the 100-clip sample (10.7%), Google endpoint.
     case geminiFlashLite = "google/gemini-3.5-flash-lite"
     case qwenCerebras = "qwen/qwen3.8-27b"
     case claudeHaiku = "anthropic/claude-haiku-5.5"
 
     public var title: String {
         switch self {
+        case .deepSeekFlash: "DeepSeek V4.1 Flash"
         case .geminiFlashLite: "Gemini 3.5 Flash-Lite"
         case .qwenCerebras: "Qwen 3.8 27B (Cerebras)"
         case .claudeHaiku: "Claude Haiku 5.5"
@@ -63,6 +68,10 @@ public final class OpenRouterCleaner: TextCleaner {
             user: "<transcript>\n\(escaped(transcript))\n</transcript>", rewriting: transcript, floor: 2_048)
         // The switches per model from bench/cleanup.ts (each model's `reasoning` entry in GET /models).
         switch model {
+        case .deepSeekFlash:
+            body.reasoning = .effort("none")
+            body.temperature = 0
+            body.provider.hosts = PolishModel.deepSeekFlash.hosts
         case .geminiFlashLite:
             // Reasoning is mandatory for this model; "minimal" is its lowest effort. No temperature: the model ignores
             // a custom one (Google's model page, 2026-10-15).

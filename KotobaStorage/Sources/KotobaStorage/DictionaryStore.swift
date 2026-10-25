@@ -11,6 +11,8 @@ public actor DictionaryStore {
     public static let maxPendingSuggestions = 20
     /// A pending suggestion not seen again for this long is dropped (not dismissed: seen later, it comes back).
     public static let suggestionLifetime: TimeInterval = 30 * 24 * 60 * 60
+    /// The app's own name, pinned in every dictionary once: unlisted, MAI wrote "kotoba" as "Codex" (owner, 2026-10-25).
+    private static let appTerms = ["kotoba"]
 
     private static let schema = """
         PRAGMA journal_mode = WAL;
@@ -60,6 +62,24 @@ public actor DictionaryStore {
         try Self.migrateSuggestions(database)
         try database.execute(Self.pairIndex)
         try Self.migrateTermUse(database)
+        try Self.addAppTerms(database)
+    }
+
+    /// Once per database (`user_version` 0 to 1): each of `appTerms` the dictionary does not send yet goes at its end,
+    /// pinned. A term the owner removes later stays removed.
+    private static func addAppTerms(_ database: SQLiteDatabase, at now: Date = .now) throws(SQLiteError) {
+        guard try database.userVersion() == 0 else { return }
+        try database.transaction { () throws(SQLiteError) in
+            var dictionary = try load(database)
+            let added = appTerms.filter { !dictionary.keytermKeys.contains(TermUse.key(for: $0)) }
+            dictionary.terms += added
+            try write(dictionary, to: database)
+            try writeTermUse(of: dictionary, at: now, to: database)
+            for term in added {
+                try setPinned(term, true, in: database)
+            }
+            try database.setUserVersion(1)
+        }
     }
 
     /// A suggestion table from an earlier build matched pairs with SQLite's `lower()`, which folds ASCII only; the
@@ -126,8 +146,8 @@ public actor DictionaryStore {
         at now: Date = .now
     ) throws {
         try database.transaction { () throws(SQLiteError) in
-            try write(dictionary)
-            try writeTermUse(of: dictionary, at: now)
+            try Self.write(dictionary, to: database)
+            try Self.writeTermUse(of: dictionary, at: now, to: database)
             for id in ids {
                 try setStatus(.added, of: id)
             }
@@ -143,7 +163,8 @@ public actor DictionaryStore {
 
     // MARK: Dictionary rows
 
-    private func write(_ dictionary: PersonalDictionary) throws(SQLiteError) {
+    /// Static for the migration, which runs before the actor is set up.
+    private static func write(_ dictionary: PersonalDictionary, to database: SQLiteDatabase) throws(SQLiteError) {
         try database.execute("DELETE FROM dictionary_terms; DELETE FROM replacement_rules;")
         for (position, term) in dictionary.terms.enumerated() {
             try database.run(

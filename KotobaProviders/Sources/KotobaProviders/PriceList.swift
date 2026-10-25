@@ -36,6 +36,7 @@ enum PriceList {
     /// US cents per 1M input and output tokens.
     static func centsPerMillionTokens(_ model: CleanupModel) -> (input: Int, output: Int) {
         switch model {
+        case .deepSeekFlash: (30, 120)
         case .geminiFlashLite: (30, 250)
         case .qwenCerebras: (99, 149)
         case .claudeHaiku: (10, 50)
@@ -52,7 +53,7 @@ enum PriceList {
     static func estimate(_ model: PolishModel, inputTokens: Int, outputTokens: Int) -> Cost {
         let price =
             switch model {
-            case .deepSeekFlash: (input: 30, output: 120)
+            case .deepSeekFlash: centsPerMillionTokens(.deepSeekFlash)
             case .geminiFlashLite: centsPerMillionTokens(.geminiFlashLite)
             }
         return estimate(price, inputTokens: inputTokens, outputTokens: outputTokens)

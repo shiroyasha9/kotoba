@@ -37,7 +37,7 @@ final class ModesModel {
         /// Opens the pane where the owner adds that key.
         var addKey: @MainActor () -> Void = {}
         /// The cleanup model (`TranscriptionSettings.cleanupModel`).
-        var cleanupModel: @MainActor () -> CleanupModel = { .geminiFlashLite }
+        var cleanupModel: @MainActor () -> CleanupModel = { .deepSeekFlash }
         var saveCleanupModel: @MainActor (CleanupModel) -> Void = { _ in }
 
         /// Messages, Mail and Notes in Writing, Terminal in Code, and a seed app that is not installed; TextEdit and
@@ -49,7 +49,7 @@ final class ModesModel {
                 "com.apple.MobileSMS": "Messages", "com.apple.mail": "Mail", "com.apple.Notes": "Notes",
                 "com.apple.Terminal": "Terminal", "com.apple.TextEdit": "TextEdit", "com.apple.Safari": "Safari",
             ]
-            var cleanupModel = CleanupModel.geminiFlashLite
+            var cleanupModel = CleanupModel.deepSeekFlash
             return Self(
                 rules: { rules }, save: { rules = $0 }, name: { names[$0] }, icon: InstalledApp.icon(of:),
                 recentApps: {

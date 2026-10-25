@@ -93,6 +93,15 @@ final class SQLiteDatabase {
         }
     }
 
+    /// The file's own migration number (`PRAGMA user_version`): each database file counts its own steps.
+    func userVersion() throws(SQLiteError) -> Int64 {
+        try query("PRAGMA user_version;").first?.first?.integer ?? 0
+    }
+
+    func setUserVersion(_ version: Int64) throws(SQLiteError) {
+        try execute("PRAGMA user_version = \(version);")
+    }
+
     func run(_ sql: String, _ values: [Value] = []) throws(SQLiteError) {
         _ = try query(sql, values)
     }

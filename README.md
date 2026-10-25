@@ -75,7 +75,7 @@ A native, open-source alternative to Wispr Flow, made for people who dictate to 
 
 ### Clean up, per app
 
-- A second shortcut (⌃⌥⇧⌘) removes filler words and fixes punctuation, with Gemini 3.5 Flash-Lite, Qwen 3.8 27B on Cerebras or Claude Haiku 5.5.
+- A second shortcut (⌃⌥⇧⌘) removes filler words and fixes punctuation, with DeepSeek V4.1 Flash on Together (the default, about 0.6 s), Gemini 3.5 Flash-Lite, Qwen 3.8 27B on Cerebras or Claude Haiku 5.5.
 - In code apps, cleanup keeps commands, paths and flags as you said them; in writing apps, it writes clear sentences in your words. kotoba picks the style from the app in front, and the Cleanup page shows an example of each.
 - Rewrite makes your last dictation shorter and clearer, from the menu or its own shortcut, with DeepSeek V4.1 Flash through OpenRouter. "View Changes…" in History shows what cleanup and Rewrite changed.
 

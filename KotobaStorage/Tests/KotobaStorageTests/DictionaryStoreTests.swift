@@ -7,9 +7,30 @@ import Testing
 struct DictionaryStoreTests {
     let folder = TemporaryFolder()
 
-    @Test func aNewStoreHasAnEmptyDictionary() async throws {
+    @Test func aNewStoreHasTheAppsNamePinned() async throws {
         let store = try DictionaryStore(url: folder.url.appending(path: "dictionary.sqlite"))
-        #expect(try await store.load() == PersonalDictionary())
+        #expect(try await store.load() == PersonalDictionary(terms: ["kotoba"]))
+        #expect(try await store.termUse()["kotoba"]?.isPinned == true)
+    }
+
+    @Test func theAppsNameRemovedStaysRemoved() async throws {
+        let url = folder.url.appending(path: "dictionary.sqlite")
+        try await DictionaryStore(url: url).save(PersonalDictionary(terms: ["uv"]))
+
+        #expect(try await DictionaryStore(url: url).load() == PersonalDictionary(terms: ["uv"]))
+    }
+
+    @Test func theAppsNameInAnyCaseIsNotAddedAgain() async throws {
+        let url = folder.url.appending(path: "dictionary.sqlite")
+        do {
+            let database = try SQLiteDatabase(url: url)
+            try database.execute(
+                """
+                CREATE TABLE dictionary_terms (position INTEGER PRIMARY KEY, term TEXT NOT NULL);
+                INSERT INTO dictionary_terms (position, term) VALUES (0, 'Kotoba'), (1, 'uv');
+                """)
+        }
+        #expect(try await DictionaryStore(url: url).load() == PersonalDictionary(terms: ["Kotoba", "uv"]))
     }
 
     @Test func aSavedDictionaryLoadsInTheSameOrderAfterARestart() async throws {

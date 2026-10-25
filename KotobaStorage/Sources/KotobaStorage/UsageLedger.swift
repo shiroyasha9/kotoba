@@ -194,7 +194,7 @@ extension HistoryStore {
     /// recovered dictation, else its key-down). Those builds kept no costs, so the entries have none and the Activity page
     /// says so; a row with cleaned text also had a cleanup request, whose model was not kept.
     static func fillLedger(_ database: SQLiteDatabase) throws(SQLiteError) {
-        guard try database.query("PRAGMA user_version;").first?.first?.integer == 0 else { return }
+        guard try database.userVersion() == 0 else { return }
         let rows = try database.query(
             """
             SELECT id, coalesce(recovered_at, created_at), model, transcript, cleaned_text, app_bundle_id, app_name,
@@ -227,7 +227,7 @@ extension HistoryStore {
         for start in stride(from: 0, to: entries.count, by: 1_000) {
             try addToLedger(Array(entries[start..<min(start + 1_000, entries.count)]), in: database)
         }
-        try database.execute("PRAGMA user_version = 1;")
+        try database.setUserVersion(1)
     }
 
     private static func nanoUSD(_ usd: Decimal) -> Int64 {
