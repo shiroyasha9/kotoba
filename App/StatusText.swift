@@ -331,7 +331,7 @@ extension ShellStatus.MenuStatus where Missing == Readiness.Missing {
         case .yieldsToRelease: .text(StatusText.yieldsToRelease)
         case .dictation(let state): .text(state.statusText(context) ?? "")
         case .finishSetup(let missing): .finishSetup(missing.setupText)
-        case .ready: .text(StatusText.ready)
+        case .ready: .ready
         }
     }
 }

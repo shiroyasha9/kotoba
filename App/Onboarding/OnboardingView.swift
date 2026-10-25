@@ -7,7 +7,7 @@ import SwiftUI
 /// the bottom. A grant never moves the window on: the step shows it and the owner clicks Continue (owner, 2026-10-16).
 struct OnboardingView: View {
     @Bindable var model: OnboardingModel
-    /// Closes the window after Done.
+    /// After Done: closes the window and opens the app on Home.
     let close: @MainActor () -> Void
 
     var body: some View {
@@ -27,7 +27,7 @@ struct OnboardingView: View {
 
     @ViewBuilder private var content: some View {
         switch model.step {
-        case .welcome: WelcomeStep()
+        case .welcome: WelcomeStep(model: model)
         case .permissions: PermissionsStep(model: model)
         case .key: KeyStep(model: model)
         case .tryIt: TryItStep(model: model)
@@ -74,10 +74,12 @@ struct StepHeading<Icon: View>: View {
     let title: String
     /// A `Text`, so the UI-text lint sees its words wherever the formatter puts the argument (`Text(` is a builder).
     let text: Text
+    /// Welcome's is centred, as Apple's first-run screens (Journal, Freeform) centre the app's icon and welcome.
+    var isCentred = false
     @ViewBuilder var icon: Icon
 
     var body: some View {
-        VStack(alignment: .leading) {
+        VStack(alignment: isCentred ? .center : .leading) {
             icon
             Text(title)
                 .font(.largeTitle)
@@ -88,6 +90,8 @@ struct StepHeading<Icon: View>: View {
                 .foregroundStyle(.secondary)
                 .fixedSize(horizontal: false, vertical: true)
         }
+        .multilineTextAlignment(isCentred ? .center : .leading)
+        .frame(maxWidth: .infinity, alignment: isCentred ? .center : .leading)
         .accessibilityElement(children: .combine)
         .accessibilityAddTraits(.isHeader)
     }

@@ -128,17 +128,26 @@ final class Readiness {
     }
 }
 
+/// The main window's places that setup opens, each a closure, so the setup flow and onboarding never hold the window.
+struct SetupLinks {
+    /// The Speech page: the credit fix.
+    var speech: @MainActor () -> Void
+    /// The Speech page with its "Advanced…" sheet: the xAI and Azure routes and the Azure endpoint.
+    var otherSpeechServices: @MainActor () -> Void
+    /// Home: where onboarding's Done leads.
+    var home: @MainActor () -> Void
+}
+
 /// The setup flow around `Readiness`: onboarding at first launch and from "Finish Setting Up kotoba…", and the
 /// hotkey tap, which starts once Accessibility is allowed. No permission prompt appears before its onboarding
 /// step (ux-polish O2).
 @MainActor
 final class SetupFlow {
     let readiness: Readiness
-    private let openSpeechSettings: @MainActor () -> Void
-    private let openOtherSpeechServices: @MainActor () -> Void
+    private let links: SetupLinks
     private lazy var onboarding = OnboardingController(
         readiness: readiness, routeSettings: routeSettings, vault: vault, router: router, dictionary: dictionary,
-        openOtherSpeechServices: openOtherSpeechServices)
+        links: links)
     private let routeSettings: TranscriptionSettings
     private let vault: KeyVault
     private let router: TranscriptionRouter
@@ -151,21 +160,17 @@ final class SetupFlow {
     /// Reads Readiness again when the system disables the tap for user input (`HotkeyTap.disabledByUserInput`).
     private var tapDisables: Task<Void, Never>?
 
-    /// `router` checks a key in onboarding. `openSpeechSettings` opens the Speech page, where the credit fix lands;
-    /// `openOtherSpeechServices` opens it with its "Advanced…" sheet, where the xAI and Azure routes and the Azure
-    /// endpoint are.
+    /// `router` checks a key in onboarding; `links` open the main window where a fix or onboarding's Done leads.
     init(
         readiness: Readiness, routeSettings: TranscriptionSettings, vault: KeyVault, router: TranscriptionRouter,
-        dictionary: @escaping @MainActor () -> DictionaryModel?, openSpeechSettings: @escaping @MainActor () -> Void,
-        openOtherSpeechServices: @escaping @MainActor () -> Void
+        dictionary: @escaping @MainActor () -> DictionaryModel?, links: SetupLinks
     ) {
         self.readiness = readiness
         self.routeSettings = routeSettings
         self.vault = vault
         self.router = router
         self.dictionary = dictionary
-        self.openSpeechSettings = openSpeechSettings
-        self.openOtherSpeechServices = openOtherSpeechServices
+        self.links = links
     }
 
     /// Onboarding opens at launch until the owner clicks Done, unless kotoba is set up already (`AppPresence.window`).
@@ -187,8 +192,8 @@ final class SetupFlow {
         switch readiness.firstMissing {
         case .microphone, .accessibility: onboarding.show(step: .permissions)
         case .setup(.key, _): onboarding.show(step: .key)
-        case .setup(.endpoint, _): openOtherSpeechServices()
-        case .setup(.credit, _): openSpeechSettings()
+        case .setup(.endpoint, _): links.otherSpeechServices()
+        case .setup(.credit, _): links.speech()
         case nil: onboarding.show()
         }
     }

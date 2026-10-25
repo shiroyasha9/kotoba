@@ -52,7 +52,8 @@ final class OnboardingModel {
     var playsSounds: Bool {
         didSet { source.setPlaysSounds(playsSounds) }
     }
-    /// What keeps the launch-at-login choice from taking effect, shown under its toggle.
+    /// What keeps the owner's launch-at-login change from taking effect, shown under its toggle; only after the owner
+    /// turns the switch, never for the default.
     private(set) var loginProblem: LaunchAtLogin.Problem?
     /// The Done step offers the Wispr Flow import (`OnboardingFlow.offersWisprImport`).
     private(set) var offersWisprImport = false
@@ -169,9 +170,10 @@ final class OnboardingModel {
         LaunchAtLogin.openLoginItemsSettings()
     }
 
-    /// The Done button. The launch-at-login choice is applied when the Done step shows, so its problem text is
-    /// read before the window closes.
+    /// The Done button. It applies the launch-at-login default the owner left as it was (on for a release build); a
+    /// switch the owner turned took effect then. A problem with the default shows on the General page.
     func finish() {
+        _ = source.setLaunchAtLogin(opensAtLogin)
         OnboardingController.isComplete = true
     }
 }
@@ -180,11 +182,12 @@ final class OnboardingModel {
 
 extension OnboardingModel.Source {
     /// No Keychain, network or setting behind it. `dictionary` stands for the one Wispr Flow imports into.
-    static func sample(dictionary: DictionaryModel? = nil) -> Self {
+    /// `loginProblem` is what turning the login switch answers.
+    static func sample(dictionary: DictionaryModel? = nil, loginProblem: LaunchAtLogin.Problem? = nil) -> Self {
         Self(
             route: { .openRouterMAI },
             opensAtLogin: { true },
-            setLaunchAtLogin: { _ in nil },
+            setLaunchAtLogin: { _ in loginProblem },
             playsSounds: { true },
             setPlaysSounds: { _ in },
             openURL: { _ in },

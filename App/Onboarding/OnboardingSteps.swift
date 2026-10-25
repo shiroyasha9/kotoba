@@ -5,8 +5,11 @@ import SwiftUI
 // The onboarding steps, each a `PageForm`'s sections with its `StepHeading` over the first card. `OnboardingView`
 // shows one at a time.
 
-/// What kotoba is good at, in three rows, and both ways to dictate with their keys drawn as keycaps.
+/// What kotoba is good at, in three rows (four when Wispr Flow is on this Mac), and both ways to dictate with their keys
+/// drawn as keycaps.
 struct WelcomeStep: View {
+    let model: OnboardingModel
+
     var body: some View {
         let chords = HotkeyChords.shared
         Section {
@@ -19,10 +22,16 @@ struct WelcomeStep: View {
             Point(
                 "Private", systemImage: "hand.raised", tint: .blue,
                 text: "No account. Your audio goes only to the speech service you choose, with your own key.")
+            // A reason to switch for a Wispr Flow user (owner QA, 2026-10-25); the import itself is on the last step.
+            if model.offersWisprImport {
+                Point(
+                    "From Wispr Flow", systemImage: "square.and.arrow.down", tint: .indigo,
+                    text: "Bring your Wispr Flow dictionary along. You can import it on the last step.")
+            }
         } header: {
             StepHeading(
-                title: "Talk Instead of Typing",
-                text: Text("Speak in any app, and kotoba types your words where your cursor is.")
+                title: "Welcome to kotoba",
+                text: Text("Speak in any app, and kotoba types your words where your cursor is."), isCentred: true
             ) {
                 AppIconView(icon: NSApp.applicationIconImage, side: PageMetrics.welcomeIconSide)
             }
@@ -165,12 +174,7 @@ struct KeyStep: View {
     var body: some View {
         let provider = model.account.title
         Section {
-            PageRow(title: "\(provider) key", subtitle: nil) {
-                SymbolTile(
-                    systemImage: PaneID.speech.systemImage, tint: PaneID.speech.tint, side: PageMetrics.rowTileSide)
-            } trailing: {
-                KeyField(account: model.account, route: model.route, keyChecks: model.keyChecks)
-            }
+            keyRow(provider: provider)
             result
         } header: {
             StepHeading(
@@ -179,20 +183,39 @@ struct KeyStep: View {
                     "kotoba sends your audio to \(provider), which turns it into text. Get a key there and paste it "
                         + "here."))
         } footer: {
-            VStack(alignment: .leading) {
-                PriceLine(route: model.route)
-                // Below the card, so a link that goes away moves nothing the pointer is on.
-                HStack {
+            PriceLine(route: model.route)
+        }
+        // The other services in a group of their own, clear of the key's links (owner QA, 2026-10-25: three links in
+        // one line looked crammed).
+        Section {
+            PageRow(title: "xAI or Azure", subtitle: "Use another speech service, with your own key.") {
+                Button("Open Speech Settings…", action: model.openOtherSpeechServices)
+            }
+        }
+    }
+
+    /// The key's name with "Get a Key at …" under it, as System Settings puts a row's link under its title, and the
+    /// field beside them. Custom: a `PageRow` subtitle is text, not a link.
+    private func keyRow(provider: String) -> some View {
+        HStack {
+            RowLeading {
+                SymbolTile(
+                    systemImage: PaneID.speech.systemImage, tint: PaneID.speech.tint, side: PageMetrics.rowTileSide)
+            } content: {
+                VStack(alignment: .leading) {
+                    Text("\(provider) key")
                     // Gone once a key is saved, unless the provider refused it: Change… is then the next thing to do.
                     if !model.keyChecks.isSaved(model.account)
                         || model.keyChecks.status[model.account] == .checked(.invalid)
                     {
                         Button("Get a Key at \(provider)…") { model.open(model.account.keysPage) }
+                            .buttonStyle(.link)
+                            .font(.subheadline)
                     }
-                    Button("Use xAI or Azure Instead…", action: model.openOtherSpeechServices)
                 }
-                .buttonStyle(.link)
             }
+            Spacer()
+            KeyField(account: model.account, route: model.route, keyChecks: model.keyChecks)
         }
     }
 
@@ -259,22 +282,27 @@ struct DoneStep: View {
             }
         }
         Section {
+            Toggle("Play sounds when a dictation starts and stops", isOn: $model.playsSounds)
+            // Turning it takes effect at once; the default (on for a release build) applies at Done.
             Toggle(
                 "Open at login",
                 isOn: Binding(get: { model.opensAtLogin }, set: { model.setOpensAtLogin($0) }))
-            if let problem = model.loginProblem {
-                PageRow(title: problem.text, subtitle: nil) {
-                    Button("Open Login Items…", action: model.openLoginItemsSettings)
-                }
-            }
-            Toggle("Play sounds when a dictation starts and stops", isOn: $model.playsSounds)
         } header: {
             if model.firstMissingStep == nil {
                 heading(isReady: isReady)
             }
+        } footer: {
+            // A footnote under the switch, as System Settings writes one, only after the owner turned it.
+            if let problem = model.loginProblem {
+                VStack(alignment: .leading) {
+                    Text(problem.text)
+                    Button("Open Login Items…", action: model.openLoginItemsSettings)
+                        .buttonStyle(.link)
+                }
+                // The link in the footnote's own size, as System Settings' "Learn More…" under a group.
+                .font(.subheadline)
+            }
         }
-        // Applied as the step shows (default on), so a problem shows here before Done closes the window.
-        .task { model.setOpensAtLogin(model.opensAtLogin) }
         if model.offersWisprImport {
             Section {
                 PageRow(title: "Wispr Flow dictionary", subtitle: wisprText) {

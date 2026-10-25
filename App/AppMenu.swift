@@ -12,8 +12,12 @@ extension AppDelegate: StatusMenuActions {
     func menuModel() -> MenuModel {
         readiness.refresh()
         let input = audio.inputInUse
+        let chords = HotkeyChords.shared
         return MenuModel(
             status: shell.view(shellFacts).status.line(statusContext),
+            chords: MenuModel.Chords(
+                handsFree: chords.handsFree, pushToTalk: chords.pushToTalk, pasteLast: chords.pasteLast,
+                copyLast: chords.copyLast, rewriteLast: chords.polishLast),
             pendingCount: shell.queues.waitingCount,
             recovered: shell.queues.recovered.map { MenuChoice(title: $0.title, value: $0.id.rawValue.uuidString) },
             microphones: AudioDevices.inputs().map { MenuChoice(title: $0.name, value: $0.uid) },

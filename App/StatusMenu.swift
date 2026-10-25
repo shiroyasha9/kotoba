@@ -29,11 +29,24 @@ struct MenuModel {
     enum Status {
         /// Setup is not complete: an enabled "Finish Setting Up kotoba…" with the first thing to do.
         case finishSetup(String)
-        /// A disabled line: the dictation state, or the ready hint.
+        /// Ready to dictate: both ways to dictate, each with its chord.
+        case ready
+        /// A disabled line: the dictation state.
         case text(String)
     }
 
+    /// The owner's chords, as `HotkeyChords` holds them: the ready lines name the dictation chords, and a last
+    /// dictation item shows its own chord on the right, as an app menu shows a shortcut, so the menu teaches them.
+    struct Chords {
+        var handsFree = Chord.defaultHandsFree
+        var pushToTalk = Chord.defaultHandsFree
+        var pasteLast: Chord?
+        var copyLast: Chord? = .defaultCopyLast
+        var rewriteLast: Chord?
+    }
+
     var status: Status
+    var chords = Chords()
     var pendingCount = 0
     /// Retried transcripts, newest first; `value` is the dictation id.
     var recovered: [MenuChoice] = []
@@ -69,8 +82,11 @@ struct MenuModel {
     /// Builds the whole menu into `menu`, replacing its items.
     func build(into menu: NSMenu, target: StatusMenuActions?, for place: Place = .menuBar) {
         menu.removeAllItems()
-        for item in topItems(target: target, for: place) + [.separator(), microphoneItem(target: target), .separator()]
-        {
+        var items = topItems(target: target)
+        if hasLastDictation {
+            items += [.separator()] + lastDictationItems(target: target, for: place)
+        }
+        for item in items + [.separator(), microphoneItem(target: target), .separator()] {
             menu.addItem(item)
         }
         menu.addItem(
@@ -88,7 +104,7 @@ struct MenuModel {
             ))
     }
 
-    private func topItems(target: StatusMenuActions?, for place: Place) -> [NSMenuItem] {
+    private func topItems(target: StatusMenuActions?) -> [NSMenuItem] {
         var items: [NSMenuItem] = []
         switch status {
         case .finishSetup(let missing):
@@ -96,6 +112,13 @@ struct MenuModel {
                 "Finish Setting Up kotoba…", target: target, action: #selector(StatusMenuActions.finishSetup))
             item.subtitle = missing
             items.append(item)
+        case .ready:
+            // Both ways to dictate with their chords, as lines to read, not to click (owner QA, 2026-10-25: the menu
+            // teaches the shortcuts). Push to talk's chord is hands-free's, held, unless it has its own.
+            items.append(
+                .note(StatusText.shortcutTitle(.handsFree), "Press \(chords.handsFree.title) to start and stop"))
+            items.append(
+                .note(StatusText.shortcutTitle(.pushToTalk), "Hold \(chords.pushToTalk.title) while you speak"))
         case .text(let text):
             let item = NSMenuItem(title: text, action: nil, keyEquivalent: "")
             item.isEnabled = false
@@ -114,37 +137,38 @@ struct MenuModel {
                     "Recovered Dictations", choices, selected: nil, target: target,
                     action: #selector(StatusMenuActions.copyRecovered(_:))))
         }
-        if hasLastDictation {
-            items += lastDictationItems(target: target, for: place)
-        }
         return items
     }
 
-    /// Paste, copy, rewrite or fix the last dictation. Paste without cleanup stays one item: the ⌥ alternate of Paste,
-    /// as Finder's Close and Close All, so the menu keeps the plan's few items and the feature keeps its one way in.
-    /// The Dock's menu leaves it out: nothing shows that the Dock draws alternates, and the menu bar menu has it.
+    /// The last dictation's group under its section header, as Apple's menu bar extras group their items (Wi-Fi's
+    /// "Known Network"), so each item is one verb: Paste, Copy, Rewrite, Fix. An item with a key chord shows it on the
+    /// right. Paste without cleanup is Paste's ⌥ alternate, as Finder's Close and Close All, so the feature keeps its
+    /// one way in; an alternate pairs only with an item of the same key equivalent, so while Paste shows a chord of
+    /// its own, it is an item of its own. The Dock's menu leaves it out: nothing shows that the Dock draws alternates,
+    /// and the menu bar menu has it.
     private func lastDictationItems(target: StatusMenuActions?, for place: Place) -> [NSMenuItem] {
-        var items: [NSMenuItem] = [
-            .action("Paste Last Dictation", target: target, action: #selector(StatusMenuActions.pasteLastDictation))
-        ]
+        let paste = NSMenuItem.action("Paste", target: target, action: #selector(StatusMenuActions.pasteLastDictation))
+        let pastesWithChord = paste.showsChord(chords.pasteLast)
+        var items: [NSMenuItem] = [.sectionHeader(title: "Last Dictation"), paste]
         if hasRawLastDictation && place == .menuBar {
             let raw = NSMenuItem.action(
-                "Paste Last Without Cleanup", target: target,
-                action: #selector(StatusMenuActions.pasteLastWithoutCleanup))
-            raw.keyEquivalentModifierMask = .option
-            raw.isAlternate = true
+                "Paste Without Cleanup", target: target, action: #selector(StatusMenuActions.pasteLastWithoutCleanup))
+            if !pastesWithChord {
+                raw.keyEquivalentModifierMask = .option
+                raw.isAlternate = true
+            }
             items.append(raw)
         }
-        items.append(
-            .action("Copy Last Dictation", target: target, action: #selector(StatusMenuActions.copyLastDictation)))
+        let copy = NSMenuItem.action("Copy", target: target, action: #selector(StatusMenuActions.copyLastDictation))
+        copy.showsChord(chords.copyLast)
+        items.append(copy)
         if canRewrite {
-            items.append(
-                .action(
-                    "Rewrite Last Dictation", target: target,
-                    action: #selector(StatusMenuActions.rewriteLastDictation)))
+            let rewrite = NSMenuItem.action(
+                "Rewrite", target: target, action: #selector(StatusMenuActions.rewriteLastDictation))
+            rewrite.showsChord(chords.rewriteLast)
+            items.append(rewrite)
         }
-        items.append(
-            .action("Fix Last Dictation…", target: target, action: #selector(StatusMenuActions.fixLastDictation)))
+        items.append(.action("Fix…", target: target, action: #selector(StatusMenuActions.fixLastDictation)))
         return items
     }
 
@@ -178,10 +202,10 @@ struct MenuModel {
         return item
     }
 
-    /// Menus for the snapshot run's `menu-<name>.txt`: ready (a cleaned-up last dictation, Rewrite set up), setup not
-    /// complete (a Debug build: no update item),
-    /// recording (with Sparkle busy), failed with a retry and an update waiting, a Bluetooth mic, and kotoba Dev while
-    /// the release app runs.
+    /// Menus for the snapshot run's `menu-<name>.txt`: ready (a cleaned-up last dictation, Rewrite set up, Copy's
+    /// default chord), ready with chords of their own for push to talk, Paste and Rewrite, setup not complete (a Debug
+    /// build: no update item), recording (with Sparkle busy), failed with a retry and an update waiting, a Bluetooth
+    /// mic, and kotoba Dev while the release app runs.
     static func samples() -> [(name: String, model: Self)] {
         let mics = [MenuChoice(title: "MacBook Pro Microphone", value: "builtin")]
         // Each status line comes from the shell, as the running app's does, so a sample shows its priorities.
@@ -204,6 +228,10 @@ struct MenuModel {
         ready.hasLastDictation = true
         ready.hasRawLastDictation = true
         ready.canRewrite = true
+        var ownChords = ready
+        ownChords.chords.pushToTalk = Chord(modifiers: [.rightOption])
+        ownChords.chords.pasteLast = Chord(modifiers: [.control, .option], keyCode: KeyCode.ansiV)
+        ownChords.chords.rewriteLast = Chord(modifiers: [.option], keyCode: KeyCode.ansi1)
         var yielding = ready
         yielding.status = status(.idle, .init(isYielding: true))
         var failed = ready
@@ -215,7 +243,8 @@ struct MenuModel {
         bluetooth.microphoneInUse = ("airpods", "AirPods Pro")
         bluetooth.microphoneWarning = .bluetoothMic(interruptsPlayback: true)
         return [
-            ("ready", ready), ("setup", setup), ("listening", listening), ("failed", failed), ("bluetooth", bluetooth),
+            ("ready", ready), ("own-chords", ownChords), ("setup", setup), ("listening", listening), ("failed", failed),
+            ("bluetooth", bluetooth),
             ("yielding", yielding),
         ]
     }
@@ -244,6 +273,7 @@ extension NSMenu {
             if let subtitle = item.subtitle { line += " · " + subtitle }
             if !item.keyEquivalent.isEmpty { line += " " + shortcut(of: item) }
             if item.isAlternate { line += " (alternate with " + shortcut(of: item) + ")" }
+            if item.isSectionHeader { line += " (header)" }
             if item.state == .on { line += " [on]" }
             if !item.isEnabled { line += " (disabled)" }
             if let submenu = item.submenu { return [line + " ▸"] + lines(of: submenu, depth: depth + 1) }
