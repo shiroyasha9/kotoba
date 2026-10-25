@@ -127,13 +127,7 @@ struct ActivityPage: View {
         } header: {
             Text("This Month")
         } footer: {
-            // Alone at the trailing edge under the group, as Battery's "Options…".
-            if !month.models.isEmpty {
-                HStack {
-                    Spacer()
-                    Button("Advanced…") { model.isAdvancedShown = true }
-                }
-            }
+            PageFooter(advanced: month.models.isEmpty ? nil : { model.isAdvancedShown = true })
         }
     }
 

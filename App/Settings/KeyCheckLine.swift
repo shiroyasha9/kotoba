@@ -150,9 +150,14 @@ struct KeyCheckLine: View {
         case .checked(.invalid):
             StatusLabel("\(account.title) didn’t accept this key.", systemImage: "xmark.circle.fill", color: .red)
         case .checked(.noCredit):
-            HStack {
+            // The link under the status, as System Settings' "Learn More…" under a description: beside it, the two
+            // squeezed into the row's text column and wrapped.
+            VStack(alignment: .leading, spacing: 0) {
                 StatusLabel("This key has no credit.", systemImage: "exclamationmark.circle.fill", color: .orange)
                 Button("Add Credit…") { NSWorkspace.shared.open(account.creditsPage) }
+                    .buttonStyle(.link)
+                    // A subtitle's grey would take the link's colour.
+                    .foregroundStyle(.link)
             }
         case .checked(.unreachable):
             StatusLabel(
@@ -194,6 +199,9 @@ struct StatusLabel<Style: ShapeStyle>: View {
         } icon: {
             Image(systemName: systemImage).foregroundStyle(color)
         }
+        // The symbol beside its words: in a form row a plain label takes the row's icon column, which left a wide gap
+        // after the symbol (owner QA 1, Q18).
+        .labelStyle(.titleAndIcon)
     }
 }
 
@@ -234,5 +242,7 @@ struct PriceLine: View {
             Button("See Pricing…") { NSWorkspace.shared.open(route.account.pricingPage) }
                 .buttonStyle(.link)
         }
+        // A footer's size: the form sets it on text only, so the link came out larger than its line.
+        .font(.subheadline)
     }
 }

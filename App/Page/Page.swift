@@ -53,6 +53,35 @@ struct PageHeader: View {
     }
 }
 
+/// The footer under a page's last group: its note (grey text, a link) on its own lines, then the page's "Advanced…"
+/// alone at the trailing edge, as Battery's "Options…" (owner QA 1, Q18: a note, two links and the button in one row
+/// looked crowded). A page with no "Advanced…" passes nil.
+struct PageFooter<Note: View>: View {
+    let advanced: (@MainActor () -> Void)?
+    @ViewBuilder let note: Note
+
+    var body: some View {
+        VStack(alignment: .leading) {
+            note
+                // The form sets its footer size on text only; a link in the note ("See Pricing…") takes it too.
+                .font(.subheadline)
+            if let advanced {
+                HStack {
+                    Spacer()
+                    Button("Advanced…", action: advanced)
+                        .buttonStyle(.automatic)
+                }
+            }
+        }
+    }
+}
+
+extension PageFooter where Note == EmptyView {
+    init(advanced: (@MainActor () -> Void)?) {
+        self.init(advanced: advanced) { EmptyView() }
+    }
+}
+
 /// A page's read failed: one row in the form's own type, with the button that reads again, in place of what the page
 /// shows (review-window.md 8: a pane-sized empty view in a card looked out of place).
 struct LoadFailedRow: View {
