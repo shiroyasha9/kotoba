@@ -68,6 +68,12 @@ public enum OnboardingFlow {
         isWisprInstalled && isDictionaryOpen
     }
 
+    /// Welcome takes Wispr Flow's usable shortcuts when it shows (owner QA 2, R1), once: after that the chords are the
+    /// owner's, also when onboarding resumes later. Never on a Mac whose setup was done before (`isComplete`).
+    public static func takesWisprShortcuts(on step: OnboardingStep, hasTaken: Bool, isComplete: Bool) -> Bool {
+        step == .welcome && !hasTaken && !isComplete
+    }
+
     /// The step dots' check on `step` while `shown` is on screen: its own requirement is met (`isDone`), or it asks for
     /// nothing kotoba needs (Welcome, and Try It, which the owner may skip) and the owner went past it.
     public static func isChecked(_ step: OnboardingStep, shown: OnboardingStep, isDone: Bool) -> Bool {

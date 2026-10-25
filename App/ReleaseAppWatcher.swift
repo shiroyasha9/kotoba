@@ -16,20 +16,25 @@ final class ReleaseAppWatcher {
     /// never gives way, so it observes nothing.
     func start(_ changed: @escaping @MainActor (Bool) -> Void) {
         guard !Install.isRelease else { return }
-        // `.initial` lists every running app; later changes list the apps that launched (new) and quit (old).
-        let options: NSKeyValueObservingOptions = [.initial, .new, .old]
-        observation = NSWorkspace.shared.observe(\.runningApplications, options: options) { [weak self] _, change in
-            let launched = Self.releaseProcesses(change.newValue)
-            let quit = Self.releaseProcesses(change.oldValue)
-            MainActor.assumeIsolated {
-                guard let self, self.yield.releaseChanged(launched: launched, quit: quit) else { return }
-                changed(self.yield.isYielding)
-            }
+        observation = Self.watch(Install.releaseBundleID) { [weak self] launched, quit in
+            guard let self, self.yield.releaseChanged(launched: launched, quit: quit) else { return }
+            changed(self.yield.isYielding)
         }
     }
 
-    private nonisolated static func releaseProcesses(_ apps: [NSRunningApplication]?) -> [Int32] {
-        running(apps ?? [], of: Install.releaseBundleID).map(\.processIdentifier)
+    /// Calls `changed` with the processes of `bundleID` that launched and quit: at once with the ones running, then at
+    /// each change of the running apps (mostly empty lists), until the observation is released. Onboarding follows
+    /// Wispr Flow with it too.
+    static func watch(
+        _ bundleID: String, _ changed: @escaping @MainActor (_ launched: [Int32], _ quit: [Int32]) -> Void
+    ) -> NSKeyValueObservation {
+        // `.initial` lists every running app; later changes list the apps that launched (new) and quit (old).
+        let options: NSKeyValueObservingOptions = [.initial, .new, .old]
+        return NSWorkspace.shared.observe(\.runningApplications, options: options) { _, change in
+            let launched = running(change.newValue ?? [], of: bundleID).map(\.processIdentifier)
+            let quit = running(change.oldValue ?? [], of: bundleID).map(\.processIdentifier)
+            MainActor.assumeIsolated { changed(launched, quit) }
+        }
     }
 
     /// The apps of `bundleID` with a process: an app with no process reports -1, and it must not count as running.

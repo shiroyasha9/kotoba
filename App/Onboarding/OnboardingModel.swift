@@ -24,7 +24,14 @@ final class OnboardingModel {
         var isWisprInstalled: @MainActor () async -> Bool
         /// Wispr Flow's `prefs.user.shortcuts`; nil when it has none or its file cannot be read.
         var wisprShortcutKeys: @MainActor () async -> [String: String]?
-        var isWisprRunning: @MainActor () -> Bool
+        /// Calls back with Wispr Flow's processes that launched and quit, at once with the running ones, while the
+        /// returned object lives (`ReleaseAppWatcher.watch`).
+        var watchWispr: @MainActor (@escaping @MainActor (_ launched: [Int32], _ quit: [Int32]) -> Void) -> AnyObject?
+        /// Welcome took Wispr Flow's shortcuts once (`OnboardingFlow.takesWisprShortcuts`).
+        var hasTakenWisprShortcuts: @MainActor () -> Bool
+        var tookWisprShortcuts: @MainActor () -> Void
+        /// The owner clicked Done in an earlier setup (`OnboardingController.isComplete`).
+        var isComplete: @MainActor () -> Bool
         /// The chords Welcome shows and changes.
         var chords: HotkeyChords
         /// The dictionary that the Done step's Wispr Flow row imports into; nil until it is read at launch, or when it
@@ -46,14 +53,19 @@ final class OnboardingModel {
                 openURL: { NSWorkspace.shared.open($0) },
                 isWisprInstalled: { await WisprFlowImport.isInstalled() },
                 wisprShortcutKeys: { await WisprFlowPoint.readKeys() },
-                isWisprRunning: { WisprFlowPoint.isWisprRunning },
+                watchWispr: { ReleaseAppWatcher.watch(WisprFlowPoint.bundleID, $0) },
+                hasTakenWisprShortcuts: { OnboardingController.hasTakenWisprShortcuts },
+                tookWisprShortcuts: { OnboardingController.hasTakenWisprShortcuts = true },
+                isComplete: { OnboardingController.isComplete },
                 chords: .shared,
                 dictionary: dictionary
             )
         }
     }
 
-    var step: OnboardingStep
+    var step: OnboardingStep {
+        didSet { takeWisprShortcuts() }
+    }
     let readiness: Readiness
     /// Saves and checks the key, and holds the result line's status.
     let keyChecks: KeyChecks
@@ -74,14 +86,17 @@ final class OnboardingModel {
     /// Wispr Flow's shortcuts as it keeps them, read with the install check; kotoba's chords are measured against them
     /// each time Welcome draws, so a chord changed with Change… counts.
     private var wisprShortcutKeys: [String: String]?
-    /// Wispr Flow ran when the owner took its shortcuts: both apps would start on the same keys.
-    private(set) var wisprRunsWithSameKeys = false
+    /// Wispr Flow's running processes: while there is one, Welcome's footnote asks to quit it. Followed while the
+    /// window is open (`wisprWatch`).
+    private var wisprProcesses: Set<Int32> = []
     /// What the Wispr Flow row imported; empty when Wispr Flow had nothing new. Nil until the owner answers.
     private(set) var wisprImported: DictionaryImport?
     /// Accessibility was asked for once; the next click opens System Settings instead of the prompt again.
     private var hasPromptedAccessibility = false
 
     @ObservationIgnored private let source: Source
+    /// Follows Wispr Flow's launch and quit until the window closes and releases the model.
+    @ObservationIgnored private var wisprWatch: AnyObject?
     /// The Speech page with its "Advanced…" sheet open, where the xAI and Azure routes and the Azure endpoint are: the
     /// key step's "Use xAI or Azure Instead…" and Done's "Add Your Azure Endpoint…".
     @ObservationIgnored let openOtherSpeechServices: @MainActor () -> Void
@@ -132,12 +147,24 @@ final class OnboardingModel {
         readiness.refresh()
     }
 
-    /// Looks for Wispr Flow once, when the window opens, and reads its shortcuts when it is there.
+    /// Looks for Wispr Flow once, when the window opens; when it is there, reads its shortcuts, takes them on Welcome
+    /// and follows whether it runs.
     func checkWispr() async {
         isWisprInstalled = await source.isWisprInstalled()
         dictionaryOpened()
         if isWisprInstalled {
-            wisprShortcutKeys = await source.wisprShortcutKeys()
+            wisprFound(keys: await source.wisprShortcutKeys())
+        }
+    }
+
+    private func wisprFound(keys: [String: String]?) {
+        wisprShortcutKeys = keys
+        takeWisprShortcuts()
+        wisprWatch = source.watchWispr { [weak self] launched, quit in
+            guard let self else { return }
+            let processes = wisprProcesses.subtracting(quit).union(launched)
+            // Most changes are other apps': no redraw for them.
+            if processes != wisprProcesses { wisprProcesses = processes }
         }
     }
 
@@ -150,22 +177,31 @@ final class OnboardingModel {
         return found.handsFree == nil && found.pushToTalk == nil ? nil : found
     }
 
-    /// kotoba's chords are Wispr Flow's usable ones already.
-    var usesWisprShortcuts: Bool {
-        guard let found = wisprShortcuts, !found.chords.isEmpty else { return false }
-        return found.chords.allSatisfy { role, chord in chords.chord(role) == chord }
-    }
-
-    /// "Use Your Wispr Flow Shortcuts": saves each chord kotoba can take; the other mode keeps kotoba's own.
-    func useWisprShortcuts() {
-        for (role, chord) in wisprShortcuts?.chords ?? [] {
+    /// Welcome takes Wispr Flow's usable shortcuts as it shows, once (`OnboardingFlow.takesWisprShortcuts`), for each
+    /// way to dictate that still has kotoba's own chord; a mode it cannot take keeps kotoba's. A chord the owner changed
+    /// later stays: the next time Welcome shows takes nothing.
+    private func takeWisprShortcuts() {
+        guard
+            OnboardingFlow.takesWisprShortcuts(
+                on: step, hasTaken: source.hasTakenWisprShortcuts(), isComplete: source.isComplete()),
+            let found = wisprShortcuts
+        else { return }
+        for (role, chord) in found.chordsToTake(handsFree: chords.handsFree, savedPushToTalk: chords.savedPushToTalk) {
             if let problem = chords.save(chord, as: role) {
                 Log.app.error(
                     "Cannot use the Wispr Flow chord for \(String(describing: role)): \(String(describing: problem))")
             }
         }
-        wisprRunsWithSameKeys = source.isWisprRunning()
+        source.tookWisprShortcuts()
     }
+
+    /// The ways to dictate whose chord is Wispr Flow's now: Welcome says each was imported.
+    var wisprShortcutRoles: Set<ChordRole> {
+        guard let found = wisprShortcuts else { return [] }
+        return Set([ChordRole.handsFree, .pushToTalk].filter { found.isImported($0, chord: chords.chord($0)) })
+    }
+
+    var isWisprRunning: Bool { !wisprProcesses.isEmpty }
 
     /// The dictionary was read at launch, after the window opened (first launch opens onboarding first).
     func dictionaryOpened() {
@@ -233,14 +269,15 @@ final class OnboardingModel {
 
 extension OnboardingModel.Source {
     /// No Keychain, network or setting behind it. `dictionary` stands for the one Wispr Flow imports into.
-    /// `opensAtLogin` is the login switch's first value, and `loginProblem` what turning it answers; `wisprKeys` are Wispr Flow's shortcuts; `wisprRuns`
-    /// says Wispr Flow is open.
+    /// `opensAtLogin` is the login switch's first value, and `loginProblem` what turning it answers; `wisprKeys` are
+    /// Wispr Flow's shortcuts; `wisprRuns` says Wispr Flow is open. Welcome has not taken Wispr Flow's shortcuts yet.
     @MainActor static func sample(
         dictionary: DictionaryModel? = nil, opensAtLogin: Bool = true, loginProblem: LaunchAtLogin.Problem? = nil,
         wisprKeys: [String: String]? = sampleWisprKeys, wisprRuns: Bool = false
     ) -> Self {
         // What the system holds: a change it refuses leaves it as it was.
-        let loginItem = SampleLoginItem(isOn: opensAtLogin)
+        let loginItem = SampleFlag(isOn: opensAtLogin)
+        let wisprTaken = SampleFlag(isOn: false)
         return Self(
             route: { .openRouterMAI },
             opensAtLogin: { loginItem.isOn },
@@ -254,13 +291,19 @@ extension OnboardingModel.Source {
             openURL: { _ in },
             isWisprInstalled: { dictionary != nil },
             wisprShortcutKeys: { wisprKeys },
-            isWisprRunning: { wisprRuns },
+            watchWispr: { changed in
+                changed(wisprRuns ? [1] : [], [])
+                return nil
+            },
+            hasTakenWisprShortcuts: { wisprTaken.isOn },
+            tookWisprShortcuts: { wisprTaken.isOn = true },
+            isComplete: { false },
             chords: HotkeyChords(defaults: nil),
             dictionary: { dictionary }
         )
     }
 
-    @MainActor private final class SampleLoginItem {
+    @MainActor private final class SampleFlag {
         var isOn: Bool
 
         init(isOn: Bool) {
@@ -275,10 +318,10 @@ extension OnboardingModel.Source {
 
 extension OnboardingModel {
     /// Wispr Flow shows as installed, with `keys` as its shortcuts, without a look on disk (`checkWispr()` runs in a
-    /// task, which a snapshot skips).
+    /// task, which a snapshot skips). Welcome takes them as it does when it shows.
     func showsWisprInstalled(keys: [String: String]? = OnboardingModel.Source.sampleWisprKeys) {
         isWisprInstalled = true
-        wisprShortcutKeys = keys
         dictionaryOpened()
+        wisprFound(keys: keys)
     }
 }

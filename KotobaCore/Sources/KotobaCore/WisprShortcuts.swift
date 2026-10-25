@@ -1,5 +1,5 @@
-/// Wispr Flow's two ways to dictate as kotoba chords, for onboarding's "Use Your Wispr Flow Shortcuts" (owner QA 1,
-/// Q1). Wispr keeps its shortcuts in `prefs.user.shortcuts` of its `config.json`: macOS virtual key codes joined by "+",
+/// Wispr Flow's two ways to dictate as kotoba chords, which onboarding's Welcome takes when it shows (owner QA 2, R1).
+/// Wispr keeps its shortcuts in `prefs.user.shortcuts` of its `config.json`: macOS virtual key codes joined by "+",
 /// each mapped to an action. "popo" is hands-free (Wispr records it as a locked dictation: `isLocked ? "popo" : "ptt"`
 /// in its app bundle), "ptt" is push to talk; its other actions (paste_last_text, polish, lens, dismiss, …) are not
 /// read. Only a chord kotoba can save is taken; for the other mode kotoba keeps its own chord.
@@ -59,6 +59,17 @@ public struct WisprShortcuts: Sendable, Equatable {
         [(ChordRole.handsFree, handsFree?.chord), (.pushToTalk, pushToTalk?.chord)].compactMap { role, chord in
             chord.map { (role, $0) }
         }
+    }
+
+    /// The chords Welcome takes when it shows (owner QA 2, R1): each usable one whose way to dictate still has
+    /// kotoba's own chord (`handsFree` the default, `savedPushToTalk` nil), so a chord the owner changed stays.
+    public func chordsToTake(handsFree: Chord, savedPushToTalk: Chord?) -> [(ChordRole, Chord)] {
+        chords.filter { role, _ in role == .handsFree ? handsFree == .defaultHandsFree : savedPushToTalk == nil }
+    }
+
+    /// `chord`, the one `role` has now, is Wispr Flow's: Welcome says it was imported.
+    public func isImported(_ role: ChordRole, chord: Chord?) -> Bool {
+        chords.contains { $0 == role && $1 == chord }
     }
 
     /// One Wispr Flow shortcut ("55+58+59") as a chord: modifiers with at most one key or mouse button. Wispr's left

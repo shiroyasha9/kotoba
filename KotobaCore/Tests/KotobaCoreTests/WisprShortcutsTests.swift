@@ -62,6 +62,33 @@ struct WisprShortcutsTests {
         let found = Self.shortcuts(["179": "popo", "61": "popo"])
         #expect(found.handsFree == .usable(Chord(modifiers: .rightOption)))
     }
+
+    /// Welcome takes Wispr Flow's chords only for a way to dictate that still has kotoba's own: a chord the owner
+    /// changed (onboarding resumed later) stays.
+    @Test func welcomeTakesAChordOnlyWhereKotobasOwnIsStillSet() {
+        let found = Self.shortcuts(["61": "popo", "49+58": "ptt"])
+        let ptt = Chord(modifiers: .option, keyCode: 49)
+        #expect(
+            found.chordsToTake(handsFree: .defaultHandsFree, savedPushToTalk: nil).map(\.1) == [
+                Chord(modifiers: .rightOption), ptt,
+            ])
+        let changed = Chord(modifiers: .function)
+        #expect(found.chordsToTake(handsFree: changed, savedPushToTalk: nil).map(\.0) == [.pushToTalk])
+        #expect(found.chordsToTake(handsFree: .defaultHandsFree, savedPushToTalk: changed).map(\.0) == [.handsFree])
+    }
+
+    /// "Imported from Wispr Flow" shows while a way to dictate has Wispr Flow's chord, also when it equals kotoba's
+    /// default, and goes once the owner changes it. A mode that follows Wispr Flow's hands-free chord without its own
+    /// Wispr Flow chord is not imported.
+    @Test func aModeIsImportedWhileItsChordIsWisprFlows() {
+        let rightOption = Chord(modifiers: .rightOption)
+        let found = Self.shortcuts(["61": "popo"], handsFree: rightOption)
+        #expect(found.isImported(.handsFree, chord: rightOption))
+        #expect(!found.isImported(.handsFree, chord: .defaultHandsFree))
+        #expect(!found.isImported(.pushToTalk, chord: rightOption))
+        let same = Self.shortcuts(["55+58+59": "popo"])
+        #expect(same.isImported(.handsFree, chord: .defaultHandsFree))
+    }
 }
 
 /// The Done step's "Open at login" switch: what it shows after a turn, and what Done applies.

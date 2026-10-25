@@ -46,6 +46,15 @@ struct OnboardingFlowTests {
         #expect(!OnboardingFlow.offersWisprImport(isWisprInstalled: true, isDictionaryOpen: false))
     }
 
+    /// Welcome takes Wispr Flow's shortcuts once, when it shows during the first setup; never again after (the owner
+    /// may have changed them), and never for a Mac set up before.
+    @Test func welcomeTakesWisprShortcutsOnceBeforeSetupIsDone() {
+        #expect(OnboardingFlow.takesWisprShortcuts(on: .welcome, hasTaken: false, isComplete: false))
+        #expect(!OnboardingFlow.takesWisprShortcuts(on: .welcome, hasTaken: true, isComplete: false))
+        #expect(!OnboardingFlow.takesWisprShortcuts(on: .welcome, hasTaken: false, isComplete: true))
+        #expect(!OnboardingFlow.takesWisprShortcuts(on: .permissions, hasTaken: false, isComplete: false))
+    }
+
     /// kotoba cannot work without the microphone or Accessibility: no Skip, and no Continue before both grants.
     @Test func thePermissionsStepWaitsForBothGrants() {
         #expect(OnboardingFlow.footer(on: .permissions, isDone: false) == .waitsForStep)
