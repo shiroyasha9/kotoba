@@ -70,7 +70,7 @@ A native, open-source alternative to Wispr Flow, made for people who dictate to 
 ### Get technical words right
 
 - Learns your names and technical terms: your dictionary goes to the speech model as hints, and its replacement rules run on every transcript.
-- Learns from your edits: fix a word right after a paste, and kotoba adds it. In a terminal, use "Fix Last Dictation…".
+- Learns from your edits: fix a word right after a paste, and kotoba adds it. In a terminal, use "Fix…".
 - Imports your Wispr Flow dictionary in one click, with the corrections Wispr Flow learned.
 
 ### Clean up, per app
