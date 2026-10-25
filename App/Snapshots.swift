@@ -18,6 +18,9 @@ struct Snapshot {
     /// On for a view that floats over other apps (the pill): it sits on the fixed desktop, which its glass refracts.
     /// Off, it sits on the window background, as a pane in its window.
     var floatsOverDesktop = false
+    /// On for a showcase image (`make readme-images`, `Showcase`): a view sits on the colourful stage instead, and a real
+    /// window is captured with its shadow and put on the stage.
+    var isOnStage = false
     /// Off for a view whose image cannot be trusted: the run lays it out and runs its check, and writes no PNG.
     var hasImage = true
 }
@@ -54,7 +57,6 @@ enum Snapshots {
         Pane.windowSnapshots,
         Pane.switchSnapshots,
         Pane.emptyWindowSnapshots,
-        Pane.readmeSnapshots,
         MainWindow.tileSnapshots,
         MainWindow.pageSystemSnapshots,
         MainWindow.frameChecks,
@@ -147,20 +149,23 @@ enum Snapshots {
             NSApplication.shared.setActivationPolicy(.prohibited)
             Pane.measureWindowMemory()
         }
-        guard let flag = arguments.firstIndex(of: "--snapshots"), arguments.indices.contains(flag + 1) else { return }
+        // `--showcase <folder>` renders the showcase images (`make readme-images`) instead of the registered views.
+        let showcase = arguments.firstIndex(of: "--showcase")
+        guard let flag = showcase ?? arguments.firstIndex(of: "--snapshots"), arguments.indices.contains(flag + 1)
+        else { return }
         isRunning = true
         let folder = URL(filePath: arguments[flag + 1], directoryHint: .isDirectory)
         NSApplication.shared.setActivationPolicy(.prohibited)
         // A run loop block, not a main queue task: `settle()` and the capture turn the run loop inside the pass, and a
         // nested turn runs the main queue's work only outside a main queue task.
         CFRunLoopPerformBlock(CFRunLoopGetMain(), CFRunLoopMode.defaultMode.rawValue) {
-            MainActor.assumeIsolated { writeSnapshots(to: folder) }
+            MainActor.assumeIsolated { writeSnapshots(to: folder, isShowcase: showcase != nil) }
         }
         // The capture asks the window server, so the pass runs once the app has started. It exits when done.
         NSApplication.shared.run()
     }
 
-    private static func writeSnapshots(to folder: URL) -> Never {
+    private static func writeSnapshots(to folder: URL, isShowcase: Bool) -> Never {
         if let problem = SnapshotCapture.problem() {
             FileHandle.standardError.write(Data("Snapshots failed: \(problem)\n".utf8))
             exit(1)
@@ -178,7 +183,7 @@ enum Snapshots {
             where ["png", "txt"].contains(old.pathExtension) {
                 try files.removeItem(at: old)
             }
-            for snapshot in registry.flatMap({ $0() }) {
+            for snapshot in isShowcase ? Showcase.snapshots() : registry.flatMap({ $0() }) {
                 guard snapshot.hasImage else {
                     _ = try layOut(snapshot, in: NSAppearance(named: .aqua) ?? .currentDrawing(), isCaptured: false)
                     continue
@@ -198,12 +203,14 @@ enum Snapshots {
             // The Dock icon's menu is the ready menu bar menu without Quit; the main menu is the release's, also with an update
             // waiting.
             let menus =
-                MenuModel.samples().map { ($0.name, $0.model.text()) }
-                + MenuModel.samples().filter { $0.name == "ready" }.map { ("dock", $0.model.text(for: .dock)) }
-                + [
-                    ("main", MainMenu.outline(MenuModel.Updates())),
-                    ("main-update-waiting", MainMenu.outline(MenuModel.Updates(hasWaitingUpdate: true))),
-                ]
+                isShowcase
+                ? []
+                : MenuModel.samples().map { ($0.name, $0.model.text()) }
+                    + MenuModel.samples().filter { $0.name == "ready" }.map { ("dock", $0.model.text(for: .dock)) }
+                    + [
+                        ("main", MainMenu.outline(MenuModel.Updates())),
+                        ("main-update-waiting", MainMenu.outline(MenuModel.Updates(hasWaitingUpdate: true))),
+                    ]
             for (name, text) in menus {
                 try text.write(to: folder.appending(path: "menu-\(name).txt"), atomically: true, encoding: .utf8)
                 written += 1
@@ -246,8 +253,12 @@ enum Snapshots {
             throw SnapshotError.layout(snapshot.name, "an animation still runs at the capture (\(animation))")
         }
         let image: CGImage
+        let scale = snapshot.scale ?? window.backingScaleFactor
         do {
-            image = try SnapshotCapture.image(of: window, scale: snapshot.scale ?? window.backingScaleFactor)
+            image =
+                snapshot.isOnStage && window.styleMask.contains(.titled)
+                ? try Showcase.windowOnStage(window, scale: scale, appearance: appearance)
+                : try SnapshotCapture.image(of: window, scale: scale)
         } catch {
             throw SnapshotError.capture(snapshot.name, "\(error)")
         }
@@ -274,7 +285,9 @@ enum Snapshots {
                 contentRect: NSRect(origin: .zero, size: size), styleMask: .borderless, backing: .buffered,
                 defer: !isCaptured)
             window.isReleasedWhenClosed = false
-            let backdrop = Backdrop(frame: NSRect(origin: .zero, size: size), isDesktop: snapshot.floatsOverDesktop)
+            let backdrop = Backdrop(
+                frame: NSRect(origin: .zero, size: size),
+                surface: snapshot.isOnStage ? .stage : snapshot.floatsOverDesktop ? .desktop : .window)
             window.contentView = backdrop
             view.setFrameOrigin(NSPoint(x: padding, y: padding))
             backdrop.addSubview(view)
@@ -295,42 +308,6 @@ enum Snapshots {
         case noBitmap(String)
         case layout(String, String)
         case capture(String, String)
-    }
-
-    /// What a view sits on: the window background, or for a view that floats over other apps a fixed desktop, the same
-    /// in light, in dark and in every run, never the owner's wallpaper. Its grey ramp, light at the left and dark at the
-    /// right, shows the view over bright and dark content in one image; its thin black and white stripes give the
-    /// glass edges to bend. Neutral greys keep the glass's own tint visible. Fixed sRGB values, not theme colors, so
-    /// the desktop does not change with the appearance.
-    private final class Backdrop: NSView {
-        private let isDesktop: Bool
-
-        init(frame: NSRect, isDesktop: Bool) {
-            self.isDesktop = isDesktop
-            super.init(frame: frame)
-        }
-
-        @available(*, unavailable)
-        required init?(coder: NSCoder) {
-            fatalError("Backdrop is built in code")
-        }
-
-        override func draw(_ dirtyRect: NSRect) {
-            guard isDesktop else {
-                NSColor.windowBackgroundColor.setFill()
-                dirtyRect.fill()
-                return
-            }
-            let light = NSColor(srgbRed: 0.93, green: 0.93, blue: 0.92, alpha: 1)
-            let dark = NSColor(srgbRed: 0.16, green: 0.17, blue: 0.2, alpha: 1)
-            NSGradient(starting: light, ending: dark)?.draw(in: bounds, angle: 0)
-            for (offset, white) in [(0.0, 0.0), (8.0, 1.0)] {
-                NSColor(srgbRed: white, green: white, blue: white, alpha: 0.3).setFill()
-                for x in stride(from: offset, to: bounds.width, by: 16) {
-                    NSRect(x: x, y: 0, width: 2, height: bounds.height).fill(using: .sourceOver)
-                }
-            }
-        }
     }
 }
 

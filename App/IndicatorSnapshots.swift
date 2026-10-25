@@ -50,6 +50,27 @@ extension IndicatorPanel {
         }
     }
 
+    /// The pill's main looks for the README and the site (`make readme-images`): recording, transcribing, done and a
+    /// notice with a button, each alone and all four in one column, on the showcase stage.
+    static func showcaseSnapshots() -> [Snapshot] {
+        let looks = [
+            sample("recording", .init(.recording(isLong: false))), sample("transcribing", .init(.transcribing)),
+            sample("done", .init(.idle, isPasted: true)),
+            Sample(name: "learned", content: PillContent(.learned("Kubernetes", id: UUID()))),
+        ].compactMap(\.self)
+        return (looks.map { [$0] } + [looks]).map { shown in
+            let name = shown.count == 1 ? "showcase-pill-\(shown[0].name)" : "showcase-pills"
+            var snapshot = Snapshot(name: name) {
+                Showcase.pillStage(shown.map { pill(showing: $0, at: .bottomCenter) })
+            } check: { stage in
+                stage.subviews.lazy.compactMap { ($0 as? PillView).flatMap { problem(of: $0, named: name) } }.first
+            }
+            snapshot.isOnStage = true
+            snapshot.scale = 2
+            return snapshot
+        }
+    }
+
     private static var samples: [Sample] {
         let id = DictationID()
         var silent = context

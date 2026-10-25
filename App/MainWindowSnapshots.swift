@@ -41,13 +41,17 @@ extension MainWindow {
         }
     }
 
-    /// The README images (`Pane.readmeSnapshots`, `make readme-images`): the whole window content at one size, as
-    /// `windowSnapshot` draws it, each page from its top, so its header shows. The pane's scroll bar is not in the image.
-    static func readmeSnapshot(of panes: [Pane], selecting id: Pane.ID, named name: String) -> Snapshot {
-        var snapshot = Snapshots.fixedWindow(named: name, size: NSSize(width: 960, height: 610), check: overflow) {
-            MainView(panes: panes, selection: Selection(panes: panes, showing: id), identity: .release)
-                .scrollIndicators(.hidden)
+    /// A showcase image (`Pane.showcaseSnapshots`, `make readme-images`): the real window at the default size, title
+    /// bar, toolbar and shadow included, with the release's name and icon, on the showcase stage. The page's scroll
+    /// bar is not in the image (an overlay scroll bar shows as the page appears).
+    static func showcaseSnapshot(of panes: [Pane], selecting id: Pane.ID, named name: String) -> Snapshot {
+        var snapshot = Snapshots.window(named: name, contentSize: PageMetrics.defaultWindowSize) {
+            let view = MainView(panes: panes, selection: Selection(panes: panes, showing: id), identity: .release)
+            return window(showing: view, root: view.scrollIndicators(.hidden))
+        } check: {
+            overflow($0)
         }
+        snapshot.isOnStage = true
         snapshot.scale = 2
         return snapshot
     }
@@ -60,7 +64,7 @@ extension MainWindow {
     }
 
     /// Content cut off in a scroll view with no scroller, which cannot scroll (a list page's pinned cards at large
-    /// text, owner QA 1, Q18). Not for the README images, which hide their scrollers on purpose.
+    /// text, owner QA 1, Q18). Not for the showcase images, which hide their scroll bars on purpose.
     private static func clipped(in view: NSView) -> String? {
         if let scroll = view as? NSScrollView, !scroll.hasVerticalScroller,
             let document = scroll.documentView?.frame.height, document > scroll.contentView.bounds.height + 0.5

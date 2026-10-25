@@ -147,7 +147,12 @@ final class MainWindow: NSObject, NSWindowDelegate, NSMenuItemValidation {
     /// and the hosting controller does not take `navigationTitle` as the window title (owner QA 2, R6: every window
     /// after the first opened titled with the app's name).
     static func window(showing view: MainView) -> NSWindow {
-        let window = NSWindow(contentViewController: NSHostingController(rootView: view))
+        window(showing: view, root: view)
+    }
+
+    /// The window with `root`, `view` with modifiers, as content (the showcase hides the scroll bars).
+    static func window(showing view: MainView, root: some View) -> NSWindow {
+        let window = NSWindow(contentViewController: NSHostingController(rootView: root))
         window.title = view.selection.pane.current.title
         window.styleMask = [.titled, .closable, .miniaturizable, .resizable, .fullSizeContentView]
         window.toolbarStyle = .unified

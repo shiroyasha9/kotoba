@@ -134,11 +134,14 @@ enum SnapshotCapture {
     }
 
     /// The window as the window server composites it. A window that is never ordered in is captured on its own
-    /// (`desktopIndependentWindow`), so nothing shows on screen.
-    static func image(of window: NSWindow, scale: CGFloat) throws -> CGImage {
+    /// (`desktopIndependentWindow`), so nothing shows on screen. With a `shadowMargin`, the image is that much wider
+    /// and taller on each side and has the window's shadow: the capture puts the window and its shadow at the image's
+    /// top left, the window at `scale` (measured 2026-10-25: a 900 x 560 pt window, its shadow 21 pt on each side,
+    /// 16 pt above and 28 pt under it).
+    static func image(of window: NSWindow, scale: CGFloat, shadowMargin: CGFloat = 0) throws -> CGImage {
         #if DEBUG
             do {
-                return try captureOnce(window, scale: scale)
+                return try captureOnce(window, scale: scale, shadowMargin: shadowMargin)
             } catch SCStreamError.userDeclined {
                 throw CaptureFailure.noScreenRecording(responsibleApp)
             }
@@ -148,7 +151,7 @@ enum SnapshotCapture {
     }
 
     #if DEBUG
-        private static func captureOnce(_ window: NSWindow, scale: CGFloat) throws -> CGImage {
+        private static func captureOnce(_ window: NSWindow, scale: CGFloat, shadowMargin: CGFloat) throws -> CGImage {
             window.displayIfNeeded()
             CATransaction.flush()
             let id = CGWindowID(window.windowNumber)
@@ -170,11 +173,11 @@ enum SnapshotCapture {
                 }
                 let filter = SCContentFilter(desktopIndependentWindow: listed)
                 let configuration = SCStreamConfiguration()
-                configuration.width = Int((filter.contentRect.width * scale).rounded())
-                configuration.height = Int((filter.contentRect.height * scale).rounded())
+                configuration.width = Int(((filter.contentRect.width + 2 * shadowMargin) * scale).rounded())
+                configuration.height = Int(((filter.contentRect.height + 2 * shadowMargin) * scale).rounded())
                 // With the cursor, the capture of a window that is not on screen fails (-3811).
                 configuration.showsCursor = false
-                configuration.ignoreShadowsSingleWindow = true
+                configuration.ignoreShadowsSingleWindow = shadowMargin == 0
                 configuration.colorSpaceName = CGColorSpace.sRGB
                 return try await SCScreenshotManager.captureImage(contentFilter: filter, configuration: configuration)
             }

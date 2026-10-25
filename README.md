@@ -19,20 +19,15 @@
 
 <p align="center">
   <picture>
-    <source media="(prefers-color-scheme: dark)" srcset="docs/images/readme-home-dark.png">
-    <img src="docs/images/readme-home-light.png" alt="The kotoba window on Home: today’s words with the week’s bars, the time saved and the streak, the keys for hands-free and push to talk, and the last dictation with Fix, Copy and Paste Again">
+    <source media="(prefers-color-scheme: dark)" srcset="docs/images/showcase-home-dark.png">
+    <img src="docs/images/showcase-home-light.png" alt="The kotoba window on Home: today’s words with the week’s bars, the time saved and the streak, the keys for hands-free and push to talk, and the last dictation with Fix, Copy and Paste Again">
   </picture>
 </p>
 
 <p align="center">
   <picture>
-    <source media="(prefers-color-scheme: dark)" srcset="docs/images/indicator-listening-dark.png">
-    <img src="docs/images/indicator-listening-light.png" width="201" alt="The kotoba indicator while it listens, with a mic level bar">
-  </picture>
-  &nbsp;
-  <picture>
-    <source media="(prefers-color-scheme: dark)" srcset="docs/images/indicator-transcribing-dark.png">
-    <img src="docs/images/indicator-transcribing-light.png" width="182" alt="The kotoba indicator while it transcribes">
+    <source media="(prefers-color-scheme: dark)" srcset="docs/images/showcase-pills-dark.png">
+    <img src="docs/images/showcase-pills-light.png" width="400" alt="The kotoba pill in four looks: recording, with the voice level bars, Cancel and Stop; transcribing; done, with a check; and the notice that kotoba added Kubernetes to the dictionary, with Undo">
   </picture>
 </p>
 
@@ -106,15 +101,15 @@ MAI-Transcribe-2 (recommended) or Grok through OpenRouter, with one key. Under S
   <tr>
     <td width="50%">
       <picture>
-        <source media="(prefers-color-scheme: dark)" srcset="docs/images/readme-history-dark.png">
-        <img src="docs/images/readme-history-light.png" alt="History: a search field, how long kotoba keeps audio, and dictations by day with the app, length and word count of each, and the one waiting for a retry">
+        <source media="(prefers-color-scheme: dark)" srcset="docs/images/showcase-history-dark.png">
+        <img src="docs/images/showcase-history-light.png" alt="History: a search field, how long kotoba keeps audio, and dictations by day with the app, length and word count of each">
       </picture>
       <p align="center">History</p>
     </td>
     <td width="50%">
       <picture>
-        <source media="(prefers-color-scheme: dark)" srcset="docs/images/readme-activity-dark.png">
-        <img src="docs/images/readme-activity-light.png" alt="Activity: the daily average with a week of words per day, then words per minute, streak, time saved and words learned">
+        <source media="(prefers-color-scheme: dark)" srcset="docs/images/showcase-activity-dark.png">
+        <img src="docs/images/showcase-activity-light.png" alt="Activity: the daily average with a week of words per day, then words per minute, streak, time saved and words learned">
       </picture>
       <p align="center">Activity</p>
     </td>
@@ -122,17 +117,17 @@ MAI-Transcribe-2 (recommended) or Grok through OpenRouter, with one key. Under S
   <tr>
     <td width="50%">
       <picture>
-        <source media="(prefers-color-scheme: dark)" srcset="docs/images/readme-modes-dark.png">
-        <img src="docs/images/readme-modes-light.png" alt="Cleanup: what cleanup does with an example, cleanup for every dictation in code or writing apps, the cleanup shortcut, and Rewrite with an example">
+        <source media="(prefers-color-scheme: dark)" srcset="docs/images/showcase-modes-dark.png">
+        <img src="docs/images/showcase-modes-light.png" alt="Cleanup: what cleanup does with an example, cleanup for every dictation in code or writing apps, the cleanup shortcut, and Rewrite with an example">
       </picture>
       <p align="center">Cleanup</p>
     </td>
     <td width="50%">
       <picture>
-        <source media="(prefers-color-scheme: dark)" srcset="docs/images/readme-general-dark.png">
-        <img src="docs/images/readme-general-light.png" alt="General: sounds, the indicator, open at login, and whether kotoba shows in the Dock and menu bar">
+        <source media="(prefers-color-scheme: dark)" srcset="docs/images/showcase-dictionary-dark.png">
+        <img src="docs/images/showcase-dictionary-light.png" alt="Dictionary: Import and Add in the toolbar, Learn from edits, and words such as PyTorch, Supabase and Kubernetes, with replacements such as cloud code to Claude Code">
       </picture>
-      <p align="center">General</p>
+      <p align="center">Dictionary</p>
     </td>
   </tr>
 </table>

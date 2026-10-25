@@ -106,29 +106,39 @@ extension Pane {
             named: name, isFramed: isFramed)
     }
 
-    /// The images in the README's "Screenshots" section, which `make readme-images` copies to docs/images: the whole
-    /// window content at one size, as the release shows it, each page from its top.
-    static func readmeSnapshots() -> [Snapshot] {
-        let panes = samplePanes(home: .readme)
-        let ids: [PaneID] = [.home, .history, .activity, .modes, .general]
+    /// The README's and the site's window images (`make readme-images`, `Showcase`): the whole window as the release
+    /// shows it, each page from its top: dictations with text (as Home's), none selected, and words a reader knows in
+    /// the dictionary.
+    static func showcaseSnapshots() -> [Snapshot] {
+        let dictionary = PersonalDictionary(
+            terms: ["PyTorch", "Supabase", "Vercel", "Kubernetes", "zshrc"],
+            rules: [
+                ReplacementRule(find: "cloud code", replacement: "Claude Code"),
+                ReplacementRule(find: "um", replacement: ""),
+            ])
+        let history = HistoryModel(rows: HistoryController.sampleRows().filter(\.hasText))
+        let panes = samplePanes(home: .readme, history: history, dictionary: dictionary)
+        let ids: [PaneID] = [.home, .history, .activity, .dictionary, .modes]
         return ids.map { id in
-            MainWindow.readmeSnapshot(of: panes, selecting: id, named: "readme-\(id.rawValue)")
+            MainWindow.showcaseSnapshot(of: panes, selecting: id, named: "showcase-\(id.rawValue)")
         }
     }
 
-    /// Every pane with sample data; `isPlaying` shows History's first row's audio playing.
+    /// Every pane with sample data; `isPlaying` shows History's first row's audio playing, `history` replaces History's
+    /// rows.
     private static func samplePanes(
-        suggestions: [DictionarySuggestion] = [], isPlaying: Bool = false, home: HomeModel = .sample
+        suggestions: [DictionarySuggestion] = [], isPlaying: Bool = false, home: HomeModel = .sample,
+        history: HistoryModel? = nil, dictionary: PersonalDictionary = sampleDictionary
     ) -> [Pane] {
         let rows = HistoryController.sampleRows()
-        let history = HistoryModel(rows: rows, playing: isPlaying ? rows[0].id : nil)
-        history.selection = [rows[0].id]
+        let sampleHistory = HistoryModel(rows: rows, playing: isPlaying ? rows[0].id : nil)
+        sampleHistory.selection = [rows[0].id]
         return [
             .home(home),
-            .history(history),
+            .history(history ?? sampleHistory),
             .general(.sample()),
             .shortcuts(.sample()),
-            .dictionary(sampleModel(sampleDictionary, suggestions: suggestions)),
+            .dictionary(sampleModel(dictionary, suggestions: suggestions)),
             .modes(ModesModel(source: .sample(), chords: HotkeyChords(defaults: nil))),
             .microphones(MicrophoneModel(source: .sample()) {}),
             .speech(.sample(route: .openRouterMAI, azureEndpoint: "")),

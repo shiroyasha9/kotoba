@@ -91,12 +91,18 @@ SNAPSHOTS := build/snapshots$(if $(AGENT),-$(AGENT))
 snapshots: build-check
 	$(call DEBUG_APP,$(CHECK_DERIVED))/Contents/MacOS/kotoba --snapshots $(SNAPSHOTS)
 
-# The README's screenshots (`Pane.readmeSnapshots`) in macOS's default blue accent, not this Mac's (-AppleAccentColor 4
-# sets it for this run only), copied to docs/images.
+# The README's and the site's images (App/ShowcaseSnapshots.swift): the main window as macOS draws it and the pill's
+# main looks, on a colourful stage, light and dark, at 2x, in macOS's default blue accent, not this Mac's
+# (-AppleAccentColor 4 sets it for this run only). pngquant (at most 256 colours, no visible banding at 80-95) and
+# oxipng take each image from about 1.3 MB to about 0.2 MB; then they are copied to docs/images.
 README_SHOTS := build/readme-images$(if $(AGENT),-$(AGENT))
 readme-images: build-check
-	$(call DEBUG_APP,$(CHECK_DERIVED))/Contents/MacOS/kotoba --snapshots $(README_SHOTS) -AppleAccentColor 4
-	cp $(README_SHOTS)/readme-*.png docs/images/
+	@command -v pngquant >/dev/null && command -v oxipng >/dev/null \
+		|| { echo "readme-images needs pngquant and oxipng: brew install pngquant oxipng"; exit 1; }
+	$(call DEBUG_APP,$(CHECK_DERIVED))/Contents/MacOS/kotoba --showcase $(README_SHOTS) -AppleAccentColor 4
+	pngquant --quality 80-95 --speed 1 --strip --force --ext .png $(README_SHOTS)/*.png
+	oxipng -o 4 --strip safe -q $(README_SHOTS)/*.png
+	cp $(README_SHOTS)/showcase-*.png docs/images/
 
 # The main window's memory, offscreen, with sample data (App/Settings/SettingsSnapshots.swift `measureWindowMemory`):
 # footprint at launch, with every pane shown and after close. Run with the environment the app gets from Launch Services

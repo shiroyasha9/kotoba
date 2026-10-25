@@ -24,7 +24,7 @@ Cause (research): the code, not a missing library. No MIT or Apache-2.0 library 
 ### Process
 - First a native prototype in a Worktrunk worktree on branch `ui-polish`, registered in `App/Snapshots.swift`. It covers Home, Activity and every pill state, and it sets the visual system: the content column, the header card, rows, cards, the chart, symbol sizes and the pill geometry. The owner approves it. Then every page uses that system. The prototype views go when the system is extracted.
 - One release, 0.5.0, with the new system, all pages, the pill and the new copy.
-- README: the owner takes the hero images (glass, the floating sidebar) on screen after the redesign. `make readme-images` keeps the pane images. Since 2026-10-24 they capture real glass and the active look, and `drawsSidebarColors` is gone; the sidebar still draws edge to edge, not inset, in snapshots, which stays open until the owner's on-screen check.
+- README: `make readme-images` renders the README's and the site's images (2026-10-25): the real window with its title bar, glass toolbar, rounded corners and shadow, and the pill's main looks, on a colourful stage, light and dark. macOS 27 has no floating sidebar (sidebar spike, 2026-10-24): the sidebar is glass over the page's background, edge to edge, in the images as on screen.
 - Each change reports its measured cost (repo rule): `make window-memory` for the window (Swift Charts is new), the pill's idle CPU and footprint as in `docs/research/memory-spike.md`.
 
 ### Window
