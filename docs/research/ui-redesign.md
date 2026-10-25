@@ -81,7 +81,7 @@ Stays a separate window (the status menu opens it while another app is in front)
 ### Pill
 Pattern: one small glass capsule that changes shape; no status words (Hex, Wispr Flow, Jot). Nothing inside it has its own glass (Apple: avoid glass on glass), so the buttons use a fill.
 - Idle ("Show indicator: Always"): a still 40×8 glass bar (8×40 at a side edge), not a circle. On hover (a tracking area, no timer) it grows and shows the shortcut keycaps. A click starts a dictation.
-- Recording: about 9 mirrored bars driven by the existing level events, no "Listening". Push to talk: bars only. Hands-free: wider, with Cancel (×) and Stop buttons. A small wand when the dictation will be cleaned up.
+- Recording: 9 bars driven by the existing level events, no "Listening". A scrolling waveform, as in Voice Memos (owner QA 1, Q16): each level enters as a new bar at the trailing edge (the bottom at a side edge) and the bars slide toward the leading edge, one place per level event; no centre origin. Push to talk: bars only. Hands-free: wider, with Cancel (×) and Stop buttons. A small wand when the dictation will be cleaned up.
 - Processing: the bars settle into one slow sweep (a Core Animation loop that runs only while text is on its way), then a short check bloom, then idle. No "Transcribing" or "Pasted".
 - Words show only when the user must know something or can act: errors with a fix button (Retry, Add Key…, Choose Mic…), a silent mic (orange bars and "No sound from the mic"), Undo after Esc or a rewrite, "Added ‘word’", the 10-minute timer. The capsule widens for them and stays one glass shape.
 - VoiceOver reads a label for each state ("Recording", "Recording, hands-free", …). Undo and Retry stay real buttons.

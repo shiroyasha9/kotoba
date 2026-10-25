@@ -9,7 +9,7 @@ extension IndicatorPanel {
     private struct Sample {
         let name: String
         let content: PillContent
-        /// The bars show silence, not the mirrored ripple of a few speech levels.
+        /// The bars show silence, not a second of speech.
         var isSilent = false
     }
 
@@ -193,14 +193,14 @@ extension IndicatorPanel {
     }
 
     /// The pill showing `sample` at `anchor`, in a view the size of its capsule (at least as thick as the capsule), after
-    /// a few level events, so the bars show the mirrored ripple, not one flat step.
+    /// a second of speech levels, so every bar of the waveform shows one.
     private static func pill(showing sample: Sample, at anchor: IndicatorAnchor) -> PillView {
         let pill = PillView(frame: .zero)
         pill.anchor = anchor
         pill.isClickable = sample.content.click != nil
         pill.toolTip = sample.content.toolTip
         pill.look = timedNow(sample.content.look)
-        for level in [0.3, 0.9, 0.5, 0.8] where !sample.content.look.isProcessing {
+        for level in [0.2, 0.5, 0.9, 0.6, 0.3, 0.7, 1.0, 0.5, 0.8, 0.4] where !sample.content.look.isProcessing {
             pill.level = sample.isSilent ? 0 : level
         }
         let size = pill.shapeSize
