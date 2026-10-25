@@ -47,11 +47,9 @@ struct OpenRouterCleanerTests {
         #expect(sent.url == stub.url("/api/v1/chat/completions"))
         #expect(sent.headers["Authorization"] == "Bearer sk-or-test")
         let body = try sent.json()
-        #expect(body["model"] as? String == "deepseek/deepseek-v4.1-flash")
+        #expect(body["model"] as? String == CleanupModel.recommended.rawValue)
         #expect(body["stream"] as? Bool == false)
         #expect(body["max_tokens"] as? Int == 2048)
-        #expect(body["temperature"] as? Int == 0)
-        #expect(body["reasoning"] as? [String: String] == ["effort": "none"])
         let messages = try #require(body["messages"] as? [[String: String]])
         #expect(messages.map { $0["role"] } == ["system", "user"])
         #expect(

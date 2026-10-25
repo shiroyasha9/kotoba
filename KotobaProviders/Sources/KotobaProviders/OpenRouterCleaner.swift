@@ -12,6 +12,9 @@ public enum CleanupModel: String, CaseIterable, Sendable {
     case qwenCerebras = "qwen/qwen3.8-27b"
     case claudeHaiku = "anthropic/claude-haiku-5.5"
 
+    /// A new install's model, and the Cleanup page's choice until the owner picks one.
+    public static let recommended = deepSeekFlash
+
     public var title: String {
         switch self {
         case .deepSeekFlash: "DeepSeek V4.1 Flash"
@@ -68,14 +71,8 @@ public final class OpenRouterCleaner: TextCleaner {
             user: "<transcript>\n\(escaped(transcript))\n</transcript>", rewriting: transcript, floor: 2_048)
         // The switches per model from bench/cleanup.ts (each model's `reasoning` entry in GET /models).
         switch model {
-        case .deepSeekFlash:
-            body.reasoning = .effort("none")
-            body.temperature = 0
-            body.provider.hosts = PolishModel.deepSeekFlash.hosts
-        case .geminiFlashLite:
-            // Reasoning is mandatory for this model; "minimal" is its lowest effort. No temperature: the model ignores
-            // a custom one (Google's model page, 2026-10-15).
-            body.reasoning = .effort("minimal")
+        case .deepSeekFlash: PolishModel.deepSeekFlash.configure(&body)
+        case .geminiFlashLite: PolishModel.geminiFlashLite.configure(&body)
         case .qwenCerebras:
             body.reasoning = .off
             body.temperature = 0

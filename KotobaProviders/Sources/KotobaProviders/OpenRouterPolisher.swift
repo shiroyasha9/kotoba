@@ -25,6 +25,21 @@ public enum PolishModel: String, CaseIterable, Sendable {
         case .geminiFlashLite: .any
         }
     }
+
+    /// The hosts and switches from bench/polish/run.ts and docs/research/polish.md, section 4. Cleanup sends the same
+    /// for these models.
+    func configure(_ body: inout ChatRequest) {
+        body.provider.hosts = hosts
+        switch self {
+        case .deepSeekFlash:
+            body.reasoning = .effort("none")
+            body.temperature = 0
+        case .geminiFlashLite:
+            // Reasoning is mandatory for this model; "minimal" is its lowest effort. No temperature: the model ignores
+            // a custom one (Google's model page, 2026-10-15).
+            body.reasoning = .effort("minimal")
+        }
+    }
 }
 
 /// Polish through OpenRouter's `POST /chat/completions`, with prompt v2 (bench/polish/prompts.ts, `POLISH_PROMPTS[2]`).
@@ -76,16 +91,7 @@ public final class OpenRouterPolisher: TextPolisher {
         var body = ChatRequest(
             model: model.rawValue, system: systemPrompt, user: "<text>\n\(escaped(text))\n</text>", rewriting: text,
             floor: 4_096)
-        body.provider.hosts = model.hosts
-        // The switches from bench/polish/run.ts and docs/research/polish.md, section 4.
-        switch model {
-        case .deepSeekFlash:
-            body.reasoning = .effort("none")
-            body.temperature = 0
-        case .geminiFlashLite:
-            // Reasoning is mandatory for this model; "minimal" is its lowest effort. It ignores a temperature.
-            body.reasoning = .effort("minimal")
-        }
+        model.configure(&body)
         return body
     }
 
