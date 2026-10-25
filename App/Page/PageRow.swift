@@ -5,14 +5,14 @@ import SwiftUI
 /// the subtitle fits on one line (Notifications' app rows) and sits on the title line once the text wraps (Keyboard's
 /// "Keyboard navigation"). `ViewThatFits` tries the one-line layout first, so the rule needs no measured offset.
 /// VoiceOver reads the title, subtitle and icon as one element and the trailing content as its own elements, as System
-/// Settings' rows read "title, subtitle", then the control: a row's buttons stay buttons. A short note on the row
-/// (Welcome's "Imported from Wispr Flow") goes in `extra`, under the subtitle in the row's text column.
-struct PageRow<Icon: View, Trailing: View, Extra: View>: View {
+/// Settings' rows read "title, subtitle", then the control: a row's buttons stay buttons. A mark on the row (Try It's
+/// sparkles for a chord from Wispr Flow) goes in `badge`, beside the title, and VoiceOver reads its label after the title.
+struct PageRow<Icon: View, Trailing: View, Badge: View>: View {
     let title: String
     var subtitle: String?
     @ViewBuilder let icon: Icon
     @ViewBuilder let trailing: Trailing
-    @ViewBuilder let extra: Extra
+    @ViewBuilder let badge: Badge
 
     var body: some View {
         ViewThatFits(in: .horizontal) {
@@ -24,51 +24,54 @@ struct PageRow<Icon: View, Trailing: View, Extra: View>: View {
     private func line(isOneLine: Bool) -> some View {
         HStack(alignment: isOneLine ? .center : .titleLine) {
             if Icon.self == EmptyView.self {
-                RowText(title: title, subtitle: subtitle, isOneLine: isOneLine) { extra }
-                    .accessibilityElement(children: .combine)
+                RowText(
+                    title: title, subtitle: subtitle, isOneLine: isOneLine, badge: { badge }, extra: { EmptyView() }
+                )
+                .accessibilityElement(children: .combine)
             } else {
-                TileLabel(title: title, subtitle: subtitle, isOneLine: isOneLine) {
-                    icon
-                } extra: {
-                    extra
-                }
+                TileLabel(
+                    title: title, subtitle: subtitle, isOneLine: isOneLine, icon: { icon }, badge: { badge },
+                    extra: { EmptyView() })
             }
             Spacer(minLength: PageMetrics.rowTrailingGap)
             // On one line, the trailing content's whole box centres on the row, whatever centre it marks, so the
-            // names under `NamedKeycaps` add no height. Wrapped, its `.titleLine` goes on the title's.
+            // names under `NamedKeycaps` add height only where the box is taller than the row's text. Wrapped, its
+            // `.titleLine` goes on the title's.
             trailing
                 .alignmentGuide(VerticalAlignment.center) { $0.height / 2 }
         }
     }
 }
 
-extension PageRow where Extra == EmptyView {
+extension PageRow where Badge == EmptyView {
     init(title: String, subtitle: String?, @ViewBuilder icon: () -> Icon, @ViewBuilder trailing: () -> Trailing) {
-        self.init(title: title, subtitle: subtitle, icon: icon, trailing: trailing, extra: { EmptyView() })
+        self.init(title: title, subtitle: subtitle, icon: icon, trailing: trailing, badge: { EmptyView() })
     }
 }
 
 extension PageRow where Icon == EmptyView {
-    init(title: String, subtitle: String?, @ViewBuilder trailing: () -> Trailing, @ViewBuilder extra: () -> Extra) {
-        self.init(title: title, subtitle: subtitle, icon: { EmptyView() }, trailing: trailing, extra: extra)
+    init(title: String, subtitle: String?, @ViewBuilder trailing: () -> Trailing, @ViewBuilder badge: () -> Badge) {
+        self.init(title: title, subtitle: subtitle, icon: { EmptyView() }, trailing: trailing, badge: badge)
     }
 }
 
-extension PageRow where Icon == EmptyView, Extra == EmptyView {
+extension PageRow where Icon == EmptyView, Badge == EmptyView {
     init(title: String, subtitle: String?, @ViewBuilder trailing: () -> Trailing) {
-        self.init(title: title, subtitle: subtitle, icon: { EmptyView() }, trailing: trailing, extra: { EmptyView() })
+        self.init(title: title, subtitle: subtitle, icon: { EmptyView() }, trailing: trailing, badge: { EmptyView() })
     }
 }
 
 /// A row's title, its one grey subtitle and its icon in the page's icon column, centred on both lines as in System
 /// Settings' rows. Custom: SwiftUI's `Label` centres its icon on the first line only, so a two-line row's tile sat high
 /// (owner trial, 2026-10-24), and a custom `LabelStyle` loses the form's subtitle style.
-struct TileLabel<Icon: View, Extra: View>: View {
+struct TileLabel<Icon: View, Badge: View, Extra: View>: View {
     let title: String
     var subtitle: String?
     /// Title and subtitle each kept on one line (`PageRow` tries this first).
     var isOneLine = false
     @ViewBuilder let icon: Icon
+    /// Beside the title: a `PageRow`'s badge.
+    @ViewBuilder var badge: Badge
     /// Under the subtitle: a header card's link.
     @ViewBuilder var extra: Extra
 
@@ -76,31 +79,45 @@ struct TileLabel<Icon: View, Extra: View>: View {
         RowLeading {
             icon
         } content: {
-            RowText(title: title, subtitle: subtitle, isOneLine: isOneLine, extra: { extra })
+            RowText(title: title, subtitle: subtitle, isOneLine: isOneLine, badge: { badge }, extra: { extra })
         }
         .accessibilityElement(children: .combine)
     }
 }
 
-extension TileLabel where Extra == EmptyView {
+extension TileLabel where Badge == EmptyView {
+    init(
+        title: String, subtitle: String?, isOneLine: Bool = false, @ViewBuilder icon: () -> Icon,
+        @ViewBuilder extra: () -> Extra
+    ) {
+        self.init(
+            title: title, subtitle: subtitle, isOneLine: isOneLine, icon: icon, badge: { EmptyView() }, extra: extra)
+    }
+}
+
+extension TileLabel where Badge == EmptyView, Extra == EmptyView {
     init(title: String, subtitle: String?, isOneLine: Bool = false, @ViewBuilder icon: () -> Icon) {
         self.init(title: title, subtitle: subtitle, isOneLine: isOneLine, icon: icon) { EmptyView() }
     }
 }
 
 /// A row's title and its one grey subtitle in the form's own styles (body; subheadline, secondary), measured equal in
-/// the snapshot. The title marks `VerticalAlignment.titleLine`.
-struct RowText<Extra: View>: View {
+/// the snapshot. The title marks `VerticalAlignment.titleLine`; a badge sits on its baseline after it.
+struct RowText<Badge: View, Extra: View>: View {
     let title: String
     var subtitle: String?
     var isOneLine = false
+    @ViewBuilder var badge: Badge
     @ViewBuilder var extra: Extra
 
     var body: some View {
         VStack(alignment: .leading) {
-            Text(title)
-                .fixedSize(horizontal: isOneLine, vertical: false)
-                .alignmentGuide(.titleLine) { $0[VerticalAlignment.center] }
+            HStack(alignment: .firstTextBaseline) {
+                Text(title)
+                    .fixedSize(horizontal: isOneLine, vertical: false)
+                    .alignmentGuide(.titleLine) { $0[VerticalAlignment.center] }
+                badge
+            }
             if let subtitle {
                 Text(subtitle)
                     .font(.subheadline)
@@ -112,9 +129,10 @@ struct RowText<Extra: View>: View {
     }
 }
 
-extension RowText where Extra == EmptyView {
+extension RowText where Badge == EmptyView, Extra == EmptyView {
     init(title: String, subtitle: String?, isOneLine: Bool = false) {
-        self.init(title: title, subtitle: subtitle, isOneLine: isOneLine) { EmptyView() }
+        self.init(
+            title: title, subtitle: subtitle, isOneLine: isOneLine, badge: { EmptyView() }, extra: { EmptyView() })
     }
 }
 

@@ -174,7 +174,7 @@ extension OnboardingController {
             window("onboarding-tryIt-wispr") { tookWispr(model(.welcome, ready)) },
             window("onboarding-tryIt-wispr-running") { tookWispr(model(.welcome, ready, wisprRuns: true)) },
             window("onboarding-tryIt-wispr-both") { tookWispr(model(.welcome, ready, wisprKeys: both)) },
-            // The tallest Try It: a line under each shortcut row and the footnote.
+            // The tallest Try It: a mark beside each shortcut row's title and the footnote.
             window("onboarding-tryIt-wispr-both-running") {
                 tookWispr(model(.welcome, ready, wisprKeys: both, wisprRuns: true))
             },
@@ -198,10 +198,11 @@ extension OnboardingController {
         return model
     }
 
-    /// Try It's shortcut rows with their text in three lines (the Wispr Flow line under the subtitle): Hands-free,
-    /// whose subtitle fits on one line, and Push to talk, whose subtitle wraps, each over the same row with its keycaps
-    /// hidden at no height. The run fails when the keycaps' centre is not Change…'s (owner QA 3, S1), when the keycaps'
-    /// names make a row taller, or when the wrapped row's keycaps leave its title line.
+    /// Try It's shortcut rows with the Wispr Flow mark beside their titles: Hands-free, whose subtitle fits on one line,
+    /// and Push to talk, whose subtitle wraps, each over the same row with its keycaps hidden at no height. The run fails
+    /// when the keycaps' centre is not Change…'s (owner QA 3, S1), when the wrapped row's keycaps leave its title line,
+    /// when the gaps between keycaps differ within or across the rows or
+    /// the rows' last keycaps end at different x (owner QA 4, U2), or when a name touches the next name or Change….
     private static func keycapsBesideButtonSnapshot() -> Snapshot {
         let frames = KeycapFrames()
         let chords = HotkeyChords(defaults: nil, pushToTalk: Chord(modifiers: .option, keyCode: KeyCode.space))
@@ -221,7 +222,9 @@ extension OnboardingController {
                         PageRow(title: StatusText.shortcutTitle(role), subtitle: subtitle) {
                             HStack {
                                 if isShown {
-                                    NamedKeycaps(keys: keys).modifier(frames.measuring("\(row) keycaps"))
+                                    NamedKeycaps(keys: keys)
+                                        .modifier(frames.measuring("\(row) keycaps"))
+                                        .modifier(frames.measuringParts(row))
                                 } else {
                                     // Their width, so the text wraps alike, at no height, with their guides reset to
                                     // that zero height's centre, so Change… sits as it would alone.
@@ -232,8 +235,8 @@ extension OnboardingController {
                                 }
                                 Button("Change…") {}.modifier(frames.measuring("\(row) button"))
                             }
-                        } extra: {
-                            WisprFlowPoint.ImportedLine()
+                        } badge: {
+                            WisprFlowPoint.ImportedMark()
                         }
                         .modifier(frames.measuring(row))
                     }
@@ -251,8 +254,12 @@ extension OnboardingController {
     @MainActor final class KeycapFrames {
         static let space = "keycaps-rows"
         var rects: [String: CGRect] = [:]
+        /// Each shown row's keycaps and their names, left to right.
+        var parts: [String: (keys: [CGRect], names: [CGRect])] = [:]
 
         func measuring(_ name: String) -> KeycapMeasuring { KeycapMeasuring(frames: self, name: name) }
+
+        func measuringParts(_ row: String) -> KeycapPartsMeasuring { KeycapPartsMeasuring(frames: self, row: row) }
 
         func problem(in roles: [ChordRole]) -> String? {
             for role in roles {
@@ -264,14 +271,38 @@ extension OnboardingController {
                 if abs(keysCentre - button.midY) > 0.5 {
                     return "the \(role) keycaps centre \(keysCentre - button.midY) pt off Change…"
                 }
-                if row.height > bare.height + 0.5 {
-                    return "the keycaps make the \(role) row \(row.height) pt tall, \(bare.height) pt without them"
-                }
                 // Change… alone sits on the title line of a wrapped row.
                 let offTitle = (keysCentre - row.minY) - (bareButton.midY - bare.minY)
                 if role == .pushToTalk, abs(offTitle) > 0.5 {
                     return "the \(role) keycaps centre \(offTitle) pt off the row's title line"
                 }
+            }
+            return spacingProblem(in: roles)
+        }
+
+        /// One gap between every two keycaps of every row, the last keycaps at one x, and every name clear of the next
+        /// name and of Change….
+        private func spacingProblem(in roles: [ChordRole]) -> String? {
+            var gaps: [CGFloat] = []
+            var ends: [CGFloat] = []
+            for role in roles {
+                guard let (keys, names) = parts["\(role) shown"], let last = keys.last,
+                    let button = rects["\(role) shown button"]
+                else { return "the \(role) keycaps were not measured" }
+                gaps += zip(keys, keys.dropFirst()).map { $1.minX - $0.maxX }
+                ends.append(last.maxX)
+                for (name, next) in zip(names, names.dropFirst()) where next.minX - name.maxX < 1 {
+                    return "the \(role) key names are \(next.minX - name.maxX) pt apart"
+                }
+                if let name = names.last, button.minX - name.maxX < 1 {
+                    return "the \(role) last key name ends \(button.minX - name.maxX) pt before Change…"
+                }
+            }
+            if let low = gaps.min(), let high = gaps.max(), high - low > 0.5 {
+                return "the keycap gaps run from \(low) to \(high) pt"
+            }
+            if let low = ends.min(), let high = ends.max(), high - low > 0.5 {
+                return "the rows' last keycaps end \(high - low) pt apart"
             }
             return nil
         }
@@ -300,6 +331,27 @@ extension OnboardingController {
 
     private static func window(_ name: String, _ model: @escaping @MainActor () -> OnboardingModel) -> Snapshot {
         Snapshots.fixedWindow(named: name, size: size) { OnboardingView(model: model()) {} }
+    }
+}
+
+/// Records the frames of a `NamedKeycaps`' keycaps and names in `KeycapFrames.space` under `row`.
+struct KeycapPartsMeasuring: ViewModifier {
+    let frames: OnboardingController.KeycapFrames
+    let row: String
+
+    func body(content: Content) -> some View {
+        content.backgroundPreferenceValue(NamedKeycaps.Parts.self) { parts in
+            Color.clear.onGeometryChange(for: [CGRect].self) { proxy in
+                let origin = proxy.frame(in: .named(OnboardingController.KeycapFrames.space)).origin
+                return parts.map { proxy[$0.bounds].offsetBy(dx: origin.x, dy: origin.y) }
+            } action: { rects in
+                let isName = parts.map(\.isName)
+                let sorted = { (names: Bool) in
+                    zip(rects, isName).filter { $0.1 == names }.map(\.0).sorted { $0.minX < $1.minX }
+                }
+                frames.parts[row] = (sorted(false), sorted(true))
+            }
+        }
     }
 }
 
