@@ -5,8 +5,9 @@ import SwiftUI
 /// The indicator pill (docs/research/ui-redesign.md, "Pill"): one `NSGlassEffectView` capsule that changes shape, no
 /// status words, words only when the owner must know something or can act. The view covers the pill window's room
 /// (`IndicatorPlacement.room`), so the capsule changes shape inside it and the window does not move. Nothing in it has
-/// glass of its own. A look change flows the glass to its new shape with one spring (`morph`). At idle it does no work:
-/// no timer, display link or animation; hover is a tracking area.
+/// glass of its own. A look change flows the glass to its new shape with Siri's motion (`morph`); the pill opens out of
+/// the idle bar as it appears and goes back into it (`appear`, `vanish`). At idle it does no work: no timer, display
+/// link or animation; hover is a tracking area.
 final class PillView: NSView {
     enum Action {
         /// A click on the capsule, not on a button.
@@ -48,6 +49,11 @@ final class PillView: NSView {
     var onDragBegan: ((NSPoint) -> Void)?
     var onDragMoved: ((NSPoint) -> Void)?
     var onDragEnded: ((NSPoint) -> Void)?
+    /// Steps the glass's moves on another clock: the pill's clips (`PillClips`) set its frame frame by frame. Nil on
+    /// screen, where the glass's spring runs in process (`morph`).
+    var glassClock: ((GlassMove) -> Void)?
+    /// The pill's clips ask for Reduce Motion (`reducesMotion`).
+    static var prefersStill = false
 
     /// The capsule, the pill's one glass: the navigation layer, and nothing in it has glass of its own. Its frame is
     /// the look's shape in the room.
@@ -56,10 +62,10 @@ final class PillView: NSView {
     let stack = NSStackView()
     /// The glass's content view: the stack, the lone check, and an item fading out where it was after its look ended.
     let glassContent = NSView()
-    private let bars = PillBars()
+    let bars = PillBars()
     private let wand = PillView.symbolView("wand.and.sparkles", color: .labelColor)
     private let warning = PillView.symbolView("exclamationmark.triangle.fill", color: .systemOrange)
-    let check = PillView.symbolView("checkmark", color: .systemGreen, weight: .semibold)
+    let check = PillCheck()
     private let label = NSTextField(labelWithString: "")
     private let elapsed = NSTextField(labelWithString: "")
     private let keycaps = NSHostingView(rootView: PillKeycaps())
@@ -74,6 +80,14 @@ final class PillView: NSView {
     var isDragging = false
     var isHovering = false
     var hoverArea: NSTrackingArea?
+    /// The loading dots' light, while text is on its way and as it fades.
+    private var light: PillLoadingLight?
+    /// The next look change comes from hidden or goes (`appear`, `vanish`).
+    var pendingFade: Fade?
+    /// Runs once the pill has gone (`vanish`); nil once a new look takes it back.
+    var vanished: (() -> Void)?
+    /// Each glass fade's turn: a fade's end that a later fade replaced does nothing.
+    var fadeToken = 0
 
     override init(frame: NSRect) {
         super.init(frame: frame)
@@ -88,10 +102,11 @@ final class PillView: NSView {
         for view in [label, elapsed] {
             view.setAccessibilityElement(false)
         }
-        // Each item keeps its own layer while it is out of the glass, so its fade-in (`fade`) has a layer to run on
-        // when it comes back.
-        for view in [label, elapsed, keycaps, wand, warning, cancel, stop, button] as [NSView] {
+        // Each item keeps its own layer while it is out of the glass, so its fade-in (`morph`) has a layer to run on
+        // when it comes back; and it may blur as it comes and goes.
+        for view in [label, elapsed, keycaps, wand, warning, cancel, stop, button, bars] as [NSView] {
             view.wantsLayer = true
+            view.layerUsesCoreImageFilters = true
         }
         keycaps.sizingOptions = .intrinsicContentSize
         keycaps.setAccessibilityElement(false)
@@ -117,11 +132,9 @@ final class PillView: NSView {
             stack.centerXAnchor.constraint(equalTo: glassContent.centerXAnchor),
             stack.centerYAnchor.constraint(equalTo: glassContent.centerYAnchor), stackWidth, stackHeight,
         ])
-        // The lone check is centred by its image's frame, not through the stack: the stack centres a symbol's
-        // alignment rect, which sits off its drawn centre.
+        // The lone check is centred in the glass, not through the stack.
         check.frame = glassContent.bounds
         check.autoresizingMask = [.width, .height]
-        check.imageAlignment = .alignCenter
         glassContent.addSubview(check)
         glass.contentView = glassContent
         addSubview(glass)
@@ -133,14 +146,10 @@ final class PillView: NSView {
         fatalError("PillView is built in code")
     }
 
-    private static func symbolView(_ name: String, color: NSColor, weight: NSFont.Weight? = nil) -> NSImageView {
+    private static func symbolView(_ name: String, color: NSColor) -> NSImageView {
         let view = NSImageView(image: NSImage(systemSymbolName: name, accessibilityDescription: nil) ?? NSImage())
-        // The same text style as the words beside it, so symbol and text weights match; the lone check is bolder.
-        var configuration = NSImage.SymbolConfiguration(textStyle: .body, scale: weight == nil ? .medium : .large)
-        if let weight {
-            configuration = configuration.applying(.init(pointSize: 0, weight: weight, scale: .large))
-        }
-        view.symbolConfiguration = configuration
+        // The same text style as the words beside it, so symbol and text weights match.
+        view.symbolConfiguration = NSImage.SymbolConfiguration(textStyle: .body, scale: .medium)
         view.contentTintColor = color
         view.setAccessibilityElement(false)
         return view
@@ -198,8 +207,6 @@ final class PillView: NSView {
     /// Shows the views the look needs, in order, and moves the capsule to its new shape: animated on screen, at once
     /// offscreen and for the first look.
     private func apply(from old: PillLook) {
-        bars.isVertical = isVertical
-        bars.isSweeping = look.isProcessing
         let before = stack.arrangedSubviews
         let places = before.map { (view: $0, offset: offset(of: $0), frame: stack.convert($0.frame, to: glassContent)) }
         let (text, face) = (label.stringValue, button.rootView.face)
@@ -221,13 +228,21 @@ final class PillView: NSView {
         for view in views {
             view.alphaValue = 1
         }
+        // Bars that leave keep their way and their loading dots while they fade (`morph` ends them).
+        if views.contains(bars) {
+            bars.isVertical = isVertical
+        }
+        if look.isProcessing {
+            bars.isLoading = true
+        } else if views.contains(bars) || window?.isVisible != true {
+            bars.isLoading = false
+        }
         stack.edgeInsets = edgeInsets(for: views)
         contentLength = naturalLength()
         let size = shapeSize
         stackWidth.constant = size.width
         stackHeight.constant = size.height
-        check.isHidden = look != .done
-        drawCheck(isShown: look == .done && old != .done)
+        check.show(look == .done, animated: window?.isVisible == true, at: now)
         runClock()
         updateAccessibility()
         morph(
@@ -237,7 +252,9 @@ final class PillView: NSView {
                 },
                 entering: views.filter { !before.contains($0) || renewed[$0] == true },
                 returning: returning,
-                leaving: places.filter { !views.contains($0.view) }.map { ($0.view, $0.frame) }))
+                leaving: places.filter { !views.contains($0.view) }.map { ($0.view, $0.frame) }, fade: pendingFade))
+        pendingFade = nil
+        updateLight(from: old)
         // Last: the hover it finds can change the look (the idle bar's keys), and that change runs its own apply.
         trackHover()
     }
@@ -308,12 +325,20 @@ extension PillView {
             : NSEdgeInsets(top: 0, left: first, bottom: 0, right: last)
     }
 
-    /// The check draws itself on (SF Symbols' draw effect) when a dictation is pasted; a one-shot animation.
-    private func drawCheck(isShown: Bool) {
-        check.removeAllSymbolEffects(animated: false)
-        guard isShown, window != nil else { return }
-        check.addSymbolEffect(.drawOn, animated: false)
-        check.removeSymbolEffect(ofType: .drawOn, animated: true)
+    /// The loading dots' light comes with the loading look over the content, and fades as it ends.
+    private func updateLight(from old: PillLook) {
+        if look.isProcessing, light?.fits(shape: shapeSize, isVertical: isVertical) != true {
+            light?.removeFromSuperview()
+            let light = PillLoadingLight(shape: shapeSize, isVertical: isVertical, isStill: Self.reducesMotion)
+            light.frame = glassContent.bounds
+            light.autoresizingMask = [.width, .height]
+            glassContent.addSubview(light)
+            light.start(at: now)
+            self.light = light
+        } else if !look.isProcessing, let light {
+            light.end()
+            self.light = nil
+        }
     }
 
     /// The recording's time, once a second while it shows: the clock sleeps to the next whole second and wakes for it

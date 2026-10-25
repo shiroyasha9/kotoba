@@ -278,18 +278,21 @@ extension IndicatorPanel {
         return pressed.count == expected ? nil : "VoiceOver presses ran \(pressed.count) actions, not \(expected)"
     }
 
-    /// No work at idle: the idle bar has no animation, also after a sweep and a check, and the sweep runs while text is
-    /// on its way. Layer animations are the only clock the pill has at idle (no timer, no display link).
+    /// No work at idle: the idle bar has no animation, also after the loading dots and a check, and the loading dots
+    /// run while text is on its way. Layer animations are the only clock the pill has at idle (no timer, no display
+    /// link).
     private static func idleCostProblem() -> String? {
         let pill = PillView(frame: .zero)
         if !pill.animatedLayers.isEmpty { return "the idle pill animates \(pill.animatedLayers.count) layers" }
         pill.look = .processing(.transcribing)
-        guard pill.animatedLayers.count == PillBars.count else {
-            return "the sweep animates \(pill.animatedLayers.count) layers, not \(PillBars.count)"
+        // Offscreen only loops run: each dot's and the light's two spots, or with Reduce Motion the rim's breath.
+        let loops = PillView.reducesMotion ? 1 : PillBars.count + 2
+        guard pill.animatedLayers.count == loops else {
+            return "the loading look animates \(pill.animatedLayers.count) layers, not \(loops)"
         }
         pill.look = .done
         pill.look = .idle
         return pill.animatedLayers.isEmpty
-            ? nil : "after a sweep the idle pill animates \(pill.animatedLayers.count) layers"
+            ? nil : "after the loading look the idle pill animates \(pill.animatedLayers.count) layers"
     }
 }

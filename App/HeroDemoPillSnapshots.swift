@@ -15,13 +15,11 @@ final class DemoPill {
     private let clock = CACurrentMediaTime()
     /// The last look change, while its glass and items still move.
     private var change: Change?
-    /// Since when the check draws on, and the mask that uncovers it from its left.
-    private var drawOn: (at: Double, mask: CALayer)?
 
     private struct Change {
         let at: Double
-        let from: NSRect
-        let to: NSRect
+        let move: PillView.GlassMove
+        let isCheck: Bool
         let entering: [NSView]
         let leaving: [NSView]
     }
@@ -38,7 +36,7 @@ final class DemoPill {
         window.contentView = backdrop
         view.frame = backdrop.bounds.insetBy(dx: PillGeometry.shadowMargin, dy: PillGeometry.shadowMargin)
         backdrop.addSubview(view)
-        // The pill's animations (the bars settling and sweeping) run on the demo's clock, not the wall clock.
+        // The pill's animations (the bars settling, the loading dots) run on the demo's clock, not the wall clock.
         view.layer?.speed = 0
         view.levelsPerSecond = HeroDemo.fps
     }
@@ -56,14 +54,10 @@ final class DemoPill {
         for item in view.stack.arrangedSubviews {
             item.alphaValue = 1
         }
-        view.check.layer?.mask = nil
-        drawOn = nil
         if look == .done {
-            // The check's draw-on effect does not run in a window that is not on screen; this mask stands in for it.
-            let mask = CALayer()
-            mask.backgroundColor = CGColor(gray: 0, alpha: 1)
-            view.check.layer?.mask = mask
-            drawOn = (time, mask)
+            // Offscreen the check shows whole at once; it draws itself on at the demo's time.
+            view.check.show(false, animated: false, at: view.now)
+            view.check.show(true, animated: true, at: view.now)
         }
         guard isAnimated else {
             change = nil
@@ -74,44 +68,29 @@ final class DemoPill {
         for (item, place) in leaving {
             view.park(item, at: place)
         }
+        let spring = IndicatorMotion.spring(
+            from: ScreenRect(from), to: ScreenRect(view.glass.frame), reducesMotion: false)
         change = Change(
-            at: time, from: from, to: view.glass.frame,
+            at: time, move: PillView.GlassMove(from: from, to: view.glass.frame, spring: spring),
+            isCheck: look == .done,
             entering: shown.filter { item in !places.contains { $0.0 === item } }, leaving: leaving.map(\.0))
     }
 
     /// The pill at the demo's `time`: its clock there, its glass on the spring's way, its items fading.
     func step(to time: Double) {
         view.layer?.timeOffset = clock + time
-        if let drawOn {
-            let check = view.check
-            let symbol = check.image?.size.width ?? check.bounds.width
-            let progress = UnitCurve.easeOut.value(at: min(1, (time - drawOn.at) / Self.drawOnLength))
-            CATransaction.begin()
-            CATransaction.setDisableActions(true)
-            drawOn.mask.frame = NSRect(
-                x: 0, y: 0, width: (check.bounds.width - symbol) / 2 + symbol * progress, height: check.bounds.height)
-            CATransaction.commit()
-        }
         guard let change else { return }
         let elapsed = time - change.at
-        let progress = GlassSpring().spring.value(target: 1.0, time: elapsed)
-        let from = change.from
-        let to = change.to
-        view.glass.frame = NSRect(
-            x: from.minX + (to.minX - from.minX) * progress, y: from.minY + (to.minY - from.minY) * progress,
-            width: from.width + (to.width - from.width) * progress,
-            height: from.height + (to.height - from.height) * progress)
+        view.glass.frame = change.move.frame(at: elapsed)
         for item in change.leaving {
-            item.alphaValue = 1 - UnitCurve.easeIn.value(at: min(1, elapsed / PillView.fadeOutLength))
+            let length = IndicatorMotion.leaveLength(beforeCheck: change.isCheck)
+            item.alphaValue = 1 - UnitCurve.linear.value(at: min(1, elapsed / length))
         }
-        let fadeIn = (elapsed - PillView.fadeInDelay) / PillView.fadeInLength
         for item in change.entering {
+            let fadeIn = (elapsed - IndicatorMotion.enterDelay(isBars: item is PillBars)) / IndicatorMotion.enterLength
             item.alphaValue = UnitCurve.easeOut.value(at: min(1, max(0, fadeIn)))
         }
     }
-
-    /// How long the check takes to draw on, about as long as the symbol effect.
-    private static let drawOnLength = 0.4
 
     /// `image` with the pill drawn over it at its place.
     func drawn(over image: CGImage) throws -> CGImage {

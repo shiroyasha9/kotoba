@@ -9,7 +9,7 @@ indirect enum PillLook: Equatable {
     /// at every anchor.
     case hover(keys: [String])
     case recording(PillRecording)
-    /// Text is on its way: the bars sweep.
+    /// Text is on its way: the loading dots.
     case processing(PillStep)
     /// The text is pasted: a check, then idle.
     case done
@@ -53,7 +53,7 @@ indirect enum PillLook: Equatable {
     }
 }
 
-/// What the sweep waits on, for VoiceOver.
+/// What the loading dots wait on, for VoiceOver.
 enum PillStep: Equatable {
     case transcribing
     case cleaningUp

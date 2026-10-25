@@ -73,7 +73,7 @@ public enum IndicatorPlacement {
     /// A press that moves less than this is a click, not a drag.
     static let dragThreshold = 4.0
 
-    /// A pill with no words (bars, the sweep, the check, the idle bar) stands vertical at a side edge. Words, keys or the
+    /// A pill with no words (bars, the loading dots, the check, the idle bar) stands vertical at a side edge. Words, keys or the
     /// time keep it horizontal at every anchor, so they read left to right.
     public static func isVertical(at anchor: IndicatorAnchor, hasWords: Bool) -> Bool {
         !hasWords && anchor != .bottomCenter

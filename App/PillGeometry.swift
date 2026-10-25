@@ -35,6 +35,4 @@ enum PillGeometry {
     /// A bar's thickness and its shortest length: a dot at silence.
     static let barThickness: CGFloat = 3
     static let barGap: CGFloat = 2
-    /// The sweep's wave: the dots grow to this many times their length and back.
-    static let sweepScale: CGFloat = 2.6
 }

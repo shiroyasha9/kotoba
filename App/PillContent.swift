@@ -20,7 +20,7 @@ enum PillRank: Comparable {
     /// The App's own message (an added word and its Undo, a development build that gives way), for its time or
     /// until a click.
     case notice
-    /// A dictation's looks: recording, the sweep, its messages and Undo.
+    /// A dictation's looks: recording, the loading dots, its messages and Undo.
     case dictation
 
     /// The rank of a dictation state's pill; the panel ranks the App's notices itself.
@@ -130,7 +130,7 @@ extension IndicatorPanel {
         }
     }
 
-    /// What the sweep waits on.
+    /// What the loading dots wait on.
     private static func step(of phase: DictationPhase) -> PillStep {
         switch phase {
         case .cleaning: .cleaningUp

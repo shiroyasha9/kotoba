@@ -177,10 +177,16 @@ final class IndicatorPanel {
         }
         pill.isClickable = content.click != nil
         pill.toolTip = content.toolTip
-        pill.look = look(for: content)
+        // From hidden the pill opens out of the idle bar on screen; while it goes, it comes back from where it is.
         if !wasVisible {
+            pill.prepareToAppear()
             panel.orderFrontRegardless()
             Self.rejoinAllSpaces(panel)
+        }
+        if !wasVisible || pill.isVanishing {
+            pill.appear(look(for: content))
+        } else {
+            pill.look = look(for: content)
         }
         if let timer = content.timer {
             start(timer)
@@ -230,14 +236,17 @@ final class IndicatorPanel {
         window != nil && window === built?.panel
     }
 
-    /// Hides the pill. Its look goes back to the idle bar offscreen, so no sweep, check or clock runs while hidden.
+    /// Hides the pill: it goes back into the idle bar and fades (`PillView.vanish`), then its window goes. Its look is the
+    /// idle bar from the start, so no clock runs while it goes, and the loading dots and the check end as they fade; none
+    /// runs while hidden.
     private func orderOut() {
         endDrag()
         content = nil
         guard let built else { return }
-        built.panel.orderOut(nil)
-        built.pill.look = .idle
-        screen = nil
+        built.pill.vanish { [weak self] in
+            built.panel.orderOut(nil)
+            self?.screen = nil
+        }
     }
 
     private func build() -> (panel: NSPanel, pill: PillView) {

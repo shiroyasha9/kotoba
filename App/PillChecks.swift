@@ -73,7 +73,7 @@ extension PillView {
         }
     }
 
-    /// A live phase with no words: a recording that shows only its bars and buttons, or the sweep.
+    /// A live phase with no words: a recording that shows only its bars and buttons, or the loading dots.
     var isLive: Bool {
         switch look {
         case .processing: true

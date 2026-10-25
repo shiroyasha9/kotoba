@@ -7,7 +7,7 @@ public enum IndicatorLook: Sendable, Equatable {
     /// The idle bar ("Show indicator: Always").
     case idle
     case recording(IndicatorRecording)
-    /// Text is on its way (transcription, cleanup, rewrite): the bars sweep.
+    /// Text is on its way (transcription, cleanup, rewrite): the loading dots.
     case processing
     /// The dictation was pasted and nothing else is on its way: a check, then idle.
     case done

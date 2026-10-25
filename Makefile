@@ -12,7 +12,7 @@ SWIFT_SRC   := App KotobaCore/Sources KotobaCore/Tests KotobaCore/Package.swift 
                KotobaStorage/Sources KotobaStorage/Tests KotobaStorage/Package.swift
 SWIFTFORMAT := xcrun swift-format
 
-.PHONY: gen build build-check test lint lint-files format format-lint privacy check view-checks snapshots readme-images hero-demo memory window-memory latency latency-log stop-probe timing test-slow \
+.PHONY: gen build build-check test lint lint-files format format-lint privacy check view-checks snapshots readme-images hero-demo pill-clip memory window-memory latency latency-log stop-probe timing test-slow \
 	release dmg appcast
 
 gen:
@@ -115,6 +115,15 @@ hero-demo: build-check
 		|| { echo "hero-demo needs ffmpeg, pngquant and oxipng: brew install ffmpeg pngquant oxipng"; exit 1; }
 	$(call DEBUG_APP,$(CHECK_DERIVED))/Contents/MacOS/kotoba --hero-demo $(HERO_DEMO) -AppleAccentColor 4
 	scripts/hero-demo.sh $(HERO_DEMO)
+
+# The pill's clips (App/PillClipSnapshots.swift, scripts/pill-clip.sh): the shipping pill with its glass through a
+# dictation's looks, frame by frame, from windows never shown: "While dictating", "Always" and Reduce Motion, each an
+# MP4 at full and quarter speed. Needs Screen Recording for the terminal, as snapshots; about 3 min after the build.
+PILL_CLIP := build/pill-clip$(if $(AGENT),-$(AGENT))
+pill-clip: build-check
+	@command -v ffmpeg >/dev/null || { echo "pill-clip needs ffmpeg: brew install ffmpeg"; exit 1; }
+	$(call DEBUG_APP,$(CHECK_DERIVED))/Contents/MacOS/kotoba --pill-clip $(PILL_CLIP)
+	scripts/pill-clip.sh $(PILL_CLIP)
 
 # The main window's memory, offscreen, with sample data (App/Settings/SettingsSnapshots.swift `measureWindowMemory`):
 # footprint at launch, with every pane shown and after close. Run with the environment the app gets from Launch Services

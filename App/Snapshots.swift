@@ -150,11 +150,13 @@ enum Snapshots {
             NSApplication.shared.setActivationPolicy(.prohibited)
             Pane.measureWindowMemory()
         }
-        // `--showcase <folder>` renders the showcase images (`make readme-images`) instead of the registered views, and
-        // `--hero-demo <folder>` the site's hero demo frames (`make hero-demo`, `HeroDemo`).
+        // `--showcase <folder>` renders the showcase images (`make readme-images`) instead of the registered views,
+        // `--hero-demo <folder>` the site's hero demo frames (`make hero-demo`, `HeroDemo`), and `--pill-clip <folder>`
+        // the pill's clips (`make pill-clip`, `PillClips`).
         let showcase = arguments.firstIndex(of: "--showcase")
         let heroDemo = arguments.firstIndex(of: "--hero-demo")
-        guard let flag = heroDemo ?? showcase ?? arguments.firstIndex(of: "--snapshots"),
+        let pillClip = arguments.firstIndex(of: "--pill-clip")
+        guard let flag = pillClip ?? heroDemo ?? showcase ?? arguments.firstIndex(of: "--snapshots"),
             arguments.indices.contains(flag + 1)
         else { return }
         isRunning = true
@@ -166,6 +168,9 @@ enum Snapshots {
             MainActor.assumeIsolated {
                 if heroDemo != nil {
                     HeroDemo.run(writingTo: folder)
+                }
+                if pillClip != nil {
+                    PillClips.run(writingTo: folder)
                 }
                 writeSnapshots(to: folder, isShowcase: showcase != nil)
             }

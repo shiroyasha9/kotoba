@@ -8,7 +8,7 @@ import SwiftUI
 /// (`SnapshotCapture`): each window's title bar, toolbar, text and caret (`DemoWindow`), and the pill's glass, which
 /// refracts the frame under it. Offscreen the pill takes each look at once
 /// (`PillView.morph`), so the demo moves the glass with the pill's own spring and fades its items with the pill's
-/// timings, and steps the pill's Core Animation clock (the bars settling, the sweep, the check drawing on) with the
+/// timings, and steps the pill's Core Animation clock (the bars settling, the loading dots, the check drawing on) with the
 /// frames. Nothing shows on screen.
 @MainActor
 enum HeroDemo {
@@ -50,7 +50,7 @@ enum HeroDemo {
     private struct Beat {
         /// The shortcut: the window fades in from the bare stage with the pill recording on it.
         let press: Double
-        /// The stop tap: the bars sweep while the text is on its way.
+        /// The stop tap: the loading dots while the text is on its way.
         let stop: Double
         /// The text lands and the check shows.
         let paste: Double
@@ -261,7 +261,7 @@ private struct Speech {
         // The level measured over the 100 ms that ended at each event, and the tween each one still runs.
         var shown = measured(last)
         for event in max(0, last - 2)...max(0, last) {
-            let progress = (time - Double(event) * Self.interval) / PillBars.tween
+            let progress = (time - Double(event) * Self.interval) / IndicatorMotion.fallTween
             guard progress < 1 else { continue }
             shown += (measured(event - 1) - measured(event)) * (1 - UnitCurve.easeInOut.value(at: progress))
         }
