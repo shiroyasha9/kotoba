@@ -138,7 +138,7 @@ struct MenuModel {
         if pendingCount > 0 {
             items.append(
                 .action(
-                    "Retry \(StatusText.counted(pendingCount, "Saved Dictation"))", target: target,
+                    "Send \(StatusText.counted(pendingCount, "Saved Dictation"))", target: target,
                     action: #selector(StatusMenuActions.retryFailed)))
         }
         if !recovered.isEmpty {
