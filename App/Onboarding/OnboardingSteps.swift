@@ -23,12 +23,11 @@ struct WelcomeStep: View {
                 text: "Add names and terms to your dictionary, and kotoba spells them your way.")
             Point(
                 "Private", systemImage: "hand.raised", tint: .blue,
-                text: "No account. Your audio goes only to the speech service you choose, with your own key.")
-            // A reason to switch for a Wispr Flow user (owner QA, 2026-10-25); the import itself is on the last step.
-            if model.offersWisprImport {
-                Point(
-                    "From Wispr Flow", systemImage: "square.and.arrow.down", tint: .indigo,
-                    text: "Bring your Wispr Flow dictionary along. You can import it on the last step.")
+                text: "No account. Audio goes only to the speech service you choose, with your key.")
+            // A reason to switch for a Wispr Flow user (owner QA, 2026-10-25): the dictionary (imported on the last
+            // step) and the shortcuts (taken here) in one row.
+            if model.offersWisprImport || model.wisprShortcuts != nil {
+                WisprFlowPoint(model: model, shortcuts: model.wisprShortcuts)
             }
         } header: {
             StepHeading(
@@ -44,9 +43,6 @@ struct WelcomeStep: View {
             }
             PageRow(title: StatusText.shortcutTitle(.pushToTalk), subtitle: StatusText.pushToTalkHelp(chords)) {
                 shortcut(.pushToTalk, chords.pushToTalk)
-            }
-            if let wispr = model.wisprShortcuts {
-                WisprShortcutsRow(model: model, shortcuts: wispr)
             }
         }
         .sheet(isPresented: Binding(get: { changing != nil }, set: { if !$0 { changing = nil } })) {

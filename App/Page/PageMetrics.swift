@@ -137,10 +137,9 @@ enum PageMetrics {
     /// heading and footer) takes it.
     static let formInset: CGFloat = 20
 
-    /// The onboarding window: the page column's width. 720 pt tall: Welcome with Wispr Flow's point and shortcuts row
-    /// needs 706 pt (owner QA 1, Q1); with the title bar the window is about 748 pt, inside a 1280×800 screen's 776 pt
-    /// under the menu bar.
-    static let onboardingWindowSize = CGSize(width: columnWidth, height: 720)
+    /// The onboarding window: the page column's width and the main window's first height, so it fits a 1280×800 screen
+    /// with the menu bar and the Dock.
+    static let onboardingWindowSize = CGSize(width: columnWidth, height: defaultWindowSize.height)
 
     /// The app icon on onboarding's Welcome step: Journal's and Freeform's welcome sheets draw theirs at about 68 pt
     /// (refs/apple/journal-welcome-light, freeform-welcome-light).

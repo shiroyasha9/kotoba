@@ -45,8 +45,8 @@ final class OnboardingModel {
                 setPlaysSounds: { AppDefaults.areSoundCuesOn = $0 },
                 openURL: { NSWorkspace.shared.open($0) },
                 isWisprInstalled: { await WisprFlowImport.isInstalled() },
-                wisprShortcutKeys: { await WisprShortcutsRow.readKeys() },
-                isWisprRunning: { WisprShortcutsRow.isWisprRunning },
+                wisprShortcutKeys: { await WisprFlowPoint.readKeys() },
+                isWisprRunning: { WisprFlowPoint.isWisprRunning },
                 chords: .shared,
                 dictionary: dictionary
             )

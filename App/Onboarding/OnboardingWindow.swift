@@ -162,7 +162,12 @@ extension OnboardingController {
                 model.useWisprShortcuts()
                 return model
             },
-            window("onboarding-welcome-no-wispr") { model(.welcome, ready, wisprKeys: nil) },
+            window("onboarding-welcome-no-wispr-shortcuts") { model(.welcome, ready, wisprKeys: nil) },
+            // Both ways to dictate come from Wispr Flow: the button goes under the chords.
+            window("onboarding-welcome-wispr-both") {
+                model(.welcome, ready, wisprKeys: ["62+61": "popo", "49+58": "ptt"])
+            },
+            window("onboarding-welcome-no-wispr") { model(.welcome, ready, isWisprInstalled: false) },
             MainWindow.sheetSnapshot(named: "onboarding-change-shortcut") {
                 ShortcutSheet(chords: HotkeyChords(defaults: nil), role: .handsFree)
             },
@@ -175,15 +180,18 @@ extension OnboardingController {
         _ step: OnboardingStep, _ readiness: Readiness, keys: [ProviderAccount: KeyStatus] = [:], hasKey: Bool = false,
         loginProblem: LaunchAtLogin.Problem? = nil,
         wisprKeys: [String: String]? = OnboardingModel.Source.sampleWisprKeys,
-        wisprRuns: Bool = false
+        wisprRuns: Bool = false, isWisprInstalled: Bool = true
     ) -> OnboardingModel {
         let model = OnboardingModel(
             step: step, readiness: readiness, keyChecks: .sample(keys, savedKeys: hasKey ? [.openRouter] : []),
             source: .sample(
-                dictionary: Pane.sampleModel(PersonalDictionary()), loginProblem: loginProblem, wisprKeys: wisprKeys,
+                dictionary: isWisprInstalled ? Pane.sampleModel(PersonalDictionary()) : nil, loginProblem: loginProblem,
+                wisprKeys: wisprKeys,
                 wisprRuns: wisprRuns),
             openOtherSpeechServices: {})
-        model.showsWisprInstalled(keys: wisprKeys)
+        if isWisprInstalled {
+            model.showsWisprInstalled(keys: wisprKeys)
+        }
         return model
     }
 
