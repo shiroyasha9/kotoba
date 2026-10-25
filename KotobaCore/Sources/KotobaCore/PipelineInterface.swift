@@ -136,7 +136,8 @@ extension DictationPipeline {
         /// How long Undo can resume a recording after Esc.
         public var undoWindow: Duration
         /// The longest a live cleanup may take; then the raw transcript pastes (about 2x the cleanup p90 of 2.3 s in
-        /// kotoba-bench-v1). A late answer is dropped and its cost still goes to the ledger. A retry has no paste
+        /// kotoba-bench-v1; DeepSeek's p90 of 1.2 s plus one try on the fallback model, Gemini's p90 of 2.2 s, fits too:
+        /// docs/research/real-usage-pass.md). A late answer is dropped and its cost still goes to the ledger. A retry has no paste
         /// waiting, so it has no deadline.
         public var cleanupDeadline: Duration
         /// The longest Polish waits for its answer (bench p90 1.3 s, plus one try on the fallback model); then it pastes

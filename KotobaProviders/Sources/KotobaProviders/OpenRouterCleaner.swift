@@ -2,10 +2,10 @@ import Foundation
 import KotobaCore
 
 /// The cleanup models kotoba-bench-v1 measured, with the request switches each one needs (bench/cleanup.ts).
-public enum CleanupModel: String, CaseIterable, Sendable {
+public enum CleanupModel: String, CaseIterable, Sendable, ChatModel {
     /// Default: on 60 of the owner's real terminal dictations (2026-10-25, Code prompt v3) p50 559 ms and p90 1,152 ms
     /// on Together, against 1,048 and 2,174 ms for Gemini; a judge found no lost content in 60 and a change of meaning
-    /// in 2 (Gemini: 3 lost, 6 changed). The same model and hosts as Polish.
+    /// in 2 (Gemini: 3 lost, 6 changed). The same model and hosts as Polish, and the same fallback to Gemini.
     case deepSeekFlash = "deepseek/deepseek-v4.1-flash"
     /// The lowest WER of the three cleanup LLMs on the 100-clip sample (10.7%), Google endpoint.
     case geminiFlashLite = "google/gemini-3.5-flash-lite"
@@ -21,6 +21,15 @@ public enum CleanupModel: String, CaseIterable, Sendable {
         case .geminiFlashLite: "Gemini 3.5 Flash-Lite"
         case .qwenCerebras: "Qwen 3.8 27B (Cerebras)"
         case .claudeHaiku: "Claude Haiku 5.5"
+        }
+    }
+
+    /// The model that cleans when this one's hosts fail (`ChatFallback`), as Polish does: only DeepSeek has one, as it
+    /// runs on three pinned hosts. Every other model cleans alone.
+    var fallback: Self? {
+        switch self {
+        case .deepSeekFlash: .geminiFlashLite
+        case .geminiFlashLite, .qwenCerebras, .claudeHaiku: nil
         }
     }
 }
@@ -56,7 +65,14 @@ public final class OpenRouterCleaner: TextCleaner {
 
     /// `vocabulary` comes within the route limits (`PersonalDictionary.keyterms`); `mode` picks the system prompt.
     public func clean(_ transcript: String, vocabulary: [String], mode: AppMode) async throws -> RewrittenText {
-        let model = settings.cleanupModel
+        try await ChatFallback.send(settings.cleanupModel, step: "Cleanup") { model in
+            try await clean(transcript, vocabulary: vocabulary, mode: mode, with: model)
+        }
+    }
+
+    private func clean(_ transcript: String, vocabulary: [String], mode: AppMode, with model: CleanupModel)
+        async throws -> RewrittenText
+    {
         let label = "cleanup \(model.rawValue) \(mode.rawValue)"
         let request = Self.request(transcript, vocabulary: vocabulary, mode: mode, model: model)
         let answer = try await ChatAnswer.send(request, on: connection, at: baseURL, label: label)

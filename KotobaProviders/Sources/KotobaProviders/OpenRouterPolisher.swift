@@ -3,7 +3,7 @@ import KotobaCore
 
 /// The Polish models (docs/research/polish.md, section 6): DeepSeek V4.1 Flash first, Gemini 3.5 Flash-Lite when its
 /// hosts fail. Both get prompt v2.
-public enum PolishModel: String, CaseIterable, Sendable {
+public enum PolishModel: String, CaseIterable, Sendable, ChatModel {
     /// Kept 97.1% of the checklist items on the 40-input test sample, p90 1.33 s on Together.
     case deepSeekFlash = "deepseek/deepseek-v4.1-flash"
     /// Another vendor on the same key: 87.6% kept, p90 1.91 s.
@@ -13,6 +13,14 @@ public enum PolishModel: String, CaseIterable, Sendable {
         switch self {
         case .deepSeekFlash: "DeepSeek V4.1 Flash"
         case .geminiFlashLite: "Gemini 3.5 Flash-Lite"
+        }
+    }
+
+    /// Gemini when DeepSeek's hosts fail (`ChatFallback`).
+    var fallback: Self? {
+        switch self {
+        case .deepSeekFlash: .geminiFlashLite
+        case .geminiFlashLite: nil
         }
     }
 
@@ -56,24 +64,10 @@ public final class OpenRouterPolisher: TextPolisher {
         self.baseURL = baseURL
     }
 
-    /// DeepSeek first; after a server error, a rate limit or a refusal (no host could take it), Gemini once. A missing
-    /// key, no credit or no network fails at once: the other model would fail the same way.
+    /// DeepSeek first, Gemini when its hosts fail (`ChatFallback`).
     public func polish(_ text: String) async throws -> RewrittenText {
-        do {
-            return try await polish(text, with: .deepSeekFlash)
-        } catch let error as ProviderError where Self.isFallbackCase(error) {
-            ProviderHTTP.log.notice("Polish falls back to \(PolishModel.geminiFlashLite.rawValue, privacy: .public)")
-            return try await polish(text, with: .geminiFlashLite)
-        }
-    }
-
-    static func isFallbackCase(_ error: ProviderError) -> Bool {
-        switch error {
-        case .server, .timedOut, .unreadableAnswer, .rateLimited, .rejected: true
-        case .offline, .connectionBlocked, .hostNotFound, .auth, .needsSetup, .keyUnavailable, .noCredit,
-            .emptyTranscript, .noAudio,
-            .audioMissing:
-            false
+        try await ChatFallback.send(PolishModel.deepSeekFlash, step: "Polish") { model in
+            try await polish(text, with: model)
         }
     }
 

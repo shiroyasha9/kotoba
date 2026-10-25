@@ -130,6 +130,44 @@ struct ChatAnswer: Decodable {
     }
 }
 
+/// A cleanup or Polish model, with the model to try when its hosts fail.
+protocol ChatModel: RawRepresentable where RawValue == String {
+    var fallback: Self? { get }
+}
+
+/// The second model of cleanup and Polish. A model on a few pinned hosts has no other host after them, so when
+/// they fail its step sends once more to another model. OpenRouter's own `models` list cannot do it: the fallback
+/// gets the first model's hosts and switches, and Gemini runs on none of DeepSeek's hosts.
+enum ChatFallback {
+    /// `model` first; when its route cannot serve now (a 5xx, a rate limit, or a 404: no host could take it), its
+    /// fallback once. Everything else fails at once, as the other model would fail the same way or pay again: a
+    /// missing key, no credit, no network, a timeout (slow, not down; a live cleanup has pasted by then), another 4xx
+    /// (a bad request) or a billed answer that does not parse (lead, 2026-10-25).
+    static func send<Model: ChatModel, Answer>(
+        _ model: Model, step: String, _ attempt: (Model) async throws -> Answer
+    ) async throws -> Answer {
+        do {
+            return try await attempt(model)
+        } catch let error as ProviderError where isFallbackCase(error) {
+            guard let fallback = model.fallback else { throw error }
+            try Task.checkCancellation()
+            ProviderHTTP.log.notice("\(step, privacy: .public) falls back to \(fallback.rawValue, privacy: .public)")
+            return try await attempt(fallback)
+        }
+    }
+
+    private static func isFallbackCase(_ error: ProviderError) -> Bool {
+        switch error {
+        case .server(let status): status >= 500
+        case .rejected(let status, _): status == 404
+        case .rateLimited: true
+        case .timedOut, .unreadableAnswer, .offline, .connectionBlocked, .hostNotFound, .auth, .needsSetup,
+            .keyUnavailable, .noCredit, .emptyTranscript, .noAudio, .audioMissing:
+            false
+        }
+    }
+}
+
 struct ChatChoice: Decodable {
     struct Message: Decodable {
         var content: String?
