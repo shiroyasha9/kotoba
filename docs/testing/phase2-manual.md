@@ -960,7 +960,7 @@ Shortcut recorders, the spoken commands, the Bluetooth switch and the Microphone
 
 | # | Do this | Expect | Result |
 |---|---|---|---|
-| 1150 | On **History**, choose Edit > Find… (⌘F) and type a word from one dictation; then type a word that no dictation has | The cursor goes to the search field above the list; only matching rows stay and the field keeps the cursor while you type; then one row says “No results for “<word>”” and the field stays | |
+| 1150 | On **History**, choose Edit > Find… (⌘F) and type a word from one dictation; then type a word that no dictation has | The cursor goes to **Search dictations** in the window toolbar; only matching rows stay and the field keeps the cursor while you type; then “No Results for “<word>”” shows centred under the cards and the field stays | |
 | 1151 | On History, click a row, press ↓ and ↑, press Space, Space again; ⇧-click a second row and press ⌘C, then ⌘V in TextEdit | The selection moves with the arrows; Space plays and stops the audio (a speaker symbol by the time); both texts paste, oldest first, a blank line between | |
 | 1152 | With TextEdit the last app you were in, Control-click a History row and choose **Paste Again** | TextEdit comes to the front and the text is pasted; the menu has Copy, Paste Again, Fix…, Transcribe Again (or Retry), Play Audio, Show Audio in Finder and Delete… | |
 | 1153 | Select two rows and press Delete; confirm | “Delete 2 Dictations?” asks first; both rows go, with their audio | |
@@ -970,9 +970,9 @@ Shortcut recorders, the spoken commands, the Bluetooth switch and the Microphone
 | 1157 | With more than 200 dictations, scroll History to the end | The next rows load as the end comes into view, with no click | |
 | 1158 | Look at History and then at Home, Activity and General in turn | The title bar keeps one height on every page; History has no toolbar | |
 | 1159 | On History, select a row with text and audio; open the menu bar's **Dictation** menu; choose **Show Audio in Finder** (⇧⌘R); select a row and press ⌘⌫ | The menu has Copy Without Cleanup, Paste Again, Fix…, Retry, Transcribe Again, Transcribe Again With, Play Audio, View Changes…, Show Audio in Finder and Delete…, each dimmed when it cannot apply; Finder shows the file; ⌘⌫ asks to delete. On Home the menu's items are dimmed | |
-| 1160 | On History, select a row with audio, then click in the search field and type “see you” | The space goes into the field; no audio plays | |
+| 1160 | On History, select a row with audio, then click in the toolbar search field and type “see you” | The space goes into the field; no audio plays | |
 | 1161 | On History, play a row's audio (Space), then type a search that leaves that row out | The audio stops when the row goes | |
-| 1162 | On History, scroll down several days, then press ⌘F and type | The cursor goes to the search field at the top, which stayed in view | |
+| 1162 | On History, scroll down several days, then press ⌘F and type | The cursor goes to the search field in the window toolbar, which stayed in view | |
 
 ## Page system: sheets and list pages (0.5.0, kotoba Dev)
 
@@ -980,7 +980,7 @@ Shortcut recorders, the spoken commands, the Bluetooth switch and the Microphone
 |---|---|---|---|
 | 1195 | Open Activity > **Advanced…** (a sheet with Done only) and press Esc; open it again and press Return | Esc closes the sheet; Return closes it too (Done) | |
 | 1196 | Open Dictionary > Add Word (a sheet with Cancel and Add), type a word, press Esc | The sheet closes and nothing is added | |
-| 1197 | On History, type in the search field, then scroll the list down and up, and wait for a new dictation to arrive | The search field stays above the rows and keeps the cursor; the title bar has one tint across the whole page in light and dark | |
+| 1197 | On History, type in the toolbar search field, then scroll the list down and up, and wait for a new dictation to arrive | The search field stays in the toolbar and keeps the cursor; the title bar has one tint across the whole page in light and dark | |
 
 ## The 0.5.0 pill (kotoba Dev)
 
@@ -1005,4 +1005,8 @@ One glass capsule that changes shape (docs/research/ui-redesign.md, "Pill"). Sna
 | 1214 | With VoiceOver on, move to a word on **Dictionary** (pointer away from it) and open the actions menu (VO-⌘-Space) | VoiceOver reads the word (and “starred” for a starred one); the menu has **Star** or **Unstar**, and it works while the star is hidden | |
 | 1215 | On **Dictionary** with more words than the window shows, scroll to the end of the list | **+**, **Import from Wispr Flow…** (when Wispr Flow is installed) and **Search words** stay in the window toolbar; the list has no **+** or **−** under it; pointing at each toolbar button shows its name | |
 | 1216 | On **Dictionary**, click **Import from Wispr Flow…** in the toolbar, then switch to **Home** and back | The import alert shows as before; on Home the toolbar has no Dictionary buttons and the title bar keeps its height | |
+| 1240 | Quit kotoba Dev, open it again and open **History** first (before any other page) | Every row shows its text, the app and length line under it and the whole app icon; no row is one cut line; a switch to Home and back changes nothing (owner QA 1, Q8) | |
+| 1241 | With no dictations (or a search that finds none, then cleared), dictate once while History is open | The first row comes in at full height with its second line; “No Dictations Yet” goes | |
+| 1242 | On **History**, look at the top of the page in light and dark | The header and **Keep audio** sit in their own cards with a gap between them; the search is in the window toolbar; the title bar keeps the height it has on Home | |
+| 1243 | On **History** with dictations, type a search that finds none, then press Esc in the field | “No Results for “<word>”” shows in the middle under the cards; after Esc the rows come back at full height | |
 | 1250 | On **Speech**, look at the status under “Key” with a key that works, then with a key that has no credit | The green or orange symbol sits next to its words with a normal gap (as in System Settings); with no credit, **Add Credit…** is a blue link on the line under the status and opens OpenRouter's credits page | |

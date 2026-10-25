@@ -89,3 +89,144 @@ extension HistoryController {
         ]
     }
 }
+
+@MainActor
+extension Pane {
+    /// History's rows when they come in after the page is on screen, as in the app: the first page is read after the
+    /// window opens, a new dictation comes into an empty history, and Try Again reads after a failed read. The run fails
+    /// when a row keeps a height that the list changes when asked to measure it again (owner QA 1, Q8: on the first
+    /// open after launch, every row drew as one cut line until a page switch built the list again). No image: the check
+    /// measures the rows again, which hides what it finds.
+    static func historyArrivalChecks() -> [Snapshot] {
+        ArrivingHistory.Arrival.allCases.map { arrival in
+            var problem: String?
+            var snapshot = Snapshot(name: "history-arrival-\(arrival.rawValue)") {
+                let history = ArrivingHistory(arrival)
+                let model = HistoryModel(source: history.source, audio: .sample())
+                let panes: [Pane] = [.home(.sample), .history(model)]
+                let window = MainWindow.window(
+                    showing: MainView(panes: panes, selection: Selection(panes: panes, showing: .history)))
+                window.setContentSize(PageMetrics.defaultWindowSize)
+                // The page is on screen with what it shows first: its first read waits, or it came back empty or failed.
+                ArrivingHistory.wait { history.isWaiting || model.isLoaded }
+                Snapshots.settle()
+                window.layoutIfNeeded()
+                history.arrive(in: model)
+                ArrivingHistory.wait { model.rows.count == history.rows.count }
+                Snapshots.settle()
+                window.layoutIfNeeded()
+                // Measured here, before the run's fit check: a window's fitting size measures every row again.
+                problem =
+                    model.rows.count == history.rows.count
+                    ? ArrivingHistory.staleRows(in: window)
+                    : "\(model.rows.count) of \(history.rows.count) rows came in"
+                window.close()
+                return NSView()
+            } check: { _ in
+                problem
+            }
+            snapshot.hasImage = false
+            return snapshot
+        }
+    }
+}
+
+/// A history whose rows come in while the page is shown, for `Pane.historyArrivalChecks`.
+@MainActor
+private final class ArrivingHistory {
+    enum Arrival: String, CaseIterable {
+        /// The first page comes in after the page is on screen.
+        case firstOpen = "first-open"
+        /// The first dictation comes into an empty history.
+        case firstDictation = "first-dictation"
+        /// Try Again after a read that failed.
+        case tryAgain = "try-again"
+    }
+
+    private struct ReadFailed: Error {}
+
+    private let arrival: Arrival
+    private(set) var rows: [DictationRecord] = []
+    private var isFailing = false
+    private var isHeld = false
+    private var held: CheckedContinuation<Void, Never>?
+
+    /// The first read waits for `arrive`.
+    var isWaiting: Bool { held != nil }
+
+    /// Turns the run loop until `isDone`, for at most 2 s: a read's answer reaches the page a few turns later, and the
+    /// bound stops a read that never answers (the check then names what did not come).
+    static func wait(until isDone: () -> Bool) {
+        let deadline = Date.now + 2
+        while !isDone(), Date.now < deadline {
+            RunLoop.main.run(mode: .default, before: .now + 0.01)
+        }
+    }
+
+    /// What the page shows first: no rows yet (the first read waits), an empty history, or a failed read.
+    init(_ arrival: Arrival) {
+        self.arrival = arrival
+        switch arrival {
+        case .firstOpen:
+            rows = HistoryController.sampleRows()
+            isHeld = true
+        case .firstDictation: rows = []
+        case .tryAgain: isFailing = true
+        }
+    }
+
+    /// The rows come in, as the app's history sends them.
+    func arrive(in model: HistoryModel) {
+        switch arrival {
+        case .firstOpen:
+            isHeld = false
+            held?.resume()
+            held = nil
+        case .firstDictation:
+            let record = HistoryController.sampleRows()[0]
+            rows = [record]
+            Task { await model.apply(.saved(record.id, isUsageAdded: false)) }
+        case .tryAgain:
+            isFailing = false
+            rows = HistoryController.sampleRows()
+            model.tryAgain()
+        }
+    }
+
+    var source: HistoryModel.Source {
+        HistoryModel.Source(
+            page: { [self] _, after, _ in
+                if isHeld {
+                    await withCheckedContinuation { held = $0 }
+                }
+                if isFailing { throw ReadFailed() }
+                return after == nil ? rows : []
+            },
+            record: { [self] id, _ in rows.first { $0.id == id } },
+            delete: { _ in false }, retry: { _ in }, paste: { _, _ in false }, copy: { _ in },
+            transcribeAgain: { _, _ in false }, otherSpeechModels: { [] }, fix: { _ in })
+    }
+
+    /// The rows of the page's list (the window's one table that selects several rows: not the sidebar, not the cards)
+    /// whose height changes when the list measures them again; nil when none does.
+    static func staleRows(in window: NSWindow) -> String? {
+        func tables(in view: NSView) -> [NSTableView] {
+            (view as? NSTableView).map { [$0] } ?? view.subviews.flatMap { tables(in: $0) }
+        }
+        guard let content = window.contentView,
+            let table = tables(in: content).first(where: \.allowsMultipleSelection)
+        else {
+            return "the page shows no list"
+        }
+        let rows = 0..<table.numberOfRows
+        let heights = rows.map { table.rect(ofRow: $0).height }
+        table.noteHeightOfRows(withIndexesChanged: IndexSet(integersIn: rows))
+        Snapshots.settle()
+        window.layoutIfNeeded()
+        let stale = rows.filter { table.rect(ofRow: $0).height != heights[$0] }
+        return stale.isEmpty
+            ? nil
+            : "rows \(stale) kept heights \(stale.map { heights[$0] }), measured again "
+                + "\(stale.map { table.rect(ofRow: $0).height })"
+    }
+}

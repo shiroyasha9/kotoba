@@ -10,27 +10,39 @@ extension Pane {
     }
 }
 
-/// The History page (docs/research/ui-redesign.md, "Page map"): the header, how long audio stays and the search pinned
-/// above the list, and the dictations by day, newest first, in a list as Apple's list apps draw one (Mail, Notes, Voice Memos):
-/// rows load as they scroll into view, several can be selected, and the list keys work (arrows, Space plays, Delete,
-/// ⌘C). The actions are in the rows' context menu and the menu bar's Dictation menu (`HistoryCommand`), as in those
-/// apps; there is no toolbar.
+/// The History page (docs/research/ui-redesign.md, "Page map"): the header and how long audio stays in their cards above
+/// the list, the search in the window toolbar, and the dictations by day, newest first, in a list as Apple's list apps
+/// draw one (Mail, Notes, Voice Memos): rows load as they scroll into view, several can be selected, and the list keys
+/// work (arrows, Space plays, Delete, ⌘C). The actions are in the rows' context menu and the menu bar's Dictation menu
+/// (`HistoryCommand`), as in those apps.
 struct HistoryView: View {
     @Bindable var model: HistoryModel
 
     var body: some View {
-        PageList(selection: $model.selection) {
+        PageList(selection: $model.selection, hasRows: !model.rows.isEmpty && !model.isLoadFailed) {
             content
+        } unavailable: {
+            unavailable
         } pinned: {
-            // Above the rows, never scrolled or rebuilt with them: the search keeps the focus while the rows reload
-            // under it, ⌘F always reaches it, and a failed read leaves it in place. It is an AppKit field, so while it
-            // has the focus a Space or Delete goes into it, never to the list's keys.
-            PageHeader(page: .history, summary: "Every dictation, newest first, to copy, paste again or fix.")
-            if let audio = model.audio {
-                AudioRetentionRow(model: audio)
+            // Above the rows, never scrolled or rebuilt with them, so a failed read leaves them in place.
+            Section {
+                PageHeader(page: .history, summary: "Every dictation, newest first, to copy, paste again or fix.")
             }
-            PageSearchField(text: $model.search, prompt: "Search")
+            if let audio = model.audio {
+                Section {
+                    AudioRetentionRow(model: audio)
+                }
+            }
+            if model.isLoadFailed {
+                Section {
+                    LoadFailedRow(retry: model.tryAgain)
+                }
+            }
         }
+        // In the toolbar, so it stays in view while the rows scroll and is never rebuilt with them: it keeps the focus
+        // while the rows reload under it. While it has the focus, a Space or Delete goes into it, never to the list's
+        // keys.
+        .pageSearch(text: $model.search, prompt: "Search dictations")
         // The page, not a row, measures the kept audio: a row's appear and disappear follow its scrolling.
         .onAppear { model.audio?.show() }
         .onDisappear { model.audio?.hide() }
@@ -72,46 +84,41 @@ struct HistoryView: View {
         }
     }
 
+    /// The rows by day; the page has the list only while it has rows (`PageList`).
     @ViewBuilder private var content: some View {
-        if model.isLoadFailed {
-            Section {
-                LoadFailedRow(retry: model.tryAgain)
-            }
-            .selectionDisabled()
-        } else if model.rows.isEmpty, model.isLoaded {
-            Section {
-                if model.search.isEmpty {
-                    PageRow(
-                        title: "No dictations yet",
-                        subtitle: "\(StatusText.howToDictate(.shared)). Each dictation appears here."
-                    ) {}
-                } else {
-                    PageRow(
-                        title: "No results for “\(model.search)”",
-                        subtitle: "Check the spelling or try a new search."
-                    ) {}
+        ForEach(model.days) { day in
+            Section(day.title) {
+                ForEach(day.rows) { record in
+                    // No line between a day's title and its first row: the separator above a section's first row
+                    // drew under the title.
+                    row(record)
+                        .listRowSeparator(.hidden, edges: record.id == day.rows.first?.id ? .top : [])
                 }
             }
-            .selectionDisabled()
-        } else {
-            ForEach(model.days) { day in
-                Section(day.title) {
-                    ForEach(day.rows) { record in
-                        // No line between a day's title and its first row: the separator above a section's first row
-                        // drew under the title.
-                        row(record)
-                            .listRowSeparator(.hidden, edges: record.id == day.rows.first?.id ? .top : [])
-                    }
-                }
-            }
-            if !model.isComplete {
-                // The last row: when it scrolls into view, the next page loads.
-                ProgressView()
-                    .controlSize(.small)
-                    .frame(maxWidth: .infinity)
-                    .selectionDisabled()
-                    // A new last row (a page came in, or a reload dropped one) loads again.
-                    .task(id: model.rows.last?.id) { await model.loadMore() }
+        }
+        if !model.isComplete {
+            // The last row: when it scrolls into view, the next page loads.
+            ProgressView()
+                .controlSize(.small)
+                .frame(maxWidth: .infinity)
+                .selectionDisabled()
+                // A new last row (a page came in, or a reload dropped one) loads again.
+                .task(id: model.rows.last?.id) { await model.loadMore() }
+        }
+    }
+
+    /// In place of the list: nothing while the first read runs (so the empty state does not flash before the rows) or
+    /// after a failed read (its card is above), else the empty history or the search that found nothing.
+    @ViewBuilder private var unavailable: some View {
+        if model.isLoaded, !model.isLoadFailed {
+            if model.search.isEmpty {
+                EmptyState(
+                    "No Dictations Yet", systemImage: PaneID.history.systemImage,
+                    description: "\(StatusText.howToDictate(.shared)). Each dictation appears here.")
+            } else {
+                EmptyState(
+                    "No Results for “\(model.search)”", systemImage: "magnifyingglass",
+                    description: "Check the spelling or try a new search.")
             }
         }
     }
