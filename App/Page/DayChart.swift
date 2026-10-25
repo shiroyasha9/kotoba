@@ -24,9 +24,9 @@ struct ChartHeadline: View {
     }
 }
 
-/// The days a words-per-day chart shows: the last `count` days, today last, from the first dictation on (the chart
-/// starts at the first dictation; review-window.md T5). A chart keeps at least a week's slots, so a new user's bars keep
-/// a week bar's width; the slots before the first dictation stay blank, with no bar and no label.
+/// The days a words-per-day chart shows: the last `count` days, today last, from the first dictation on, in at least a
+/// week's slots. A week always shows its 7 days with their initials (owner QA 1, Q10: one bar alone at the right edge
+/// looked broken); a day before the first dictation has no bar.
 struct ChartDays: Equatable {
     /// Every slot, oldest first, today last.
     let slots: [DictationInsights.Day]
@@ -51,10 +51,10 @@ struct ChartDays: Equatable {
         return (largest + step - 1) / step * step
     }
 
-    /// A day that gets a label: one from the first dictation on. The marks stride by day over every slot, so Charts
-    /// centres each label on its day.
+    /// A day that gets a label: every slot, so a week reads as a week. The marks stride by day over every slot, so
+    /// Charts centres each label on its day.
     func isLabelled(_ date: Date) -> Bool {
-        started.contains { Calendar.current.isDate($0.start, inSameDayAs: date) }
+        slots.contains { Calendar.current.isDate($0.start, inSameDayAs: date) }
     }
 
     /// The average over the started days.
@@ -116,7 +116,7 @@ struct WeekBars: View {
             }
             HStack(spacing: 0) {
                 ForEach(days.slots, id: \.start) { day in
-                    Text(days.started.contains(day) ? day.start.formatted(.dateTime.weekday(.narrow)) : "")
+                    Text(day.start.formatted(.dateTime.weekday(.narrow)))
                         .frame(maxWidth: .infinity)
                 }
             }

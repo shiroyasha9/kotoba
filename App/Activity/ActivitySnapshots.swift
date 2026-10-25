@@ -14,6 +14,8 @@ extension Pane {
             MainWindow.snapshot(of: .activity(.sample()), named: "activity", height: 1_500),
             MainWindow.snapshot(of: .activity(.sample(period: .month)), named: "activity-month", height: 1_500),
             MainWindow.snapshot(of: .activity(.sampleStarted), named: "activity-started", height: 1_500),
+            // Owner QA 1, Q10: one day of 17 words, so "avg" sat on the scale's "20".
+            MainWindow.snapshot(of: .activity(.sampleFirstDay), named: "activity-first-day", height: 1_500),
             MainWindow.snapshot(of: .activity(.empty), named: "activity-empty"),
             MainWindow.sheetSnapshot(named: "activity-advanced") { SpendByModel(month: ActivityModel.sampleMonth) },
         ]
@@ -33,6 +35,16 @@ extension ActivityModel {
         let recent = [0, 0, 0, 0, 260, 410, 180]
         figures.insights.days = figures.insights.days.suffix(recent.count).enumerated().map { index, day in
             DictationInsights.Day(start: day.start, words: recent[index], dictations: recent[index] / 40)
+        }
+        return ActivityModel(figures: figures)
+    }
+
+    /// The first day: 17 words today, nothing before.
+    static var sampleFirstDay: ActivityModel {
+        var figures = sampleFigures
+        figures.insights.days = figures.insights.days.enumerated().map { index, day in
+            let isToday = index == figures.insights.days.count - 1
+            return DictationInsights.Day(start: day.start, words: isToday ? 17 : 0, dictations: isToday ? 1 : 0)
         }
         return ActivityModel(figures: figures)
     }
