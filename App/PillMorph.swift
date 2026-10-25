@@ -45,13 +45,11 @@ extension PillView {
             fadeOut(view, at: frame)
         }
         CATransaction.commit()
-        NSAnimationContext.animate(reducesMotion ? .smooth(duration: 0.25) : Self.morphSpring) {
+        let spring = reducesMotion ? GlassSpring(spring: Spring(duration: 0.25, bounce: 0)) : GlassSpring()
+        NSAnimationContext.animate(Animation(spring)) {
             placeGlass()
         }
     }
-
-    /// Fluid with a small bounce, close to the system's own glass morphs; the content's slide takes the same curve.
-    private static let morphSpring = Animation.spring(duration: 0.4, bounce: 0.15)
 
     /// The item's centre from the content's centre: the content stays centred in the glass, so this is the item's place
     /// in the capsule.
@@ -64,7 +62,7 @@ extension PillView {
     private func slide(_ view: NSView, from old: CGPoint) {
         let new = offset(of: view)
         guard let layer = view.layer, old != new else { return }
-        let slide = CASpringAnimation(perceptualDuration: 0.4, bounce: 0.15)
+        let slide = CASpringAnimation(perceptualDuration: GlassSpring.duration, bounce: GlassSpring.bounce)
         slide.keyPath = "position"
         slide.isAdditive = true
         // The stack is flipped: a frame's y and its layer's y run the same way.
@@ -116,6 +114,29 @@ extension PillView {
     }
 
     private static let fadeKey = "fade"
+}
+
+/// The glass's spring: fluid with a small bounce, close to the system's own glass morphs. It ends once the glass is within
+/// a quarter point of its place and slower than 20 pt/s: SwiftUI's own spring runs on for an invisible tail, about 105
+/// frames over 0.86 s against about 65 over 0.54 s, at about 1 ms of glass layout per frame (2026-10-25,
+/// `<runbooks>/2026-10-24-kotoba-ui-redesign/pill-real/qa1-pill/`).
+struct GlassSpring: CustomAnimation {
+    static let duration = 0.4
+    static let bounce = 0.15
+    var spring = Spring(duration: duration, bounce: bounce)
+
+    func animate<V: VectorArithmetic>(value: V, time: TimeInterval, context: inout AnimationContext<V>) -> V? {
+        let now = spring.value(target: value, time: time)
+        var left = value
+        left -= now
+        let speed = spring.velocity(target: value, time: time)
+        return left.magnitudeSquared < 0.25 * 0.25 && speed.magnitudeSquared < 20 * 20 ? nil : now
+    }
+
+    /// A change that takes over mid-way starts at the glass's speed.
+    func velocity<V: VectorArithmetic>(value: V, time: TimeInterval, context: AnimationContext<V>) -> V? {
+        spring.velocity(target: value, time: time)
+    }
 }
 
 /// The pill's one glass, a capsule at every size: the radius follows the size at each step of a morph. The spring that
