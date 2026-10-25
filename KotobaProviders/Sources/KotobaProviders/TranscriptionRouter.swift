@@ -1,5 +1,6 @@
 import Foundation
 import KotobaCore
+import Synchronization
 
 /// The app's one `TranscriptionProvider`: it reads the settings once per request and sends the request down the
 /// chosen route, so a route switched in the menu applies to the next dictation. Each provider keeps its own
@@ -9,6 +10,8 @@ public final class TranscriptionRouter: TranscriptionProvider {
     private let openRouter: OpenRouterProvider
     private let xai: XAIProvider
     private let azure: AzureProvider
+    /// Which accounts are out of credit, as this router's requests and its cleaner's found.
+    public let credit = AccountCredit()
 
     /// `keys` gives the key source for each provider account; the app passes its `KeyVault`'s sources. It is called
     /// once per account here, so each source keeps its cache.
@@ -60,13 +63,24 @@ public final class TranscriptionRouter: TranscriptionProvider {
         if let route = request.model.flatMap(TranscriptionRoute.init(rawValue:)) {
             options.route = route
         }
-        return try await client(for: options.route.account).transcribe(request, options)
+        let account = options.route.account
+        return try await credit.tracking(account) { try await client(for: account).transcribe(request, options) }
     }
 
     /// Checks `key` for `account` with one free request on that provider's connection (no audio, no cost). Used
     /// when a key is saved (onboarding, the Speech pane); the dictation path never calls it.
+    /// A check that finds no credit marks the account (`credit`); a valid one leaves the mark, as OpenRouter's check
+    /// reads the key's own limit, not the account's balance.
     public func checkKey(_ key: String, for account: ProviderAccount) async -> KeyCheck {
-        await client(for: account).checkKey(key, settings.routeOptions)
+        let result = await client(for: account).checkKey(key, settings.routeOptions)
+        if result == .noCredit { credit.ranOut(account) }
+        return result
+    }
+
+    /// Cleanup and Polish on OpenRouter with `apiKey`, on this router's settings: their answers mark OpenRouter's credit
+    /// in `credit`, as a transcript does.
+    public func cleaner(apiKey: any APIKeySource) -> OpenRouterCleaner {
+        OpenRouterCleaner(apiKey: apiKey, settings: settings, credit: credit)
     }
 
     /// The one place that maps a provider to its client; a route reaches it through `TranscriptionRoute.account`.
@@ -94,6 +108,65 @@ protocol RouteClient: Sendable {
     /// `TranscriptionProvider.prime` on this route.
     func prime(_ options: TranscriptionSettings.RouteOptions, language: Locale.Language, size: PrimerSize) async
         -> Transcript?
+}
+
+/// Which provider accounts are out of credit, as the requests found: a dictation, a cleanup, a Polish or a key check
+/// refused for no credit marks its account, and the next answer from that account clears the mark. Only
+/// KotobaProviders knows the account of a request, so the fact lives here, beside the router that sends it. Kept in
+/// memory: launch's retry of the saved dictations finds it again, and a mark kept on disk would outlive credit added
+/// while kotoba was closed. Requests that overlap (segments, a retry run, a cleanup) mark in the order their answers
+/// come: a late answer to a request sent before a refusal clears the mark until the next request sets it again.
+public final class AccountCredit: Sendable {
+    private let marked = Mutex<(accounts: Set<ProviderAccount>, changes: Int)>(([], 0))
+    private let continuation: AsyncStream<Void>.Continuation
+    /// Each change of the marks, none for a request that leaves them as they were; only the newest is kept. One
+    /// reader: `SetupFlow`, which reads Readiness again.
+    public let changes: AsyncStream<Void>
+
+    init() {
+        (changes, continuation) = AsyncStream.makeStream(of: Void.self, bufferingPolicy: .bufferingNewest(1))
+    }
+
+    /// The last request to `account` found no credit, and none worked since.
+    public func isOut(_ account: ProviderAccount) -> Bool {
+        marked.withLock { $0.accounts.contains(account) }
+    }
+
+    /// Runs a billed request to `account` (a transcription, a cleanup, a Polish) and marks what its answer says: an
+    /// answer means credit, a refusal for no credit means none, any other failure says nothing.
+    func tracking<Answer>(_ account: ProviderAccount, _ request: () async throws -> Answer) async throws -> Answer {
+        do {
+            let answer = try await request()
+            worked(account)
+            return answer
+        } catch ProviderError.noCredit {
+            ranOut(account)
+            throw ProviderError.noCredit
+        }
+    }
+
+    /// A request to `account` was refused for no credit.
+    func ranOut(_ account: ProviderAccount) {
+        update { $0.insert(account).inserted }
+    }
+
+    /// `account` answered a billed request, so it has credit.
+    func worked(_ account: ProviderAccount) {
+        update { $0.remove(account) != nil }
+    }
+
+    /// Test seam: the changes announced so far.
+    var changeCount: Int { marked.withLock(\.changes) }
+
+    /// `change` returns whether it changed the marks; only then is it counted and announced.
+    private func update(_ change: (inout Set<ProviderAccount>) -> Bool) {
+        let isChanged = marked.withLock { marked in
+            guard change(&marked.accounts) else { return false }
+            marked.changes += 1
+            return true
+        }
+        if isChanged { continuation.yield() }
+    }
 }
 
 /// What a key check found.

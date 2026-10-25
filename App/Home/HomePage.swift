@@ -1,4 +1,5 @@
 import KotobaCore
+import KotobaProviders
 import KotobaStorage
 import SwiftUI
 
@@ -22,13 +23,20 @@ private struct HomePage: View {
 
     var body: some View {
         PageForm {
-            if let missing = model.readiness.firstMissing {
+            switch model.readiness.firstMissing {
+            case .setup(.credit, let account):
+                Section {
+                    outOfCredit(account)
+                }
+            case let missing?:
                 Section {
                     problem(missing)
                 }
-            } else if let insights = model.reader.value?.insights, insights.dictations > 0 {
-                Section {
-                    today(insights)
+            case nil:
+                if let insights = model.reader.value?.insights, insights.dictations > 0 {
+                    Section {
+                        today(insights)
+                    }
                 }
             }
             Section {
@@ -77,6 +85,32 @@ private struct HomePage: View {
         } trailing: {
             Button(Self.fixTitle(missing), action: model.finishSetup)
                 .buttonStyle(.borderedProminent)
+        }
+    }
+
+    /// The account is out of credit. The shortcut still records, and each dictation waits for credit, so the card is no
+    /// "Not ready" line: it says so, with the fix and, once credit is back, the saved dictations' send, under the text
+    /// as the Last Dictation card's actions.
+    private func outOfCredit(_ account: ProviderAccount) -> some View {
+        VStack(alignment: .leading) {
+            PageRow(
+                title: StatusText.outOfCredit(account),
+                subtitle: "kotoba saves your dictations until you add credit."
+            ) {
+                SymbolTile(systemImage: "exclamationmark.triangle", tint: .orange, side: PageMetrics.rowTileSide)
+            } trailing: {
+                EmptyView()
+            }
+            HStack {
+                Spacer()
+                if let waiting = model.reader.value?.waitingCount, waiting > 0 {
+                    Button("Send \(StatusText.counted(waiting, "Saved Dictation"))", action: model.sendSaved)
+                        .disabled(model.isSendingSaved)
+                }
+                Button(Self.fixTitle(.setup(.credit, account)), action: model.finishSetup)
+                    .buttonStyle(.borderedProminent)
+            }
+            .inRowTextColumn()
         }
     }
 

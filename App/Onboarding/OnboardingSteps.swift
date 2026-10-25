@@ -209,9 +209,12 @@ struct DoneStep: View {
                 PageRow(title: missing.problemText, subtitle: nil) {
                     SymbolTile(systemImage: "exclamationmark.triangle", tint: .orange, side: PageMetrics.rowTileSide)
                 } trailing: {
-                    if model.readiness.missingSetup?.item == .endpoint {
+                    switch missing {
+                    case .setup(.endpoint, _):
                         Button("Add Your Azure Endpoint…", action: model.openOtherSpeechServices)
-                    } else {
+                    case .setup(.credit, let account):
+                        Button(SetupItem.credit.pillAction.title) { model.open(account.creditsPage) }
+                    case .microphone, .accessibility, .setup(.key, _):
                         Button(Self.fixTitle(step)) { model.step = step }
                     }
                 }

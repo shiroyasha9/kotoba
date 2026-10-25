@@ -85,6 +85,11 @@ final class StubHost {
         StubURLProtocol.routes.withLock { $0[host] = StubURLProtocol.Route(reply: reply) }
     }
 
+    /// The reply to the requests from now on.
+    func reply(_ reply: StubReply) {
+        StubURLProtocol.routes.withLock { $0[host]?.reply = reply }
+    }
+
     func onRequest(_ action: @escaping @Sendable () -> Void) {
         StubURLProtocol.routes.withLock { $0[host]?.onRequest = action }
     }
@@ -129,9 +134,10 @@ final class StubHost {
         )
     }
 
-    func cleaner(key: String? = StubHost.key) -> OpenRouterCleaner {
+    func cleaner(key: String? = StubHost.key, credit: AccountCredit = AccountCredit()) -> OpenRouterCleaner {
         OpenRouterCleaner(
-            apiKey: FakeAPIKey(key: key), settings: settings, baseURL: baseURL, configuration: Self.configuration())
+            apiKey: FakeAPIKey(key: key), settings: settings, credit: credit, baseURL: baseURL,
+            configuration: Self.configuration())
     }
 
     private static func configuration() -> URLSessionConfiguration {

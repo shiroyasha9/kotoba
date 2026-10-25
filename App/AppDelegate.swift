@@ -18,14 +18,13 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     let routeSettings = TranscriptionSettings()
     /// Also read by the menu: Rewrite shows once an OpenRouter key is saved.
     let vault = KeyVault()
-    lazy var readiness = Readiness(settings: routeSettings, vault: vault)
-    /// The provider; onboarding uses it to check a key.
+    lazy var readiness = Readiness(settings: routeSettings, vault: vault, credit: router.credit)
+    /// The provider; onboarding uses it to check a key, and Readiness reads which accounts it found out of credit.
     private lazy var router = TranscriptionRouter(settings: routeSettings, keys: vault.source(for:))
     lazy var setup = SetupFlow(
         readiness: readiness, routeSettings: routeSettings, vault: vault, router: router,
         dictionary: { [weak self] in self?.mainWindow.dictionary },
         links: SetupLinks(
-            speech: { [weak self] in self?.mainWindow.show(selecting: .speech) },
             otherSpeechServices: { [weak self] in self?.mainWindow.showOtherSpeechServices() },
             home: { [weak self] in self?.mainWindow.show(selecting: .home) }))
     /// Its audio retention is set once the history opens (`AppDefaults.chooseAudioRetention`).
@@ -86,7 +85,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         statusItem = DockAndMenuBar.shared.attach(StatusBarItem(target: self) { [weak self] in self?.menuModel() })
         updater?.onWaitingUpdateChange = { [weak self] in self?.updateIcon() }
         guard let store = openHistory() else { return }
-        let cleaner = OpenRouterCleaner(apiKey: vault.source(for: .openRouter), settings: routeSettings)
+        let cleaner = router.cleaner(apiKey: vault.source(for: .openRouter))
         let pipeline = DictationPipeline(
             ports: .init(
                 audio: audio,

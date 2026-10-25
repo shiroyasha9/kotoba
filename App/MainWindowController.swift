@@ -207,7 +207,12 @@ final class MainWindowController {
                 guard let pipeline = self?.pipeline else { return true }
                 return await PasteAgain(pipeline: pipeline)(text, of: id)
             },
+            readWaitingCount: { [weak self] in
+                guard let history = self?.history else { throw NoHistory() }
+                return try await history.pendingCount()
+            },
             retry: { [weak self] in await self?.pipeline?.retry($0) },
+            sendSaved: { [weak self] in await self?.pipeline?.retryPending() },
             fixLast: fixLast, finishSetup: finishSetup, tryIt: tryIt)
     }
 

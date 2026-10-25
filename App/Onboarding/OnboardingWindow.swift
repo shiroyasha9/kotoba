@@ -119,7 +119,7 @@ final class OnboardingController: NSObject, NSWindowDelegate {
 
 extension OnboardingController {
     /// Every step as the whole window, plus the states a step changes into (microphone off, one grant, both grants,
-    /// key saved, Wispr Flow imported, all done). Wispr Flow shows as installed, so Done has its row.
+    /// key saved, Wispr Flow imported, all done, out of credit). Wispr Flow shows as installed, so Done has its row.
     static func snapshots() -> [Snapshot] {
         let ready = Readiness.sample()
         let first = OnboardingStep.allCases.map { step in
@@ -148,6 +148,7 @@ extension OnboardingController {
                 return model
             },
             window("onboarding-done-ready") { model(.done, ready) },
+            window("onboarding-done-no-credit") { model(.done, .sample(outOfCredit: .openRouter)) },
             // The owner turned the login switch on and macOS refused: the switch goes back off, the footnote under it.
             window("onboarding-done-login-problem") {
                 let model = model(.done, ready, opensAtLogin: false, loginProblem: .failed)

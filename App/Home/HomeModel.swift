@@ -18,6 +18,8 @@ final class HomeModel {
         var lastDelivered: DictationID?
         /// The rows of `recent` whose audio waits for a retry, as History marks them (`HistoryModel.kept`).
         var retryable: Set<DictationID> = []
+        /// Every dictation that waits for a retry, as the menu's Retry counts them: the credit card's Send button.
+        var waitingCount = 0
     }
 
     /// What Home does. The snapshot run passes none and sets the figures itself.
@@ -29,8 +31,12 @@ final class HomeModel {
         var copy: @MainActor (String) async -> Void
         /// Paste Again (`PasteAgain`): false when nothing was pasted and the text is on the clipboard.
         var paste: @MainActor (String, DictationID) async -> Bool
+        /// The dictations that wait for a retry, all of them (`HistoryStore.pendingCount`).
+        var readWaitingCount: @MainActor () async throws -> Int
         /// Retry on a dictation whose audio waits for one, as History's (`DictationPipeline.retry`).
         var retry: @MainActor (Set<DictationID>) async -> Void
+        /// Sends every saved dictation, as the menu's Retry (`DictationPipeline.retryPending`).
+        var sendSaved: @MainActor () async -> Void
         /// Opens the Fix window on the last dictation.
         var fixLast: @MainActor () -> Void
         /// "Finish Setting Up kotoba…": onboarding on the first missing step, or the Speech pane.
@@ -56,6 +62,10 @@ final class HomeModel {
     @ObservationIgnored private var sending: Task<Void, Never>?
     /// Paste Again could not bring back the app the owner was in.
     var isPasteFailureShown = false
+    /// The credit card's Send, which ends once each saved dictation got its answer.
+    @ObservationIgnored private var sendingSaved: Task<Void, Never>?
+    /// `sendingSaved` runs.
+    private(set) var isSendingSaved = false
     /// Which dictations are being sent, and whether Paste Again can paste (`DictationPipeline.activity`).
     var activity = PipelineActivity(isQuiet: true, inFlight: [])
 
@@ -129,6 +139,16 @@ final class HomeModel {
         sending = Task { await source.retry([record.id]) }
     }
 
+    /// The credit card's Send: every saved dictation, once credit is back.
+    func sendSaved() {
+        guard let source, !isSendingSaved else { return }
+        isSendingSaved = true
+        sendingSaved = Task {
+            await source.sendSaved()
+            isSendingSaved = false
+        }
+    }
+
     func fixLast() {
         source?.fixLast()
     }
@@ -149,12 +169,14 @@ extension HomeModel {
     private final class Reads {
         private let readInsights: @MainActor (_ now: Date) async throws -> DictationInsights
         private let readRows: @MainActor () async throws -> (recent: [DictationRecord], lastDelivered: DictationID?)
+        private let readWaitingCount: @MainActor () async throws -> Int
         private var isInsightsDue = true
         private var insights: (value: DictationInsights, day: Date)?
 
         init(source: Source) {
             readInsights = source.readInsights
             readRows = source.readRows
+            readWaitingCount = source.readWaitingCount
         }
 
         func insightsChanged() {
@@ -163,6 +185,7 @@ extension HomeModel {
 
         func read(at now: Date) async throws -> Figures {
             async let rows = readRows()
+            async let waitingCount = readWaitingCount()
             let current: DictationInsights
             if !isInsightsDue, let insights, Calendar.current.isDate(insights.day, inSameDayAs: now) {
                 current = insights.value
@@ -179,7 +202,8 @@ extension HomeModel {
             }
             let (recent, lastDelivered) = try await rows
             return Figures(
-                insights: current, recent: recent, lastDelivered: lastDelivered, retryable: HistoryModel.kept(recent))
+                insights: current, recent: recent, lastDelivered: lastDelivered, retryable: HistoryModel.kept(recent),
+                waitingCount: try await waitingCount)
         }
     }
 }
