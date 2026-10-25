@@ -146,7 +146,7 @@ struct KeyCheckLine: View {
                 Text("Checking the key…").foregroundStyle(.secondary)
             }
         case .checked(.valid):
-            StatusLabel("Key works", systemImage: "checkmark.circle.fill", color: .green)
+            StatusLabel("Connected", systemImage: "checkmark.circle.fill", color: .green)
         case .checked(.invalid):
             StatusLabel("\(account.title) didn’t accept this key.", systemImage: "xmark.circle.fill", color: .red)
         case .checked(.noCredit):
