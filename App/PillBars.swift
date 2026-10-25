@@ -23,14 +23,18 @@ final class PillBars: NSView {
     private static let floor: CGFloat = 0.02
     /// The capture sends a level every 100 ms (`CaptureWriter.measureLevel`). A tween lasts two of them, so the next
     /// level's tween starts while this one runs; the tweens add, and the bars glide from level to level with no step.
-    private static let tween: CFTimeInterval = 0.2
+    nonisolated static let tween: CFTimeInterval = 0.2
 
     private let bars = (0..<count).map { _ in CALayer() }
     /// The level the bars show: 0 under `floor`.
     private var shown: CGFloat = 0
-    /// The level events shown so far: the weights' clock, so the drift needs no timer and a snapshot is the same on
-    /// every run.
-    private var beat = 0
+    /// The level events shown so far, in steps of the capture's (`levelsPerSecond`): the weights' clock, so the drift
+    /// needs no timer and a snapshot is the same on every run.
+    private var beat: Double = 0
+    /// How many levels a second come in: the capture sends ten. A source that sends more (a video frame by frame) takes
+    /// a smaller step at each, so the humps wander at the same pace.
+    var levelsPerSecond = Double(captureLevelsPerSecond)
+    private static let captureLevelsPerSecond = 10
 
     var level: CGFloat = 0 {
         didSet {
@@ -40,7 +44,7 @@ final class PillBars: NSView {
             shown = next
             // Reduce Motion: the weights keep still, and the bars follow only the voice.
             if !NSWorkspace.shared.accessibilityDisplayShouldReduceMotion {
-                beat += 1
+                beat += Double(Self.captureLevelsPerSecond) / levelsPerSecond
             }
             respond()
         }
@@ -171,13 +175,12 @@ final class PillBars: NSView {
     /// Bar `index`'s share of the level at `beat`, from 0.4 to 1.2: three slow waves across the row, two drifting one
     /// way and one the other, so the humps swell, fade and wander with no direction to follow. The slowest takes about
     /// 6 s to come round at ten levels a second, the fastest about 13 s; no two bars have the same weight for long.
-    private static func weight(of index: Int, at beat: Int) -> CGFloat {
+    private static func weight(of index: Int, at beat: Double) -> CGFloat {
         let place = Double(index)
-        let time = Double(beat)
         let sum =
-            0.5 * sin(0.8 * place + 0.105 * time)
-            + 0.3 * sin(1.9 * place - 0.07 * time + 2)
-            + 0.2 * sin(3.1 * place + 0.048 * time + 4)
+            0.5 * sin(0.8 * place + 0.105 * beat)
+            + 0.3 * sin(1.9 * place - 0.07 * beat + 2)
+            + 0.2 * sin(3.1 * place + 0.048 * beat + 4)
         return CGFloat(0.8 + 0.4 * sum)
     }
 
@@ -195,8 +198,9 @@ final class PillBars: NSView {
         }
         guard isSweeping else { return }
         let reducesMotion = NSWorkspace.shared.accessibilityDisplayShouldReduceMotion
-        // The settle (0.25 s in `layout`) ends before the wave starts.
-        let start = CACurrentMediaTime() + 0.25
+        // The settle (0.25 s in `layout`) ends before the wave starts. In the bars' own time, so a pill on another clock
+        // (the site's demo) starts its wave on that clock.
+        let start = (layer?.convertTime(CACurrentMediaTime(), from: nil) ?? CACurrentMediaTime()) + 0.25
         for (index, bar) in bars.enumerated() {
             let fade = CABasicAnimation(keyPath: "opacity")
             // Dimmer between pulses, but still a clear row of dots on light and dark glass.

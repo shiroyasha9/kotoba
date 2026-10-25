@@ -149,9 +149,12 @@ enum Snapshots {
             NSApplication.shared.setActivationPolicy(.prohibited)
             Pane.measureWindowMemory()
         }
-        // `--showcase <folder>` renders the showcase images (`make readme-images`) instead of the registered views.
+        // `--showcase <folder>` renders the showcase images (`make readme-images`) instead of the registered views, and
+        // `--hero-demo <folder>` the site's hero demo frames (`make hero-demo`, `HeroDemo`).
         let showcase = arguments.firstIndex(of: "--showcase")
-        guard let flag = showcase ?? arguments.firstIndex(of: "--snapshots"), arguments.indices.contains(flag + 1)
+        let heroDemo = arguments.firstIndex(of: "--hero-demo")
+        guard let flag = heroDemo ?? showcase ?? arguments.firstIndex(of: "--snapshots"),
+            arguments.indices.contains(flag + 1)
         else { return }
         isRunning = true
         let folder = URL(filePath: arguments[flag + 1], directoryHint: .isDirectory)
@@ -159,7 +162,12 @@ enum Snapshots {
         // A run loop block, not a main queue task: `settle()` and the capture turn the run loop inside the pass, and a
         // nested turn runs the main queue's work only outside a main queue task.
         CFRunLoopPerformBlock(CFRunLoopGetMain(), CFRunLoopMode.defaultMode.rawValue) {
-            MainActor.assumeIsolated { writeSnapshots(to: folder, isShowcase: showcase != nil) }
+            MainActor.assumeIsolated {
+                if heroDemo != nil {
+                    HeroDemo.run(writingTo: folder)
+                }
+                writeSnapshots(to: folder, isShowcase: showcase != nil)
+            }
         }
         // The capture asks the window server, so the pass runs once the app has started. It exits when done.
         NSApplication.shared.run()

@@ -78,8 +78,8 @@ extension PillView {
         let fade = CABasicAnimation(keyPath: "opacity")
         fade.fromValue = isReturning ? (layer.presentation()?.opacity ?? 0) : 0
         fade.toValue = 1
-        fade.beginTime = layer.convertTime(CACurrentMediaTime(), from: nil) + (isReturning ? 0 : 0.08)
-        fade.duration = 0.2
+        fade.beginTime = layer.convertTime(CACurrentMediaTime(), from: nil) + (isReturning ? 0 : Self.fadeInDelay)
+        fade.duration = Self.fadeInLength
         fade.fillMode = .backwards
         fade.timingFunction = CAMediaTimingFunction(name: .easeOut)
         view.alphaValue = 1
@@ -91,10 +91,7 @@ extension PillView {
     /// stack's buttons) and VoiceOver does not see it.
     private func fadeOut(_ view: NSView, at frame: NSRect) {
         let opacity = view.layer?.presentation()?.opacity ?? 1
-        view.translatesAutoresizingMaskIntoConstraints = true
-        view.autoresizingMask = [.minXMargin, .maxXMargin, .minYMargin, .maxYMargin]
-        view.frame = frame
-        glassContent.addSubview(view, positioned: .below, relativeTo: stack)
+        park(view, at: frame)
         view.alphaValue = 0
         guard let layer = view.layer else { return }
         CATransaction.begin()
@@ -107,13 +104,25 @@ extension PillView {
         let fade = CABasicAnimation(keyPath: "opacity")
         fade.fromValue = opacity
         fade.toValue = 0
-        fade.duration = 0.12
+        fade.duration = Self.fadeOutLength
         fade.timingFunction = CAMediaTimingFunction(name: .easeIn)
         layer.add(fade, forKey: Self.fadeKey)
         CATransaction.commit()
     }
 
+    /// The item that goes, out of the stack where it was, under the content, centred as the glass changes around it.
+    func park(_ view: NSView, at frame: NSRect) {
+        view.translatesAutoresizingMaskIntoConstraints = true
+        view.autoresizingMask = [.minXMargin, .maxXMargin, .minYMargin, .maxYMargin]
+        view.frame = frame
+        glassContent.addSubview(view, positioned: .below, relativeTo: stack)
+    }
+
     private static let fadeKey = "fade"
+    /// A new item fades in once the glass has begun to open; an item that goes fades out faster.
+    static let fadeInDelay = 0.08
+    static let fadeInLength = 0.2
+    static let fadeOutLength = 0.12
 }
 
 /// The glass's spring: fluid with a small bounce, close to the system's own glass morphs. It ends once the glass is within
