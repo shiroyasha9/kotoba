@@ -87,13 +87,8 @@ struct HistoryView: View {
     /// The rows by day; the page has the list only while it has rows (`PageList`).
     @ViewBuilder private var content: some View {
         ForEach(model.days) { day in
-            Section(day.title) {
-                ForEach(day.rows) { record in
-                    // No line between a day's title and its first row: the separator above a section's first row
-                    // drew under the title.
-                    row(record)
-                        .listRowSeparator(.hidden, edges: record.id == day.rows.first?.id ? .top : [])
-                }
+            PageListSection(title: day.title, rows: day.rows) { record in
+                row(record)
             }
         }
         if !model.isComplete {

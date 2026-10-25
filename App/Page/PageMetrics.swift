@@ -45,6 +45,16 @@ enum PageMetrics {
     /// The most a `PageList`'s pinned cards take: half the smallest window, so its rows always have room.
     static let pinnedMaxHeight = minimumWindowSize.height / 2
 
+    /// A `PageList`'s rows in from the list's sides, so the selection runs from card edge to card edge: the form's
+    /// section inset (`formInset`, 20 pt) less the 10 pt an inset list keeps around its selection (measured in the
+    /// framed History snapshot, 2026-10-25).
+    static let listSideInset: CGFloat = 10
+
+    /// A `PageList` row's content in from its selection, so it starts in the cards' text column: a card's row padding
+    /// (10 pt) less the 6 pt an inset list row keeps. Measured: a row's text and a card's text start 0.5 pt apart in the
+    /// framed History snapshot.
+    static let listRowInset: CGFloat = 4
+
     /// The widest the content column gets; a wider window adds margin on both sides. The form keeps its own inset
     /// inside it, so sections are 520 pt wide at most: about 80 characters of body text per line (measured in the
     /// Home snapshot at 6.2 pt a character), near the usual 45-75 for reading. System Settings keeps its sections near
