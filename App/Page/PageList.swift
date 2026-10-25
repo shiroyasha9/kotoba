@@ -4,8 +4,8 @@ import SwiftUI
 /// list style of Apple's list apps, across the whole detail column as Mail's and Notes' lists.
 ///
 /// What must stay in view (the page's header, a setting) goes in `pinned`, as form sections: cards above the rows as on
-/// every other page, never scrolled and never rebuilt with them, so a failed read does not hide them. The page's search
-/// is in the window toolbar (`pageSearch`).
+/// every other page, never scrolled with the rows and never rebuilt with them, so a failed read does not hide them. The
+/// page's search is in the window toolbar (`pageSearch`).
 ///
 /// Full width, not in the page column (chief of staff, 2026-10-25, option A): SwiftUI's List ignores scroll content
 /// margins, and a list narrowed by safe-area padding narrows its scroll view, so the title bar took its tint over the
@@ -18,14 +18,15 @@ struct PageList<SelectionValue: Hashable, Content: View, Pinned: View>: View {
     var body: some View {
         VStack(spacing: 0) {
             if Pinned.self != EmptyView.self {
-                // A grouped form at its content's height that does not scroll: native cards, spacing and type. At most
-                // half the smallest window, so the rows always have room.
+                // A grouped form at its content's height: native cards, spacing and type. At most half the smallest
+                // window, so the rows always have room; taller content (large text, a narrow window) scrolls there
+                // instead of being cut off, and content that fits does not bounce.
                 IdealHeight(within: 0...PageMetrics.pinnedMaxHeight) {
                     Form {
                         pinned
                     }
                     .formStyle(.grouped)
-                    .scrollDisabled(true)
+                    .scrollBounceBehavior(.basedOnSize)
                 }
             }
             List(selection: $selection) {

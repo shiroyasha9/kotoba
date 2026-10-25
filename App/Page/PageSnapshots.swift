@@ -11,6 +11,7 @@ extension MainWindow {
             snapshot(of: Pane(id: .general) { AnyView(SystemSheet()) }, named: "page-system"),
             pageList,
             framedList,
+            largeTextList,
             // A sheet longer than the smallest window stops at its height and scrolls.
             sheetSnapshot(named: "page-sheet-long") {
                 PageSheet(title: "Long") {
@@ -92,7 +93,19 @@ private var framedList: Snapshot {
     return MainWindow.windowSnapshot(of: panes, selecting: .history, named: "page-list-framed", isFramed: true)
 }
 
+/// A list page whose pinned groups are taller than `PageMetrics.pinnedMaxHeight`, in the smallest window: they scroll,
+/// and the run fails if they are cut off. It stands in for large text: macOS draws `dynamicTypeSize(.accessibility3)`
+/// at the regular size (the pinned groups measured 153 pt either way).
+@MainActor
+private var largeTextList: Snapshot {
+    let panes = [Pane.home(.sample), Pane(id: .history) { AnyView(ListSample(isTall: true)) }]
+    return MainWindow.windowSnapshot(
+        of: panes, selecting: .history, named: "page-list-large-text", size: PageMetrics.minimumWindowSize)
+}
+
 private struct ListSample: View {
+    /// Pinned groups taller than `PageMetrics.pinnedMaxHeight`, as large text makes them.
+    var isTall = false
     @State private var selection: Set<Int> = [2]
     @State private var search = ""
 
@@ -108,6 +121,16 @@ private struct ListSample: View {
             Section {
                 PageRow(title: "Keep audio", subtitle: "For Retry and Play. The text always stays.") {
                     Text("7 Days").foregroundStyle(.secondary)
+                }
+            }
+            if isTall {
+                Section {
+                    ForEach(1...3, id: \.self) {
+                        PageRow(
+                            title: "Setting \($0)",
+                            subtitle: "A subtitle long enough to wrap onto a second line in the smallest window."
+                        ) {}
+                    }
                 }
             }
         }

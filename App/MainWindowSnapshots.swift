@@ -30,9 +30,9 @@ extension MainWindow {
     ) -> Snapshot {
         let selection = { Selection(panes: panes, showing: id) }
         guard isFramed else {
-            return Snapshots.fixedWindow(named: name, size: size, check: overflow) {
-                MainView(panes: panes, selection: selection())
-            }
+            return Snapshots.fixedWindow(
+                named: name, size: size, check: { overflow($0) ?? clipped(in: $0) },
+                { MainView(panes: panes, selection: selection()) })
         }
         return Snapshots.window(named: name, contentSize: size) {
             let window = window(showing: MainView(panes: panes, selection: selection()))
@@ -40,7 +40,7 @@ extension MainWindow {
             window.title = id.title
             return window
         } check: {
-            overflow($0)
+            overflow($0) ?? clipped(in: $0)
         }
     }
 
@@ -60,6 +60,17 @@ extension MainWindow {
         content.subviews.first { $0.frame != content.bounds }.map {
             "the window content is \($0.frame), the window is \(content.bounds)"
         }
+    }
+
+    /// Content cut off in a scroll view with no scroller, which cannot scroll (a list page's pinned cards at large
+    /// text, owner QA 1, Q18). Not for the README images, which hide their scrollers on purpose.
+    private static func clipped(in view: NSView) -> String? {
+        if let scroll = view as? NSScrollView, !scroll.hasVerticalScroller,
+            let document = scroll.documentView?.frame.height, document > scroll.contentView.bounds.height + 0.5
+        {
+            return "a view \(document) pt tall is cut off at \(scroll.contentView.bounds.height) pt and cannot scroll"
+        }
+        return view.subviews.lazy.compactMap { clipped(in: $0) }.first
     }
 }
 
