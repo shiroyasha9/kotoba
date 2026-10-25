@@ -7,7 +7,9 @@ import SwiftUI
 
 /// A chord as keycaps with each key's name in small text under it, as a Mac keyboard prints "control" under ⌃
 /// (docs/research/ui-redesign.md, "Onboarding"): the first time the owner meets the symbols, the names teach them. A
-/// one-side modifier ("right ⌥", from Wispr Flow's keys) draws its symbol, and its name says the side.
+/// one-side modifier ("right ⌥", from Wispr Flow's keys) draws its symbol, and its name says the side. Its vertical
+/// centre is the keycaps' centre, with the names hanging below, so the keycaps centre on a button or a row's title
+/// beside them (owner QA 3, S1: centred as a whole, the keycaps sat above Change…).
 struct NamedKeycaps: View {
     let keys: [String]
 
@@ -33,9 +35,14 @@ struct NamedKeycaps: View {
         }
         // At its own width beside Change…: the row's text wraps instead of the key names.
         .fixedSize()
+        .alignmentGuide(VerticalAlignment.center) { $0[.top] + Self.keysCentre }
+        .alignmentGuide(.titleLine) { $0[.top] + Self.keysCentre }
         .accessibilityElement(children: .ignore)
         .accessibilityLabel(keys.map { $0.name ?? $0.legend }.joined(separator: " "))
     }
+
+    /// The keycaps' centre below the view's top: the names hang under it.
+    static var keysCentre: CGFloat { PageMetrics.keycapSide / 2 }
 
     /// What a key's cap draws, and the name under it: "right ⌥" draws ⌥ over "right option".
     private static func legendAndName(_ key: String) -> (legend: String, name: String?) {

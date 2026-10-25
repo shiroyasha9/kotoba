@@ -160,7 +160,7 @@ extension OnboardingController {
                 model.wisprImportAnswered(PersonalDictionary().importPreview(of: incoming))
                 return model
             },
-        ] + welcomeSnapshots(ready)
+        ] + welcomeSnapshots(ready) + [keycapsBesideButtonSnapshot()]
     }
 
     /// Welcome with Wispr Flow's shortcuts usable (the sample's hands-free), unusable and absent; then Try It with the
@@ -198,6 +198,85 @@ extension OnboardingController {
         return model
     }
 
+    /// Try It's shortcut rows with their text in three lines (the Wispr Flow line under the subtitle): Hands-free,
+    /// whose subtitle fits on one line, and Push to talk, whose subtitle wraps, each over the same row with its keycaps
+    /// hidden at no height. The run fails when the keycaps' centre is not Change…'s (owner QA 3, S1), when the keycaps'
+    /// names make a row taller, or when the wrapped row's keycaps leave its title line.
+    private static func keycapsBesideButtonSnapshot() -> Snapshot {
+        let frames = KeycapFrames()
+        let chords = HotkeyChords(defaults: nil, pushToTalk: Chord(modifiers: .option, keyCode: KeyCode.space))
+        let roles: [ChordRole] = [.handsFree, .pushToTalk]
+        let rows = roles.flatMap { role in [true, false].map { (role, $0) } }
+        let check: @MainActor (NSView) -> String? = { _ in frames.problem(in: roles) }
+        var snapshot = Snapshots.fixedWindow(named: "onboarding-keycaps-beside-button", size: size, check: check) {
+            PageForm {
+                Section {
+                    // One ForEach: a form's rows need ids unique across the section.
+                    ForEach(Array(rows.enumerated()), id: \.offset) { _, item in
+                        let (role, isShown) = item
+                        let keys = (role == .handsFree ? chords.handsFree : chords.pushToTalk).keycaps
+                        let subtitle =
+                            role == .handsFree ? StatusText.shortcutHelp(.handsFree) : StatusText.pushToTalkHelp(chords)
+                        let row = "\(role) \(isShown ? "shown" : "hidden")"
+                        PageRow(title: StatusText.shortcutTitle(role), subtitle: subtitle) {
+                            HStack {
+                                if isShown {
+                                    NamedKeycaps(keys: keys).modifier(frames.measuring("\(row) keycaps"))
+                                } else {
+                                    // Their width, so the text wraps alike, at no height, with their guides reset to
+                                    // that zero height's centre, so Change… sits as it would alone.
+                                    NamedKeycaps(keys: keys).hidden()
+                                        .frame(height: 0)
+                                        .alignmentGuide(VerticalAlignment.center) { $0[VerticalAlignment.center] }
+                                        .alignmentGuide(.titleLine) { $0[VerticalAlignment.center] }
+                                }
+                                Button("Change…") {}.modifier(frames.measuring("\(row) button"))
+                            }
+                        } extra: {
+                            WisprFlowPoint.ImportedLine()
+                        }
+                        .modifier(frames.measuring(row))
+                    }
+                }
+            }
+            .frame(width: size.width)
+            .coordinateSpace(.named(KeycapFrames.space))
+        }
+        // The form sets its rows' measured heights in the window's first run loop turn.
+        snapshot.settlesInWindow = true
+        return snapshot
+    }
+
+    /// The frames `keycapsBesideButtonSnapshot` lays out, by name, in its form's coordinates.
+    @MainActor final class KeycapFrames {
+        static let space = "keycaps-rows"
+        var rects: [String: CGRect] = [:]
+
+        func measuring(_ name: String) -> KeycapMeasuring { KeycapMeasuring(frames: self, name: name) }
+
+        func problem(in roles: [ChordRole]) -> String? {
+            for role in roles {
+                guard let row = rects["\(role) shown"], let keycaps = rects["\(role) shown keycaps"],
+                    let button = rects["\(role) shown button"], let bare = rects["\(role) hidden"],
+                    let bareButton = rects["\(role) hidden button"]
+                else { return "the \(role) rows were not laid out" }
+                let keysCentre = keycaps.minY + NamedKeycaps.keysCentre
+                if abs(keysCentre - button.midY) > 0.5 {
+                    return "the \(role) keycaps centre \(keysCentre - button.midY) pt off Change…"
+                }
+                if row.height > bare.height + 0.5 {
+                    return "the keycaps make the \(role) row \(row.height) pt tall, \(bare.height) pt without them"
+                }
+                // Change… alone sits on the title line of a wrapped row.
+                let offTitle = (keysCentre - row.minY) - (bareButton.midY - bare.minY)
+                if role == .pushToTalk, abs(offTitle) > 0.5 {
+                    return "the \(role) keycaps centre \(offTitle) pt off the row's title line"
+                }
+            }
+            return nil
+        }
+    }
+
     /// `hasKey`: an OpenRouter key is saved; `wisprRuns`: Wispr Flow is open. Wispr Flow shows as installed, with
     /// made-up shortcuts.
     private static func model(
@@ -221,5 +300,19 @@ extension OnboardingController {
 
     private static func window(_ name: String, _ model: @escaping @MainActor () -> OnboardingModel) -> Snapshot {
         Snapshots.fixedWindow(named: name, size: size) { OnboardingView(model: model()) {} }
+    }
+}
+
+/// Records a view's frame in `KeycapFrames.space` under `name`.
+struct KeycapMeasuring: ViewModifier {
+    let frames: OnboardingController.KeycapFrames
+    let name: String
+
+    func body(content: Content) -> some View {
+        content.onGeometryChange(for: CGRect.self) {
+            $0.frame(in: .named(OnboardingController.KeycapFrames.space))
+        } action: {
+            frames.rects[name] = $0
+        }
     }
 }

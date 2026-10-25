@@ -34,8 +34,10 @@ struct PageRow<Icon: View, Trailing: View, Extra: View>: View {
                 }
             }
             Spacer(minLength: PageMetrics.rowTrailingGap)
+            // On one line, the trailing content's whole box centres on the row, whatever centre it marks, so the
+            // names under `NamedKeycaps` add no height. Wrapped, its `.titleLine` goes on the title's.
             trailing
-                .alignmentGuide(.titleLine) { $0[VerticalAlignment.center] }
+                .alignmentGuide(VerticalAlignment.center) { $0.height / 2 }
         }
     }
 }
@@ -121,7 +123,8 @@ extension VerticalAlignment {
         static func defaultValue(in dimensions: ViewDimensions) -> CGFloat { dimensions[VerticalAlignment.center] }
     }
 
-    /// The middle of a row's title line (`RowText`).
+    /// The middle of a row's title line (`RowText`). A wrapped row's trailing content puts its centre there, or the line
+    /// it marks (`NamedKeycaps`: its keycaps' centre).
     static let titleLine = VerticalAlignment(TitleLine.self)
 }
 
