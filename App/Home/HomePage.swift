@@ -90,8 +90,10 @@ private struct HomePage: View {
                 )
                 .fixedSize()
                 WeekBars(days: ChartDays(insights.days, last: ChartDays.week))
+                // On the label's line at the top, as Screen Time's card puts it beside "Daily Average".
                 Image(systemName: "chevron.forward")
                     .foregroundStyle(.tertiary)
+                    .frame(maxHeight: .infinity, alignment: .top)
             }
             .fixedSize(horizontal: false, vertical: true)
             .contentShape(.rect)

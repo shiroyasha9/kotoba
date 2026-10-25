@@ -125,12 +125,15 @@ enum PageMetrics {
     /// A bar's width as a share of its day's slot, as Screen Time's bars (0.57 in the owner's capture).
     static let barWidthRatio: CGFloat = 0.6
 
-    /// A bar's corner, all four as Screen Time's (review-window.md T6): about a quarter of a week bar's width. Charts
-    /// takes only a fixed radius, so a month's thin bar keeps it too.
+    /// A bar's corner, all four as Screen Time's (review-window.md T6): about a quarter of a week bar's width
+    /// (`barCornerShare`), and never more.
     static let barCornerRadius: CGFloat = 4
+    static let barCornerShare: CGFloat = 0.25
 
-    /// Home's stub for an empty day: as tall as a bar's corner, standing on the base line.
-    static let barStubHeight = barCornerRadius
+    /// Home's week bar at most this share of its plot's height wide: the plot beside the today headline is about 30 pt
+    /// tall, and a bar 0.6 of its day wide (24 pt) read as a square (qa1-review 3). A third keeps the tallest day at least three
+    /// times as tall as wide, as Activity's tallest bars are.
+    static let weekBarShare: CGFloat = 1 / 3
 
     /// Home's week: from the bars' base line to the top of a day initial's capitals, as Swift Charts drew it (14 px at 2x
     /// in the 0.5.0 Home snapshot), less the space the text frame keeps above its capitals.
