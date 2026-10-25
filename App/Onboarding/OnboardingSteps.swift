@@ -381,9 +381,7 @@ struct ShortcutSheet: View {
     var body: some View {
         PageSheet(title: "Change Shortcut") {
             Section {
-                PageRow(title: StatusText.shortcutTitle(role), subtitle: help) {
-                    ChordRecorder(chords: chords, role: role)
-                }
+                ChordRecorder(chords: chords, role: role, help: help)
             } footer: {
                 Text("You can change every shortcut later on kotoba’s Shortcuts page.")
             }

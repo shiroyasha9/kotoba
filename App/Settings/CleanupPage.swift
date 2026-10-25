@@ -62,7 +62,7 @@ private struct CleanupPage: View {
         } header: {
             Text("Cleanup")
         } footer: {
-            Text("Each cleanup adds about 1-2 seconds before the paste.")
+            Text("Each cleanup adds about 1 to 2 seconds before the paste.")
         }
     }
 

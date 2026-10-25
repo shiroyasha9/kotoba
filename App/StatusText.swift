@@ -149,7 +149,8 @@ enum StatusText {
         case .handsFree: "Press to start. Press again to stop and paste."
         case .pushToTalk: "Hold while you speak. Let go to paste."
         case .cleanup:
-            "Press or hold to dictate. Removes filler words and fixes punctuation; the paste comes 1-2 seconds later."
+            "Press or hold to dictate. Removes filler words and fixes punctuation; the paste comes 1 to 2 seconds "
+                + "later."
         case .pasteLast: "Pastes your last dictation again."
         case .copyLast: "Puts your last dictation on the clipboard."
         case .polishLast: "Makes your last dictation shorter and clearer."

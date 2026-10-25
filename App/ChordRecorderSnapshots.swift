@@ -141,6 +141,8 @@ extension ChordRecorder {
 
     @MainActor
     private static func row(_ title: String, _ recorder: ChordRecorder) -> some View {
-        LabeledContent(title) { recorder }
+        var recorder = recorder
+        recorder.title = title
+        return recorder
     }
 }

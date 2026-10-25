@@ -4,65 +4,84 @@ import Observation
 import SwiftUI
 
 // Custom: AppKit and SwiftUI have no shortcut recorder control.
-/// The shortcut recorder for one chord: click, press the chord, and it is saved. A refused chord keeps the old one
-/// and shows why. The Shortcuts page and onboarding use it.
+/// A chord's row with its shortcut recorder: click, press the chord, and it is saved. A refused chord keeps the old one
+/// and shows why. The row's title is the chord's mode or action and `help` says how it works; a refusal or a hint goes
+/// under them, left-aligned in the text column as a System Settings footnote (qa1-review, Shortcuts). The Shortcuts
+/// page and onboarding use it.
 struct ChordRecorder: View {
     let chords: HotkeyChords
     let role: HotkeyChords.Role
+    var help: String?
+    /// Nil: the role's name (`StatusText.shortcutTitle`). Snapshots name each state instead.
+    var title: String?
     @State private var listener: ChordListener
 
-    init(chords: HotkeyChords, role: HotkeyChords.Role, listener: ChordListener = ChordListener()) {
+    init(
+        chords: HotkeyChords, role: HotkeyChords.Role, help: String? = nil, listener: ChordListener = ChordListener()
+    ) {
         self.chords = chords
         self.role = role
+        self.help = help
         _listener = State(initialValue: listener)
     }
 
     var body: some View {
-        VStack(alignment: .trailing) {
-            // Turn Off and Reset come before the recorder, so every recorder in a column keeps the same trailing edge.
-            HStack {
-                if role != .handsFree, role != .pushToTalk, chord != nil {
-                    Button("Turn Off", systemImage: "xmark.circle") { save(nil) }
-                        .labelStyle(.iconOnly)
-                        .buttonStyle(.borderless)
-                        .help(role == .cleanup ? "Turn off the cleanup shortcut" : "Turn off this shortcut")
-                }
-                // A default Copy Last that a dictation chord turned off would be refused: the note says why instead.
-                if let defaultChord, chord != defaultChord, role != .copyLast || chords.copyLastOffReason == nil {
-                    Button("Reset", systemImage: "arrow.counterclockwise") { save(defaultChord) }
-                        .labelStyle(.iconOnly)
-                        .buttonStyle(.borderless)
-                        .help("Reset to \(defaultChord.title)")
-                }
-                // Rewrite Last is off until the owner records one: one click takes the suggestion.
-                if role == .polishLast, chord == nil, !listener.isListening,
-                    let suggestion = chords.polishLastSuggestion
-                {
-                    // A link, as a suggestion reads in System Settings: as plain grey text it did not look clickable.
-                    Button("Use \(suggestion.title)") { save(suggestion) }
-                        .buttonStyle(.link)
-                        .help("Use \(suggestion.title) to rewrite the last dictation")
-                }
-                Button(action: toggle) {
-                    // As wide as the widest caption, so the button keeps its width while it listens.
-                    ZStack {
-                        ForEach(Self.widestCaptions, id: \.self) { Text($0).hidden() }
-                        Text(caption)
-                            .foregroundStyle(listener.isListening ? AnyShapeStyle(.tint) : AnyShapeStyle(.primary))
-                    }
-                }
-                .help(
-                    listener.isListening ? "Press the new shortcut, or Esc to stop" : "Click to record a new shortcut")
+        VStack(alignment: .leading) {
+            PageRow(title: title ?? StatusText.shortcutTitle(role), subtitle: help) {
+                controls
             }
             if let note {
-                Text(note.text)
-                    .font(.caption)
-                    .foregroundStyle(note.isProblem ? AnyShapeStyle(.red) : AnyShapeStyle(.secondary))
-                    .multilineTextAlignment(.trailing)
-                    .fixedSize(horizontal: false, vertical: true)
+                // A refusal with the app's warning look; a hint in a footnote's grey.
+                Group {
+                    if note.isProblem {
+                        StatusLine(note.text, .problem)
+                    } else {
+                        Text(note.text).foregroundStyle(.secondary)
+                    }
+                }
+                .font(.subheadline)
+                .fixedSize(horizontal: false, vertical: true)
             }
         }
         .onDisappear { listener.stop() }
+    }
+
+    private var controls: some View {
+        // Turn Off and Reset come before the recorder, so every recorder in a column keeps the same trailing edge.
+        HStack {
+            if role != .handsFree, role != .pushToTalk, chord != nil {
+                Button("Turn Off", systemImage: "xmark.circle") { save(nil) }
+                    .labelStyle(.iconOnly)
+                    .buttonStyle(.borderless)
+                    .help(role == .cleanup ? "Turn off the cleanup shortcut" : "Turn off this shortcut")
+            }
+            // A default Copy Last that a dictation chord turned off would be refused: the note says why instead.
+            if let defaultChord, chord != defaultChord, role != .copyLast || chords.copyLastOffReason == nil {
+                Button("Reset", systemImage: "arrow.counterclockwise") { save(defaultChord) }
+                    .labelStyle(.iconOnly)
+                    .buttonStyle(.borderless)
+                    .help("Reset to \(defaultChord.title)")
+            }
+            // Rewrite Last is off until the owner records one: one click takes the suggestion.
+            if role == .polishLast, chord == nil, !listener.isListening,
+                let suggestion = chords.polishLastSuggestion
+            {
+                // A link, as a suggestion reads in System Settings: as plain grey text it did not look clickable.
+                Button("Use \(suggestion.title)") { save(suggestion) }
+                    .buttonStyle(.link)
+                    .help("Use \(suggestion.title) to rewrite the last dictation")
+            }
+            Button(action: toggle) {
+                // As wide as the widest caption, so the button keeps its width while it listens.
+                ZStack {
+                    ForEach(Self.widestCaptions, id: \.self) { Text($0).hidden() }
+                    Text(caption)
+                        .foregroundStyle(listener.isListening ? AnyShapeStyle(.tint) : AnyShapeStyle(.primary))
+                }
+            }
+            .help(
+                listener.isListening ? "Press the new shortcut, or Esc to stop" : "Click to record a new shortcut")
+        }
     }
 
     /// The four modifiers and the listening caption: the button is as wide as the wider of the two.

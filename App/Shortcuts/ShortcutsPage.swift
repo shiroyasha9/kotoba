@@ -83,9 +83,9 @@ private struct ShortcutsPage: View {
                 }
             }
             Section("Last Dictation") {
-                recorder(.pasteLast, StatusText.shortcutHelp(.pasteLast) + " Off until you record a shortcut.")
+                recorder(.pasteLast, StatusText.shortcutHelp(.pasteLast))
                 recorder(.copyLast, StatusText.shortcutHelp(.copyLast))
-                recorder(.polishLast, StatusText.shortcutHelp(.polishLast) + " Off until you record a shortcut.")
+                recorder(.polishLast, StatusText.shortcutHelp(.polishLast))
             }
             Section {
                 PageToggle(
@@ -104,11 +104,9 @@ private struct ShortcutsPage: View {
         }
     }
 
-    /// A chord's row: its name, how it works, and its recorder.
+    /// A chord's row: its name, how it works, and its recorder. A shortcut that is off says so on its button.
     private func recorder(_ role: HotkeyChords.Role, _ help: String) -> some View {
-        PageRow(title: StatusText.shortcutTitle(role), subtitle: help) {
-            ChordRecorder(chords: model.chords, role: role)
-        }
+        ChordRecorder(chords: model.chords, role: role, help: help)
     }
 }
 
