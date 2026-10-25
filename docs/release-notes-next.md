@@ -23,7 +23,7 @@
 
 ### Improved
 
-- On a test build, kotoba keeps about 37 MB after you close its window, down from about 40 MB in 0.4.6. With the window open on Home, it uses about 31 MB, down from about 36 MB.
+- On a test build, with the window open on Home, kotoba uses about 31 MB, down from about 36 MB in 0.4.6, and at its peak about 155 MB, down from about 159 MB.
 - The pill uses no more memory or CPU than the old indicator, and does no work while it waits.
 - Cleanup is faster: it now uses DeepSeek V4.1 Flash by default. On 60 real dictations, half the cleanups took under 0.6 seconds, against 1 second with Gemini 3.5 Flash-Lite, the old default, and none lost words.
 - Without cleanup, your text now comes without “um”, “uh”, repeated words and false starts: MAI-Transcribe-2 removes them as it transcribes, with no extra time, and keeps every dictionary word. To keep them, turn on Settings > Speech > Advanced… > Keep filler words, which now works for every speech model, not only Grok.
