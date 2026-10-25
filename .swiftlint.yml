@@ -252,6 +252,15 @@ custom_rules:
     match_kinds: [string]
     message: "Use the 0.5.0 names in UI text: “Rewrite” (not Polish), “App styles” (not Modes), “Recording” (not Listening) (CODING_STANDARDS.md, User-facing text 9)."
     severity: error
+  # Rule 16 (docs/research/copywriting.md, voice rule 2): a claim that is not always true gets a different claim, not a
+  # hedge. "about" counts only before a number or "a", "an", "one", so the menu's "About kotoba" passes.
+  ui_text_hedges:
+    name: "UI text: definite claims"
+    included: ["App/.*\\.swift"]
+    regex: "(?i:\\b(?:usually|typically|basically|simply|just|about (?:an?|one|\\d))\\b)(?<=(?:\\b(?:Text|Button|Toggle|Section|Label|Picker|LabeledContent|Link|Menu|TextField|SecureField|GroupBox|NSMenuItem|NSButton|NSTextField|NSAlert|MenuChoice|StepHeading|StatusLine|Point|PageRow|PageHeader|ChartHeadline|PageSheet|PageToggle|ChoiceRow|CleanupSample|PageSearchField|help|navigationTitle|confirmationDialog|alert)\\(|\\.(?:title|subtitle|toolTip|messageText|informativeText|placeholderString|stringValue|prompt) = )(?:[ \\t]{0,4}\\n[ \\t]{0,40})?[^\\n]{0,200}(?i:\\b(?:usually|typically|basically|simply|just|about (?:an?|one|\\d))\\b))"
+    match_kinds: [string]
+    message: "Make a definite claim in UI text: no “usually”, “typically”, “basically”, “simply”, “just”, or “about” before a number; when it is not always true, change the claim (CODING_STANDARDS.md, User-facing text 16)."
+    severity: error
   # What the shell shows is decided in KotobaCore's `ShellStatus` and tested there; these two files only collect its
   # facts and draw its output. b235fa0 and 3a9743b changed such rules here with no test: a pattern match on a state in
   # them is a decision no test covers.
@@ -352,6 +361,13 @@ custom_rules:
     regex: "(?:(?i:\\bpolish(?:es|ed|ing)?\\b|\\blistening\\b)|(?-i:\\bModes?\\b))"
     match_kinds: [string]
     message: "Use the 0.5.0 names in pill and menu text: “Rewrite” (not Polish), “App styles” (not Modes), “Recording” (not Listening) (CODING_STANDARDS.md, User-facing text 9)."
+    severity: error
+  status_text_hedges:
+    name: "Status text: definite claims"
+    included: ["App/StatusText\\.swift", "KotobaCore/Sources/KotobaCore/ShellStatus\\.swift"]
+    regex: "(?i:\\b(?:usually|typically|basically|simply|just|about (?:an?|one|\\d))\\b)"
+    match_kinds: [string]
+    message: "Make a definite claim in pill and menu text: no “usually”, “typically”, “basically”, “simply”, “just”, or “about” before a number (CODING_STANDARDS.md, User-facing text 16)."
     severity: error
   live_state_in_ledger:
     name: "Live dictation state in LiveDictations"

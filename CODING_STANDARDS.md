@@ -71,7 +71,9 @@ The main window's visual system lives in `App/Page/` (plan: docs/research/ui-red
 
 ## User-facing text
 
-Reference: the copy deck in `docs/research/ux-polish.md` (sections 4.1-4.6). A new string follows these rules; review checks them, and `.swiftlint.yml` enforces 3, 4 (a modifier name joined to a key, such as "Cmd+V"), 5, 8, 9 (the 0.5.0 names), 13, 14 and 15 on UI-building lines (and on the line after the builder's `(`). A view that takes visible text as a parameter (a header card, a row) adds its name to the UI-builder list of every `ui_text_*` rule; `scripts/ui-text-builders.sh` (`make lint`) fails when the lists differ.
+Voice: `docs/research/copywriting.md` says what to say and what to leave out; read it before you write or change any user-facing text. The rules below are the mechanical part. The older copy sources (`docs/research/ux-polish.md` 4.1-4.6, `<runbooks>/2026-10-24-kotoba-ui-redesign/app-copy-research.md` and `copy-pass.md`) are superseded where they ask to explain first, to give every row a subtitle or to hedge a claim; their term list and fact checks stay. Rules 4, 9, 14, 15 and 16 also apply to the README and the landing site, by review.
+
+A new string follows these rules; review checks them, and `.swiftlint.yml` enforces 3, 4 (a modifier name joined to a key, such as "Cmd+V"), 5, 8, 9 (the 0.5.0 names), 13, 14, 15 and 16 (the hedge words) on UI-building lines (and on the line after the builder's `(`). A view that takes visible text as a parameter (a header card, a row) adds its name to the UI-builder list of every `ui_text_*` rule; `scripts/ui-text-builders.sh` (`make lint`) fails when the lists differ.
 
 1. Brand: always "kotoba", lowercase, also at the start of a sentence.
 2. Capitalisation (Apple HIG): Title Case for menu items, buttons, window and pane titles, section headers. Sentence case for toggle and field labels, footers, help text, pill messages and status lines.
@@ -81,13 +83,17 @@ Reference: the copy deck in `docs/research/ux-polish.md` (sections 4.1-4.6). A n
 6. An error says what happened and what to do next, names the service ("Couldn't reach OpenRouter"), says when the audio is saved, and puts the fix on a button. Never blame the user.
 7. A pill message fits the 360 pt pill (about 34 characters); the snapshot run fails on truncation. A live pill (recording, transcribing, cleanup, rewrite) shows no words: the pill reads `pillText`, which is nil there (lint `pill_reads_pill_text`; the snapshot run fails on words in a live pill), and the menu status line reads `statusText`. The pill has one glass, its capsule; its buttons use a fill (lint `glass_on_navigation_layer_only`; the snapshot run fails on a second glass view). Symbols and text take text styles, never a point size (lint `ui_font_size_literal`).
 8. No " - " between phrases: two sentences, a colon, or "·" for a value after a state.
-9. One word per concept: Recording (live state; owner, 2026-10-24, was Listening), dictation, speech model, key, word, replacement, suggestion, Cleanup, Rewrite (was Polish), App styles (was Modes); “microphone” on pages, titles and menus, “mic” only where space is tight (the pill, short status lines). Lint `ui_text_old_names` and `status_text_old_names` refuse Polish, Modes and Listening.
+9. One word per concept: Recording (live state; owner, 2026-10-24, was Listening), dictation, speech model, speech service (not “provider”), key (not “API key”), shortcut (“chord” stays a code word), word, replacement, suggestion, Cleanup, Rewrite (was Polish), App styles (was Modes); “microphone” on pages, titles and menus, “mic” only where space is tight (the pill, short status lines). Lint `ui_text_old_names` and `status_text_old_names` refuse Polish, Modes and Listening.
 10. Counts inflect (`AttributedString(localized: "^[…](inflect: true)")`); hide a zero count instead of "(0)".
 11. Pill and menu status strings live in `App/StatusText.swift` only.
 12. Every new window, pane, `DictationPhase` and `DictationNotice` gets a snapshot in `App/Snapshots.swift` (light and dark).
 13. Typographic punctuation: curly apostrophe and quotes (’ “ ”) in UI text, never ' or " inside the visible words.
-14. Voice (Apple HIG Writing, Apple Style Guide): no “we”, “our” or “us” (name kotoba or the thing), no “please”, no “enable”, “disable” or “toggle” (a switch’s label names what is on: “Keep filler words”), no interjections (“oops”, “sorry”).
+14. Voice (Apple HIG Writing, Apple Style Guide): no “we”, “our” or “us” (name kotoba or the thing), no “please”, no “enable”, “disable” or “toggle” (a switch’s label names what is on: “Keep filler words”), no interjections (“oops”, “sorry”), no hype (“perfect”, “magic”, “seamless”, “powerful”). Contractions are fine (“it’s”, “can’t”), as Apple writes.
 15. Keys: “press” and “hold”, never “tap” (“Press ⌃⌥⌘ to start, press it again to stop.” “Hold ⌥ while you speak.”). In code, “tap” stays the name of a short chord press (Naming). Lint `status_text_press_not_tap` checks `App/StatusText.swift`, and `ui_text_press_not_tap` the other UI text.
+16. Definite claims: no “usually”, “typically”, “basically”, “simply” or “just”, and no “about” before a number. When a claim is not always true, change the claim, not its strength. A number in a heading or a row is the median in `docs/benchmarks.md`; the p90 and the method stay there. Lint `ui_text_hedges` and `status_text_hedges` (the menu’s “About kotoba” does not match).
+17. Outcome first: a line says what the user gets (“Learns your names and technical terms.”), not the mechanism or a to-do. Mechanism and edge cases go to an Advanced sheet, the README’s later sections or `docs/`; an edge case that changes what the user sees is said once, where it happens (the pill’s “Copied. Press ⌘V to paste.”).
+18. Assume Mac literacy: do not explain dictation, the menu bar, the Dock, the orange mic indicator or System Settings.
+19. Parallel lists, optional subtitles: the rows of one section share one grammatical shape and about one length. A row gets a subtitle only when its title is not enough.
 
 ## Tests
 
