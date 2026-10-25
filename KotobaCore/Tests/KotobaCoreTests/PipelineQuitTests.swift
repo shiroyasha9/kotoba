@@ -111,6 +111,7 @@ struct PipelineQuitTests {
         await pipeline.tap(world)
         await pipeline.tap(world)
         #expect(await eventually { await gate.hasWaiters })
+        #expect(await world.store.waitForRecords(1))
 
         async let quit: Void = pipeline.shutdown()
         #expect(await eventually { await pipeline.waiterCount(.sendsEnded) == 1 })

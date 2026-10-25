@@ -59,6 +59,12 @@ actor FakeStore: Store {
         history[record.id, default: []].append(record.status)
     }
 
+    /// Yields until at least `count` rows are saved. A dictation's pending row is saved beside its request
+    /// (`TranscriptDelivery.deliver`), so a request held at a gate does not mean that its row is here yet.
+    func waitForRecords(_ count: Int) async -> Bool {
+        await eventually { records.count >= count }
+    }
+
     func update(_ record: DictationRecord) async throws -> Bool {
         await Slowness.pause()
         if let updateError { throw updateError }
