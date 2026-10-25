@@ -38,8 +38,9 @@ struct ChordRecorder: View {
                 if role == .polishLast, chord == nil, !listener.isListening,
                     let suggestion = chords.polishLastSuggestion
                 {
+                    // A link, as a suggestion reads in System Settings: as plain grey text it did not look clickable.
                     Button("Use \(suggestion.title)") { save(suggestion) }
-                        .buttonStyle(.borderless)
+                        .buttonStyle(.link)
                         .help("Use \(suggestion.title) to rewrite the last dictation")
                 }
                 Button(action: toggle) {
