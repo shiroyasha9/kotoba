@@ -32,6 +32,34 @@ enum SnapshotCapture {
         (window.contentView?.superview ?? window.contentView).flatMap(runningAnimation(in:))
     }
 
+    /// Ends every Core Animation animation in the window that has an end, so the capture draws each layer as it rests:
+    /// a snapshot run shows no animation. A control that animates in its first value (Microphone's input level gauge,
+    /// 250 ms) was still moving when a capture came less than 250 ms after its layout, and failed the run under load.
+    /// A repeating one (a spinner) is left as it is.
+    static func endAnimations(in window: NSWindow) {
+        guard let view = window.contentView?.superview ?? window.contentView else { return }
+        endAnimations(in: view)
+        CATransaction.flush()
+    }
+
+    private static func endAnimations(in view: NSView) {
+        guard let layer = view.layer else {
+            view.subviews.forEach(endAnimations(in:))
+            return
+        }
+        endAnimations(in: layer)
+    }
+
+    private static func endAnimations(in layer: CALayer) {
+        for key in layer.animationKeys() ?? [] {
+            guard let animation = layer.animation(forKey: key), animation.repeatCount.isFinite,
+                animation.repeatDuration.isFinite
+            else { continue }
+            layer.removeAnimation(forKey: key)
+        }
+        layer.sublayers?.forEach(endAnimations(in:))
+    }
+
     /// From each top layer-backed view down: a borderless window's frame view has no layer of its own.
     private static func runningAnimation(in view: NSView) -> String? {
         if let layer = view.layer {
