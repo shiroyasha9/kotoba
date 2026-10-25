@@ -12,7 +12,7 @@ SWIFT_SRC   := App KotobaCore/Sources KotobaCore/Tests KotobaCore/Package.swift 
                KotobaStorage/Sources KotobaStorage/Tests KotobaStorage/Package.swift
 SWIFTFORMAT := xcrun swift-format
 
-.PHONY: gen build build-check test lint lint-files format format-lint privacy check view-checks snapshots readme-images memory window-memory latency latency-log stop-probe timing test-slow \
+.PHONY: gen build build-check test lint lint-files format format-lint privacy check view-checks snapshots readme-images hero-demo memory window-memory latency latency-log stop-probe timing test-slow \
 	release dmg appcast
 
 gen:
@@ -103,6 +103,17 @@ readme-images: build-check
 	pngquant --quality 80-95 --speed 1 --strip --force --ext .png $(README_SHOTS)/*.png
 	oxipng -o 4 --strip safe -q $(README_SHOTS)/*.png
 	cp $(README_SHOTS)/showcase-*.png docs/images/
+
+# The site's hero demo (App/HeroDemoSnapshots.swift): one dictation into a message window, from real AppKit and the real pill
+# with its glass, frame by frame, light and dark, at 2x, encoded to a looping H.264 MP4 and AV1 WebM (about 0.2 MB
+# each) with the first frame as the poster (scripts/hero-demo.sh). Needs Screen Recording for the terminal, as
+# snapshots; about 40 s. Copy build/hero-demo/hero-demo-* to the site.
+HERO_DEMO := build/hero-demo$(if $(AGENT),-$(AGENT))
+hero-demo: build-check
+	@command -v ffmpeg >/dev/null && command -v pngquant >/dev/null && command -v oxipng >/dev/null \
+		|| { echo "hero-demo needs ffmpeg, pngquant and oxipng: brew install ffmpeg pngquant oxipng"; exit 1; }
+	$(call DEBUG_APP,$(CHECK_DERIVED))/Contents/MacOS/kotoba --hero-demo $(HERO_DEMO) -AppleAccentColor 4
+	scripts/hero-demo.sh $(HERO_DEMO)
 
 # The main window's memory, offscreen, with sample data (App/Settings/SettingsSnapshots.swift `measureWindowMemory`):
 # footprint at launch, with every pane shown and after close. Run with the environment the app gets from Launch Services

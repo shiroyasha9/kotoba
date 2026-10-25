@@ -74,7 +74,7 @@ private func isDark(_ appearance: NSAppearance) -> Bool {
 
 /// The showcase's backdrop: soft colour fields on a pale (light) or deep (dark) ground, like a product shot. Fixed sRGB
 /// values in proportion to the size, so every image of one appearance has the same light, never the owner's wallpaper.
-private enum Stage {
+enum Stage {
     /// A colour field: its centre and radius in fractions of the stage (the radius of its longer side), its colour
     /// (red, green, blue, alpha at the centre).
     private struct Field {

@@ -36,6 +36,11 @@ final class PillView: NSView {
         get { bars.level }
         set { bars.level = newValue }
     }
+    /// How many levels a second come in (`PillBars.levelsPerSecond`).
+    var levelsPerSecond: Double {
+        get { bars.levelsPerSecond }
+        set { bars.levelsPerSecond = newValue }
+    }
     var onAction: ((Action) -> Void)?
     /// The pointer entered (true) or left (false) the capsule.
     var onHoverChanged: ((Bool) -> Void)?
