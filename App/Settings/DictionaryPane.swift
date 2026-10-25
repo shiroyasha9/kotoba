@@ -43,6 +43,17 @@ private struct DictionaryPane: View {
             }
             words
         }
+        // In the window toolbar, always in view however long the list is, as Passwords' search and + (owner QA 1, Q12).
+        .pageSearch(text: $search, prompt: "Search words")
+        .pageToolbar {
+            if model.isWisprInstalled {
+                Button("Import from Wispr Flow…", systemImage: "square.and.arrow.down") { model.previewWisprImport() }
+                    .disabled(model.wisprImport != nil)
+            }
+            Button("Add Word…", systemImage: "plus", action: add)
+                .help("Add a word or a replacement")
+        }
+        .task { await model.checkWisprInstalled() }
         .wisprImportAlert(model)
         .sheet(item: $editing) { editing in
             EntryEditor(draft: editing.draft, isNew: editing.row == nil) { draft throws(DictionaryError) in
@@ -56,31 +67,15 @@ private struct DictionaryPane: View {
     private var words: some View {
         Section {
             EditableList(
-                rows: visibleRows, emptyText: emptyText, addTitle: "Add Word", addHelp: "Add a word or a replacement",
-                removeTitle: "Delete", remove: model.delete, add: add, edit: edit
+                rows: visibleRows, emptyText: emptyText, removeTitle: "Delete", remove: model.delete, edit: edit
             ) { row in
                 DictionaryRowView(
                     draft: model.draft(for: row), sendsKeyterm: model.keyterm(for: row) != nil,
                     isPinned: model.isPinned(row), isNotSent: model.isNotSent(row)
                 ) { model.setPinned(row, $0) }
-            } accessory: {
-                if isReading {
-                    ProgressView().controlSize(.small)
-                }
-                if model.isWisprInstalled {
-                    Button("Import from Wispr Flow…") { model.previewWisprImport() }
-                        .buttonStyle(.automatic)
-                        .disabled(model.wisprImport != nil)
-                }
             }
         } header: {
-            // The field names the list ("Search words"), so the group needs no other header. It stays while it
-            // filters, even when no word is left, so a search never hides words with no field to clear it.
-            if model.rows.isEmpty && search.isEmpty {
-                Text("Words")
-            } else {
-                PageSearchField(text: $search, prompt: "Search words")
-            }
+            Text("Words")
         } footer: {
             VStack(alignment: .leading) {
                 // An empty dictionary says so in the list; "0 words" adds nothing.
@@ -92,7 +87,6 @@ private struct DictionaryPane: View {
                 }
             }
         }
-        .task { await model.checkWisprInstalled() }
     }
 
     private var emptyText: String {
@@ -123,8 +117,6 @@ private struct DictionaryPane: View {
                 + "most."
         return "\(words), \(replacements). " + hints
     }
-
-    private var isReading: Bool { model.wisprImport?.isReading == true }
 
     private func add() {
         editing = Editing(row: nil, draft: EntryDraft())

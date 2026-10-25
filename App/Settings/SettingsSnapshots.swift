@@ -22,6 +22,8 @@ extension Pane {
             windowSnapshot(selecting: .general, named: "window-general"),
             windowSnapshot(selecting: .speech, named: "window-speech"),
             windowSnapshot(selecting: .dictionary, named: "window-dictionary"),
+            // Framed: its search, Import and + in the window toolbar.
+            windowSnapshot(selecting: .dictionary, named: "window-dictionary-framed", isFramed: true),
             windowSnapshot(
                 suggestions: sampleSuggestions, selecting: .dictionary, named: "window-dictionary-suggestions"),
             windowSnapshot(selecting: .modes, named: "window-modes"),
