@@ -88,8 +88,14 @@ struct ChangesView: View {
 
     /// Removed words struck through in red, added words underlined in green; the spacing after them stays plain. The
     /// two colors (asset catalog, light and dark) read at 4.5:1 or more on the text background in both modes.
+    /// A word put in place of a struck one with no space between them ("friday" → "Friday." at a sentence end) gets one,
+    /// so the two do not read as one word (qa1-review, History).
     static func marked(_ runs: [WordDiff.Run]) -> AttributedString {
-        runs.reduce(into: AttributedString()) { text, run in
+        zip([nil] + runs.map(\.kind), runs).reduce(into: AttributedString()) { text, pair in
+            let (previous, run) = pair
+            if previous == .removed, run.kind == .added, text.characters.last?.isWhitespace == false {
+                text += AttributedString(" ")
+            }
             let end = run.text.lastIndex { !$0.isWhitespace }.map(run.text.index(after:)) ?? run.text.startIndex
             var words = AttributedString(run.text[..<end])
             switch run.kind {

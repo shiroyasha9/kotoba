@@ -50,7 +50,8 @@ private struct CleanupPage: View {
     private var cleanup: some View {
         Section {
             let sample = AppMode.writing.sample
-            Text("Cleanup removes filler words and fixes punctuation as you dictate.")
+            // The section title names it, so the line starts with what it does (qa1-review, Cleanup: "Cleanup" three times).
+            Text("Removes filler words and fixes punctuation as you dictate.")
             CleanupSample(
                 before: ("You say", sample.spoken), after: ("kotoba pastes", sample.cleaned))
             ForEach(AppMode.allCases, id: \.self) { mode in
@@ -68,7 +69,7 @@ private struct CleanupPage: View {
 
     private var rewrite: some View {
         Section {
-            Text("Rewrite makes your last dictation shorter and clearer, with nothing left out.")
+            Text("Makes your last dictation shorter and clearer, with nothing left out.")
             CleanupSample(
                 before: ("You dictated", Self.rewriteSample.dictated),
                 after: ("kotoba pastes", Self.rewriteSample.rewritten))

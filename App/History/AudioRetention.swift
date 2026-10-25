@@ -222,7 +222,7 @@ struct AudioRetentionRow: View {
         let saved = size.deletable.formatted(.byteCount(style: .file))
         guard size.waiting > 0 else { return "\(saved) saved. \(stays)" }
         let waiting = size.waiting.formatted(.byteCount(style: .file))
-        return "\(saved) saved, and \(waiting) that waits for Retry. \(stays)"
+        return "\(saved) saved, plus \(waiting) not transcribed yet. \(stays)"
     }
 
     /// Both questions: the size when it is known, then what stays.
