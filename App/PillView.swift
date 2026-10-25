@@ -214,6 +214,12 @@ final class PillView: NSView {
         stack.orientation = isVertical ? .vertical : .horizontal
         stack.alignment = isVertical ? .centerX : .centerY
         stack.setViews(views, in: .center)
+        // An item in the stack is opaque; a fade-in only animates its layer from 0. An item that faded out keeps its 0
+        // after it leaves the glass, and a look applied while the pill is hidden runs no fade (an empty capsule at the
+        // start of a recording, owner QA 4 U3).
+        for view in views {
+            view.alphaValue = 1
+        }
         stack.edgeInsets = edgeInsets(for: views)
         contentLength = naturalLength()
         let size = shapeSize

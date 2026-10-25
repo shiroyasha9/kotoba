@@ -248,6 +248,7 @@ extension IndicatorPanel {
         let glassCount = glassViews(in: pill)
         if glassCount != 1 { return "the pill \(name) has \(glassCount) glass views, not one: no glass on glass" }
         return accessibilityProblem(of: pill) ?? (pill.look == .idle ? idleCostProblem() : nil)
+            ?? reshowProblem(of: pill.look)
     }
 
     private static func glassViews(in view: NSView) -> Int {
@@ -288,57 +289,5 @@ extension IndicatorPanel {
         pill.look = .idle
         return pill.animatedLayers.isEmpty
             ? nil : "after a sweep the idle pill animates \(pill.animatedLayers.count) layers"
-    }
-}
-
-// MARK: Checks
-
-extension PillView {
-    /// Every layer under the pill with a running animation: the idle-cost check wants none at idle.
-    var animatedLayers: [CALayer] {
-        // A view's layer is also its parent view's sublayer, so each layer counts once.
-        var seen = Set<ObjectIdentifier>()
-        func walk(_ layer: CALayer) -> [CALayer] {
-            guard seen.insert(ObjectIdentifier(layer)).inserted else { return [] }
-            let own = (layer.animationKeys() ?? []).isEmpty ? [] : [layer]
-            return own + (layer.sublayers ?? []).flatMap(walk)
-        }
-        func walk(_ view: NSView) -> [CALayer] {
-            (view.layer.map(walk) ?? []) + view.subviews.flatMap(walk)
-        }
-        return walk(self)
-    }
-
-    /// The content is longer than the capsule, so an item sits outside it. Valid after layout.
-    var isOverflowing: Bool {
-        let content = stack.arrangedSubviews.map(\.frame).reduce(NSRect.null) { $0.union($1) }
-        return !content.isNull && !stack.bounds.insetBy(dx: -0.5, dy: -0.5).contains(content)
-    }
-
-    /// The content needs more than the longest pill, so its words cannot all show.
-    var isTooLong: Bool {
-        contentLength > PillGeometry.maxLength + 0.5
-    }
-
-    /// The words or the time are narrower than their text, so they end in "…" or are cut. Valid after layout.
-    var isTextTruncated: Bool {
-        stack.arrangedSubviews.contains {
-            guard let text = $0 as? NSTextField else { return false }
-            return text.intrinsicContentSize.width > text.frame.width + 0.5
-        }
-    }
-
-    /// A live phase with no words: a recording that shows only its bars and buttons, or the sweep.
-    var isLive: Bool {
-        switch look {
-        case .processing: true
-        case .recording(let recording): recording.words == nil && recording.timedFrom == nil
-        case .idle, .hover, .done, .message, .dragged: false
-        }
-    }
-
-    /// The words the pill shows, its time included.
-    var shownWords: [String] {
-        stack.arrangedSubviews.compactMap { ($0 as? NSTextField)?.stringValue }
     }
 }

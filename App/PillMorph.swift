@@ -82,7 +82,6 @@ extension PillView {
         fade.duration = Self.fadeInLength
         fade.fillMode = .backwards
         fade.timingFunction = CAMediaTimingFunction(name: .easeOut)
-        view.alphaValue = 1
         layer.add(fade, forKey: Self.fadeKey)
     }
 
