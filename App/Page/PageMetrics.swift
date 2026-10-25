@@ -24,7 +24,10 @@ enum PageMetrics {
     /// open big by default).
     static let defaultWindowSize = CGSize(width: 960, height: 640)
 
-    /// The smallest window: the sidebar and a page column with its form inset.
+    /// The smallest window: the sidebar and a page column with its form inset. The height is the area under the
+    /// toolbar (the content's minimum height), so the smallest window's frame is the toolbar's 52 pt taller: 532 pt
+    /// (measured 2026-10-25). `defaultWindowSize` is the whole content, toolbar included. A framed snapshot asked for
+    /// this size fails its fit check for that reason; nothing in the window is cut off.
     static let minimumWindowSize = CGSize(width: 720, height: 480)
 
     /// The widest window: the sidebar and a detail column one and a half columns wide, so the page column fills at
@@ -87,6 +90,10 @@ enum PageMetrics {
     /// From a row's tile to its text: Screen Time's rows, 22 px from the tile to the title in the 2x capture
     /// (owner-trial/round2/img18), of which about 2 px is the letter's side bearing.
     static let tileTextGap: CGFloat = 10
+
+    /// The least space between a row's text and its trailing content (a value, a check, a button): System Settings
+    /// keeps 16 pt or more; the stack's own 8 pt let a wrapped subtitle end 10 pt from a choice's check (qa1-review).
+    static let rowTrailingGap: CGFloat = 16
 
     /// A tile's or keycap's corner as a share of its side, continuous: an app icon's shape, as System Settings' tiles
     /// (0.22 measured in the owner's capture).

@@ -12,7 +12,7 @@ struct DailyWordsChart: View {
 
     var body: some View {
         let average = days.average
-        let top = days.top
+        let top = Self.top(of: days, clearOf: average)
         VStack(alignment: .leading) {
             ChartHeadline(label: "Daily Average", value: StatusText.counted(average, "word"))
             Chart {
@@ -76,13 +76,26 @@ struct DailyWordsChart: View {
         }
     }
 
+    /// The scale's top (`ChartDays.top`), one step higher when "avg" would take the top's label, so the top of the scale
+    /// always shows its value, as Screen Time's (qa1-review: one day of 17 words showed "avg" where "20" goes, and the
+    /// bar's top had no value).
+    @MainActor static func top(of days: ChartDays, clearOf average: Int) -> Int {
+        let top = days.top
+        return Double(abs(top - average)) < clearance(top: top) ? top + days.step : top
+    }
+
     /// 0, the middle and the top, less one that "avg" would overlap: a label less than one line of body text from the
-    /// average yields to it. The distance is measured on the plot, which is the chart's height less its row of day
-    /// labels (the 0.5.0 build measured on the whole height and let "20" sit on "avg", owner QA 1, Q10).
+    /// average yields to it (the top never does, `top(of:clearOf:)`).
     @MainActor static func ticks(top: Int, clearOf average: Int) -> [Int] {
+        [0, top / 2, top].filter { average == 0 || abs(Double($0 - average)) >= clearance(top: top) }
+    }
+
+    /// One line of body text in words on the scale. The distance is measured on the plot, which is the chart's height
+    /// less its row of day labels (the 0.5.0 build measured on the whole height and let "20" sit on "avg", owner QA 1,
+    /// Q10).
+    @MainActor private static func clearance(top: Int) -> Double {
         let font = NSFont.preferredFont(forTextStyle: .body)
         let line = font.ascender - font.descender + font.leading
-        let clearance = Double(top) * line / (PageMetrics.chartHeight - line)
-        return [0, top / 2, top].filter { average == 0 || abs(Double($0 - average)) >= clearance }
+        return Double(top) * line / (PageMetrics.chartHeight - line)
     }
 }

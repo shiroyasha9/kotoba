@@ -136,17 +136,16 @@ struct ActivityPage: View {
         return amount > 0 && amount < cent ? "Less than \(cent.formatted(format))" : amount.formatted(format)
     }
 
-    /// What the spend is, that it outlives deleted dictations (review-window.md T10), and what it leaves out or
-    /// estimates.
+    /// What the spend is, that it outlives deleted dictations (review-window.md T10), and whether part of it is
+    /// estimated or unknown, in as few words as its neighbours' lines (qa1-review: three sentences made it the heaviest
+    /// text on the page). "Advanced…" says which model's cost is estimated or unknown.
     private static func spendDetail(_ month: UsageSummary) -> String {
-        var parts = [
-            "What your services billed for speech, cleanup and rewrite. Spend stays when you delete dictations."
-        ]
-        if month.isCostEstimated {
-            parts.append("Partly estimated from list prices.")
-        }
-        if month.unpricedAnswers > 0 {
-            parts.append(SpendByModel.unpricedNote(month.unpricedAnswers) + ".")
+        var parts = ["Speech, cleanup and rewrite. Kept when you delete dictations."]
+        switch (month.isCostEstimated, month.unpricedAnswers > 0) {
+        case (true, true): parts.append("Partly estimated, some costs unknown.")
+        case (true, false): parts.append("Partly estimated.")
+        case (false, true): parts.append("Some costs unknown.")
+        case (false, false): break
         }
         return parts.joined(separator: " ")
     }

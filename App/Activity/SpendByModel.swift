@@ -21,9 +21,11 @@ struct SpendByModel: View {
                             .foregroundStyle(.secondary)
                     }
                 }
+                // In the primary colour, apart from the rows it adds up, as Battery's and Storage's totals.
                 LabeledContent("Total") {
                     Text(amounts.total)
                         .monospacedDigit()
+                        .foregroundStyle(.primary)
                 }
             } header: {
                 Text("This Month by Model")
@@ -63,7 +65,7 @@ struct SpendByModel: View {
     }
 
     /// Answers kept before kotoba recorded costs, or a rare answer with no cost and no token counts.
-    static func unpricedNote(_ count: Int) -> String {
+    private static func unpricedNote(_ count: Int) -> String {
         "Cost unknown for \(StatusText.counted(count, "request"))"
     }
 }

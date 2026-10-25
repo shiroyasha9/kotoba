@@ -47,8 +47,13 @@ struct ChartDays: Equatable {
     var top: Int {
         let largest = slots.map(\.words).max() ?? 0
         guard largest > 0 else { return 1 }
-        let step = Int(pow(10, floor(log10(Double(largest)))))
         return (largest + step - 1) / step * step
+    }
+
+    /// The unit of the largest day's leading digit (100 for 910): what `top` rounds to.
+    var step: Int {
+        let largest = slots.map(\.words).max() ?? 0
+        return largest > 0 ? Int(pow(10, floor(log10(Double(largest))))) : 1
     }
 
     /// A day that gets a label: every slot, so a week reads as a week. The marks stride by day over every slot, so

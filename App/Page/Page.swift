@@ -83,12 +83,16 @@ extension PageFooter where Note == EmptyView {
 }
 
 /// A page's read failed: one row in the form's own type, with the button that reads again, in place of what the page
-/// shows (review-window.md 8: a pane-sized empty view in a card looked out of place).
+/// shows (review-window.md 8: a pane-sized empty view in a card looked out of place). Its title in Title Case, as the
+/// `EmptyRow` it stands with. The line says what to do when Try Again does not help (a history that did not open at
+/// launch), so the row offers one way, not two (qa1-review).
 struct LoadFailedRow: View {
     let retry: @MainActor () -> Void
 
     var body: some View {
-        PageRow(title: StatusText.historyReadFailedTitle, subtitle: StatusText.historyReadFailedMessage) {
+        PageRow(
+            title: StatusText.historyReadFailedTitle, subtitle: "If Try Again doesn’t help, quit and reopen kotoba."
+        ) {
             SymbolTile(systemImage: "exclamationmark.triangle", tint: .orange, side: PageMetrics.rowTileSide)
         } trailing: {
             Button("Try Again", action: retry)

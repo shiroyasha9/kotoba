@@ -27,7 +27,7 @@ struct PageRow<Icon: View, Trailing: View>: View {
             } else {
                 TileLabel(title: title, subtitle: subtitle, isOneLine: isOneLine) { icon }
             }
-            Spacer()
+            Spacer(minLength: PageMetrics.rowTrailingGap)
             trailing
                 .alignmentGuide(.titleLine) { $0[VerticalAlignment.center] }
         }
