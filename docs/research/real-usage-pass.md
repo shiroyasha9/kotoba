@@ -78,6 +78,34 @@ With DeepSeek, a cleaned dictation should take about the speech time plus 0.56 s
 1. `CleanupModel.deepSeekFlash` (`KotobaProviders/Sources/KotobaProviders/OpenRouterCleaner.swift`) is the default cleanup model: reasoning `none`, temperature 0, Polish's host order (Together, PrimeIntellect, InferenceNet, no other host). An owner who picked a model in Settings keeps it. Price list: $0.30 / $1.20 per 1M tokens.
 2. The dictionary file adds "kotoba", pinned, once per dictionary (`DictionaryStore.addAppTerms`, `user_version` 0 to 1). MAI wrote the app's name as "Codex" (a listed term) when it was not listed; "kotoba" occurs in none of the 231 transcripts.
 
+## 5. Evening pass: MAI's clean style, swear words, Apple on device (2026-10-25, 20:10-20:30 IST)
+
+Same 60 clips and references as section 2, MAI with the phrase list through OpenRouter, the two variants in turn per clip. $0.13 (raw rows in the runbooks folder).
+
+| MAI variant | WER (95% CI) | Terms | p50 | "um"/"uh" | "you know" | Words |
+| --- | --- | --- | --- | --- | --- | --- |
+| verbatim (the app before this change) | 2.40% (1.5-3.6) | 12/12 | 1,747 ms | 22 | 33 | 2,470 |
+| `transcribeStyle: "clean"` | 3.91% (2.8-5.2) | 12/12 | 1,781 ms | 0 | 22 | 2,412 |
+
+- WER counts against a verbatim reference, so a dropped repetition ("let's, let's") or false start counts as an error. Of the 58 words clean drops, nearly all are fillers, repeated words and false starts. One change of meaning in 60 clips: a word both variants misheard became a different wrong word, and two words fewer. Punctuation and casing changes are small; a lowercase sentence start after `.` stays (141 and 140).
+- Time: paired median +74 ms per clip, inside this hour's spread (p25 -1.2 s, p75 +1.6 s). No cost change.
+- The option takes effect only inside `enhancedMode.modelOptions` (Microsoft's request shape). At the top of `provider.options.azure` it changed 3 of 60 texts, which is the noise of a repeated request.
+- Decision: both MAI routes send `clean` (`MAIEnhancedMode`, `KotobaProviders/Sources/KotobaProviders/ProviderHTTP.swift`). The cleanup chord still runs the LLM on top.
+
+Swear words: 4 recordings with one each, 7 variants. `profanityFilterMode: "Masked"` through OpenRouter masked none (with and without `clean`), so OpenRouter or MAI ignores it there and a "mask" setting cannot work on the default route. Azure direct masks by default, by Microsoft's docs, so it now sends `None`, to paste what the speaker said on both routes.
+
+Apple DictationTranscriber (macOS 27.0.1, M3 Pro, `longDictation` preset, the 34 terms as `contextualStrings`, free):
+
+| Locale | WER (95% CI) | Terms | Final text after the last buffer, p50 |
+| --- | --- | --- | --- |
+| en-IN, with terms | 22.4% (18.6-26.8) | 0/12 | 601 ms (fed at once) |
+| en-IN, no terms | 22.4% | 0/12 | 678 ms |
+| en-US, with terms | 18.7% (15.3-22.5) | 0/12 | 683 ms |
+
+- It writes 15% fewer words than the reference, and drops whole clauses (one 18 s clip: 27 of 64 words). Fed in real time (6 clips) it writes the same words; its final text then comes 83-829 ms after the last buffer.
+- The terms change nothing on real audio (60 of 60 texts the same with and without them), against 7 of 7 on one synthetic en-US clip.
+- Not usable for dictation here. The `shortDictation` preset returned no final text in this harness.
+
 ## Unresolved questions
 
 - Short cold dictations: does the silent primer, still on its way at the stop, slow the real request? A latency mark for "primer in flight at the stop" would answer it from real use.

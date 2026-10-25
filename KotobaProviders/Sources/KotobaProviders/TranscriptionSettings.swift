@@ -103,9 +103,10 @@ public final class TranscriptionSettings: Sendable {
         static let route = "transcription.route"
         /// Phase 1 kept the OpenRouter model here; its values are `TranscriptionRoute` raw values.
         static let legacyModel = "openrouter.model"
-        // Phase 1 names, kept so the owner's toggles survive; both Grok routes read them.
+        // Phase 1 names, kept so the owner's toggles survive: the format switch is Grok only, the filler words switch is
+        // every route's.
         static let grokFormat = "openrouter.grok.format"
-        static let grokFillerWords = "openrouter.grok.fillerWords"
+        static let fillerWords = "openrouter.grok.fillerWords"
         static let azureEndpoint = "azure.endpoint"
         static let cleanupModel = "cleanup.model"
     }
@@ -135,7 +136,7 @@ public final class TranscriptionSettings: Sendable {
 
     public enum Change: Sendable {
         case route
-        case grokOptions
+        case speechOptions
         case azureEndpoint
         case cleanupModel
     }
@@ -144,14 +145,14 @@ public final class TranscriptionSettings: Sendable {
     struct RouteOptions {
         var route: TranscriptionRoute
         var isGrokFormatOn: Bool
-        var keepsGrokFillerWords: Bool
+        var keepsFillerWords: Bool
         /// Nil when the setting is not an https URL.
         var azureEndpoint: URL?
     }
 
     var routeOptions: RouteOptions {
         RouteOptions(
-            route: route, isGrokFormatOn: isGrokFormatOn, keepsGrokFillerWords: keepsGrokFillerWords,
+            route: route, isGrokFormatOn: isGrokFormatOn, keepsFillerWords: keepsFillerWords,
             azureEndpoint: Self.azureEndpointURL(azureEndpoint))
     }
 
@@ -172,16 +173,17 @@ public final class TranscriptionSettings: Sendable {
         get { storage.bool(forKey: Key.grokFormat) }
         set {
             storage.set(newValue, forKey: Key.grokFormat)
-            post(.grokOptions)
+            post(.speechOptions)
         }
     }
 
-    /// Grok only: keep "um" and "uh" (xAI `filler_words`). Off by default, so fillers are removed.
-    public var keepsGrokFillerWords: Bool {
-        get { storage.bool(forKey: Key.grokFillerWords) }
+    /// Every route: keep "um" and "uh" as said (MAI's `verbatim` style, xAI `filler_words`). Off by default, so MAI
+    /// sends its `clean` style and Grok drops them.
+    public var keepsFillerWords: Bool {
+        get { storage.bool(forKey: Key.fillerWords) }
         set {
-            storage.set(newValue, forKey: Key.grokFillerWords)
-            post(.grokOptions)
+            storage.set(newValue, forKey: Key.fillerWords)
+            post(.speechOptions)
         }
     }
 

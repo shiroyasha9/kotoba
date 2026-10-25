@@ -84,7 +84,7 @@ final class XAIProvider: RouteClient {
             try writer.write(multipart.field("language", language))
         }
         try writer.write(multipart.field("format", String(options.isGrokFormatOn)))
-        try writer.write(multipart.field("filler_words", String(options.keepsGrokFillerWords)))
+        try writer.write(multipart.field("filler_words", String(options.keepsFillerWords)))
         for term in request.dictionaryTerms {
             try writer.write(multipart.field("keyterm", term))
         }

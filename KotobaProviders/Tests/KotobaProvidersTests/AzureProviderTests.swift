@@ -23,6 +23,18 @@ struct AzureProviderTests {
         #expect(sent.body == StubReply.fixtureData("request-azure", extension: "multipart"))
     }
 
+    @Test func fillerWordsKeptSendTheVerbatimStyle() async throws {
+        let stub = StubHost(reply: .fixture("azure-success"))
+        stub.useAzure()
+        stub.settings.keepsFillerWords = true
+
+        _ = try await stub.provider().transcribe(stub.request())
+
+        let sent = try #require(stub.requests.only)
+        let body = try #require(String(bytes: sent.body, encoding: .utf8))
+        #expect(body.contains(#""modelOptions":{"transcribeStyle":"verbatim"}"#))
+    }
+
     @Test func missingEndpointFailsWithoutARequest() async {
         let stub = StubHost(reply: .fixture("azure-success"))
         stub.settings.route = .azureMAI

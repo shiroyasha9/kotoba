@@ -86,13 +86,16 @@ final class OpenRouterProvider: RouteClient {
                     xai: .init(
                         keyterm: terms.isEmpty ? nil : terms,
                         format: options.isGrokFormatOn,
-                        fillerWords: options.keepsGrokFillerWords,
+                        fillerWords: options.keepsFillerWords,
                         // xAI applies `format` only when its own `language` is set.
                         language: options.isGrokFormatOn ? language : nil
                     )
                 )
             } else {
-                terms.isEmpty ? nil : .init(azure: .init(phraseList: PhraseList(phrases: terms)))
+                .init(
+                    azure: .init(
+                        enhancedMode: MAIEnhancedMode(keepsFillerWords: options.keepsFillerWords),
+                        phraseList: terms.isEmpty ? nil : PhraseList(phrases: terms)))
             }
         return RequestFields(
             model: route.rawValue,
@@ -120,7 +123,8 @@ struct RequestFields: Encodable, Equatable {
 /// 58.7% -> 73.2%). xAI fields: https://docs.x.ai/developers/rest-api-reference/inference/speech-to-text
 struct ProviderOptions: Encodable, Equatable {
     struct Azure: Encodable, Equatable {
-        var phraseList: PhraseList
+        var enhancedMode: MAIEnhancedMode
+        var phraseList: PhraseList?
     }
 
     var azure: Azure?

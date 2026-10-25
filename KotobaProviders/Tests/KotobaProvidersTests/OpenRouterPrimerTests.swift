@@ -5,7 +5,7 @@ import Testing
 @testable import KotobaProviders
 
 /// The primer (`TranscriptionProvider.prime`): half a second of silence through the route's whole path, the same
-/// model, language and data policy as a dictation, with no dictionary terms.
+/// model, language, style and data policy as a dictation, with no dictionary terms.
 struct OpenRouterPrimerTests {
     @Test func maiPrimerSendsHalfASecondOfSilenceWithTheRoutesDataPolicy() async throws {
         let stub = StubHost(reply: .fixture("success"))
@@ -19,7 +19,10 @@ struct OpenRouterPrimerTests {
         let body = try sent.json()
         #expect(body["model"] as? String == "microsoft/mai-transcribe-2")
         #expect(body["language"] as? String == "en")
-        #expect(body["provider"] as? [String: Bool] == ["zdr": true])
+        let provider = try #require(body["provider"] as? [String: Any])
+        #expect(provider["zdr"] as? Bool == true)
+        // The dictation's clean style, so the primer warms the same upstream mode; no phrase list.
+        #expect(body.azureOptions.keys.sorted() == ["enhancedMode"])
         let audio = try #require(body["input_audio"] as? [String: String])
         #expect(audio["format"] == "flac")
         let flac = try #require(audio["data"].flatMap { Data(base64Encoded: $0) })
@@ -71,7 +74,10 @@ struct OpenRouterPrimerTests {
 
         let body = try #require(stub.requests.only).json()
         #expect(body["model"] as? String == "microsoft/mai-transcribe-2")
-        #expect(body["provider"] as? [String: Bool] == ["zdr": true])
+        let provider = try #require(body["provider"] as? [String: Any])
+        #expect(provider["zdr"] as? Bool == true)
+        // The dictation's clean style, so the primer warms the same upstream mode; no phrase list.
+        #expect(body.azureOptions.keys.sorted() == ["enhancedMode"])
         let audio = try #require(body["input_audio"] as? [String: String])
         #expect(audio["format"] == "wav")
         let wav = try #require(audio["data"].flatMap { Data(base64Encoded: $0) })
@@ -120,5 +126,20 @@ struct OpenRouterPrimerTests {
 
         #expect(provider.primerBodyBuilds == 2)
         #expect(try #require(stub.requests.last).json()["language"] as? String == "hi")
+    }
+
+    /// The filler words switch changes MAI's style, so the next primer warms the new one.
+    @Test func theFillerWordsSwitchBuildsANewPrimerBody() async throws {
+        let stub = StubHost(reply: .fixture("success"))
+        let provider = stub.provider()
+
+        _ = await provider.prime(language: Locale.Language(identifier: "en"), size: .silent)
+        stub.settings.keepsFillerWords = true
+        _ = await provider.prime(language: Locale.Language(identifier: "en"), size: .silent)
+
+        #expect(provider.primerBodyBuilds == 2)
+        let style = (try #require(stub.requests.last).json().azureOptions["enhancedMode"] as? [String: Any])?[
+            "modelOptions"]
+        #expect(style as? [String: String] == ["transcribeStyle": "verbatim"])
     }
 }

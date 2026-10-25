@@ -9,7 +9,7 @@ import Testing
 struct OpenRouterProviderTests {
     // MARK: Request building
 
-    @Test func maiRequestSendsFLACAndThePhraseList() async throws {
+    @Test func maiRequestSendsFLACThePhraseListAndTheCleanStyle() async throws {
         let stub = StubHost(reply: .fixture("success"))
         let provider = stub.provider()
 
@@ -30,6 +30,19 @@ struct OpenRouterProviderTests {
         #expect(options.keys.sorted() == ["azure"])
         let azure = try #require(options["azure"] as? [String: Any])
         #expect((azure["phraseList"] as? [String: Any])?["phrases"] as? [String] == ["DictationPipeline", "swiftlint"])
+        let enhancedMode = try #require(azure["enhancedMode"] as? [String: Any])
+        #expect(enhancedMode["enabled"] as? Bool == true)
+        #expect(enhancedMode["model"] as? String == "MAI-Transcribe-2")
+        #expect(enhancedMode["modelOptions"] as? [String: String] == ["transcribeStyle": "clean"])
+    }
+
+    /// The clean style does not depend on the dictionary: with no terms it still goes, with no phrase list.
+    @Test func maiRequestWithoutTermsStillSendsTheCleanStyle() async throws {
+        let stub = StubHost(reply: .fixture("success"))
+
+        _ = try await stub.provider().transcribe(stub.request(terms: []))
+
+        #expect(try #require(stub.requests.only).json().azureOptions.keys.sorted() == ["enhancedMode"])
     }
 
     @Test func requestBodyMatchesTheRecordedBytes() async throws {
@@ -87,7 +100,7 @@ struct OpenRouterProviderTests {
     @Test func grokFillerWordsAreKeptWhenOn() async throws {
         let stub = StubHost(reply: .fixture("success"))
         stub.settings.route = .openRouterGrok
-        stub.settings.keepsGrokFillerWords = true
+        stub.settings.keepsFillerWords = true
 
         _ = try await stub.provider().transcribe(stub.request())
 
@@ -137,22 +150,23 @@ struct OpenRouterProviderTests {
         #expect(provider["zdr"] as? Bool == zdr)
     }
 
-    @Test func settingsDefaultToMAIWithGrokOptionsOff() {
+    @Test func maiFillerWordsAreKeptWhenOn() async throws {
+        let stub = StubHost(reply: .fixture("success"))
+        stub.settings.keepsFillerWords = true
+
+        _ = try await stub.provider().transcribe(stub.request(terms: ["kotoba"]))
+
+        let azure = try #require(stub.requests.only).json().azureOptions
+        let enhancedMode = try #require(azure["enhancedMode"] as? [String: Any])
+        #expect(enhancedMode["modelOptions"] as? [String: String] == ["transcribeStyle": "verbatim"])
+    }
+
+    @Test func settingsDefaultToMAIWithSpeechOptionsOff() {
         let settings = StubHost(reply: .status(200)).settings
 
         #expect(settings.route == .openRouterMAI)
         #expect(!settings.isGrokFormatOn)
-        #expect(!settings.keepsGrokFillerWords)
-    }
-
-    @Test func maiRequestWithoutTermsSendsOnlyZDR() async throws {
-        let stub = StubHost(reply: .fixture("success"))
-
-        _ = try await stub.provider().transcribe(stub.request(terms: []))
-
-        let body = try #require(stub.requests.only).json()
-        let provider = try #require(body["provider"] as? [String: Any])
-        #expect(provider.keys.sorted() == ["zdr"])
+        #expect(!settings.keepsFillerWords)
     }
 
     @Test func missingKeyNeedsSetupWithoutARequest() async {

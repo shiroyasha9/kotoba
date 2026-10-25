@@ -61,7 +61,7 @@ final class AzureProvider: RouteClient {
         }
         let label = options.route.rawValue
         let multipart = Multipart(boundary: makeBoundary())
-        let definition = try Self.definition(request)
+        let definition = try Self.definition(request, keepsFillerWords: options.keepsFillerWords)
         let reply = try await connection.send(
             endpoint, contentType: multipart.contentType, label: label,
             body: .streamed { writer in
@@ -92,10 +92,10 @@ final class AzureProvider: RouteClient {
     }
 
     /// The `definition` part. The dictionary terms come within the route limits (`PersonalDictionary.keyterms`).
-    private static func definition(_ request: TranscriptionRequest) throws -> String {
+    private static func definition(_ request: TranscriptionRequest, keepsFillerWords: Bool) throws -> String {
         let terms = request.dictionaryTerms
         let definition = Definition(
-            enhancedMode: .init(enabled: true, model: "MAI-Transcribe-2"),
+            enhancedMode: MAIEnhancedMode(keepsFillerWords: keepsFillerWords),
             // Microsoft's MAI-Transcribe example sends a bare language code ("locales": ["en"]); the OpenRouter route
             // sends language "en" too. Microsoft calls it a strong hint, and English is the v1 language.
             locales: request.language.languageCode.map { [$0.identifier] },
@@ -106,14 +106,13 @@ final class AzureProvider: RouteClient {
 }
 
 private struct Definition: Encodable {
-    struct EnhancedMode: Encodable {
-        var enabled: Bool
-        var model: String
-    }
-
-    var enhancedMode: EnhancedMode
+    var enhancedMode: MAIEnhancedMode
     var locales: [String]?
     var phraseList: PhraseList?
+    /// Azure masks swear words by default ("The default value is `Masked`",
+    /// https://learn.microsoft.com/en-us/azure/ai-services/speech-service/fast-transcription-create); a paste keeps
+    /// what the owner said, as the OpenRouter route does (it ignores this field: 4 real clips, 2026-10-25).
+    var profanityFilterMode = "None"
 }
 
 private struct SuccessBody: Decodable {

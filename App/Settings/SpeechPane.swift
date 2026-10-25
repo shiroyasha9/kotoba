@@ -24,9 +24,9 @@ final class SpeechSettingsModel {
         get { read(settings.isGrokFormatOn) }
         set { write { settings.isGrokFormatOn = newValue } }
     }
-    var keepsGrokFillerWords: Bool {
-        get { read(settings.keepsGrokFillerWords) }
-        set { write { settings.keepsGrokFillerWords = newValue } }
+    var keepsFillerWords: Bool {
+        get { read(settings.keepsFillerWords) }
+        set { write { settings.keepsFillerWords = newValue } }
     }
     /// The page's "Advanced…" sheet is open: the page's button, the endpoint warning, or another window
     /// (`MainWindowController.showOtherSpeechServices`, onboarding's “Use xAI or Azure Instead…”).
@@ -104,7 +104,7 @@ final class SpeechSettingsModel {
     }
 }
 
-/// The speech service and its key; the direct routes, the Azure endpoint, other keys and the Grok switches are in
+/// The speech service and its key; the direct routes, the Azure endpoint, other keys and the switches are in
 /// "Advanced…" (docs/research/ui-redesign.md, "Page map").
 private struct SpeechPane: View {
     @Bindable var model: SpeechSettingsModel
@@ -166,8 +166,8 @@ private struct SpeechPane: View {
     }
 }
 
-/// The speech page's "Advanced…": the direct routes with their own keys, the Azure endpoint, the Grok switches and
-/// the keys the page shows nowhere else.
+/// The speech page's "Advanced…": the direct routes with their own keys, the Azure endpoint, the Grok switch, the
+/// filler words switch and the keys the page shows nowhere else.
 struct SpeechAdvanced: View {
     @Bindable var model: SpeechSettingsModel
 
@@ -207,10 +207,13 @@ struct SpeechAdvanced: View {
                     PageToggle(
                         title: "Format numbers and units", subtitle: "Writes “twenty dollars” as “$20”.",
                         isOn: $model.isGrokFormatOn)
-                    PageToggle(
-                        title: "Keep filler words", subtitle: "Pastes “um” and “uh” as you said them.",
-                        isOn: $model.keepsGrokFillerWords)
                 }
+            }
+            // Every speech model drops fillers unless this is on (MAI's clean style, Grok's own switch).
+            Section("Transcript") {
+                PageToggle(
+                    title: "Keep filler words", subtitle: "Pastes “um” and “uh” as you said them.",
+                    isOn: $model.keepsFillerWords)
             }
             if !otherSavedKeys.isEmpty {
                 Section("Other Keys") {

@@ -98,7 +98,7 @@ struct TranscriptionSettingsTests {
         settings.isGrokFormatOn = true
         settings.cleanupModel = .claudeHaiku
 
-        #expect(changes.withLock { $0 } == [.azureEndpoint, .route, .grokOptions, .cleanupModel])
+        #expect(changes.withLock { $0 } == [.azureEndpoint, .route, .speechOptions, .cleanupModel])
     }
 
     @Test func missingSetupNamesTheKeyFirstThenTheAzureEndpoint() {

@@ -62,6 +62,11 @@ extension [String: Any] {
     var xaiOptions: [String: Any] {
         ((self["provider"] as? [String: Any])?["options"] as? [String: Any])?["xai"] as? [String: Any] ?? [:]
     }
+
+    /// `provider.options.azure`, or empty.
+    var azureOptions: [String: Any] {
+        ((self["provider"] as? [String: Any])?["options"] as? [String: Any])?["azure"] as? [String: Any] ?? [:]
+    }
 }
 
 /// One test's slice of `StubURLProtocol`: a unique host, its reply, and the requests it saw. The host also names the

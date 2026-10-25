@@ -269,6 +269,32 @@ struct PhraseList: Encodable, Equatable {
     var phrases: [String]
 }
 
+/// MAI-Transcribe-2 in Azure's `enhancedMode`, sent direct and through OpenRouter's `provider.options.azure`, with
+/// the `clean` style unless the owner keeps filler words (`verbatim`, Microsoft's default). `clean` "removes filler
+/// words and auto-formats common speech patterns"
+/// (https://learn.microsoft.com/en-us/azure/ai-services/speech-service/mai-transcribe). On 60 of the owner's real clips
+/// with the phrase list (2026-10-25): "um"/"uh" 22 to 0, repeated words and false starts dropped, every dictionary
+/// term kept, time within the noise (docs/research/real-usage-pass.md). `transcribeStyle` takes effect only here; at
+/// the top of the options it does nothing.
+struct MAIEnhancedMode: Encodable, Equatable {
+    enum TranscribeStyle: String, Encodable {
+        case clean
+        case verbatim
+    }
+
+    struct ModelOptions: Encodable, Equatable {
+        var transcribeStyle: TranscribeStyle
+    }
+
+    var enabled = true
+    var model = "MAI-Transcribe-2"
+    var modelOptions: ModelOptions
+
+    init(keepsFillerWords: Bool) {
+        modelOptions = ModelOptions(transcribeStyle: keepsFillerWords ? .verbatim : .clean)
+    }
+}
+
 /// Writes a request body to a file piece by piece, so the audio is copied in chunks and never held whole in memory.
 final class BodyWriter {
     /// Base64 turns 3 bytes into 4 characters, so chunks of a multiple of 3 bytes encode to pieces that join

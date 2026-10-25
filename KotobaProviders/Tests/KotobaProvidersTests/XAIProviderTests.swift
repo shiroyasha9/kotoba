@@ -24,7 +24,7 @@ struct XAIProviderTests {
         let stub = StubHost(reply: .fixture("xai-success"))
         stub.settings.route = .xaiGrok
         stub.settings.isGrokFormatOn = true
-        stub.settings.keepsGrokFillerWords = true
+        stub.settings.keepsFillerWords = true
 
         _ = try await stub.provider().transcribe(stub.request())
 

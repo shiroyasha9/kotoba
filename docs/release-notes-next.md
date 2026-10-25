@@ -14,7 +14,7 @@
 - Cleanup replaces Modes. Cleanup, Rewrite and App styles share one page, each with one example. Polish is now called Rewrite, and modes are now app styles. The cleanup model is in Cleanup > Advanced….
 - Shortcuts is a new page with every shortcut and how it works, Esc, and the “press enter” and “new line” voice commands, which were in General.
 - History has its search on the page (⌘F), and “Keep audio” with Delete Audio Now…, which were in General. Every action for a dictation is in its Control-click menu and in the new Dictation menu in the menu bar: ⇧⌘R shows the audio in Finder, ⌘⌫ deletes.
-- Speech keeps its rarely used settings in an Advanced… sheet: the xAI and Azure routes, the Azure endpoint, other keys and the Grok switches. On Dictionary, you star a word on its row, and the line under the list says how many words go as hints. Word suggestions show as a count next to Dictionary in the sidebar.
+- Speech keeps its rarely used settings in an Advanced… sheet: the xAI and Azure routes, the Azure endpoint, other keys, the Grok switch and Keep filler words. On Dictionary, you star a word on its row, and the line under the list says how many words go as hints. Word suggestions show as a count next to Dictionary in the sidebar.
 - Microphone says how kotoba picks a mic: the first connected one in your list, then the next when it is unplugged. Each mic shows whether it is in use or not connected, and a mic you pick in the menu bar menu moves to the top of the list.
 - The menu bar menu is shorter: the status line, Paste, Copy and Fix… under a Last Dictation header, Microphone, Open kotoba… and Quit. Hold ⌥ to see Paste Without Cleanup. Rewrite shows once you save an OpenRouter key. Speech Model, Add Word…, word suggestions, History…, Settings… and About are gone from it; add words on the Dictionary page, and find About and Settings… in the app menu.
 - Setup has 5 steps: Welcome, Allow Access (Microphone and Accessibility, each with its own Allow… button), your key, Try It and Done. Try It shows both ways to dictate, with each key’s name under it. When Wispr Flow is installed, its dictionary import is on Done.
@@ -26,6 +26,7 @@
 - On a test build, kotoba keeps about 37 MB after you close its window, down from about 40 MB in 0.4.6. With the window open on Home, it uses about 31 MB, down from about 36 MB.
 - The pill uses no more memory or CPU than the old indicator, and does no work while it waits.
 - Cleanup is faster: it now uses DeepSeek V4.1 Flash by default. On 60 real dictations, half the cleanups took under 0.6 seconds, against 1 second with Gemini 3.5 Flash-Lite, the old default, and none lost words.
+- Without cleanup, your text now comes without “um”, “uh”, repeated words and false starts: MAI-Transcribe-2 removes them as it transcribes, with no extra time, and keeps every dictionary word. To keep them, turn on Settings > Speech > Advanced… > Keep filler words, which now works for every speech model, not only Grok.
 - Your dictionary gets “kotoba” once, starred, so the speech model spells the app’s name right. If you remove it, it stays removed.
 
 ### Fixed
