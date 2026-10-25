@@ -74,15 +74,14 @@ private struct MicrophonePane: View {
             Section {
                 PageToggle(
                     title: "Use Bluetooth microphones only from the list",
-                    subtitle: "Bluetooth microphones record at call quality and can miss your first word.",
+                    // Why, not the quality note again: the warning above says that while one is in use.
+                    subtitle: "So kotoba does not record from headphones you connect only to listen.",
                     isOn: $model.isBluetoothOnlyWhenListed)
             }
             Section {
-                LabeledContent("Input level") {
+                PageRow(title: "Input level", subtitle: nil) {
                     HStack {
-                        Gauge(value: Double(min(max(model.testLevel ?? 0, 0), 1))) {}
-                            .gaugeStyle(.accessoryLinearCapacity)
-                            .animation(.linear(duration: 0.1), value: model.testLevel)
+                        InputLevelMeter(level: Double(min(max(model.testLevel ?? 0, 0), 1)))
                         Button("Test Microphone", action: model.testMicrophone)
                             .disabled(model.testLevel != nil)
                     }
@@ -177,5 +176,35 @@ extension Pane {
                 of: .microphones(MicrophoneModel(source: .sample(bluetoothOnlyWhenListed: false)) {}),
                 named: "settings-microphone-bluetooth-switch-off"),
         ]
+    }
+}
+
+/// The input level as Sound > Input draws it: a row of segments, all empty at rest. Custom: SwiftUI's gauge and linear
+/// progress bar draw a filled cap at zero, which read as a level with nothing to hear (qa1-review, Microphone);
+/// `NSLevelIndicator` is the system's meter.
+private struct InputLevelMeter: NSViewRepresentable {
+    /// 0 to 1.
+    let level: Double
+
+    /// Segments in the meter, as Sound > Input's.
+    private static let segments = 15.0
+
+    func makeNSView(context: Context) -> NSLevelIndicator {
+        let meter = NSLevelIndicator()
+        meter.levelIndicatorStyle = .discreteCapacity
+        meter.minValue = 0
+        meter.maxValue = Self.segments
+        return meter
+    }
+
+    func updateNSView(_ meter: NSLevelIndicator, context: Context) {
+        meter.doubleValue = level * Self.segments
+    }
+
+    /// The meter's own height, and segments half as wide as tall, as Sound > Input's (a representable otherwise takes
+    /// all it is offered).
+    func sizeThatFits(_ proposal: ProposedViewSize, nsView meter: NSLevelIndicator, context: Context) -> CGSize? {
+        let height = meter.fittingSize.height
+        return CGSize(width: min(proposal.width ?? .infinity, Self.segments * height / 2), height: height)
     }
 }

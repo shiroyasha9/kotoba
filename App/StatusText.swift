@@ -19,10 +19,6 @@ enum StatusText {
         return "\(chords.handsFree.title) and \(pushToTalk.title)"
     }
 
-    /// Onboarding's line for the second way to dictate.
-    @MainActor static func holdToDictate(_ chords: HotkeyChords) -> String {
-        "Or hold \(chords.pushToTalk.title) while you speak, and let go."
-    }
     /// The history database cannot be read: the panes' failure state (title and message) and the menu status line.
     static let historyReadFailedTitle = "Couldn’t Read History"
     static let historyReadFailedMessage = "Quit and reopen kotoba."

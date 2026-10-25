@@ -59,6 +59,18 @@ struct OnboardingFlowTests {
         #expect(OnboardingFlow.footer(on: step, isDone: true) == .continue(.prominent))
     }
 
+    /// A step's dot checks when its requirement is met, or, for a step with nothing to do (Welcome) or one the owner
+    /// may skip (Try It), once the owner went past it. A key the owner skipped stays open: Ready asks for it.
+    @Test func aDotChecksWhenItsStepIsDoneOrPassed() {
+        #expect(OnboardingFlow.isChecked(.welcome, shown: .permissions, isDone: false))
+        #expect(!OnboardingFlow.isChecked(.welcome, shown: .welcome, isDone: false))
+        #expect(OnboardingFlow.isChecked(.tryIt, shown: .done, isDone: false))
+        #expect(!OnboardingFlow.isChecked(.tryIt, shown: .key, isDone: false))
+        #expect(!OnboardingFlow.isChecked(.key, shown: .done, isDone: false))
+        #expect(OnboardingFlow.isChecked(.key, shown: .welcome, isDone: true))
+        #expect(!OnboardingFlow.isChecked(.done, shown: .done, isDone: false))
+    }
+
     @Test func welcomeStartsAndDoneFinishes() {
         #expect(OnboardingFlow.footer(on: .welcome, isDone: false) == .getStarted)
         #expect(OnboardingFlow.footer(on: .done, isDone: true) == .done)

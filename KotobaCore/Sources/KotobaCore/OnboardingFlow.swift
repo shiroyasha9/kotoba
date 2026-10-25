@@ -68,6 +68,14 @@ public enum OnboardingFlow {
         isWisprInstalled && isDictionaryOpen
     }
 
+    /// The step dots' check on `step` while `shown` is on screen: its own requirement is met (`isDone`), or it asks for
+    /// nothing kotoba needs (Welcome, and Try It, which the owner may skip) and the owner went past it.
+    public static func isChecked(_ step: OnboardingStep, shown: OnboardingStep, isDone: Bool) -> Bool {
+        if isDone { return true }
+        let isPassed = index(of: step) < index(of: shown)
+        return isPassed && (step == .welcome || step == .tryIt)
+    }
+
     /// The footer's forward button on `step`; `isDone` is the step's own requirement (the grants, a key, a dictation).
     public static func footer(on step: OnboardingStep, isDone: Bool) -> OnboardingFooter {
         switch step {

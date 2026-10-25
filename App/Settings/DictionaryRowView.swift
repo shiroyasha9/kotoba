@@ -22,8 +22,9 @@ struct DictionaryRowView: View {
                 Text(draft.replacement.isEmpty ? "(deleted from text)" : draft.replacement)
                     .foregroundStyle(draft.replacement.isEmpty ? .secondary : .primary)
             } else if !sendsKeyterm {
+                // Orange, as every other warning in the app (`StatusLine`); multicolor drew it yellow.
                 Image(systemName: "exclamationmark.triangle.fill")
-                    .symbolRenderingMode(.multicolor)
+                    .foregroundStyle(.orange)
                     .help(
                         "Longer than \(PersonalDictionary.maxKeytermLength) characters, so kotoba does not send it to "
                             + "the speech model.")

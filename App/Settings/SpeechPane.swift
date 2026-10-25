@@ -187,7 +187,11 @@ struct SpeechAdvanced: View {
             } header: {
                 Text("Other Services")
             } footer: {
-                Text("Your own xAI or Azure account, in place of OpenRouter. Its key goes on the Speech page.")
+                // Says the rows are choices (no check shows while OpenRouter transcribes), and where the chosen one's
+                // key goes, apart from "Other Keys", the saved keys no service uses now (qa1-review, Speech).
+                Text(
+                    "Click a service to use your own xAI or Azure account in place of OpenRouter. The Speech page then "
+                        + "shows its key.")
             }
             if model.route == .azureMAI {
                 Section {

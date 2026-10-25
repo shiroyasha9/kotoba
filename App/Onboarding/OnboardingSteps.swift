@@ -91,21 +91,23 @@ struct WelcomeStep: View {
 }
 
 /// A chord as keycaps with each key's name in small text under it, as a Mac keyboard prints "control" under ⌃
-/// (docs/research/ui-redesign.md, "Onboarding"): the first time the owner meets the symbols, the names teach them.
+/// (docs/research/ui-redesign.md, "Onboarding"): the first time the owner meets the symbols, the names teach them. A
+/// one-side modifier ("right ⌥", from Wispr Flow's keys) draws its symbol, and its name says the side.
 struct NamedKeycaps: View {
     let keys: [String]
 
     var body: some View {
         // Every column as wide as the widest name (“command”), each centred on its key, so the keys sit evenly as on a
         // keyboard: under each key, the chord's names lie hidden in one stack, which takes the widest one's width.
-        let names = keys.compactMap { Keycaps.names[$0] }
+        let keys = keys.map(Self.legendAndName)
+        let names = keys.compactMap(\.name)
         HStack(alignment: .top) {
             ForEach(Array(keys.enumerated()), id: \.offset) { _, key in
                 VStack {
-                    Keycaps(keys: [key])
+                    Keycaps(keys: [key.legend])
                     ZStack {
                         ForEach(names, id: \.self) { Text($0).hidden() }
-                        if let name = Keycaps.names[key] {
+                        if let name = key.name {
                             Text(name)
                         }
                     }
@@ -117,7 +119,16 @@ struct NamedKeycaps: View {
         // At its own width beside Change…: the row's text wraps instead of the key names.
         .fixedSize()
         .accessibilityElement(children: .ignore)
-        .accessibilityLabel(Keycaps.spoken(keys))
+        .accessibilityLabel(keys.map { $0.name ?? $0.legend }.joined(separator: " "))
+    }
+
+    /// What a key's cap draws, and the name under it: "right ⌥" draws ⌥ over "right option".
+    private static func legendAndName(_ key: String) -> (legend: String, name: String?) {
+        for side in ["left ", "right "] where key.hasPrefix(side) {
+            let legend = String(key.dropFirst(side.count))
+            if let name = Keycaps.names[legend] { return (legend, side + name) }
+        }
+        return (key, Keycaps.names[key])
     }
 }
 
@@ -168,9 +179,12 @@ struct PermissionsStep: View {
                     "To learn your corrections, kotoba reads only the text field it pasted into, and only while "
                         + "“Learn from edits” is on in Dictionary. It never reads your screen.")
                 if !model.readiness.isAccessibilityAllowed {
+                    // A paragraph apart: with no gap the two read as one (qa1-review, Onboarding).
                     Text(
                         "If kotoba is on in the Accessibility list already and this step stays open, turn it off "
-                            + "and on again.")
+                            + "and on again."
+                    )
+                    .padding(.top)
                 }
             }
         }
@@ -249,24 +263,31 @@ struct KeyStep: View {
     }
 }
 
+/// Both ways to dictate with their keys drawn as keycaps, as on Welcome (docs/research/ui-redesign.md, "Onboarding":
+/// keys as keycaps with their names, never a chord in a sentence), and the field the words arrive in.
 struct TryItStep: View {
     @Bindable var model: OnboardingModel
     @FocusState private var isFieldFocused: Bool
 
     var body: some View {
-        let chord = HotkeyChords.shared.handsFree.title
-        let hold = StatusText.holdToDictate(.shared)
+        let chords = model.chords
+        // Both ways to dictate sit together above the field, so the result line below never moves them.
+        Section {
+            PageRow(title: StatusText.shortcutTitle(.handsFree), subtitle: StatusText.shortcutHelp(.handsFree)) {
+                NamedKeycaps(keys: chords.handsFree.keycaps)
+            }
+            PageRow(title: StatusText.shortcutTitle(.pushToTalk), subtitle: StatusText.pushToTalkHelp(chords)) {
+                NamedKeycaps(keys: chords.pushToTalk.keycaps)
+            }
+        } header: {
+            StepHeading(title: "Try It", text: Text("Say “Hello from kotoba” with either way to dictate."))
+        }
         Section {
             TextField("Try It", text: $model.tryItText, prompt: Text("Your words appear here"), axis: .vertical)
                 .labelsHidden()
                 .lineLimit(3...5)
                 .focused($isFieldFocused)
                 .onAppear { isFieldFocused = true }
-        } header: {
-            // Both ways to dictate sit together above the field, so the result line below never moves them.
-            StepHeading(
-                title: "Try It",
-                text: Text("Press \(chord), say “Hello from kotoba”, then press \(chord) again. \(hold)"))
         } footer: {
             // Always laid out, so the step does not move when the dictation works.
             let works = model.isDone(.tryIt)

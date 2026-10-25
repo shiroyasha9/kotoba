@@ -103,7 +103,7 @@ extension StepHeading where Icon == EmptyView {
     }
 }
 
-/// One dot per step: done steps show a checkmark, the shown step is in the accent colour, done or not, so the owner
+/// One dot per step: done and passed steps show a checkmark (`OnboardingFlow.isChecked`), the shown step is in the accent colour, done or not, so the owner
 /// always sees where they are. Custom: macOS has no page indicator control (UIPageControl is iOS only).
 private struct StepDots: View {
     let model: OnboardingModel
@@ -112,7 +112,7 @@ private struct StepDots: View {
         HStack {
             ForEach(OnboardingFlow.steps) { step in
                 let isShown = step == model.step
-                let isDone = model.isDone(step)
+                let isDone = OnboardingFlow.isChecked(step, shown: model.step, isDone: model.isDone(step))
                 Image(systemName: Self.symbol(isShown: isShown, isDone: isDone))
                     .foregroundStyle(Self.style(isShown: isShown, isDone: isDone))
                     .font(.caption2)

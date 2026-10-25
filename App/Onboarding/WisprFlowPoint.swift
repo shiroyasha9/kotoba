@@ -5,52 +5,53 @@ import SwiftUI
 
 /// Welcome's one row for a Wispr Flow user (owner QA 1, Q1 and Q2): what comes along. The dictionary comes on the last
 /// step; the shortcuts come here, Wispr Flow's chords for the two ways to dictate as keycaps, set with one click by
-/// "Use Your Wispr Flow Shortcuts". A mode whose Wispr Flow chord kotoba cannot take keeps kotoba's own, which its
-/// row's Change… sets. kotoba does not quit Wispr Flow: a line says so when it runs.
+/// "Use Shortcuts". A mode whose Wispr Flow chord kotoba cannot take keeps kotoba's own, which its row's Change… sets.
+/// kotoba does not quit Wispr Flow: a line says so when it runs. Laid out as the rows around it (qa1-review 10): the
+/// tile beside the title and one line of text, the button on the title line, and under them one line with each way to
+/// dictate in the shortcut rows' keycaps.
 struct WisprFlowPoint: View {
     let model: OnboardingModel
     /// nil: Wispr Flow has no shortcut for either way to dictate, or its file could not be read.
     let shortcuts: WisprShortcuts?
 
     var body: some View {
-        let usable = shortcuts?.chords ?? []
-        TileLabel(title: "From Wispr Flow", subtitle: text(hasShortcuts: !usable.isEmpty)) {
-            SymbolTile(systemImage: "square.and.arrow.down", tint: .indigo, side: PageMetrics.rowTileSide)
-        } extra: {
-            if !usable.isEmpty {
-                // The chords and their button on one line while they fit, so the row stays short; else the button
-                // goes under the chords.
-                ViewThatFits(in: .horizontal) {
-                    HStack {
-                        chords(usable)
-                        Spacer()
-                        action
-                    }
-                    VStack(alignment: .leading) {
-                        HStack { chords(usable) }
-                        action
-                    }
+        let hasShortcuts = !(shortcuts?.chords ?? []).isEmpty
+        VStack(alignment: .leading) {
+            PageRow(title: "From Wispr Flow", subtitle: text(hasShortcuts: hasShortcuts)) {
+                SymbolTile(systemImage: "square.and.arrow.down", tint: .indigo, side: PageMetrics.rowTileSide)
+            } trailing: {
+                if hasShortcuts {
+                    action
                 }
-                if let note {
-                    Text(note)
-                        .font(.subheadline)
-                        .foregroundStyle(.secondary)
-                        .fixedSize(horizontal: false, vertical: true)
+            }
+            if let shortcuts, hasShortcuts {
+                HStack(alignment: .firstTextBaseline) {
+                    mode(.handsFree, shortcuts.handsFree)
+                    mode(.pushToTalk, shortcuts.pushToTalk)
                 }
+                .inRowTextColumn()
             }
         }
     }
 
-    /// Each chord after its mode's name: a chord never shows alone.
-    private func chords(_ usable: [(ChordRole, Chord)]) -> some View {
-        ForEach(usable, id: \.0) { role, chord in
-            HStack {
+    /// A way to dictate with Wispr Flow's chord after its name (a chord never shows alone), or the word that kotoba
+    /// keeps its own when it cannot take Wispr Flow's.
+    @ViewBuilder private func mode(_ role: ChordRole, _ found: WisprShortcuts.Found?) -> some View {
+        switch found {
+        case .usable(let chord):
+            HStack(alignment: .firstTextBaseline) {
                 Text(StatusText.shortcutTitle(role))
+                    .font(.subheadline)
                     .foregroundStyle(.secondary)
-                Keycaps(keys: chord.keycaps)
+                NamedKeycaps(keys: chord.keycaps)
             }
-            .fixedSize()
             .accessibilityElement(children: .combine)
+        case .unusable:
+            Text("\(StatusText.shortcutTitle(role)) keeps kotoba’s keys")
+                .font(.subheadline)
+                .foregroundStyle(.secondary)
+        case nil:
+            EmptyView()
         }
     }
 
@@ -58,30 +59,22 @@ struct WisprFlowPoint: View {
         if model.usesWisprShortcuts {
             StatusLine("In use", .good)
         } else {
-            Button("Use Your Wispr Flow Shortcuts", action: model.useWisprShortcuts)
-                .fixedSize()
+            Button("Use Shortcuts", action: model.useWisprShortcuts)
+                .accessibilityLabel("Use Your Wispr Flow Shortcuts")
         }
     }
 
-    /// What comes along: the dictionary when the last step can import it, the shortcuts when kotoba can take one.
+    /// What comes along: the dictionary when the last step can import it (the shortcuts show under it), and the line
+    /// when Wispr Flow runs on the same keys.
     private func text(hasShortcuts: Bool) -> String {
-        switch (model.offersWisprImport, hasShortcuts) {
-        case (true, true): "Import your dictionary on the last step, and use your shortcuts here."
-        case (true, false): "Bring your Wispr Flow dictionary along. You can import it on the last step."
-        case (false, _): "Use the shortcuts you know from Wispr Flow."
-        }
-    }
-
-    /// Under the chords: Wispr Flow runs on the same keys, or a mode kotoba keeps its own chord for.
-    private var note: String? {
-        if model.usesWisprShortcuts, model.wisprRunsWithSameKeys {
-            return "Wispr Flow uses these keys too. Quit it, or both apps start dictating."
-        }
-        let kept = [(ChordRole.handsFree, shortcuts?.handsFree), (.pushToTalk, shortcuts?.pushToTalk)]
-            .filter { $0.1 == .unusable }
-            .map { StatusText.shortcutTitle($0.0).lowercased() }
-        guard let mode = kept.first else { return nil }
-        return "kotoba can’t use your \(mode) keys, so it keeps its own."
+        let text =
+            switch (model.offersWisprImport, hasShortcuts) {
+            case (true, true): "Import your dictionary on the last step."
+            case (true, false): "Import your Wispr Flow dictionary on the last step."
+            case (false, _): "Use the shortcuts you know from Wispr Flow."
+            }
+        guard hasShortcuts, model.usesWisprShortcuts, model.wisprRunsWithSameKeys else { return text }
+        return text + " Wispr Flow uses these keys too. Quit it, or both apps start dictating."
     }
 
     /// Wispr Flow's bundle id, as `NSRunningApplication` lists it.

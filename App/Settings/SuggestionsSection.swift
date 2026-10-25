@@ -52,15 +52,9 @@ private struct SuggestionRow: View {
 
     var body: some View {
         let candidate = suggestion.candidate
-        // Not a `PageRow`: the title is a correction ("versel → Vercel"), not one string. Its subtitle takes a row's
-        // subtitle style.
+        // Not a `PageRow`: the title is a correction ("versel → Vercel"), not one string.
         HStack {
-            VStack(alignment: .leading) {
-                SuggestionCandidateLabel(candidate: candidate)
-                if !detail.isEmpty {
-                    Text(detail).font(.subheadline).foregroundStyle(.secondary)
-                }
-            }
+            SuggestionCandidateLabel(candidate: candidate, detail: detail)
             Spacer()
             Button("Dismiss", systemImage: "xmark", action: dismiss)
                 .labelStyle(.iconOnly)
@@ -71,8 +65,8 @@ private struct SuggestionRow: View {
         }
     }
 
-    /// "Cursor · Seen 3 times"
-    private var detail: String {
+    /// "Cursor", "Seen 3 times"
+    private var detail: [String] {
         var parts: [String] = []
         if let app = appName {
             parts.append(app)
@@ -80,7 +74,7 @@ private struct SuggestionRow: View {
         if suggestion.evidence > 1 {
             parts.append("Seen " + StatusText.counted(suggestion.evidence, "time"))
         }
-        return parts.joined(separator: " · ")
+        return parts
     }
 
     private var appName: String? {
@@ -88,23 +82,33 @@ private struct SuggestionRow: View {
     }
 }
 
-/// A correction as the owner reads it: "versel → Vercel" for a word and its replacement, "embra  Heard as “ember”"
-/// for a word only. The Suggestions section and "Fix Last Dictation…" show it the same way.
+/// A correction as the owner reads it, in one layout for both kinds (qa1-review, Dictionary): the change on the title
+/// line, "versel → Vercel" for a word and its replacement, "embra" for a word only; under it, in a row's subtitle style,
+/// what was heard for a word only, then `detail`. The Suggestions section and "Fix Last Dictation…" show it the same
+/// way.
 struct SuggestionCandidateLabel: View {
     let candidate: SuggestionCandidate
+    /// After what was heard: where and how often ("TextEdit · Seen 3 times").
+    var detail: [String] = []
 
     var body: some View {
-        HStack {
-            if candidate.proposes == .termAndRule {
-                Text(candidate.heard)
-                Image(systemName: "arrow.right").foregroundStyle(.secondary)
-                Text(candidate.corrected).bold()
-            } else {
-                Text(candidate.corrected).bold()
-                if !candidate.heard.isEmpty {
-                    Text("Heard as “\(candidate.heard)”").foregroundStyle(.secondary)
+        VStack(alignment: .leading) {
+            HStack {
+                if candidate.proposes == .termAndRule {
+                    Text(candidate.heard)
+                    Image(systemName: "arrow.right").foregroundStyle(.secondary)
                 }
+                Text(candidate.corrected).bold()
+            }
+            if !subtitle.isEmpty {
+                Text(subtitle).font(.subheadline).foregroundStyle(.secondary)
             }
         }
+    }
+
+    private var subtitle: String {
+        let heard =
+            candidate.proposes == .termAndRule || candidate.heard.isEmpty ? nil : "Heard as “\(candidate.heard)”"
+        return ([heard].compactMap(\.self) + detail).joined(separator: " · ")
     }
 }

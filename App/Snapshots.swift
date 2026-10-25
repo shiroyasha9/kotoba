@@ -201,11 +201,8 @@ enum Snapshots {
                 MenuModel.samples().map { ($0.name, $0.model.text()) }
                 + MenuModel.samples().filter { $0.name == "ready" }.map { ("dock", $0.model.text(for: .dock)) }
                 + [
-                    ("main", MainMenu(target: nil) { MenuModel.Updates() }.menu.outline()),
-                    (
-                        "main-update-waiting",
-                        MainMenu(target: nil) { MenuModel.Updates(hasWaitingUpdate: true) }.menu.outline()
-                    ),
+                    ("main", MainMenu.outline(MenuModel.Updates())),
+                    ("main-update-waiting", MainMenu.outline(MenuModel.Updates(hasWaitingUpdate: true))),
                 ]
             for (name, text) in menus {
                 try text.write(to: folder.appending(path: "menu-\(name).txt"), atomically: true, encoding: .utf8)
