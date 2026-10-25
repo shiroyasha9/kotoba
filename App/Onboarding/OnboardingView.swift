@@ -7,7 +7,7 @@ import SwiftUI
 /// the bottom. A grant never moves the window on: the step shows it and the owner clicks Continue (owner, 2026-10-16).
 struct OnboardingView: View {
     @Bindable var model: OnboardingModel
-    /// Closes the window after Done.
+    /// After Done: closes the window and opens the app on Home.
     let close: @MainActor () -> Void
 
     var body: some View {

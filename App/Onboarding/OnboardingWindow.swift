@@ -26,23 +26,22 @@ final class OnboardingController: NSObject, NSWindowDelegate {
     private let vault: KeyVault
     private let router: TranscriptionRouter
     private let dictionary: @MainActor () -> DictionaryModel?
-    private let openOtherSpeechServices: @MainActor () -> Void
+    private let links: SetupLinks
     private var window: NSWindow?
     private var model: OnboardingModel?
 
     /// `router` checks a saved key with one free request; `dictionary` is the one the Wispr Flow step imports into;
-    /// `openOtherSpeechServices` opens the Speech page with its "Advanced…" sheet.
+    /// `links` open the main window: the Speech page's "Advanced…" sheet from the key and Done steps, Home after Done.
     init(
         readiness: Readiness, routeSettings: TranscriptionSettings, vault: KeyVault, router: TranscriptionRouter,
-        dictionary: @escaping @MainActor () -> DictionaryModel?,
-        openOtherSpeechServices: @escaping @MainActor () -> Void
+        dictionary: @escaping @MainActor () -> DictionaryModel?, links: SetupLinks
     ) {
         self.readiness = readiness
         self.routeSettings = routeSettings
         self.vault = vault
         self.router = router
         self.dictionary = dictionary
-        self.openOtherSpeechServices = openOtherSpeechServices
+        self.links = links
     }
 
     /// Shows the window on `step`; nil resumes where the owner closed it, or starts at Welcome.
@@ -55,7 +54,7 @@ final class OnboardingController: NSObject, NSWindowDelegate {
                 readiness: readiness,
                 keyChecks: KeyChecks(vault: vault, checkKey: router.checkKey(_:for:)),
                 source: .live(routeSettings: routeSettings, dictionary: dictionary),
-                openOtherSpeechServices: openOtherSpeechServices)
+                openOtherSpeechServices: links.otherSpeechServices)
         if let step {
             model.step = step
         }
@@ -88,7 +87,11 @@ final class OnboardingController: NSObject, NSWindowDelegate {
     }
 
     private func makeWindow(model: OnboardingModel) -> NSWindow {
-        let view = OnboardingView(model: model) { [weak self] in self?.window?.close() }
+        // Done closes the window and opens the app on Home, where the owner starts (owner QA, 2026-10-25).
+        let view = OnboardingView(model: model) { [weak self] in
+            self?.window?.close()
+            self?.links.home()
+        }
         let window = NSWindow(contentViewController: NSHostingController(rootView: view))
         window.title = "Welcome to kotoba"
         window.styleMask = [.titled, .closable, .miniaturizable, .fullSizeContentView]
@@ -135,6 +138,12 @@ extension OnboardingController {
                 return model
             },
             window("onboarding-done-ready") { model(.done, ready) },
+            // The owner turned the login switch and macOS refused: the footnote under it.
+            window("onboarding-done-login-problem") {
+                let model = model(.done, ready, loginProblem: .failed)
+                model.setOpensAtLogin(false)
+                return model
+            },
             window("onboarding-done-imported") {
                 let model = model(.done, ready)
                 let (incoming, _) = Pane.sampleWisprImport
@@ -146,11 +155,13 @@ extension OnboardingController {
 
     /// `hasKey`: an OpenRouter key is saved. Wispr Flow shows as installed.
     private static func model(
-        _ step: OnboardingStep, _ readiness: Readiness, keys: [ProviderAccount: KeyStatus] = [:], hasKey: Bool = false
+        _ step: OnboardingStep, _ readiness: Readiness, keys: [ProviderAccount: KeyStatus] = [:], hasKey: Bool = false,
+        loginProblem: LaunchAtLogin.Problem? = nil
     ) -> OnboardingModel {
         let model = OnboardingModel(
             step: step, readiness: readiness, keyChecks: .sample(keys, savedKeys: hasKey ? [.openRouter] : []),
-            source: .sample(dictionary: Pane.sampleModel(PersonalDictionary())), openOtherSpeechServices: {})
+            source: .sample(dictionary: Pane.sampleModel(PersonalDictionary()), loginProblem: loginProblem),
+            openOtherSpeechServices: {})
         model.showsWisprInstalled()
         return model
     }

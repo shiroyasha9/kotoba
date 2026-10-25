@@ -259,22 +259,27 @@ struct DoneStep: View {
             }
         }
         Section {
+            Toggle("Play sounds when a dictation starts and stops", isOn: $model.playsSounds)
+            // Turning it takes effect at once; the default (on for a release build) applies at Done.
             Toggle(
                 "Open at login",
                 isOn: Binding(get: { model.opensAtLogin }, set: { model.setOpensAtLogin($0) }))
-            if let problem = model.loginProblem {
-                PageRow(title: problem.text, subtitle: nil) {
-                    Button("Open Login Items…", action: model.openLoginItemsSettings)
-                }
-            }
-            Toggle("Play sounds when a dictation starts and stops", isOn: $model.playsSounds)
         } header: {
             if model.firstMissingStep == nil {
                 heading(isReady: isReady)
             }
+        } footer: {
+            // A footnote under the switch, as System Settings writes one, only after the owner turned it.
+            if let problem = model.loginProblem {
+                VStack(alignment: .leading) {
+                    Text(problem.text)
+                    Button("Open Login Items…", action: model.openLoginItemsSettings)
+                        .buttonStyle(.link)
+                }
+                // The link in the footnote's own size, as System Settings' "Learn More…" under a group.
+                .font(.subheadline)
+            }
         }
-        // Applied as the step shows (default on), so a problem shows here before Done closes the window.
-        .task { model.setOpensAtLogin(model.opensAtLogin) }
         if model.offersWisprImport {
             Section {
                 PageRow(title: "Wispr Flow dictionary", subtitle: wisprText) {

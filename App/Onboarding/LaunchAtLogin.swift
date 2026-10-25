@@ -32,14 +32,17 @@ enum LaunchAtLogin {
         needsApproval ? .needsApproval : nil
     }
 
-    /// Registers or unregisters the app. Returns what keeps the choice from taking effect, or nil.
+    /// Registers or unregisters the app. Returns what keeps the choice from taking effect, or nil. Off unregisters
+    /// only an app that is registered (on, or waiting for approval): an app that never was (`.notFound`, as a
+    /// development build) has nothing to unregister, and `unregister()` fails there (SMAppServiceErrorDomain 1, seen in
+    /// kotoba Dev's log on 2026-10-25), which showed "Couldn’t change this setting" for an off that changed nothing.
     @discardableResult
     static func change(to isOn: Bool) -> Problem? {
         let service = SMAppService.mainApp
         do {
             if isOn, service.status != .enabled {
                 try service.register()
-            } else if !isOn, service.status != .notRegistered {
+            } else if !isOn, service.status == .enabled || service.status == .requiresApproval {
                 try service.unregister()
             }
         } catch {
