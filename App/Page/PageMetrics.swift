@@ -50,10 +50,14 @@ enum PageMetrics {
     /// framed History snapshot, 2026-10-25).
     static let listSideInset: CGFloat = 10
 
+    /// A grouped form's row inset on each side: the text column of a card with no icons is this far in from the card's
+    /// edge (measured in the Microphone snapshot, 2026-10-25). A list that fills its row puts the row lines here.
+    static let formRowInset: CGFloat = 10
+
     /// A `PageList` row's content in from its selection, so it starts in the cards' text column: a card's row padding
-    /// (10 pt) less the 6 pt an inset list row keeps. Measured: a row's text and a card's text start 0.5 pt apart in the
+    /// (`formRowInset`) less the 6 pt an inset list row keeps. Measured: a row's text and a card's text start 0.5 pt apart in the
     /// framed History snapshot.
-    static let listRowInset: CGFloat = 4
+    static let listRowInset = formRowInset - 6
 
     /// The widest the content column gets; a wider window adds margin on both sides. The form keeps its own inset
     /// inside it, so sections are 520 pt wide at most: about 80 characters of body text per line (measured in the

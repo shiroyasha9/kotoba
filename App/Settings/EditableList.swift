@@ -60,7 +60,17 @@ struct EditableList<Row: Identifiable, RowView: View, AddItems: View, Accessory:
         if rows.isEmpty {
             Text(emptyText).foregroundStyle(.secondary)
         } else {
-            list
+            // The form's lines above and under the list in the text column, as every row line in a card (qa1-review
+            // 7). A list alone in a row is drawn over the row's inset to the card's edges, and the form then draws the
+            // lines edge to edge whatever guides the list gives; a stack keeps its guides, and the list in it takes the
+            // row's inset back, so it still fills the row (measured: rows and lines where they were, 2026-10-25).
+            VStack {
+                list
+                    .padding(-PageMetrics.formRowInset)
+                    .ignoresSafeArea()
+            }
+            .alignmentGuide(.listRowSeparatorLeading) { _ in PageMetrics.formRowInset }
+            .alignmentGuide(.listRowSeparatorTrailing) { $0.width - PageMetrics.formRowInset }
         }
         if showsButtons {
             buttons
@@ -119,6 +129,8 @@ struct EditableList<Row: Identifiable, RowView: View, AddItems: View, Accessory:
             Spacer()
             accessory()
         }
+        // Icon-only buttons give the form no text to start the line above at.
+        .alignmentGuide(.listRowSeparatorLeading) { $0[.leading] }
         .labelStyle(.iconOnly)
         .buttonStyle(.borderless)
         .menuStyle(.borderlessButton)
