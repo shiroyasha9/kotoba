@@ -91,21 +91,23 @@ struct WelcomeStep: View {
 }
 
 /// A chord as keycaps with each key's name in small text under it, as a Mac keyboard prints "control" under ⌃
-/// (docs/research/ui-redesign.md, "Onboarding"): the first time the owner meets the symbols, the names teach them.
+/// (docs/research/ui-redesign.md, "Onboarding"): the first time the owner meets the symbols, the names teach them. A
+/// one-side modifier ("right ⌥", from Wispr Flow's keys) draws its symbol, and its name says the side.
 struct NamedKeycaps: View {
     let keys: [String]
 
     var body: some View {
         // Every column as wide as the widest name (“command”), each centred on its key, so the keys sit evenly as on a
         // keyboard: under each key, the chord's names lie hidden in one stack, which takes the widest one's width.
-        let names = keys.compactMap { Keycaps.names[$0] }
+        let keys = keys.map(Self.legendAndName)
+        let names = keys.compactMap(\.name)
         HStack(alignment: .top) {
             ForEach(Array(keys.enumerated()), id: \.offset) { _, key in
                 VStack {
-                    Keycaps(keys: [key])
+                    Keycaps(keys: [key.legend])
                     ZStack {
                         ForEach(names, id: \.self) { Text($0).hidden() }
-                        if let name = Keycaps.names[key] {
+                        if let name = key.name {
                             Text(name)
                         }
                     }
@@ -117,7 +119,16 @@ struct NamedKeycaps: View {
         // At its own width beside Change…: the row's text wraps instead of the key names.
         .fixedSize()
         .accessibilityElement(children: .ignore)
-        .accessibilityLabel(Keycaps.spoken(keys))
+        .accessibilityLabel(keys.map { $0.name ?? $0.legend }.joined(separator: " "))
+    }
+
+    /// What a key's cap draws, and the name under it: "right ⌥" draws ⌥ over "right option".
+    private static func legendAndName(_ key: String) -> (legend: String, name: String?) {
+        for side in ["left ", "right "] where key.hasPrefix(side) {
+            let legend = String(key.dropFirst(side.count))
+            if let name = Keycaps.names[legend] { return (legend, side + name) }
+        }
+        return (key, Keycaps.names[key])
     }
 }
 
