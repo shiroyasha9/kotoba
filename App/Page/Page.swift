@@ -12,20 +12,38 @@ import SwiftUI
 /// width scrolls.
 struct PageForm<Content: View>: View {
     @ViewBuilder let content: Content
-    @State private var width: CGFloat = 0
 
     var body: some View {
         Form {
             content
         }
         .formStyle(.grouped)
-        .contentMargins(.horizontal, sideMargin, for: .scrollContent)
-        .onGeometryChange(for: CGFloat.self, of: \.size.width) { width = $0 }
+        .pageColumn()
+    }
+}
+
+extension View {
+    /// A scroll view's content in the centred page column, at most `PageMetrics.columnWidth` wide: the margins are the
+    /// scroll view's content margins, so the scroll bar stays at the window's edge and the whole width scrolls. Not
+    /// for a `List`, which ignores content margins (`PageList`).
+    func pageColumn() -> some View {
+        modifier(PageColumn())
+    }
+}
+
+private struct PageColumn: ViewModifier {
+    @State private var width: CGFloat = 0
+
+    func body(content: Content) -> some View {
+        content
+            .contentMargins(.horizontal, sideMargin, for: .scrollContent)
+            .onGeometryChange(for: CGFloat.self, of: \.size.width) { width = $0 }
     }
 
-    /// Nil keeps the form's own margin until the window is wider than the column.
+    /// Nil keeps the scroll view's own margin until the window is wider than the column.
     private var sideMargin: CGFloat? {
-        width > PageMetrics.columnWidth ? (width - PageMetrics.columnWidth) / 2 : nil
+        let margin = PageMetrics.columnMargin(in: width)
+        return margin > 0 ? margin : nil
     }
 }
 

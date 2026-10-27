@@ -204,6 +204,9 @@ struct AudioRetentionRow: View {
                     Text(Self.deleteMessage(bytes: shorter.bytes))
                 }
                 Button("Delete Audio Now…") { model.isAskingToDelete = true }
+                    // Never cut off: in the smallest window it read "Delete Audio N…" (window-history-small); the
+                    // subtitle wraps instead.
+                    .fixedSize()
                     .disabled(!model.hasDeletableAudio)
                     .confirmationDialog("Delete Saved Audio?", isPresented: $model.isAskingToDelete) {
                         Button("Delete Audio", role: .destructive, action: model.deleteNow)

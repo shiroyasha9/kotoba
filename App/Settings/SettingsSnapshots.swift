@@ -126,7 +126,7 @@ extension Pane {
 
     /// Every pane with sample data; `isPlaying` shows History's first row's audio playing, `history` replaces History's
     /// rows.
-    private static func samplePanes(
+    static func samplePanes(
         suggestions: [DictionarySuggestion] = [], isPlaying: Bool = false, home: HomeModel = .sample,
         history: HistoryModel? = nil, dictionary: PersonalDictionary = sampleDictionary
     ) -> [Pane] {

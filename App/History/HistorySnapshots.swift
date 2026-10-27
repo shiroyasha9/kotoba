@@ -22,6 +22,23 @@ extension Pane {
     }
 }
 
+@MainActor
+extension Pane {
+    /// History in the whole window at the smallest and the widest size (the default is `window-history-framed`): its
+    /// cards and rows in the page column, the selection from card edge to card edge, the scroll bar at the window's
+    /// edge (docs/research/history-width.md).
+    static func historyWidthSnapshots() -> [Snapshot] {
+        let sizes: [(String, NSSize)] = [
+            ("small", NSSize(width: PageMetrics.minimumWindowSize.width, height: 532)),
+            ("wide", NSSize(width: PageMetrics.maximumWindowWidth, height: PageMetrics.defaultWindowSize.height)),
+        ]
+        return sizes.map { suffix, size in
+            MainWindow.windowSnapshot(
+                of: samplePanes(), selecting: .history, named: "window-history-\(suffix)", size: size, isFramed: true)
+        }
+    }
+}
+
 extension HistoryController {
     /// A cleaned dictation that Rewrite rewrote, for History's rewritten row and View Changes.
     static func samplePolished() -> DictationRecord {

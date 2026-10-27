@@ -56,6 +56,7 @@ enum Snapshots {
         Pane.homeSnapshots,
         Pane.historySnapshots,
         Pane.historyArrivalChecks,
+        Pane.historyWidthSnapshots,
         Pane.windowSnapshots,
         Pane.switchSnapshots,
         Pane.emptyWindowSnapshots,

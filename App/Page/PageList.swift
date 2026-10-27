@@ -1,7 +1,8 @@
+import AppKit
 import SwiftUI
 
 /// A page that is a list (History: many rows, selection, list keys, rows built as they scroll into view), in the inset
-/// list style of Apple's list apps, across the whole detail column as Mail's and Notes' lists.
+/// list style of Apple's list apps, its cards and rows in the centred page column of every other page (`pageColumn`).
 ///
 /// What must stay in view (the page's header, a setting) goes in `pinned`, as form sections: cards above the rows as on
 /// every other page, never scrolled with the rows and never rebuilt with them, so a failed read does not hide them. The
@@ -16,15 +17,18 @@ import SwiftUI
 /// One set of edges for the cards and the rows (qa1-review 1): the selection runs from card edge to card edge, and the
 /// rows' content and the day titles start in the cards' text column. A day is a `PageListSection`.
 ///
-/// Full width, not in the page column (chief of staff, 2026-10-25, option A): SwiftUI's List ignores scroll content
-/// margins, and a list narrowed by safe-area padding narrows its scroll view, so the title bar took its tint over the
-/// column only (dark mode, ui-history).
+/// The column (docs/research/history-width.md): SwiftUI's List ignores scroll content margins (macOS 27, measured
+/// 2026-10-27), so its rows move in by safe-area padding. The list's scroll view keeps the whole width (it scrolls
+/// under the margins, and its title bar edge stays full width), but AppKit tiles its scroll bar inside the padding;
+/// `ScrollerAtEdge` puts the bar back at the window's edge, as every other page's.
 struct PageList<SelectionValue: Hashable, Content: View, Unavailable: View, Pinned: View>: View {
     @Binding var selection: Set<SelectionValue>
     let hasRows: Bool
     @ViewBuilder let content: Content
     @ViewBuilder let unavailable: Unavailable
     @ViewBuilder let pinned: Pinned
+    @State private var width: CGFloat = 0
+    @State private var legacyScrollerWidth = ScrollerAtEdge.legacyWidth
 
     var body: some View {
         VStack(spacing: 0) {
@@ -37,6 +41,7 @@ struct PageList<SelectionValue: Hashable, Content: View, Unavailable: View, Pinn
                         pinned
                     }
                     .formStyle(.grouped)
+                    .pageColumn()
                     .scrollBounceBehavior(.basedOnSize)
                 }
             }
@@ -48,11 +53,13 @@ struct PageList<SelectionValue: Hashable, Content: View, Unavailable: View, Pinn
                         .listRowInsets(.horizontal, PageMetrics.listRowInset)
                         .frame(maxWidth: .infinity, alignment: .leading)
                         .alignmentGuide(.listRowSeparatorTrailing) { $0[.trailing] }
+                        .background { ScrollerAtEdge(trailingInset: trailingInset) }
                 }
                 .listStyle(.inset)
                 // The selection at the cards' edges (qa1-review 1). Safe-area padding moves the rows only: the scroll
-                // view, its bar and the title bar's tint keep the full width.
-                .safeAreaPadding(.horizontal, PageMetrics.listSideInset)
+                // view keeps the full width.
+                .safeAreaPadding(.leading, PageMetrics.columnMargin(in: width) + PageMetrics.listSideInset)
+                .safeAreaPadding(.trailing, trailingInset)
                 // The rows take the height left under the cards; a list's own ideal height is all its rows.
                 .frame(minHeight: 0, idealHeight: 0, maxHeight: .infinity)
             } else {
@@ -61,14 +68,75 @@ struct PageList<SelectionValue: Hashable, Content: View, Unavailable: View, Pinn
                     .overlay { unavailable }
             }
         }
+        .onGeometryChange(for: CGFloat.self, of: \.size.width) { width = $0 }
+        .task {
+            for await _ in NotificationCenter.default.notifications(
+                named: NSScroller.preferredScrollerStyleDidChangeNotification)
+            {
+                legacyScrollerWidth = ScrollerAtEdge.legacyWidth
+            }
+        }
+    }
+
+    /// The selection's trailing edge at the card edge: a legacy scroll bar takes its width from the list's content
+    /// area, so the padding there is that much less (never less than the list's own inset).
+    private var trailingInset: CGFloat {
+        let inset = PageMetrics.columnMargin(in: width) + PageMetrics.listSideInset - legacyScrollerWidth
+        return max(PageMetrics.listSideInset, inset)
     }
 }
+
 extension PageList where Pinned == EmptyView {
     init(
         selection: Binding<Set<SelectionValue>>, hasRows: Bool, @ViewBuilder content: () -> Content,
         @ViewBuilder unavailable: () -> Unavailable
     ) {
         self.init(selection: selection, hasRows: hasRows, content: content, unavailable: unavailable) { EmptyView() }
+    }
+}
+
+/// Puts a list's vertical scroll bar at its scroll view's trailing edge. AppKit tiles the bar inside the content insets
+/// that SwiftUI's safe-area padding sets, so a list in the page column drew its bar at the column's edge. Custom:
+/// SwiftUI has no way to move a scroll bar out of the safe area (`contentMargins(_:_:for: .scrollIndicators)` ignores
+/// a negative margin, measured 2026-10-27). It sits in each row's background, so its view is in the list's scroll view
+/// whichever rows are on screen; it draws nothing and takes no clicks.
+private struct ScrollerAtEdge: NSViewRepresentable {
+    /// The list's trailing safe-area padding, which the bar is moved back over.
+    let trailingInset: CGFloat
+
+    /// The width a legacy scroll bar takes from a list's content ("Show scroll bars: Always", or a mouse); an overlay
+    /// bar takes none.
+    @MainActor static var legacyWidth: CGFloat {
+        NSScroller.preferredScrollerStyle == .legacy
+            ? NSScroller.scrollerWidth(for: .regular, scrollerStyle: .legacy) : 0
+    }
+
+    func makeNSView(context: Context) -> Probe {
+        Probe()
+    }
+
+    func updateNSView(_ probe: Probe, context: Context) {
+        probe.trailingInset = trailingInset
+    }
+
+    final class Probe: NSView {
+        var trailingInset: CGFloat = 0 {
+            didSet { apply() }
+        }
+
+        override func viewDidMoveToWindow() {
+            super.viewDidMoveToWindow()
+            apply()
+        }
+
+        override func hitTest(_ point: NSPoint) -> NSView? {
+            nil
+        }
+
+        private func apply() {
+            guard let scroll = enclosingScrollView, scroll.scrollerInsets.right != -trailingInset else { return }
+            scroll.scrollerInsets = NSEdgeInsets(top: 0, left: 0, bottom: 0, right: -trailingInset)
+        }
     }
 }
 

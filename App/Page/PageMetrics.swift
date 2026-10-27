@@ -68,6 +68,11 @@ enum PageMetrics {
     /// 450 pt because its window does not grow (owner's capture).
     static let columnWidth: CGFloat = 560
 
+    /// The margin on each side of the page column in a page `width` wide; none until the page is wider than the column.
+    static func columnMargin(in width: CGFloat) -> CGFloat {
+        max(0, (width - columnWidth) / 2)
+    }
+
     /// A sidebar tile's side at each sidebar icon size (System Settings > Appearance). 20 pt is System Settings' tile
     /// at the default size, measured against the 13 pt body text beside it in the owner's capture; small and large
     /// step by the 4 pt that the system's sidebar text steps by (11, 13, 15 pt).
