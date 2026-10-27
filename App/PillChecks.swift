@@ -29,6 +29,47 @@ extension IndicatorPanel {
                 + "items transparent: \(unseen.map { "\(type(of: $0))" })"
     }
 
+    /// Each SwiftUI item (a button, the keycaps) keeps one size while the glass moves along its spring as the pill
+    /// appears, in the pill's own panel on each screen. An item that took another size at another place moved itself
+    /// back, and AppKit ended the app for the layout that never settled (2026-10-27, hands-free with cleanup on a 1x
+    /// display).
+    static func morphSizeProblem(of look: PillLook, at anchor: IndicatorAnchor) -> String? {
+        // The panels go with each screen's pass: the check run drains no pool until it exits.
+        NSScreen.screens.lazy.compactMap { screen in
+            autoreleasepool { morphSizeProblem(of: look, at: anchor, on: screen) }
+        }
+        .first
+    }
+
+    private static func morphSizeProblem(of look: PillLook, at anchor: IndicatorAnchor, on screen: NSScreen) -> String?
+    {
+        let room = IndicatorPlacement.room(
+            at: anchor, thickness: Double(PillGeometry.height), in: ScreenRect(screen.visibleFrame))
+        let pill = PillView(frame: .zero)
+        let panel = makeFloatingPanel(holding: pill, frame: NSRect(room))
+        pill.anchor = anchor
+        pill.prepareToAppear()
+        let from = pill.glass.frame
+        pill.appear(look)
+        panel.layoutIfNeeded()
+        let hosts = pill.stack.arrangedSubviews.filter { pill.hosts.contains($0) }
+        let sizes = hosts.map(\.frame.size)
+        let move = PillView.GlassMove(from: from, to: pill.capsuleFrame, reducesMotion: false)
+        // One step a display frame, until the spring settles.
+        let frames = Int((move.spring.swiftUI.settlingDuration * framesPerSecond).rounded(.up))
+        for frame in 1...frames {
+            pill.glass.frame = move.frame(at: Double(frame) / framesPerSecond)
+            panel.layoutIfNeeded()
+            if let (host, size) = zip(hosts, sizes).first(where: { $0.frame.size != $1 }) {
+                return "\(type(of: host)) goes from \(size) to \(host.frame.size) as the glass moves on "
+                    + screen.localizedName
+            }
+        }
+        return nil
+    }
+
+    private static let framesPerSecond = 60.0
+
     /// A window that says it is on screen while it is not, so the pill's look changes run their on-screen path.
     private final class ClaimedWindow: NSWindow {
         var claimsVisible = false

@@ -55,11 +55,7 @@ extension PillView {
         glassContent.layoutSubtreeIfNeeded()
         let reducesMotion = Self.reducesMotion
         let to = capsuleFrame
-        let move = GlassMove(
-            from: glass.frame, to: to,
-            spring: IndicatorMotion.spring(
-                from: ScreenRect(glass.frame), to: ScreenRect(to), reducesMotion: reducesMotion)
-        )
+        let move = GlassMove(from: glass.frame, to: to, reducesMotion: reducesMotion)
         // With Reduce Motion the pill fades in and out at its size: the glass is at once where it ends, or stays.
         let movesGlass = !reducesMotion || change.fade == nil
         CATransaction.begin()
@@ -359,4 +355,13 @@ extension PillView {
     private static let blurPath = "filters.\(blurName).inputRadius"
     /// The entering items' keyframes: about one a display frame.
     private static let keyframesPerSecond = 60.0
+}
+
+extension PillView.GlassMove {
+    /// The glass's move from `from` to `to` with its spring for that change (`IndicatorMotion.spring`).
+    init(from: NSRect, to: NSRect, reducesMotion: Bool) {
+        self.init(
+            from: from, to: to,
+            spring: IndicatorMotion.spring(from: ScreenRect(from), to: ScreenRect(to), reducesMotion: reducesMotion))
+    }
 }

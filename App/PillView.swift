@@ -74,6 +74,8 @@ final class PillView: NSView {
     private let stop = PillButtonHost(
         rootView: PillButton(face: .symbol("stop.fill", label: StatusText.stopLabel), isProminent: true))
     private let button = PillButtonHost(rootView: PillButton())
+    /// The SwiftUI items: the buttons and the keycaps.
+    var hosts: [NSView] { [cancel, stop, button, keycaps] }
     /// Counts the recording's time while it shows; nil otherwise.
     private var clock: Task<Void, Never>?
     var pressStart: NSPoint?
@@ -110,13 +112,18 @@ final class PillView: NSView {
         }
         keycaps.sizingOptions = .intrinsicContentSize
         keycaps.setAccessibilityElement(false)
+        // A host's size is its content's alone, not the safe area at its place: with the safe area, a button moved by
+        // the glass's spring took another size, which moved it back, until AppKit ended the app (2026-10-27,
+        // hands-free with cleanup on a 1x display).
+        keycaps.safeAreaRegions = []
+        for host in [cancel, stop, button] {
+            host.sizingOptions = .intrinsicContentSize
+            host.safeAreaRegions = []
+        }
         // A button and the keycaps keep their full width; only the words give way, so a message too long for the pill
         // truncates its words every time, and the snapshot check sees it (owner trial: the button gave way on the first
         // layout and not on the next).
-        for host in [cancel, stop, button] {
-            host.sizingOptions = .intrinsicContentSize
-        }
-        for view in [cancel, stop, button, keycaps] as [NSView] {
+        for view in hosts {
             view.setContentCompressionResistancePriority(.required, for: .horizontal)
             view.setContentCompressionResistancePriority(.required, for: .vertical)
         }

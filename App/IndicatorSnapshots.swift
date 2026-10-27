@@ -11,6 +11,18 @@ extension IndicatorPanel {
         let content: PillContent
         /// The bars show silence, not speech.
         var isSilent = false
+
+        /// A look with no words renders at the bottom and at a side edge (vertical there); a look with words looks the
+        /// same at every anchor, so it renders once.
+        var anchors: [IndicatorAnchor] {
+            content.look.hasWords ? [.bottomCenter] : [.bottomCenter, .left]
+        }
+
+        /// A button or the keycaps show: SwiftUI items, which the morph check measures.
+        var hasHosts: Bool {
+            if case .hover = content.look { return true }
+            return !content.look.buttonLabels.isEmpty
+        }
     }
 
     /// OpenRouter has the longest name of the providers, so its words are the widest; only Azure has an endpoint.
@@ -34,9 +46,7 @@ extension IndicatorPanel {
     /// words, words in a live pill, a second glass view, a VoiceOver problem, and any animation at idle.
     static func snapshots() -> [Snapshot] {
         samples.flatMap { sample in
-            let anchors: [IndicatorAnchor] =
-                sample.content.look.hasWords ? [.bottomCenter] : [.bottomCenter, .left]
-            return anchors.map { anchor in
+            sample.anchors.map { anchor in
                 var snapshot = Snapshot(name: "pill-\(sample.name)-\(anchor.rawValue)") {
                     pill(showing: sample, at: anchor)
                 } check: { view in
@@ -45,6 +55,22 @@ extension IndicatorPanel {
                 }
                 // The pill floats over other apps, so its glass shows over the fixed desktop.
                 snapshot.floatsOverDesktop = true
+                return snapshot
+            }
+        }
+    }
+
+    /// Each look with a button or the keycaps, at each anchor it renders at: no SwiftUI item changes size as the glass
+    /// moves (`morphSizeProblem`). Checks only, with no image: the pill is the check's own, in its own panel.
+    static func morphChecks() -> [Snapshot] {
+        samples.filter(\.hasHosts).flatMap { sample in
+            sample.anchors.map { anchor in
+                var snapshot = Snapshot(name: "pill-morph-\(sample.name)-\(anchor.rawValue)") {
+                    NSView()
+                } check: { _ in
+                    morphSizeProblem(of: timedNow(sample.content.look), at: anchor)
+                }
+                snapshot.hasImage = false
                 return snapshot
             }
         }

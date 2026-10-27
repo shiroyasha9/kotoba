@@ -40,6 +40,7 @@ enum Snapshots {
     /// Each feature adds one line with its own snapshot list.
     private static let registry: [@MainActor () -> [Snapshot]] = [
         IndicatorPanel.snapshots,
+        IndicatorPanel.morphChecks,
         DropGuides.snapshots,
         Pane.dictionarySnapshots,
         Pane.speechSnapshots,
