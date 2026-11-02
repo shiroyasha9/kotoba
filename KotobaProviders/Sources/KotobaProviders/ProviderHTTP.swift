@@ -205,7 +205,7 @@ enum ProviderHTTP {
         let status = response.statusCode
         guard (200..<300).contains(status) else {
             let retryAfter = response.value(forHTTPHeaderField: "Retry-After")
-            throw logged(error(status: status, retryAfter: retryAfter, body: data), label: label)
+            throw logged(error(status: status, retryAfter: retryAfter, body: data), label: label, body: data)
         }
         do {
             return try JSONDecoder().decode(type, from: data)
@@ -264,10 +264,17 @@ enum ProviderHTTP {
     }
 
     /// The label and the error are public; a refusal's message is private, as the body can echo the request
-    /// (keyterms, words of the transcript).
-    private static func logged(_ error: ProviderError, label: String) -> ProviderError {
+    /// (keyterms, words of the transcript). A rate limit also logs who set it: OpenRouter names the host behind it
+    /// (`error.metadata.provider_name`), public; no name means OpenRouter itself, or a direct route.
+    private static func logged(_ error: ProviderError, label: String, body: Data = Data()) -> ProviderError {
         if case .rejected(let status, let message) = error {
             log.error("\(label, privacy: .public) failed: rejected \(status): \(message, privacy: .private)")
+        } else if case .rateLimited = error {
+            let refusal = String(describing: error)
+            let host = UpstreamHost.name(in: body) ?? "none"
+            let message = errorMessage(in: body)
+            log.error("\(label, privacy: .public) failed: \(refusal, privacy: .public), host \(host, privacy: .public)")
+            log.error("\(label, privacy: .public) rate limit message: \(message, privacy: .private)")
         } else {
             log.error("\(label, privacy: .public) failed: \(String(describing: error), privacy: .public)")
         }
@@ -303,6 +310,35 @@ struct MAIEnhancedMode: Encodable, Equatable {
 
     init(keepsFillerWords: Bool) {
         modelOptions = ModelOptions(transcribeStyle: keepsFillerWords ? .verbatim : .clean)
+    }
+}
+
+/// The host behind OpenRouter that refused a request: `{"error": {"metadata": {"provider_name": "..."}}}`. The
+/// metadata's other fields (`raw`, `is_byok`) are not read.
+struct UpstreamHost: Decodable {
+    private struct Detail: Decodable {
+        var metadata: UpstreamHost?
+    }
+
+    private enum CodingKeys: String, CodingKey {
+        case error
+        case providerName = "provider_name"
+    }
+
+    let name: String?
+
+    init(from decoder: any Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        // The top level holds `error`; its `metadata` holds the name, read with this same type.
+        if let detail = try container.decodeIfPresent(Detail.self, forKey: .error) {
+            name = detail.metadata?.name
+        } else {
+            name = try container.decodeIfPresent(String.self, forKey: .providerName)
+        }
+    }
+
+    static func name(in body: Data) -> String? {
+        (try? JSONDecoder().decode(Self.self, from: body))?.name
     }
 }
 

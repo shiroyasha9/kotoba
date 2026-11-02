@@ -81,9 +81,40 @@ struct TranscriptionSteps: Sendable {
         return transcribed
     }
 
-    /// The provider's answer within the bound for its audio (`Settings.transcriptionTimeout(for:)`).
+    /// A request the route refused for now (`ProviderError.rateLimited`) is sent again in place, up to this many sends
+    /// in all: the next send most often works (owner, 2026-11-02: OpenRouter's 429s on MAI, `Retry-After: 1`), and a
+    /// refusal is not billed (`ProviderError.usesAttempt`). The owner sees the spinner, not an error, until the last.
+    static let rateLimitedSends = 3
+    /// The longest wait the route can ask for and still get its send in place; a longer one fails the request, and the
+    /// pipeline's scheduled retry sends it then (`DictationPipeline.scheduleRetry(after:)`).
+    static let longestRateLimitWaitInPlace = Duration.seconds(2)
+    /// The wait before a send again when the route asked for none.
+    static let rateLimitWaitUnsaid = Duration.seconds(1)
+
+    /// The provider's answer within the bound for its audio (`Settings.transcriptionTimeout(for:)`), each send with its
+    /// own bound. A refusal for now with a short wait is sent again after that wait (`rateLimitedSends`).
     func answer(to request: TranscriptionRequest) async throws -> Transcript {
-        try await answer(to: request, within: DictationPipeline.Settings.transcriptionTimeout(for: request.duration))
+        let limit = DictationPipeline.Settings.transcriptionTimeout(for: request.duration)
+        var send = 1
+        while true {
+            do {
+                return try await answer(to: request, within: limit)
+            } catch ProviderError.rateLimited(let asked) where send < Self.rateLimitedSends {
+                let wait = asked ?? Self.rateLimitWaitUnsaid
+                guard wait <= Self.longestRateLimitWaitInPlace else {
+                    throw ProviderError.rateLimited(retryAfter: asked)
+                }
+                Log.pipeline.notice(
+                    "Rate limited: send \(send + 1) of \(Self.rateLimitedSends) in \(wait, privacy: .public)")
+                // Cancelled while it waits: the refusal is the request's answer.
+                do {
+                    try await clock.sleep(until: clock.now + wait)
+                } catch {
+                    throw ProviderError.rateLimited(retryAfter: asked)
+                }
+                send += 1
+            }
+        }
     }
 
     /// The provider's answer, or `ProviderError.timedOut` when `limit` passes first on the pipeline clock. A task group,

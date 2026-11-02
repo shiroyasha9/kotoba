@@ -17,4 +17,14 @@ struct ProviderHTTPTests {
     func retryAfterReadsSecondsOrADate(header: String, expected: Duration?) {
         #expect(ProviderHTTP.retryAfter(header, now: Self.now) == expected)
     }
+
+    /// OpenRouter's 429 names the host behind it; its metadata also holds a string and a flag, which are not read.
+    @Test(arguments: [
+        (#"{"error":{"code":429,"metadata":{"raw":"busy","provider_name":"Azure","is_byok":false}}}"#, "Azure"),
+        (#"{"error":{"message":"Rate limit exceeded","code":429}}"#, nil),
+        ("not json", nil),
+    ])
+    func upstreamHostIsReadFromARateLimit(body: String, expected: String?) {
+        #expect(UpstreamHost.name(in: Data(body.utf8)) == expected)
+    }
 }
